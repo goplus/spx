@@ -790,18 +790,6 @@ func TestJSScalarInputsPassByValueAndKeepOutputPointers(t *testing.T) {
 	require.Contains(t, manager, "Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(scale), enabled, count)")
 }
 
-func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
-	t.Helper()
-	var params []string
-	for _, param := range spec.Arguments {
-		params = append(params, param.Declaration())
-	}
-	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
-	require.NoError(t, err)
-	function := ast.CollectGDExtensionInterfaceFunctions()[0]
-	return &function
-}
-
 func TestManagerBackendKeepsCacheAndBridgeWithoutDispatch(t *testing.T) {
 	parsed, err := clang.ParseCString(`
 typedef void (*GDExtensionSpxAudioSetVolume)(GdObj obj, GdFloat volume);
@@ -832,4 +820,16 @@ func CachedInputGetKey(key int64, fallback func() bool) bool { return fallback()
 		require.Equal(t, 1, strings.Count(source, "API.Spx"+method+".Invoke("), "retain each bridge call, including cache fallback")
 	}
 	require.Contains(t, source, "CachedInputGetKey(key, func() bool {")
+}
+
+func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
+	t.Helper()
+	var params []string
+	for _, param := range spec.Arguments {
+		params = append(params, param.Declaration())
+	}
+	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
+	require.NoError(t, err)
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	return &function
 }

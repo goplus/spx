@@ -34,6 +34,50 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+type dispatchCameraMgr struct {
+	gdx.IManager
+	gdx.ICameraMgr
+	position mathf.Vec2
+	reads    int
+}
+
+type dispatchInputMgr struct {
+	gdx.IManager
+	gdx.IInputMgr
+	pressed map[int64]bool
+	queries []int64
+}
+
+type dispatchSpriteMgr struct {
+	gdx.IManager
+	gdx.ISpriteMgr
+	retrieve func([]int64, []float32) bool
+}
+
+type bindingAudioMgr struct {
+	gdx.IManager
+	gdx.IAudioMgr
+	setVolume func(gdx.Object, float64)
+	getVolume func(gdx.Object) float64
+}
+
+type embeddedAudioMgr struct {
+	AudioMgrImpl
+	getVolume func(gdx.Object) float64
+}
+
+type bindingPlatformMgr struct {
+	gdx.IManager
+	gdx.IPlatformMgr
+	probes int
+	worker bool
+}
+
+type concurrentPlatformMgr struct {
+	gdx.IManager
+	gdx.IPlatformMgr
+}
+
 func TestCallInMainThreadRequiresInitOffMainThread(t *testing.T) {
 	if runtime.GOOS == "js" {
 		t.Skip("Web has no native main-thread boundary")
@@ -106,58 +150,6 @@ func TestRunnableOnUnfocusedReportsUnsupportedDisable(t *testing.T) {
 	if output.String() != warning {
 		t.Fatalf("restoring the supported setting logged another warning: %q", output.String())
 	}
-}
-
-type dispatchCameraMgr struct {
-	gdx.IManager
-	gdx.ICameraMgr
-	position mathf.Vec2
-	reads    int
-}
-
-type dispatchInputMgr struct {
-	gdx.IManager
-	gdx.IInputMgr
-	pressed map[int64]bool
-	queries []int64
-}
-
-type dispatchSpriteMgr struct {
-	gdx.IManager
-	gdx.ISpriteMgr
-	retrieve func([]int64, []float32) bool
-}
-
-type bindingAudioMgr struct {
-	gdx.IManager
-	gdx.IAudioMgr
-	setVolume func(gdx.Object, float64)
-	getVolume func(gdx.Object) float64
-}
-
-func (m *bindingAudioMgr) SetVolume(obj gdx.Object, volume float64) { m.setVolume(obj, volume) }
-func (m *bindingAudioMgr) GetVolume(obj gdx.Object) float64         { return m.getVolume(obj) }
-
-type embeddedAudioMgr struct {
-	AudioMgrImpl
-	getVolume func(gdx.Object) float64
-}
-
-func (m *embeddedAudioMgr) GetVolume(obj gdx.Object) float64 { return m.getVolume(obj) }
-
-type bindingPlatformMgr struct {
-	gdx.IManager
-	gdx.IPlatformMgr
-	probes int
-	worker bool
-}
-
-func (m *bindingPlatformMgr) IsMainThread() bool { m.probes++; return !m.worker }
-
-func catchManagerPanic(call func()) (value any) {
-	defer func() { value = recover() }()
-	call()
-	return nil
 }
 
 func TestBoundManagersRunOnMainThreadWithoutInit(t *testing.T) {
@@ -588,24 +580,6 @@ func TestBatchPositionBridgePreservesBuffersAndFailure(t *testing.T) {
 	spriteMgr.BatchRetrievePositions(nil, nil)
 }
 
-func (m *dispatchCameraMgr) GetCameraPosition() mathf.Vec2 {
-	m.reads++
-	return m.position
-}
-
-func (m *dispatchCameraMgr) SetCameraPosition(position mathf.Vec2) {
-	m.position = position
-}
-
-func (m *dispatchInputMgr) GetMouseState(button int64) bool {
-	m.queries = append(m.queries, button)
-	return m.pressed[button]
-}
-
-func (m *dispatchSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
-	return m.retrieve(ids, out)
-}
-
 // Public globals are captured before starting workers. Installation and direct
 // reads of those globals still belong to the engine's coordinated link boundary.
 func TestManagerBindingsConcurrentReleaseAndRebind(t *testing.T) {
@@ -660,13 +634,6 @@ func TestManagerBindingsConcurrentReleaseAndRebind(t *testing.T) {
 		})
 	}
 }
-
-type concurrentPlatformMgr struct {
-	gdx.IManager
-	gdx.IPlatformMgr
-}
-
-func (*concurrentPlatformMgr) IsMainThread() bool { return true }
 
 func TestManagerBindingReleaseFromBackend(t *testing.T) {
 	previousCallback, previousAudio := mainCallback, gdx.AudioMgr
@@ -723,4 +690,37 @@ func TestMousePressedUsesOneBindingAndDispatch(t *testing.T) {
 	if !slices.Equal(first.queries, []int64{input.MouseButtonLeft, input.MouseButtonRight}) {
 		t.Fatalf("original queries = %v, want left and right buttons", first.queries)
 	}
+}
+
+func (m *dispatchCameraMgr) GetCameraPosition() mathf.Vec2 {
+	m.reads++
+	return m.position
+}
+
+func (m *dispatchCameraMgr) SetCameraPosition(position mathf.Vec2) {
+	m.position = position
+}
+
+func (m *dispatchInputMgr) GetMouseState(button int64) bool {
+	m.queries = append(m.queries, button)
+	return m.pressed[button]
+}
+
+func (m *dispatchSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	return m.retrieve(ids, out)
+}
+
+func (m *bindingAudioMgr) SetVolume(obj gdx.Object, volume float64) { m.setVolume(obj, volume) }
+func (m *bindingAudioMgr) GetVolume(obj gdx.Object) float64         { return m.getVolume(obj) }
+
+func (m *embeddedAudioMgr) GetVolume(obj gdx.Object) float64 { return m.getVolume(obj) }
+
+func (m *bindingPlatformMgr) IsMainThread() bool { m.probes++; return !m.worker }
+
+func (*concurrentPlatformMgr) IsMainThread() bool { return true }
+
+func catchManagerPanic(call func()) (value any) {
+	defer func() { value = recover() }()
+	call()
+	return nil
 }

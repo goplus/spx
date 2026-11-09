@@ -36,50 +36,12 @@ type managerBinding[T comparable] struct {
 	name    string
 }
 
-func (m *managerBinding[T]) binding() *managerBinding[T] { return m }
+var mainCallback func(call func())
 
-// W is the concrete generated wrapper. Other implementations may embed a
-// wrapper and override methods, so they must remain valid backend targets.
-func resolveManager[W interface{ binding() *managerBinding[T] }, T comparable](binding *managerBinding[T], slot *T, name string) *managerBinding[T] {
-	managerstate.Mu.RLock()
-	defer managerstate.Mu.RUnlock()
-	if binding == nil {
-		current := *slot
-		if wrapper, ok := any(current).(W); ok {
-			binding = wrapper.binding()
-		} else {
-			binding = &managerBinding[T]{backend: current, name: name}
-		}
-	}
-	var zero T
-	if binding == nil || binding.backend == zero {
-		panic("enginewrap: " + name + " manager is not bound")
-	}
-	return binding
-}
-
-// target rechecks the captured binding after dispatch. A queued facade call
-// must never resolve to a replacement session's backend.
-func (m *managerBinding[T]) target() T {
-	managerstate.Mu.RLock()
-	defer managerstate.Mu.RUnlock()
-	var zero T
-	if m.backend == zero {
-		panic("enginewrap: " + m.name + " manager is not bound")
-	}
-	return m.backend
-}
-
-// bind and its cleanup require managerstate.Mu's write lock.
-func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
-	*slot = wrapper
-	return func() {
-		var zero T
-		if *slot == wrapper {
-			*slot = zero
-		}
-		m.backend = zero
-	}
+func Init(call func(f func())) {
+	managerstate.Mu.Lock()
+	mainCallback = call
+	managerstate.Mu.Unlock()
 }
 
 // BindManagers installs main-thread wrappers as one registry update.
@@ -111,14 +73,6 @@ func BindManagers(managers []gdx.IManager) (cleanup func()) {
 	}
 }
 
-var mainCallback func(call func())
-
-func Init(call func(f func())) {
-	managerstate.Mu.Lock()
-	mainCallback = call
-	managerstate.Mu.Unlock()
-}
-
 // CallInMainThread runs call synchronously on the engine main thread.
 // Without a dispatcher, only calls already on the engine thread may run.
 func CallInMainThread(call func()) {
@@ -143,6 +97,14 @@ func CallInMainThreadValue[T any](call func() T) (result T) {
 	return
 }
 
+func (c *CameraMgrImpl) GetPosition() Vec2 {
+	return c.GetCameraPosition()
+}
+
+func (c *CameraMgrImpl) SetPosition(position Vec2) {
+	c.SetCameraPosition(position)
+}
+
 func (i *InputMgrImpl) MousePressed() bool {
 	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
@@ -157,10 +119,48 @@ func (*PlatformMgrImpl) SetRunnableOnUnfocused(flag bool) {
 	}
 }
 
-func (c *CameraMgrImpl) GetPosition() Vec2 {
-	return c.GetCameraPosition()
+func (m *managerBinding[T]) binding() *managerBinding[T] { return m }
+
+// target rechecks the captured binding after dispatch. A queued facade call
+// must never resolve to a replacement session's backend.
+func (m *managerBinding[T]) target() T {
+	managerstate.Mu.RLock()
+	defer managerstate.Mu.RUnlock()
+	var zero T
+	if m.backend == zero {
+		panic("enginewrap: " + m.name + " manager is not bound")
+	}
+	return m.backend
 }
 
-func (c *CameraMgrImpl) SetPosition(position Vec2) {
-	c.SetCameraPosition(position)
+// bind and its cleanup require managerstate.Mu's write lock.
+func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
+	*slot = wrapper
+	return func() {
+		var zero T
+		if *slot == wrapper {
+			*slot = zero
+		}
+		m.backend = zero
+	}
+}
+
+// W is the concrete generated wrapper. Other implementations may embed a
+// wrapper and override methods, so they must remain valid backend targets.
+func resolveManager[W interface{ binding() *managerBinding[T] }, T comparable](binding *managerBinding[T], slot *T, name string) *managerBinding[T] {
+	managerstate.Mu.RLock()
+	defer managerstate.Mu.RUnlock()
+	if binding == nil {
+		current := *slot
+		if wrapper, ok := any(current).(W); ok {
+			binding = wrapper.binding()
+		} else {
+			binding = &managerBinding[T]{backend: current, name: name}
+		}
+	}
+	var zero T
+	if binding == nil || binding.backend == zero {
+		panic("enginewrap: " + name + " manager is not bound")
+	}
+	return binding
 }

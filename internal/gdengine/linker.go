@@ -34,6 +34,8 @@ type LinkSession struct {
 	releaseManagers func()
 }
 
+type linkerBridge struct{}
+
 var (
 	coreCallbacks        CoreCallbackInfo
 	isWebInterpreterMode bool
@@ -103,8 +105,6 @@ func (s *LinkSession) Unlink() {
 	coreCallbacks = CoreCallbackInfo{}
 	isWebInterpreterMode = false
 }
-
-type linkerBridge struct{}
 
 func (linkerBridge) IsWebIntepreterMode() bool {
 	return IsWebIntepreterMode()

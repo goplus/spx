@@ -16,6 +16,8 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+var webManagerCacheTestID atomic.Uint64
+
 func TestBatchRetrievePositionsUpdatesCallerBuffer(t *testing.T) {
 	previousSprite := gdx.SpriteMgr
 	t.Cleanup(func() { gdx.SpriteMgr = previousSprite })
@@ -141,42 +143,6 @@ func TestWriteSnapshotUpdatesCallerArray(t *testing.T) {
 		}()
 		mgr.WriteSnapshot(nil)
 	})
-}
-
-func useWebManagerDispatch(t *testing.T, dispatch func(func())) {
-	t.Helper()
-	enginewrap.Init(dispatch)
-	t.Cleanup(func() { enginewrap.Init(nil) })
-}
-
-func useWebArrayStorage(t *testing.T, inside *bool) {
-	t.Helper()
-	previous := js.Global().Get("GdspxBorrowNativeArray")
-	borrow := js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if !*inside {
-			t.Error("array conversion ran outside dispatch")
-		}
-		data := js.Global().Get("Uint8Array").New(args[2].Int())
-		data.Call("fill", 0xa5)
-		return map[string]any{
-			"__gdspx_array": true,
-			"type":          args[0].Int(), "count": args[1].Int(),
-			"data": data,
-		}
-	})
-	js.Global().Set("GdspxBorrowNativeArray", borrow)
-	t.Cleanup(func() {
-		js.Global().Set("GdspxBorrowNativeArray", previous)
-		borrow.Release()
-	})
-}
-
-var webManagerCacheTestID atomic.Uint64
-
-func catchWebManagerPanic(call func()) (value any) {
-	defer func() { value = recover() }()
-	call()
-	return nil
 }
 
 func TestWebManagerDirectAndWrappedCallsDispatchOnce(t *testing.T) {
@@ -311,4 +277,38 @@ func TestWebManagerThreadProbeDoesNotDispatch(t *testing.T) {
 	if !gdx.PlatformMgr.IsMainThread() || !new(enginewrap.PlatformMgrImpl).IsMainThread() {
 		t.Fatal("thread probe lost the backend result")
 	}
+}
+
+func useWebManagerDispatch(t *testing.T, dispatch func(func())) {
+	t.Helper()
+	enginewrap.Init(dispatch)
+	t.Cleanup(func() { enginewrap.Init(nil) })
+}
+
+func useWebArrayStorage(t *testing.T, inside *bool) {
+	t.Helper()
+	previous := js.Global().Get("GdspxBorrowNativeArray")
+	borrow := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if !*inside {
+			t.Error("array conversion ran outside dispatch")
+		}
+		data := js.Global().Get("Uint8Array").New(args[2].Int())
+		data.Call("fill", 0xa5)
+		return map[string]any{
+			"__gdspx_array": true,
+			"type":          args[0].Int(), "count": args[1].Int(),
+			"data": data,
+		}
+	})
+	js.Global().Set("GdspxBorrowNativeArray", borrow)
+	t.Cleanup(func() {
+		js.Global().Set("GdspxBorrowNativeArray", previous)
+		borrow.Release()
+	})
+}
+
+func catchWebManagerPanic(call func()) (value any) {
+	defer func() { value = recover() }()
+	call()
+	return nil
 }

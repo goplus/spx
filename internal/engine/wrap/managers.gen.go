@@ -54,173 +54,47 @@ type EngineManagers struct {
 type AudioMgrImpl struct {
 	*managerBinding[gdx.IAudioMgr]
 }
-
-func (a *AudioMgrImpl) resolve() *managerBinding[gdx.IAudioMgr] {
-	return resolveManager[*AudioMgrImpl](a.managerBinding, &gdx.AudioMgr, "audio")
-}
-
 type CameraMgrImpl struct {
 	*managerBinding[gdx.ICameraMgr]
 }
-
-func (c *CameraMgrImpl) resolve() *managerBinding[gdx.ICameraMgr] {
-	return resolveManager[*CameraMgrImpl](c.managerBinding, &gdx.CameraMgr, "camera")
-}
-
 type DebugMgrImpl struct {
 	*managerBinding[gdx.IDebugMgr]
 }
-
-func (d *DebugMgrImpl) resolve() *managerBinding[gdx.IDebugMgr] {
-	return resolveManager[*DebugMgrImpl](d.managerBinding, &gdx.DebugMgr, "debug")
-}
-
 type ExtMgrImpl struct {
 	*managerBinding[gdx.IExtMgr]
 }
-
-func (e *ExtMgrImpl) resolve() *managerBinding[gdx.IExtMgr] {
-	return resolveManager[*ExtMgrImpl](e.managerBinding, &gdx.ExtMgr, "ext")
-}
-
 type InputMgrImpl struct {
 	*managerBinding[gdx.IInputMgr]
 }
-
-func (i *InputMgrImpl) resolve() *managerBinding[gdx.IInputMgr] {
-	return resolveManager[*InputMgrImpl](i.managerBinding, &gdx.InputMgr, "input")
-}
-
 type NavigationMgrImpl struct {
 	*managerBinding[gdx.INavigationMgr]
 }
-
-func (n *NavigationMgrImpl) resolve() *managerBinding[gdx.INavigationMgr] {
-	return resolveManager[*NavigationMgrImpl](n.managerBinding, &gdx.NavigationMgr, "navigation")
-}
-
 type PenMgrImpl struct {
 	*managerBinding[gdx.IPenMgr]
 }
-
-func (p *PenMgrImpl) resolve() *managerBinding[gdx.IPenMgr] {
-	return resolveManager[*PenMgrImpl](p.managerBinding, &gdx.PenMgr, "pen")
-}
-
 type PhysicsMgrImpl struct {
 	*managerBinding[gdx.IPhysicsMgr]
 }
-
-func (p *PhysicsMgrImpl) resolve() *managerBinding[gdx.IPhysicsMgr] {
-	return resolveManager[*PhysicsMgrImpl](p.managerBinding, &gdx.PhysicsMgr, "physics")
-}
-
 type PlatformMgrImpl struct {
 	*managerBinding[gdx.IPlatformMgr]
 }
-
-func (p *PlatformMgrImpl) resolve() *managerBinding[gdx.IPlatformMgr] {
-	return resolveManager[*PlatformMgrImpl](p.managerBinding, &gdx.PlatformMgr, "platform")
-}
-
 type ResMgrImpl struct {
 	*managerBinding[gdx.IResMgr]
 }
-
-func (r *ResMgrImpl) resolve() *managerBinding[gdx.IResMgr] {
-	return resolveManager[*ResMgrImpl](r.managerBinding, &gdx.ResMgr, "res")
-}
-
 type SceneMgrImpl struct {
 	*managerBinding[gdx.ISceneMgr]
 }
-
-func (s *SceneMgrImpl) resolve() *managerBinding[gdx.ISceneMgr] {
-	return resolveManager[*SceneMgrImpl](s.managerBinding, &gdx.SceneMgr, "scene")
-}
-
 type SpriteMgrImpl struct {
 	*managerBinding[gdx.ISpriteMgr]
 }
-
-func (s *SpriteMgrImpl) resolve() *managerBinding[gdx.ISpriteMgr] {
-	return resolveManager[*SpriteMgrImpl](s.managerBinding, &gdx.SpriteMgr, "sprite")
-}
-
 type TilemapMgrImpl struct {
 	*managerBinding[gdx.ITilemapMgr]
 }
-
-func (t *TilemapMgrImpl) resolve() *managerBinding[gdx.ITilemapMgr] {
-	return resolveManager[*TilemapMgrImpl](t.managerBinding, &gdx.TilemapMgr, "tilemap")
-}
-
 type TilemapparserMgrImpl struct {
 	*managerBinding[gdx.ITilemapparserMgr]
 }
-
-func (t *TilemapparserMgrImpl) resolve() *managerBinding[gdx.ITilemapparserMgr] {
-	return resolveManager[*TilemapparserMgrImpl](t.managerBinding, &gdx.TilemapparserMgr, "tilemapparser")
-}
-
 type UiMgrImpl struct {
 	*managerBinding[gdx.IUiMgr]
-}
-
-func (u *UiMgrImpl) resolve() *managerBinding[gdx.IUiMgr] {
-	return resolveManager[*UiMgrImpl](u.managerBinding, &gdx.UiMgr, "ui")
-}
-
-func bindManager(manager gdx.IManager) func() {
-	switch backend := manager.(type) {
-	case gdx.IAudioMgr:
-		binding := &managerBinding[gdx.IAudioMgr]{backend: backend, name: "audio"}
-		return binding.bind(&gdx.AudioMgr, &AudioMgrImpl{binding})
-	case gdx.ICameraMgr:
-		binding := &managerBinding[gdx.ICameraMgr]{backend: backend, name: "camera"}
-		return binding.bind(&gdx.CameraMgr, &CameraMgrImpl{binding})
-	case gdx.IDebugMgr:
-		binding := &managerBinding[gdx.IDebugMgr]{backend: backend, name: "debug"}
-		return binding.bind(&gdx.DebugMgr, &DebugMgrImpl{binding})
-	case gdx.IExtMgr:
-		binding := &managerBinding[gdx.IExtMgr]{backend: backend, name: "ext"}
-		return binding.bind(&gdx.ExtMgr, &ExtMgrImpl{binding})
-	case gdx.IInputMgr:
-		binding := &managerBinding[gdx.IInputMgr]{backend: backend, name: "input"}
-		return binding.bind(&gdx.InputMgr, &InputMgrImpl{binding})
-	case gdx.INavigationMgr:
-		binding := &managerBinding[gdx.INavigationMgr]{backend: backend, name: "navigation"}
-		return binding.bind(&gdx.NavigationMgr, &NavigationMgrImpl{binding})
-	case gdx.IPenMgr:
-		binding := &managerBinding[gdx.IPenMgr]{backend: backend, name: "pen"}
-		return binding.bind(&gdx.PenMgr, &PenMgrImpl{binding})
-	case gdx.IPhysicsMgr:
-		binding := &managerBinding[gdx.IPhysicsMgr]{backend: backend, name: "physics"}
-		return binding.bind(&gdx.PhysicsMgr, &PhysicsMgrImpl{binding})
-	case gdx.IPlatformMgr:
-		binding := &managerBinding[gdx.IPlatformMgr]{backend: backend, name: "platform"}
-		return binding.bind(&gdx.PlatformMgr, &PlatformMgrImpl{binding})
-	case gdx.IResMgr:
-		binding := &managerBinding[gdx.IResMgr]{backend: backend, name: "res"}
-		return binding.bind(&gdx.ResMgr, &ResMgrImpl{binding})
-	case gdx.ISceneMgr:
-		binding := &managerBinding[gdx.ISceneMgr]{backend: backend, name: "scene"}
-		return binding.bind(&gdx.SceneMgr, &SceneMgrImpl{binding})
-	case gdx.ISpriteMgr:
-		binding := &managerBinding[gdx.ISpriteMgr]{backend: backend, name: "sprite"}
-		return binding.bind(&gdx.SpriteMgr, &SpriteMgrImpl{binding})
-	case gdx.ITilemapMgr:
-		binding := &managerBinding[gdx.ITilemapMgr]{backend: backend, name: "tilemap"}
-		return binding.bind(&gdx.TilemapMgr, &TilemapMgrImpl{binding})
-	case gdx.ITilemapparserMgr:
-		binding := &managerBinding[gdx.ITilemapparserMgr]{backend: backend, name: "tilemapparser"}
-		return binding.bind(&gdx.TilemapparserMgr, &TilemapparserMgrImpl{binding})
-	case gdx.IUiMgr:
-		binding := &managerBinding[gdx.IUiMgr]{backend: backend, name: "ui"}
-		return binding.bind(&gdx.UiMgr, &UiMgrImpl{binding})
-	default:
-		panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
-	}
 }
 
 // IAudioMgr
@@ -2277,4 +2151,102 @@ func (u *UiMgrImpl) SetFlip(obj gdx.Object, horizontal bool, is_flip bool) {
 	CallInMainThread(func() {
 		binding.target().SetFlip(obj, horizontal, is_flip)
 	})
+}
+
+func (a *AudioMgrImpl) resolve() *managerBinding[gdx.IAudioMgr] {
+	return resolveManager[*AudioMgrImpl](a.managerBinding, &gdx.AudioMgr, "audio")
+}
+func (c *CameraMgrImpl) resolve() *managerBinding[gdx.ICameraMgr] {
+	return resolveManager[*CameraMgrImpl](c.managerBinding, &gdx.CameraMgr, "camera")
+}
+func (d *DebugMgrImpl) resolve() *managerBinding[gdx.IDebugMgr] {
+	return resolveManager[*DebugMgrImpl](d.managerBinding, &gdx.DebugMgr, "debug")
+}
+func (e *ExtMgrImpl) resolve() *managerBinding[gdx.IExtMgr] {
+	return resolveManager[*ExtMgrImpl](e.managerBinding, &gdx.ExtMgr, "ext")
+}
+func (i *InputMgrImpl) resolve() *managerBinding[gdx.IInputMgr] {
+	return resolveManager[*InputMgrImpl](i.managerBinding, &gdx.InputMgr, "input")
+}
+func (n *NavigationMgrImpl) resolve() *managerBinding[gdx.INavigationMgr] {
+	return resolveManager[*NavigationMgrImpl](n.managerBinding, &gdx.NavigationMgr, "navigation")
+}
+func (p *PenMgrImpl) resolve() *managerBinding[gdx.IPenMgr] {
+	return resolveManager[*PenMgrImpl](p.managerBinding, &gdx.PenMgr, "pen")
+}
+func (p *PhysicsMgrImpl) resolve() *managerBinding[gdx.IPhysicsMgr] {
+	return resolveManager[*PhysicsMgrImpl](p.managerBinding, &gdx.PhysicsMgr, "physics")
+}
+func (p *PlatformMgrImpl) resolve() *managerBinding[gdx.IPlatformMgr] {
+	return resolveManager[*PlatformMgrImpl](p.managerBinding, &gdx.PlatformMgr, "platform")
+}
+func (r *ResMgrImpl) resolve() *managerBinding[gdx.IResMgr] {
+	return resolveManager[*ResMgrImpl](r.managerBinding, &gdx.ResMgr, "res")
+}
+func (s *SceneMgrImpl) resolve() *managerBinding[gdx.ISceneMgr] {
+	return resolveManager[*SceneMgrImpl](s.managerBinding, &gdx.SceneMgr, "scene")
+}
+func (s *SpriteMgrImpl) resolve() *managerBinding[gdx.ISpriteMgr] {
+	return resolveManager[*SpriteMgrImpl](s.managerBinding, &gdx.SpriteMgr, "sprite")
+}
+func (t *TilemapMgrImpl) resolve() *managerBinding[gdx.ITilemapMgr] {
+	return resolveManager[*TilemapMgrImpl](t.managerBinding, &gdx.TilemapMgr, "tilemap")
+}
+func (t *TilemapparserMgrImpl) resolve() *managerBinding[gdx.ITilemapparserMgr] {
+	return resolveManager[*TilemapparserMgrImpl](t.managerBinding, &gdx.TilemapparserMgr, "tilemapparser")
+}
+func (u *UiMgrImpl) resolve() *managerBinding[gdx.IUiMgr] {
+	return resolveManager[*UiMgrImpl](u.managerBinding, &gdx.UiMgr, "ui")
+}
+
+func bindManager(manager gdx.IManager) func() {
+	switch backend := manager.(type) {
+	case gdx.IAudioMgr:
+		binding := &managerBinding[gdx.IAudioMgr]{backend: backend, name: "audio"}
+		return binding.bind(&gdx.AudioMgr, &AudioMgrImpl{binding})
+	case gdx.ICameraMgr:
+		binding := &managerBinding[gdx.ICameraMgr]{backend: backend, name: "camera"}
+		return binding.bind(&gdx.CameraMgr, &CameraMgrImpl{binding})
+	case gdx.IDebugMgr:
+		binding := &managerBinding[gdx.IDebugMgr]{backend: backend, name: "debug"}
+		return binding.bind(&gdx.DebugMgr, &DebugMgrImpl{binding})
+	case gdx.IExtMgr:
+		binding := &managerBinding[gdx.IExtMgr]{backend: backend, name: "ext"}
+		return binding.bind(&gdx.ExtMgr, &ExtMgrImpl{binding})
+	case gdx.IInputMgr:
+		binding := &managerBinding[gdx.IInputMgr]{backend: backend, name: "input"}
+		return binding.bind(&gdx.InputMgr, &InputMgrImpl{binding})
+	case gdx.INavigationMgr:
+		binding := &managerBinding[gdx.INavigationMgr]{backend: backend, name: "navigation"}
+		return binding.bind(&gdx.NavigationMgr, &NavigationMgrImpl{binding})
+	case gdx.IPenMgr:
+		binding := &managerBinding[gdx.IPenMgr]{backend: backend, name: "pen"}
+		return binding.bind(&gdx.PenMgr, &PenMgrImpl{binding})
+	case gdx.IPhysicsMgr:
+		binding := &managerBinding[gdx.IPhysicsMgr]{backend: backend, name: "physics"}
+		return binding.bind(&gdx.PhysicsMgr, &PhysicsMgrImpl{binding})
+	case gdx.IPlatformMgr:
+		binding := &managerBinding[gdx.IPlatformMgr]{backend: backend, name: "platform"}
+		return binding.bind(&gdx.PlatformMgr, &PlatformMgrImpl{binding})
+	case gdx.IResMgr:
+		binding := &managerBinding[gdx.IResMgr]{backend: backend, name: "res"}
+		return binding.bind(&gdx.ResMgr, &ResMgrImpl{binding})
+	case gdx.ISceneMgr:
+		binding := &managerBinding[gdx.ISceneMgr]{backend: backend, name: "scene"}
+		return binding.bind(&gdx.SceneMgr, &SceneMgrImpl{binding})
+	case gdx.ISpriteMgr:
+		binding := &managerBinding[gdx.ISpriteMgr]{backend: backend, name: "sprite"}
+		return binding.bind(&gdx.SpriteMgr, &SpriteMgrImpl{binding})
+	case gdx.ITilemapMgr:
+		binding := &managerBinding[gdx.ITilemapMgr]{backend: backend, name: "tilemap"}
+		return binding.bind(&gdx.TilemapMgr, &TilemapMgrImpl{binding})
+	case gdx.ITilemapparserMgr:
+		binding := &managerBinding[gdx.ITilemapparserMgr]{backend: backend, name: "tilemapparser"}
+		return binding.bind(&gdx.TilemapparserMgr, &TilemapparserMgrImpl{binding})
+	case gdx.IUiMgr:
+		binding := &managerBinding[gdx.IUiMgr]{backend: backend, name: "ui"}
+		return binding.bind(&gdx.UiMgr, &UiMgrImpl{binding})
+	default:
+		panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
+	}
 }

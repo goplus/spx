@@ -27,11 +27,21 @@ type EngineManagers struct {
 }
 
 {{ range $i, $name := $view.Managers -}}
-{{ $receiver := slice (lowerCamelCase $name) 0 1 -}}
 type {{camelCase $name}}MgrImpl struct {
 	*managerBinding[gdx.I{{camelCase $name}}Mgr]
 }
+{{ end }}
 
+{{ range $i, $name := $view.Managers -}}
+// I{{camelCase $name}}Mgr
+{{- range $i, $f := $view.AST.CollectGDExtensionManagerFunctions $name $view.ManagerNames }}
+{{ genManagerWrapFunction $f }}
+{{- end }}
+
+{{ end }}
+
+{{ range $i, $name := $view.Managers -}}
+{{ $receiver := slice (lowerCamelCase $name) 0 1 -}}
 func ({{ $receiver }} *{{camelCase $name}}MgrImpl) resolve() *managerBinding[gdx.I{{camelCase $name}}Mgr] {
 	return resolveManager[*{{camelCase $name}}MgrImpl]({{ $receiver }}.managerBinding, &gdx.{{camelCase $name}}Mgr, "{{lowerCamelCase $name}}")
 }
@@ -48,11 +58,3 @@ func bindManager(manager gdx.IManager) func() {
 		panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
 	}
 }
-
-{{ range $i, $name := $view.Managers -}}
-// I{{camelCase $name}}Mgr
-{{- range $i, $f := $view.AST.CollectGDExtensionManagerFunctions $name $view.ManagerNames }}
-{{ genManagerWrapFunction $f }}
-{{- end }}
-
-{{ end }}
