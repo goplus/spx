@@ -34,8 +34,7 @@ const (
 // PenSyncBuffer preserves the global order of pen commands while reducing
 // Web bridge calls to bounded, reusable float32 batches.
 type PenSyncBuffer struct {
-	count int
-	data  []float32
+	data []float32
 }
 
 func NewPenSyncBuffer(capacity int) *PenSyncBuffer {
@@ -78,7 +77,14 @@ func (b *PenSyncBuffer) Flush(send func([]float32)) {
 		return
 	}
 
-	b.flush(send)
+	// The header occupies less than one command and is ignored by division.
+	count := len(b.data) / PenBatchFields
+	if count == 0 {
+		return
+	}
+	b.data[0] = float32(count)
+	send(b.data[:len(b.data):len(b.data)])
+	b.reset()
 }
 
 // Barrier flushes queued commands before running an immediate engine operation.
@@ -86,12 +92,7 @@ func (b *PenSyncBuffer) Barrier(send func([]float32), operation func()) {
 	if operation == nil {
 		return
 	}
-	if b == nil || send == nil {
-		operation()
-		return
-	}
-
-	b.flush(send)
+	b.Flush(send)
 	operation()
 }
 
@@ -116,21 +117,10 @@ func (b *PenSyncBuffer) add(command int, obj Object, a, bval, c, d float64) bool
 		float32(d),
 		0,
 	)
-	b.count++
-	return b.count >= maxPenBatchCommands
+	return len(b.data)/PenBatchFields >= maxPenBatchCommands
 }
 
 func (b *PenSyncBuffer) reset() {
-	b.count = 0
 	b.data = b.data[:1]
 	b.data[0] = 0
-}
-
-func (b *PenSyncBuffer) flush(send func([]float32)) {
-	if b.count == 0 {
-		return
-	}
-	b.data[0] = float32(b.count)
-	send(b.data[:len(b.data):len(b.data)])
-	b.reset()
 }
