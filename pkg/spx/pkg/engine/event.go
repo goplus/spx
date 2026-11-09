@@ -24,155 +24,128 @@ import (
 type Action0 func()
 
 type Event0 struct {
-	actions map[int]Action0
-	nextID  int
-	mutex   sync.Mutex
+	registry eventRegistry[Action0]
 }
 
 type Action1[T any] func(data T)
 
 type Event1[T any] struct {
-	actions map[int]Action1[T]
-	nextID  int
-	mutex   sync.Mutex
+	registry eventRegistry[Action1[T]]
 }
 
 type Action2[T1 any, T2 any] func(data1 T1, data2 T2)
 
 type Event2[T1 any, T2 any] struct {
-	actions map[int]Action2[T1, T2]
-	nextID  int
-	mutex   sync.Mutex
+	registry eventRegistry[Action2[T1, T2]]
 }
 
 func NewEvent0() *Event0 {
-	return &Event0{
-		actions: make(map[int]Action0),
-	}
+	return &Event0{registry: eventRegistry[Action0]{actions: make(map[int]Action0)}}
 }
 
 func NewEvent1[T any]() *Event1[T] {
-	return &Event1[T]{
-		actions: make(map[int]Action1[T]),
-	}
+	return &Event1[T]{registry: eventRegistry[Action1[T]]{actions: make(map[int]Action1[T])}}
 }
 
 func NewEvent2[T1 any, T2 any]() *Event2[T1, T2] {
-	return &Event2[T1, T2]{
-		actions: make(map[int]Action2[T1, T2]),
-	}
+	return &Event2[T1, T2]{registry: eventRegistry[Action2[T1, T2]]{actions: make(map[int]Action2[T1, T2])}}
 }
 
+// Keep explicit public methods and named callback types for reflected bindings.
 func (e *Event0) Subscribe(action Action0) int {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	id := e.nextID
-	e.actions[id] = action
-	e.nextID++
-
-	return id
+	return e.registry.subscribe(action)
 }
 
 func (e *Event0) Unsubscribe(id int) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	delete(e.actions, id)
+	e.registry.unsubscribe(id)
 }
 
 func (e *Event0) UnsubscribeAll() {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.actions = make(map[int]Action0)
+	e.registry.unsubscribeAll()
 }
 
 func (e *Event0) Trigger() {
-	e.mutex.Lock()
-	actions := snapshotEventActions(e.actions)
-	e.mutex.Unlock()
-	for _, action := range actions {
+	for _, action := range e.registry.snapshot() {
 		action()
 	}
 }
 
 func (e *Event1[T]) Subscribe(action Action1[T]) int {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	id := e.nextID
-	e.actions[id] = action
-	e.nextID++
-
-	return id
+	return e.registry.subscribe(action)
 }
 
 func (e *Event1[T]) Unsubscribe(id int) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	delete(e.actions, id)
+	e.registry.unsubscribe(id)
 }
 
 func (e *Event1[T]) UnsubscribeAll() {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.actions = make(map[int]Action1[T])
+	e.registry.unsubscribeAll()
 }
 
 func (e *Event1[T]) Trigger(data T) {
-	e.mutex.Lock()
-	actions := snapshotEventActions(e.actions)
-	e.mutex.Unlock()
-	for _, action := range actions {
+	for _, action := range e.registry.snapshot() {
 		action(data)
 	}
 }
 
 func (e *Event2[T1, T2]) Subscribe(action Action2[T1, T2]) int {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	id := e.nextID
-	e.actions[id] = action
-	e.nextID++
-
-	return id
+	return e.registry.subscribe(action)
 }
 
 func (e *Event2[T1, T2]) Unsubscribe(id int) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	delete(e.actions, id)
+	e.registry.unsubscribe(id)
 }
 
 func (e *Event2[T1, T2]) UnsubscribeAll() {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.actions = make(map[int]Action2[T1, T2])
+	e.registry.unsubscribeAll()
 }
 
 func (e *Event2[T1, T2]) Trigger(data1 T1, data2 T2) {
-	e.mutex.Lock()
-	actions := snapshotEventActions(e.actions)
-	e.mutex.Unlock()
-	for _, action := range actions {
+	for _, action := range e.registry.snapshot() {
 		action(data1, data2)
 	}
 }
 
-// snapshotEventActions is called under the event's mutex. Each dispatch owns its
-// callbacks, so nested or concurrent triggers cannot change an active snapshot.
-func snapshotEventActions[T any](registered map[int]T) []T {
-	ids := make([]int, 0, len(registered))
-	for id := range registered {
+type eventRegistry[A any] struct {
+	actions map[int]A
+	nextID  int
+	mutex   sync.Mutex
+}
+
+func (r *eventRegistry[A]) subscribe(action A) int {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	id := r.nextID
+	r.actions[id] = action
+	r.nextID++
+	return id
+}
+
+func (r *eventRegistry[A]) unsubscribe(id int) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	delete(r.actions, id)
+}
+
+func (r *eventRegistry[A]) unsubscribeAll() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.actions = make(map[int]A)
+}
+
+// Each dispatch owns a sorted snapshot and invokes callbacks after unlocking,
+// so subscription changes and nested or concurrent triggers are independent.
+func (r *eventRegistry[A]) snapshot() []A {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	ids := make([]int, 0, len(r.actions))
+	for id := range r.actions {
 		ids = append(ids, id)
 	}
 	sort.Ints(ids)
-	actions := make([]T, 0, len(ids))
+	actions := make([]A, 0, len(ids))
 	for _, id := range ids {
-		actions = append(actions, registered[id])
+		actions = append(actions, r.actions[id])
 	}
 	return actions
 }

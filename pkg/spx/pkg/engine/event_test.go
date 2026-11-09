@@ -141,6 +141,130 @@ func TestEventConcurrentTriggersOwnTheirSnapshots(t *testing.T) {
 	}
 }
 
+func TestEventSubscriptionIDsSurviveClear(t *testing.T) {
+	for name, create := range eventTestCases() {
+		t.Run(name, func(t *testing.T) {
+			e := create()
+			var got []int
+			for i := range 3 {
+				if id := e.subscribe(func([2]int) { got = append(got, i) }); id != i {
+					t.Fatalf("Subscribe ID=%d, want %d", id, i)
+				}
+			}
+			e.unsubscribe(1)
+			e.unsubscribe(99)
+			e.trigger(0)
+			e.unsubscribeAll()
+			e.unsubscribeAll()
+			if id := e.subscribe(func([2]int) { got = append(got, 3) }); id != 3 {
+				t.Fatalf("Subscribe after clear ID=%d, want 3", id)
+			}
+			e.unsubscribe(0) // A stale ID must not remove a new subscription.
+			e.trigger(0)
+			if want := []int{0, 2, 3}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("calls=%v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestEventConcurrentSubscriptionChanges(t *testing.T) {
+	for name, create := range eventTestCases() {
+		t.Run(name, func(t *testing.T) {
+			e := create()
+			const workers, iterations = 8, 100
+			ids := make(chan int, workers*iterations)
+			var done sync.WaitGroup
+			for range workers {
+				done.Go(func() {
+					for i := range iterations {
+						id := e.subscribe(func([2]int) {})
+						ids <- id
+						e.trigger(i)
+						e.unsubscribe(id)
+						if i%10 == 0 {
+							e.unsubscribeAll()
+						}
+					}
+				})
+			}
+			done.Wait()
+			close(ids)
+			seen := make([]bool, workers*iterations)
+			for id := range ids {
+				if id < 0 || id >= len(seen) || seen[id] {
+					t.Fatalf("invalid or reused subscription ID: %d", id)
+				}
+				seen[id] = true
+			}
+		})
+	}
+}
+
+func TestEventReflectedMethodsAndZeroValue(t *testing.T) {
+	for _, event := range []any{new(Event0), new(Event1[int]), new(Event2[int, string])} {
+		v := reflect.ValueOf(event)
+		t.Run(v.Type().String(), func(t *testing.T) {
+			if v.NumMethod() != 4 || v.Elem().NumMethod() != 0 {
+				t.Fatal("events must expose only the four pointer-receiver methods")
+			}
+			subscribe := v.MethodByName("Subscribe")
+			trigger := v.MethodByName("Trigger")
+			var actionType reflect.Type
+			switch event.(type) {
+			case *Event0:
+				actionType = reflect.TypeFor[Action0]()
+			case *Event1[int]:
+				actionType = reflect.TypeFor[Action1[int]]()
+			case *Event2[int, string]:
+				actionType = reflect.TypeFor[Action2[int, string]]()
+			}
+			if want := reflect.FuncOf([]reflect.Type{actionType}, []reflect.Type{reflect.TypeFor[int]()}, false); subscribe.Type() != want {
+				t.Fatalf("Subscribe type=%v, want %v", subscribe.Type(), want)
+			}
+			if trigger.Type().NumIn() != actionType.NumIn() || trigger.Type().NumOut() != 0 {
+				t.Fatalf("Trigger type=%v does not match %v", trigger.Type(), actionType)
+			}
+			var args []reflect.Value
+			for i := range actionType.NumIn() {
+				if trigger.Type().In(i) != actionType.In(i) {
+					t.Fatalf("Trigger argument %d type=%v, want %v", i, trigger.Type().In(i), actionType.In(i))
+				}
+				args = append(args, reflect.Zero(actionType.In(i)))
+			}
+			trigger.Call(args) // Empty zero values remain safe to trigger and unsubscribe.
+			v.MethodByName("Unsubscribe").Call([]reflect.Value{reflect.ValueOf(0)})
+			nilAction := []reflect.Value{reflect.Zero(actionType)}
+			requireEventPanic(t, func() { subscribe.Call(nilAction) }) // No implicit initialization.
+			v.MethodByName("UnsubscribeAll").Call(nil)
+			if id := subscribe.Call(nilAction)[0].Int(); id != 0 {
+				t.Fatalf("failed subscription consumed an ID: %d", id)
+			}
+			calls := 0
+			subscribe.Call([]reflect.Value{reflect.MakeFunc(actionType, func([]reflect.Value) []reflect.Value { calls++; return nil })})
+			requireEventPanic(t, func() { trigger.Call(args) })
+			if calls != 0 {
+				t.Fatal("dispatch continued past a nil callback")
+			}
+			v.MethodByName("Unsubscribe").Call([]reflect.Value{reflect.ValueOf(0)})
+			trigger.Call(args)
+			if calls != 1 {
+				t.Fatal("callback panic poisoned subsequent dispatch")
+			}
+		})
+	}
+}
+
+func requireEventPanic(t *testing.T, call func()) {
+	t.Helper()
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic")
+		}
+	}()
+	call()
+}
+
 func eventTestCases() map[string]func() eventTestHarness {
 	return map[string]func() eventTestHarness{
 		"Event0": func() eventTestHarness {
