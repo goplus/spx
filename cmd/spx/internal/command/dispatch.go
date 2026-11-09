@@ -37,6 +37,7 @@ type commandBuild uint8
 const (
 	noBuild commandBuild = iota
 	dllBuild
+	initialDllBuild // Preserve the web template command's fresh-project build.
 	wasmBuild
 	tinyGoBuild
 )
@@ -46,6 +47,7 @@ type commandSpec struct {
 	setup                commandSetup
 	build                commandBuild
 	runtime, hidden      bool
+	stageAssets          bool
 	run                  func(*CmdTool) error
 	unavailable          bool
 }
@@ -68,12 +70,12 @@ var commandSpecs = []commandSpec{
 	{name: "runwebworker", group: "Web Development", summary: "Run with a web worker", setup: webExportSetup, runtime: true, run: (*CmdTool).RunWebWorker},
 	{name: "exportweb", group: "Web Development", summary: "Export the web package", setup: webExportSetup, run: (*CmdTool).ExportWeb},
 	{name: "exportwebworker", group: "Web Development", summary: "Export the web worker package", setup: webExportSetup, run: (*CmdTool).ExportWebWorker},
-	{name: "exporttemplateweb", group: "Web Development", summary: "Export the web template project", setup: projectSetup, run: (*CmdTool).ExportTemplateWeb},
+	{name: "exporttemplateweb", group: "Web Development", summary: "Export the web template project", setup: projectSetup, build: initialDllBuild, run: (*CmdTool).ExportTemplateWeb},
 	{name: "stopweb", group: "Web Development", summary: "Stop the web server", setup: pathSetup, run: (*CmdTool).StopWeb},
 	{name: "export", group: "Export & Distribution", summary: "Export the PC package", setup: projectSetup, build: dllBuild, run: (*CmdTool).Export},
 	{name: "exportpack", group: "Export & Distribution", summary: "Export project data for the desktop runtime", setup: projectSetup, build: dllBuild, hidden: true, run: (*CmdTool).ExportPack},
-	{name: "exportapk", group: "Export & Distribution", summary: "Export an Android APK", setup: projectSetup, run: (*CmdTool).ExportApk},
-	{name: "exportios", group: "Export & Distribution", summary: "Export an iOS package", setup: projectSetup, run: (*CmdTool).ExportIos},
+	{name: "exportapk", group: "Export & Distribution", summary: "Export an Android APK", setup: projectSetup, build: dllBuild, stageAssets: true, run: (*CmdTool).executeExportApk},
+	{name: "exportios", group: "Export & Distribution", summary: "Export an iOS package", setup: projectSetup, build: dllBuild, stageAssets: true, run: (*CmdTool).executeExportIos},
 	{name: "exportminigame", group: "Export & Distribution", summary: "Export a minigame package", setup: webExportSetup, run: (*CmdTool).ExportMinigame},
 	{name: "exportminiprogram", group: "Export & Distribution", summary: "Export a mini program package", setup: webExportSetup, run: (*CmdTool).ExportMiniprogram},
 	{name: "exportbot", group: "Export & Distribution", summary: "Reserved; not implemented", unavailable: true},
@@ -91,8 +93,18 @@ func (cmd *CmdTool) dispatch(spec commandSpec, fsRelDir, dstRelDir string) error
 	if err := cmd.prepareCommand(spec, fsRelDir, dstRelDir); err != nil {
 		return err
 	}
-	if err := cmd.buildCommand(spec); err != nil {
+	needsImport := spec.setup == projectSetup && cmd.ShouldReimport()
+	build := spec.build
+	if build == initialDllBuild && !needsImport {
+		build = noBuild
+	}
+	if err := cmd.buildCommand(build); err != nil {
 		return err
+	}
+	if needsImport {
+		if err := cmd.Reimport(); err != nil {
+			return err
+		}
 	}
 	if spec.run == nil {
 		return nil
@@ -125,30 +137,28 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	if spec.setup == webExportSetup {
 		return nil
 	}
-	return cmd.setupEnv(fsRelDir)
+	if err := cmd.setupEnv(fsRelDir); err != nil {
+		return err
+	}
+	// Mobile exports need staged assets before the shared build and import.
+	if spec.stageAssets {
+		return cmd.prepareExport()
+	}
+	return nil
 }
 
-func (cmd *CmdTool) buildCommand(spec commandSpec) error {
-	if spec.setup == projectSetup && cmd.ShouldReimport() {
-		if err := cmd.Reimport(); err != nil {
-			return err
-		}
-		// Reimport already built the shared library before importing assets.
-		if spec.build == dllBuild {
-			return nil
-		}
-	}
-	switch spec.build {
+func (cmd *CmdTool) buildCommand(build commandBuild) error {
+	switch build {
 	case noBuild:
 		return nil
-	case dllBuild:
+	case dllBuild, initialDllBuild:
 		return cmd.BuildDll()
 	case wasmBuild:
 		return cmd.BuildWasm()
 	case tinyGoBuild:
 		return cmd.BuildTinyGoLib()
 	default:
-		return fmt.Errorf("invalid command build phase %d", spec.build)
+		return fmt.Errorf("invalid command build phase %d", build)
 	}
 }
 

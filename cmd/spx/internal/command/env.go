@@ -111,16 +111,6 @@ func (cmd *CmdTool) ShouldReimport() bool {
 	return !util.IsFileExist(cmd.projectImportCachePath())
 }
 
-// Reimport refreshes Godot import data.
-func (cmd *CmdTool) Reimport() error {
-	if !cmd.shouldSkipProjectImport() {
-		if err := cmd.BuildDll(); err != nil {
-			return err
-		}
-	}
-	return cmd.runProjectImport()
-}
-
 // Clear removes generated project files.
 func (cmd *CmdTool) Clear() error {
 	for _, artifact := range []string{
@@ -254,7 +244,8 @@ func (cmd *CmdTool) shouldSkipProjectImport() bool {
 		spec.build == tinyGoBuild || spec.build == wasmBuild
 }
 
-func (cmd *CmdTool) runProjectImport() error {
+// Reimport refreshes resource import data in recovery mode without building code.
+func (cmd *CmdTool) Reimport() error {
 	logInfof("Importing project resources")
 	execCmd, ctx, timeout, cancel := cmd.newProjectImportCommand()
 	defer cancel()

@@ -265,6 +265,8 @@ spx exporttemplateweb
 spx exportbot  # 当前返回错误，不会生成机器人包
 ```
 
+`exportapk` 和 `exportios` 都先复制项目资源、构建宿主机动态库，再在缺少导入缓存时执行初始资源导入。导入是独立阶段，使用 Godot recovery mode，跳过加载 GDExtension；宿主机动态库供后续导出步骤使用。已有导入缓存时仍重新构建宿主机动态库。随后构建移动端库并执行最终导出。
+
 #### `exportapk`
 
 导出项目的 Android APK 包，可以安装到 Android 设备上。

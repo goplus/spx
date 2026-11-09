@@ -19,6 +19,7 @@ package command
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -484,7 +485,7 @@ func TestProjectImportTimeoutStopsTool(t *testing.T) {
 	t.Setenv(projectImportTimeoutEnvVar, "10ms")
 	cmd := &CmdTool{ProjectDir: t.TempDir(), CmdPath: filepath.Join(binDir, "godot")}
 	start := time.Now()
-	err := cmd.runProjectImport()
+	err := cmd.Reimport()
 	if err == nil || !strings.Contains(err.Error(), "godot import timed out after 10ms") || !strings.Contains(err.Error(), projectImportTimeoutEnvVar) {
 		t.Fatalf("timeout error = %v", err)
 	}
@@ -855,21 +856,44 @@ func TestUpdateProjectNameReportsReadAndWriteFailures(t *testing.T) {
 	}
 }
 
-func TestReimportBuildFailurePreventsGodotLaunch(t *testing.T) {
-	root := t.TempDir()
-	log := filepath.Join(root, "import.log")
-	t.Setenv("SPX_IMPORT_LOG", log)
-	bin := installCommandTestTools(t, map[string]string{
-		"xgo":   "exit 23",
-		"godot": `printf imported > "$SPX_IMPORT_LOG"`,
-	})
-	arch := ""
-	cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project"), CmdPath: filepath.Join(bin, "godot"), Args: ExtraArgs{CmdName: "exporttemplateweb", Arch: &arch}}
-	if err := cmd.Reimport(); err == nil || !strings.Contains(err.Error(), "code generation failed") {
-		t.Fatalf("reimport build error = %v", err)
-	}
-	if _, err := os.Stat(log); !os.IsNotExist(err) {
-		t.Fatalf("failed build still imported project: %v", err)
+func TestReimportDoesNotBuild(t *testing.T) {
+	for _, cached := range []bool{false, true} {
+		for _, failure := range []string{"0", "23"} {
+			t.Run(fmt.Sprintf("cached=%t/exit=%s", cached, failure), func(t *testing.T) {
+				root, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				log := filepath.Join(root, "import.log")
+				t.Setenv("SPX_IMPORT_LOG", log)
+				t.Setenv("SPX_IMPORT_EXIT", failure)
+				t.Setenv(projectImportTimeoutEnvVar, "0")
+				// No Go or XGo tools: resource import must not build or hide sources.
+				bin := installCommandTestTools(t, map[string]string{
+					"godot": `printf '%s\n' "$PWD" "$@" > "$SPX_IMPORT_LOG"; exit "$SPX_IMPORT_EXIT"`,
+				})
+				cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project"), CmdPath: filepath.Join(bin, "godot"), Args: ExtraArgs{CmdName: "build"}}
+				source := filepath.Join(cmd.ProjectDir, "go", "ios_fixture.go")
+				writeCommandTestFile(t, source, "unchanged")
+				if cached {
+					writeProjectImportCache(t, cmd.ProjectDir)
+				}
+				err = cmd.Reimport()
+				if failure == "0" && err != nil || failure != "0" && (err == nil || !strings.Contains(err.Error(), "godot import failed")) {
+					t.Fatalf("Reimport = %v, want exit %s", err, failure)
+				}
+				want := strings.Join([]string{cmd.ProjectDir, "--headless", "--path", cmd.ProjectDir, "--import", "--recovery-mode", ""}, "\n")
+				if got := readTestFile(t, log); got != want {
+					t.Fatalf("import invocation = %q, want %q", got, want)
+				}
+				if got := readTestFile(t, source); got != "unchanged" {
+					t.Fatalf("import changed iOS source: %q", got)
+				}
+				if _, err := os.Stat(source + ".txt"); !os.IsNotExist(err) {
+					t.Fatalf("import hid iOS source: %v", err)
+				}
+			})
+		}
 	}
 }
 
