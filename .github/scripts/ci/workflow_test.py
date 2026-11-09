@@ -44,6 +44,26 @@ class SourceChecksWorkflowTest(unittest.TestCase):
         self.assertEqual(abi["env"]["GDSPX_SANITIZERS"], "address,undefined")
         self.assertIn("bash godot_modules/spx/web/tests/run_string_abi_test.sh", abi["run"])
 
+    def test_native_386_executes_cgo_tests_and_uploads_coverage(self):
+        self.assertEqual(self.job["runs-on"], "ubuntu-latest")
+        setup = named_step(self.job, "Set up 32-bit native test dependencies")
+        self.assertEqual(setup["run"].splitlines(), [
+            "sudo apt-get update",
+            "sudo apt-get install --no-install-recommends -y gcc-multilib",
+        ])
+        test = named_step(self.job, "Test 32-bit native binding")
+        self.assertEqual(test["env"], {"GOOS": "linux", "GOARCH": "386", "CGO_ENABLED": "1"})
+        self.assertEqual(test["run"], "go test -v -coverprofile=coverage-native-386.out "
+                         "-covermode=atomic ./internal/gdengine/binding/native")
+        artifact = action_steps(self.job, "actions/upload-artifact")[0]
+        self.assertIn("coverage-native-386.out", artifact["with"]["path"].splitlines())
+        steps = self.job["steps"]
+        self.assertLess(steps.index(setup), steps.index(test))
+        self.assertLess(steps.index(test), steps.index(artifact))
+        for step in (setup, test):
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
+
 
 class CoverageWorkflowTest(unittest.TestCase):
     def test_coverage_publication_events(self):

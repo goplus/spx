@@ -372,6 +372,7 @@ func TestDispatcherPreservesCallbackPayloads(t *testing.T) {
 }
 
 func TestWebSessionStartupAndUnlink(t *testing.T) {
+	installLinkHost(t)
 	previousCallbacks, previousInitialized := callbacks, wasmInitialized
 	previousSnapshot, previousGeneration := inputSnap, actionGeneration
 	previousBool, previousAxis, previousContact := actionBool, actionAxis, contactEventGeneration
@@ -387,8 +388,22 @@ func TestWebSessionStartupAndUnlink(t *testing.T) {
 	for _, interpreter := range []bool{false, true} {
 		starts := 0
 		BindCallbacks(engine.CallbackInfo{CoreCallbackInfo: engine.CoreCallbackInfo{OnEngineStart: func() { starts++ }}})
-		wasmInitialized = true
-		session := &LinkSession{exit: make(chan struct{}), interpreter: interpreter}
+		wasmInitialized = !interpreter
+		session, gotInterpreter := Link()
+		if gotInterpreter != interpreter || session.interpreter != interpreter {
+			t.Fatalf("Link interpreter mode = %v/%v, want %v", gotInterpreter, session.interpreter, interpreter)
+		}
+		for _, name := range []string{"go_wasm_init", "gdspx_dispatch", "gdspx_on_contact_events"} {
+			if js.Global().Get(name).Type() != js.TypeFunction {
+				t.Fatalf("Link did not register %s", name)
+			}
+		}
+		api := reflect.ValueOf(API)
+		for i := range api.NumField() {
+			if api.Field(i).Interface().(js.Value).Type() != js.TypeFunction {
+				t.Fatalf("Link did not resolve API field %s", api.Type().Field(i).Name)
+			}
+		}
 		ready, done := make(chan struct{}), make(chan struct{})
 		go func() { session.Run(func() { close(ready) }); close(done) }()
 		finish := sync.OnceFunc(func() {

@@ -98,6 +98,18 @@ jobs:
         shell: bash
         run: bash .github/scripts/ci/test_go_coverage.sh native
 
+      - name: Set up 32-bit native test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-multilib
+
+      - name: Test 32-bit native binding
+        env:
+          GOOS: linux
+          GOARCH: '386'
+          CGO_ENABLED: '1'
+        run: go test -v -coverprofile=coverage-native-386.out -covermode=atomic ./internal/gdengine/binding/native
+
       - name: Save coverage for combined upload
         if: inputs.collect_coverage
         uses: actions/upload-artifact@v7
@@ -110,6 +122,7 @@ jobs:
             ${{ steps.web-interpreter-tests.outputs.coverage }}
             ${{ steps.tool-tests.outputs.coverage }}
             ${{ steps.codegen-tests.outputs.coverage }}
+            coverage-native-386.out
           if-no-files-found: error
           overwrite: true
           retention-days: 7

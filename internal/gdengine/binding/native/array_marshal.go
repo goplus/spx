@@ -122,9 +122,7 @@ func ToGdArrayInfo(slice any) *ArrayInfo {
 		if v == nil {
 			return createGdArrayFromFloat32s(nil)
 		}
-		if len(v) > math.MaxInt32 {
-			panic("gdengine: native array length exceeds int32")
-		}
+		checkNativeArrayLength(len(v))
 		floats := make([]float32, len(v))
 		for i, f := range v {
 			floats[i] = float32(f)
@@ -293,6 +291,12 @@ func (a *ArrayInfo) ToStrings() []string {
 	return result
 }
 
+func checkNativeArrayLength(size int) {
+	if size > math.MaxInt32 {
+		panic("gdengine: native array length exceeds int32")
+	}
+}
+
 func allocateGdArrayInfo(arrayType int64, size int, isNil bool) *ArrayInfo {
 	if isNil {
 		return &ArrayInfo{}
@@ -301,9 +305,7 @@ func allocateGdArrayInfo(arrayType int64, size int, isNil bool) *ArrayInfo {
 	if size < 0 {
 		return nil
 	}
-	if size > math.MaxInt32 {
-		panic("gdengine: native array length exceeds int32")
-	}
+	checkNativeArrayLength(size)
 	var sizeOverflow C.int
 	arrayInfo := C.cgo_create_array_info(C.int(arrayType), C.int(size), &sizeOverflow)
 	if sizeOverflow != 0 {

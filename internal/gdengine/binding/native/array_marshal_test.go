@@ -240,6 +240,13 @@ func TestNativeArrayAllocationRejectsLengthOverflow(t *testing.T) {
 	}
 }
 
+func TestCheckNativeArrayLengthAcceptsBoundary(t *testing.T) {
+	// Validate the shared float64/allocation preflight without allocating a huge slice.
+	for _, size := range []int{0, 1, math.MaxInt32} {
+		checkNativeArrayLength(size)
+	}
+}
+
 func TestNativeArrayAllocationRejectsNegativeLengthBeforeNarrowing(t *testing.T) {
 	if strconv.IntSize != 64 {
 		t.Skip("requires a 64-bit Go length")

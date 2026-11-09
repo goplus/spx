@@ -62,14 +62,6 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 
 	backend, interpreter := facade.LinkFFI()
 	session := &LinkSession{backend: backend}
-	committed := false
-	defer func() {
-		if !committed {
-			backend.Unlink()
-			coreCallbacks = CoreCallbackInfo{}
-			isWebInterpreterMode = false
-		}
-	}()
 
 	isWebInterpreterMode = interpreter
 	coreCallbacks = coreCallbackInfo
@@ -77,7 +69,6 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	// These Go adapters have no lifecycle behavior; the backend owns its managers.
 	engineimpl.BindManagers(engineimpl.CreateManagers())
 	activeLink = session
-	committed = true
 	return session
 }
 
