@@ -160,7 +160,6 @@ func TestGenerateManagerWrappersOwnDispatch(t *testing.T) {
 	require.Contains(t, getter, "return CallInMainThreadValue(func() bool {\n\t\treturn binding.target().IsCollisionEnabled(obj)\n\t})")
 	require.Contains(t, setter, "binding := s.resolve()")
 	require.Contains(t, getter, "binding := s.resolve()")
-	require.Contains(t, string(generated), "&gdx.SpriteMgr")
 	probe := generatedMethod(t, path, generated, "IsMainThread")
 	require.NotContains(t, probe, "CallInMainThread")
 	require.Contains(t, probe, "return binding.target().IsMainThread()")

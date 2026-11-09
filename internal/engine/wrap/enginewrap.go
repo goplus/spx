@@ -20,7 +20,6 @@ package enginewrap
 
 import (
 	"slices"
-	"sync"
 
 	. "github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine/managerstate"
@@ -71,13 +70,10 @@ func (m *managerBinding[T]) target() T {
 	return m.backend
 }
 
+// bind and its cleanup require managerstate.Mu's write lock.
 func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
-	managerstate.Mu.Lock()
 	*slot = wrapper
-	managerstate.Mu.Unlock()
 	return func() {
-		managerstate.Mu.Lock()
-		defer managerstate.Mu.Unlock()
 		var zero T
 		if *slot == wrapper {
 			*slot = zero
@@ -86,30 +82,33 @@ func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
 	}
 }
 
-// BindManagers installs shared main-thread wrappers around raw backend managers.
-// The returned function invalidates these wrappers and clears only globals that
-// still refer to this binding, so an older cleanup cannot remove a newer binding.
-// Calls that passed their final target check may finish; release does not wait
-// for them. Backend resource destruction remains the engine lifecycle's job.
-func BindManagers(managers []gdx.IManager) func() {
+// BindManagers installs main-thread wrappers as one registry update.
+// Cleanup invalidates the set without clearing replacements or waiting for
+// calls that already acquired a backend.
+func BindManagers(managers []gdx.IManager) (cleanup func()) {
+	managerstate.Mu.Lock()
+	defer managerstate.Mu.Unlock()
+
 	var releases []func()
-	release := sync.OnceFunc(func() {
+	releaseLocked := func() {
 		for _, release := range slices.Backward(releases) {
 			release()
 		}
 		releases = nil
-	})
-	complete := false
+	}
 	defer func() {
-		if !complete {
-			release()
+		if cleanup == nil {
+			releaseLocked()
 		}
 	}()
 	for _, manager := range managers {
 		releases = append(releases, bindManager(manager))
 	}
-	complete = true
-	return release
+	return func() {
+		managerstate.Mu.Lock()
+		defer managerstate.Mu.Unlock()
+		releaseLocked()
+	}
 }
 
 var mainCallback func(call func())

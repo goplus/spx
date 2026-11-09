@@ -308,6 +308,19 @@ func TestManagerBindingsRejectStaleWrappersAndPreserveReplacement(t *testing.T) 
 	previousCallback, previousAudio := mainCallback, gdx.AudioMgr
 	t.Cleanup(func() { mainCallback, gdx.AudioMgr = previousCallback, previousAudio })
 	Init(func(call func()) { call() })
+	cleanupConcurrently := func(cleanup func()) {
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		for range 8 {
+			workers.Go(func() {
+				<-start
+				cleanup()
+			})
+		}
+		close(start)
+		workers.Wait()
+		cleanup()
+	}
 	firstCalls, secondCalls := 0, 0
 	first := &bindingAudioMgr{getVolume: func(gdx.Object) float64 { firstCalls++; return 0.25 }}
 	second := &bindingAudioMgr{getVolume: func(gdx.Object) float64 { secondCalls++; return 0.75 }}
@@ -317,8 +330,7 @@ func TestManagerBindingsRejectStaleWrappersAndPreserveReplacement(t *testing.T) 
 	secondCleanup := BindManagers([]gdx.IManager{second})
 	t.Cleanup(secondCleanup)
 	secondWrapper := gdx.AudioMgr
-	firstCleanup()
-	firstCleanup()
+	cleanupConcurrently(firstCleanup)
 	if gdx.AudioMgr != secondWrapper {
 		t.Fatal("old cleanup removed the replacement binding")
 	}
@@ -328,8 +340,7 @@ func TestManagerBindingsRejectStaleWrappersAndPreserveReplacement(t *testing.T) 
 	if got := secondWrapper.GetVolume(1); got != 0.75 || secondCalls != 1 {
 		t.Fatalf("replacement volume=%v, raw calls=%d, want 0.75 and 1", got, secondCalls)
 	}
-	secondCleanup()
-	secondCleanup()
+	cleanupConcurrently(secondCleanup)
 	if gdx.AudioMgr != nil {
 		t.Fatal("cleanup retained the public manager")
 	}
@@ -365,26 +376,14 @@ func TestManagerBindingChecksLifetimeWhenDispatchExecutes(t *testing.T) {
 				if facade {
 					manager = new(AudioMgrImpl)
 				}
-				pending := make(chan func(), 1)
-				result := make(chan any, 1)
 				Init(func(call func()) {
-					pending <- call
-					if value := <-result; value != nil {
-						panic(value)
+					cleanup()
+					if replace {
+						t.Cleanup(BindManagers([]gdx.IManager{backend}))
 					}
+					call()
 				})
-				done := make(chan any, 1)
-				go func() { done <- catchManagerPanic(func() { manager.SetVolume(1, 0.75) }) }()
-				call := <-pending
-				if calls != 0 {
-					t.Fatal("backend ran before the synchronous dispatcher executed the callback")
-				}
-				cleanup()
-				if replace {
-					t.Cleanup(BindManagers([]gdx.IManager{backend}))
-				}
-				result <- catchManagerPanic(call)
-				if got := <-done; got != "enginewrap: audio manager is not bound" || calls != 0 {
+				if got := catchManagerPanic(func() { manager.SetVolume(1, 0.75) }); got != "enginewrap: audio manager is not bound" || calls != 0 {
 					t.Fatalf("closed dispatch panic=%v, raw calls=%d; want rejection before either backend", got, calls)
 				}
 			})
