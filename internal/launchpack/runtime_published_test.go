@@ -20,6 +20,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -66,6 +67,114 @@ func TestAcquireRuntimeAssetsFromPublishedRelease(t *testing.T) {
 	}
 	if got, err := os.ReadFile(assets.PackPath); err != nil || string(got) != "fixture-pack" {
 		t.Fatalf("materialized pack = %q, err=%v", got, err)
+	}
+}
+
+// Archive digests identify the downloaded ZIPs, file digests identify their
+// extracted contents, and ManifestSHA256 identifies the exact source bytes.
+// Each participates in the materialized bundle identity, including on reuse.
+func TestAcquireRuntimeAssetsPreservesOriginIdentity(t *testing.T) {
+	for _, mode := range []string{"published", "local"} {
+		t.Run(mode, func(t *testing.T) {
+			fixture := newPublishedRuntimeFixture(t)
+			cacheRoot := t.TempDir()
+			cfg := publishedRuntimeConfig(cacheRoot)
+			engine := []byte("fixture-engine-" + runtime.GOOS + "-" + runtime.GOARCH)
+			pack := []byte("fixture-pack")
+			lockSHA, err := fixture.lock.SHA256()
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := runtimeBundleOrigin{
+				Schema: "spx-runtime-acquisition/v1", Mode: mode,
+				RuntimeVersion: fixture.lock.RuntimeVersion, RuntimeABI: fixture.lock.RuntimeABI,
+				LockSHA256: lockSHA, GOOS: fixture.spec.GOOS, GOARCH: fixture.spec.GOARCH,
+				EngineName: fixture.spec.RuntimeName, EngineSize: int64(len(engine)), EngineSHA256: digestBytes(engine),
+				PackName: fixture.spec.PackName, PackSize: int64(len(pack)), PackSHA256: digestBytes(pack),
+			}
+			if mode == "published" {
+				// Whitespace must not be discarded when identifying the source manifest.
+				fixture.manifestData = append(fixture.manifestData, '\n', ' ')
+				want.ManifestSHA256 = digestBytes(fixture.manifestData)
+				want.EngineArchive = fixture.spec.ArchiveName
+				want.EngineArchiveSHA256 = digestBytes(fixture.assets[fixture.spec.ArchiveName])
+				want.PackArchive = release.RuntimeAssetZipName
+				want.PackArchiveSHA256 = digestBytes(fixture.assets[release.RuntimeAssetZipName])
+			} else {
+				root := t.TempDir()
+				cfg.RuntimeManifestPath = publishLocalRuntimeTest(t, root, filepath.Join(root, "engine-manifest.json"), fixture.spec, string(engine), string(pack))
+				data := append(mustReadLaunchpackTestFile(t, cfg.RuntimeManifestPath), '\n', ' ')
+				if err := os.WriteFile(cfg.RuntimeManifestPath, data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				want.ManifestSHA256 = digestBytes(data)
+			}
+			wantJSON, err := json.Marshal(want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bundle, err := expectedEngineBundle(wantJSON, fixture.spec, want.EngineSize, want.EngineSHA256, want.PackSize, want.PackSHA256)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRoot := filepath.Join(cacheRoot, string(runtimebundle.NamespaceEngine), bundle.Digest)
+			calls := 0
+			dependencies := fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls))
+			for _, offline := range []bool{false, true} {
+				cfg.RuntimeOffline = offline
+				assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{}}, fixture.lock, dependencies)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(assets.Cleanup)
+				gotJSON := mustReadLaunchpackTestFile(t, filepath.Join(filepath.Dir(assets.EnginePath), "runtime-manifest.json"))
+				if !bytes.Equal(gotJSON, wantJSON) {
+					t.Fatalf("offline=%v origin = %s, want %s", offline, gotJSON, wantJSON)
+				}
+				if assets.EnginePath != filepath.Join(wantRoot, fixture.spec.RuntimeName) || assets.PackPath != filepath.Join(wantRoot, fixture.spec.PackName) {
+					t.Fatalf("offline=%v paths = (%s, %s), want bundle %s", offline, assets.EnginePath, assets.PackPath, wantRoot)
+				}
+				assets.Cleanup()
+			}
+			wantCalls := 0
+			if mode == "published" {
+				wantCalls = 3
+			}
+			if calls != wantCalls {
+				t.Fatalf("fetch count = %d, want %d", calls, wantCalls)
+			}
+		})
+	}
+}
+
+func TestMaterializePublishedRuntimeChecksAssetsBeforeAcquisition(t *testing.T) {
+	fixture := newPublishedRuntimeFixture(t)
+	for _, tt := range []struct {
+		name   string
+		remove []string
+		want   string
+	}{
+		{"both missing", []string{fixture.spec.ArchiveName, release.RuntimeAssetZipName}, fmt.Sprintf("launchpack: runtime manifest has no host asset %q", fixture.spec.ArchiveName)},
+		{"host missing", []string{fixture.spec.ArchiveName}, fmt.Sprintf("launchpack: runtime manifest has no host asset %q", fixture.spec.ArchiveName)},
+		{"pack missing", []string{release.RuntimeAssetZipName}, fmt.Sprintf("launchpack: runtime manifest has no runtime pack asset %q", release.RuntimeAssetZipName)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := fixture.manifest
+			manifest.Assets = slices.DeleteFunc(slices.Clone(manifest.Assets), func(a release.RuntimeAsset) bool { return slices.Contains(tt.remove, a.Name) })
+			// Competing acquisition errors must not mask the missing-asset error.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			cacheRoot := filepath.Join(t.TempDir(), "blocked-cache")
+			writeProjectTestFile(t, cacheRoot, "not a directory")
+			source := runtimeAssetSource{manifest: manifest, fetch: func(context.Context, string, io.Writer) error {
+				t.Fatal("missing asset must be rejected before fetching")
+				return nil
+			}}
+			_, err := materializePublishedRuntime(ctx, cacheRoot, fixture.lock, fixture.spec, source, false)
+			if err == nil || err.Error() != tt.want {
+				t.Fatalf("materialization = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -386,14 +495,6 @@ func TestMaterializeRuntimeRejectsInvalidLocalInputs(t *testing.T) {
 				t.Fatalf("materialization = %v, want %q", err, tt.want)
 			}
 		})
-	}
-	for _, without := range []string{spec.ArchiveName, release.RuntimeAssetZipName} {
-		fixture := newPublishedRuntimeFixture(t)
-		manifest := fixture.manifest
-		manifest.Assets = slices.DeleteFunc(manifest.Assets, func(a release.RuntimeAsset) bool { return a.Name == without })
-		if _, err := materializePublishedRuntime(context.Background(), t.TempDir(), lock, spec, runtimeAssetSource{manifest: manifest}, true); err == nil || !strings.Contains(err.Error(), "manifest has no") {
-			t.Fatalf("missing %s = %v", without, err)
-		}
 	}
 }
 
