@@ -18,6 +18,7 @@ package common
 
 import (
 	_ "embed"
+	"strconv"
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
@@ -31,12 +32,28 @@ var ManagerTemplate string
 // ManagerMethodSignature renders a manager method with its receiver.
 func (c *GenerationContext) ManagerMethodSignature(function *clang.TypedefFunction) string {
 	mgrName := c.GetManagerName(function.Name)
-	return "(pself *" + mgrName + "Mgr) " + c.managerSignature(function, mgrName)
+	return "(" + c.ReceiverName(function, mgrName) + " *" + mgrName + "Mgr) " + c.managerSignature(function, mgrName)
 }
 
 // ManagerInterfaceSignature renders a manager method without its receiver.
 func (c *GenerationContext) ManagerInterfaceSignature(function *clang.TypedefFunction) string {
 	return c.managerSignature(function, c.GetManagerName(function.Name))
+}
+
+// ReceiverName uses the type's initial without shadowing a public parameter.
+func (c *GenerationContext) ReceiverName(function *clang.TypedefFunction, typeName string) string {
+	used := make(map[string]bool)
+	for _, param := range c.Parameters(function) {
+		if !param.IsLength {
+			used[param.Name] = true
+		}
+	}
+	initial := strings.ToLower(typeName[:1])
+	name := initial
+	for suffix := 1; used[name]; suffix++ {
+		name = initial + strconv.Itoa(suffix)
+	}
+	return name
 }
 
 func (c *GenerationContext) managerSignature(function *clang.TypedefFunction, mgrName string) string {
