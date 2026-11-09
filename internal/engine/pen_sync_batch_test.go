@@ -18,6 +18,8 @@ package engine
 
 import (
 	"math"
+	"slices"
+	"strconv"
 	"testing"
 )
 
@@ -115,6 +117,108 @@ func TestPenSyncBufferSignalsBatchLimit(t *testing.T) {
 	}
 	if !buffer.AddUp(maxPenBatchCommands) {
 		t.Fatalf("command %d did not reach the batch limit", maxPenBatchCommands)
+	}
+	if !buffer.AddUp(maxPenBatchCommands + 1) {
+		t.Fatal("commands beyond the batch limit did not request a flush")
+	}
+	buffer.Flush(func(data []float32) {
+		if data[0] != maxPenBatchCommands+1 || len(data) != 1+(maxPenBatchCommands+1)*PenBatchFields {
+			t.Fatalf("batch after reaching the limit = %v", data)
+		}
+	})
+	if buffer.AddUp(1) {
+		t.Fatal("successful flush did not reset the batch limit")
+	}
+	buffer.Discard()
+	if buffer.AddUp(1) {
+		t.Fatal("discard did not reset the batch limit")
+	}
+}
+
+func TestPenSyncBufferCapacity(t *testing.T) {
+	for _, capacity := range []int{-1, 0, 1, 16} {
+		t.Run(strconv.Itoa(capacity), func(t *testing.T) {
+			buffer := NewPenSyncBuffer(capacity)
+			if len(buffer.data) != 1 || buffer.data[0] != 0 || cap(buffer.data) != 1+max(capacity, 1)*PenBatchFields {
+				t.Fatalf("initial buffer = %v, capacity = %d", buffer.data, cap(buffer.data))
+			}
+			if buffer.AddUp(1) {
+				t.Fatal("allocation capacity changed the batch limit")
+			}
+		})
+	}
+}
+
+func TestPenSyncBufferSendPanicPreservesCommands(t *testing.T) {
+	for _, barrier := range []bool{false, true} {
+		t.Run(strconv.FormatBool(barrier), func(t *testing.T) {
+			buffer := NewPenSyncBuffer(4)
+			buffer.AddMove(7, 2, 3)
+			var pending []float32
+			var storage *float32
+			const failure = "send failed"
+			func() {
+				defer func() {
+					if got := recover(); got != failure {
+						t.Fatalf("send panic = %v, want %q", got, failure)
+					}
+				}()
+				send := func(data []float32) {
+					pending = slices.Clone(data)
+					storage = &data[0]
+					panic(failure)
+				}
+				if barrier {
+					buffer.Barrier(send, func() { t.Fatal("operation ran after send panicked") })
+				} else {
+					buffer.Flush(send)
+				}
+			}()
+			if !slices.Equal(buffer.data, pending) {
+				t.Fatalf("pending commands changed after send panic: %v, want %v", buffer.data, pending)
+			}
+			buffer.AddUp(7)
+			buffer.Flush(func(data []float32) {
+				if data[0] != 2 || len(data) != 1+2*PenBatchFields || &data[0] != storage {
+					t.Fatalf("retry lost commands or backing storage: %v", data)
+				}
+				assertPenCommand(t, data, 0, PenBatchMove, 7, [4]float32{2, 3})
+				assertPenCommand(t, data, 1, PenBatchUp, 7, [4]float32{})
+			})
+			if len(buffer.data) != 1 || buffer.data[0] != 0 {
+				t.Fatalf("successful send did not reset the header: %v", buffer.data)
+			}
+			buffer.Flush(func([]float32) { t.Fatal("successful retry left commands queued") })
+		})
+	}
+}
+
+func TestPenSyncBufferBarrierOperationPanicAfterReset(t *testing.T) {
+	buffer := NewPenSyncBuffer(1)
+	buffer.AddUp(1)
+	sent := false
+	const failure = "operation failed"
+	func() {
+		defer func() {
+			if got := recover(); got != failure {
+				t.Fatalf("operation panic = %v, want %q", got, failure)
+			}
+		}()
+		buffer.Barrier(func([]float32) { sent = true }, func() { panic(failure) })
+	}()
+	if !sent {
+		t.Fatal("operation ran before commands were sent")
+	}
+	buffer.Flush(func([]float32) { t.Fatal("sent commands remained after operation panic") })
+}
+
+func TestPenSyncBufferZeroValueEmptyFlush(t *testing.T) {
+	var buffer PenSyncBuffer
+	buffer.Flush(func([]float32) { t.Fatal("zero-value buffer flushed") })
+	called := false
+	buffer.Barrier(func([]float32) { t.Fatal("zero-value buffer flushed") }, func() { called = true })
+	if !called || buffer.data != nil {
+		t.Fatal("empty zero-value barrier did not run the operation without allocating")
 	}
 }
 
