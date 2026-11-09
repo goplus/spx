@@ -273,16 +273,8 @@ func TestEngineBundleRejectsMissingFilesAndUnsafeDestinations(t *testing.T) {
 		})
 	}
 	root := t.TempDir()
-	src, dst := filepath.Join(root, "src"), filepath.Join(root, "dst")
-	writeProjectTestFile(t, src, "new")
-	writeProjectTestFile(t, dst, "old")
-	if err := replaceRuntimeFile(src, dst, 0600); err != nil {
-		t.Fatal(err)
-	}
-	assertRuntimeFile(t, dst, "new")
-	if err := replaceRuntimeFile(src, dst, 0600); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("missing replacement source: %v", err)
-	}
+	dst := filepath.Join(root, "dst")
+	writeProjectTestFile(t, dst, "new")
 	if err := validateRuntimeEntry(dst, "engine", runtimebundle.Bundle{}); err == nil || !strings.Contains(err.Error(), "archive is missing") {
 		t.Fatalf("unlisted runtime entry: %v", err)
 	}

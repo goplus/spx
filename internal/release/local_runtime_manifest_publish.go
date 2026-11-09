@@ -21,8 +21,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 // PublishLocalRuntimeManifest copies the verified local Engine and PCK beside
@@ -127,7 +128,7 @@ func writeLocalRuntimeManifest(path string, manifest LocalRuntimeManifest) error
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close local runtime manifest: %w", err)
 	}
-	if err := replaceLocalRuntimeFile(tmpPath, path, 0o644); err != nil {
+	if err := fileutil.ReplaceRegularFile(tmpPath, path, 0o644); err != nil {
 		return fmt.Errorf("install local runtime manifest: %w", err)
 	}
 	return nil
@@ -181,25 +182,8 @@ func copyVerifiedLocalRuntimeFile(src, dst string, want LocalRuntimeFile, mode o
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := replaceLocalRuntimeFile(tmpPath, dst, mode); err != nil {
+	if err := fileutil.ReplaceRegularFile(tmpPath, dst, mode); err != nil {
 		return err
 	}
 	return verifyLocalRuntimeFile(dst, want)
-}
-
-func replaceLocalRuntimeFile(src, dst string, mode os.FileMode) error {
-	if info, err := os.Lstat(dst); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return fmt.Errorf("destination %q is not a regular non-symlink file", dst)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.Rename(src, dst); err != nil {
-		return err
-	}
-	if runtime.GOOS != "windows" {
-		return os.Chmod(dst, mode)
-	}
-	return nil
 }

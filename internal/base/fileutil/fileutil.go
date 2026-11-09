@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"time"
 )
@@ -70,6 +71,26 @@ func CopyFile(src, dst string) (err error) {
 
 	_, err = io.Copy(output, input)
 	return err
+}
+
+// ReplaceRegularFile rejects an existing non-regular or symlink destination,
+// renames src to dst, then sets mode except on Windows.
+// It does not validate src or pin either path against concurrent changes.
+func ReplaceRegularFile(src, dst string, mode os.FileMode) error {
+	if info, err := os.Lstat(dst); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("destination %q is not a regular non-symlink file", dst)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(src, dst); err != nil {
+		return err
+	}
+	if runtime.GOOS != "windows" {
+		return os.Chmod(dst, mode)
+	}
+	return nil
 }
 
 // CopyDir recursively copies a local directory from src to dst.

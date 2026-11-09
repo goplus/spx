@@ -482,9 +482,6 @@ func TestVerifiedLocalCopyRejectsChangedDataAndFailedSink(t *testing.T) {
 	if err := writeLocalRuntimeManifest(filepath.Join(blocked, "manifest"), manifest); err == nil {
 		t.Fatal("blocked manifest directory accepted")
 	}
-	if err := replaceLocalRuntimeFile(engine+".missing", filepath.Join(t.TempDir(), "file"), 0600); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("missing replacement = %v", err)
-	}
 }
 
 func TestLocalManifestVerificationRejectsMissingPublishedObjects(t *testing.T) {

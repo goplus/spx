@@ -178,7 +178,7 @@ class CoverageWorkflowTest(unittest.TestCase):
             "source": ["coverage.out", "cmd/ispx/coverage.out", "internal/cmd/codegen/coverage.out",
                        "coverage-web.out", "cmd/ispx/coverage-web.out"],
             "macos": ["coverage-buildctl-macos.out"],
-            "windows": ["coverage-buildctl-windows.out", "coverage-engine-windows.out"],
+            "windows": ["coverage-buildctl-windows.out", "coverage-engine-windows.out", "coverage-fileutil-windows.out"],
         }
         for missing in (None, *sources):
             for empty_directory in (False, True) if missing else (False,):
