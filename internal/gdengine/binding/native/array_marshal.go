@@ -18,12 +18,42 @@ package ffi
 
 /*
 #include "gdextension_spx_interface.h"
+#include <stdint.h>
 #include <stdlib.h>
 
-static inline GdArray cgo_create_array_info(int array_type, int size) {
+static inline GdArray cgo_create_array_info(int array_type, int size, int *size_overflow) {
 	if (size < 0) {
 		return NULL;
 	}
+	size_t element_size = 0;
+	if (size > 0) {
+		switch (array_type) {
+			case GD_ARRAY_TYPE_INT64:
+				element_size = sizeof(int64_t);
+				break;
+			case GD_ARRAY_TYPE_FLOAT:
+				element_size = sizeof(float);
+				break;
+			case GD_ARRAY_TYPE_STRING:
+				element_size = sizeof(char *);
+				break;
+			case GD_ARRAY_TYPE_BOOL:
+			case GD_ARRAY_TYPE_BYTE:
+				element_size = sizeof(uint8_t);
+				break;
+			case GD_ARRAY_TYPE_GDOBJ:
+				element_size = sizeof(GdObj);
+				break;
+			default:
+				return NULL;
+		}
+
+		if ((size_t)size > SIZE_MAX / element_size) {
+			*size_overflow = 1;
+			return NULL;
+		}
+	}
+
 	GdArray array = (GdArray)malloc(sizeof(GdArrayInfo));
 	if (!array) {
 		return NULL;
@@ -36,32 +66,7 @@ static inline GdArray cgo_create_array_info(int array_type, int size) {
 		return array;
 	}
 
-	size_t element_size = 0;
-	switch (array_type) {
-		case GD_ARRAY_TYPE_INT64:
-			element_size = sizeof(int64_t);
-			break;
-		case GD_ARRAY_TYPE_FLOAT:
-			element_size = sizeof(float);
-			break;
-		case GD_ARRAY_TYPE_BOOL:
-			element_size = sizeof(uint8_t); // Store as uint8_t for alignment
-			break;
-		case GD_ARRAY_TYPE_STRING:
-			element_size = sizeof(char *);
-			break;
-		case GD_ARRAY_TYPE_BYTE:
-			element_size = sizeof(uint8_t);
-			break;
-		case GD_ARRAY_TYPE_GDOBJ:
-			element_size = sizeof(GdObj);
-			break;
-		default:
-			free(array);
-			return NULL;
-	}
-
-	array->data = malloc(size * element_size);
+	array->data = malloc((size_t)size * element_size);
 	if (!array->data) {
 		free(array);
 		return NULL;
@@ -88,6 +93,7 @@ import "C"
 
 import (
 	"fmt"
+	"math"
 	"unsafe"
 )
 
@@ -115,6 +121,9 @@ func ToGdArrayInfo(slice any) *ArrayInfo {
 	case []float64:
 		if v == nil {
 			return createGdArrayFromFloat32s(nil)
+		}
+		if len(v) > math.MaxInt32 {
+			panic("gdengine: native array length exceeds int32")
 		}
 		floats := make([]float32, len(v))
 		for i, f := range v {
@@ -288,7 +297,18 @@ func allocateGdArrayInfo(arrayType int64, size int, isNil bool) *ArrayInfo {
 	if isNil {
 		return &ArrayInfo{}
 	}
-	arrayInfo := C.cgo_create_array_info(C.int(arrayType), C.int(size))
+	// GdArrayInfo.size is int32_t. Check before narrowing the Go length.
+	if size < 0 {
+		return nil
+	}
+	if size > math.MaxInt32 {
+		panic("gdengine: native array length exceeds int32")
+	}
+	var sizeOverflow C.int
+	arrayInfo := C.cgo_create_array_info(C.int(arrayType), C.int(size), &sizeOverflow)
+	if sizeOverflow != 0 {
+		panic("gdengine: native array byte size overflows size_t")
+	}
 	if arrayInfo == nil {
 		return nil
 	}
@@ -301,11 +321,9 @@ func createGdArrayFromInt64s(ints []int64) *ArrayInfo {
 		return info
 	}
 	arrayInfo := info.gdArray
-	if len(ints) > 0 {
-		cIntSlice := unsafe.Slice((*C.int64_t)(arrayInfo.data), len(ints))
-		for i, v := range ints {
-			cIntSlice[i] = C.int64_t(v)
-		}
+	cIntSlice := unsafe.Slice((*C.int64_t)(arrayInfo.data), len(ints))
+	for i, v := range ints {
+		cIntSlice[i] = C.int64_t(v)
 	}
 	return info
 }
@@ -316,11 +334,9 @@ func createGdArrayFromFloat32s(floats []float32) *ArrayInfo {
 		return info
 	}
 	arrayInfo := info.gdArray
-	if len(floats) > 0 {
-		cFloatSlice := unsafe.Slice((*C.float)(arrayInfo.data), len(floats))
-		for i, v := range floats {
-			cFloatSlice[i] = C.float(v)
-		}
+	cFloatSlice := unsafe.Slice((*C.float)(arrayInfo.data), len(floats))
+	for i, v := range floats {
+		cFloatSlice[i] = C.float(v)
 	}
 	return info
 }
@@ -331,14 +347,12 @@ func createGdArrayFromBools(bools []bool) *ArrayInfo {
 		return info
 	}
 	arrayInfo := info.gdArray
-	if len(bools) > 0 {
-		cBoolSlice := unsafe.Slice((*C.uint8_t)(arrayInfo.data), len(bools))
-		for i, v := range bools {
-			if v {
-				cBoolSlice[i] = 1
-			} else {
-				cBoolSlice[i] = 0
-			}
+	cBoolSlice := unsafe.Slice((*C.uint8_t)(arrayInfo.data), len(bools))
+	for i, v := range bools {
+		if v {
+			cBoolSlice[i] = 1
+		} else {
+			cBoolSlice[i] = 0
 		}
 	}
 	return info
@@ -350,11 +364,9 @@ func createGdArrayFromBytes(bytes []byte) *ArrayInfo {
 		return info
 	}
 	arrayInfo := info.gdArray
-	if len(bytes) > 0 {
-		cByteSlice := unsafe.Slice((*C.uchar)(arrayInfo.data), len(bytes))
-		for i, v := range bytes {
-			cByteSlice[i] = C.uchar(v)
-		}
+	cByteSlice := unsafe.Slice((*C.uchar)(arrayInfo.data), len(bytes))
+	for i, v := range bytes {
+		cByteSlice[i] = C.uchar(v)
 	}
 	return info
 }
@@ -365,11 +377,9 @@ func createGdArrayFromObjectIDs(objects []GdObj) *ArrayInfo {
 		return info
 	}
 	arrayInfo := info.gdArray
-	if len(objects) > 0 {
-		cObjSlice := unsafe.Slice((*C.GdObj)(arrayInfo.data), len(objects))
-		for i, v := range objects {
-			cObjSlice[i] = C.GdObj(v)
-		}
+	cObjSlice := unsafe.Slice((*C.GdObj)(arrayInfo.data), len(objects))
+	for i, v := range objects {
+		cObjSlice[i] = C.GdObj(v)
 	}
 	return info
 }
@@ -380,12 +390,10 @@ func createGdArrayFromStrings(strings []string) *ArrayInfo {
 		return info
 	}
 	arrayInfo := info.gdArray
-	if len(strings) > 0 {
-		cStrSlice := unsafe.Slice((**C.char)(arrayInfo.data), len(strings))
-		for i, v := range strings {
-			cStr := C.CString(v)
-			cStrSlice[i] = cStr
-		}
+	cStrSlice := unsafe.Slice((**C.char)(arrayInfo.data), len(strings))
+	for i, v := range strings {
+		cStr := C.CString(v)
+		cStrSlice[i] = cStr
 	}
 	return info
 }

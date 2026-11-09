@@ -21,6 +21,7 @@ package ffi
 import (
 	"math"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -218,5 +219,50 @@ func TestNativeArrayAllocationRejectsInvalidMetadata(t *testing.T) {
 				t.Fatal("invalid native array metadata allocated storage")
 			}
 		})
+	}
+}
+
+func TestNativeArrayAllocationRejectsLengthOverflow(t *testing.T) {
+	if strconv.IntSize != 64 {
+		t.Skip("Go lengths cannot exceed int32 on a 32-bit target")
+	}
+	for _, size := range []int64{math.MaxInt32 + 1, 1 << 32, 1<<32 + 1} {
+		t.Run(strconv.FormatInt(size, 10), func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != "gdengine: native array length exceeds int32" {
+					t.Fatalf("oversized array panic = %v", got)
+				}
+			}()
+			if info := allocateGdArrayInfo(ArrayTypeByte, int(size), false); info != nil {
+				info.Free()
+			}
+		})
+	}
+}
+
+func TestNativeArrayAllocationRejectsNegativeLengthBeforeNarrowing(t *testing.T) {
+	if strconv.IntSize != 64 {
+		t.Skip("requires a 64-bit Go length")
+	}
+	for _, size := range []int64{-1 << 32, -1<<32 + 1, math.MinInt64} {
+		if info := allocateGdArrayInfo(ArrayTypeByte, int(size), false); info != nil {
+			info.Free()
+			t.Errorf("negative length %d allocated native storage", size)
+		}
+	}
+}
+
+func TestNativeArrayAllocationRejectsByteSizeOverflow(t *testing.T) {
+	if strconv.IntSize != 32 {
+		t.Skip("int32 element counts cannot overflow size_t on a 64-bit target")
+	}
+	// The element count fits int32, but count * sizeof(int64_t) exceeds size_t.
+	defer func() {
+		if got := recover(); got != "gdengine: native array byte size overflows size_t" {
+			t.Fatalf("overflowing allocation panic = %v", got)
+		}
+	}()
+	if info := allocateGdArrayInfo(ArrayTypeInt64, 1<<29, false); info != nil {
+		info.Free()
 	}
 }
