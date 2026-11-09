@@ -27,7 +27,7 @@ import (
 
 	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

@@ -57,7 +57,7 @@ case "${1:-}" in
     ;;
   web)
     covered_web_test coverage-web.out \
-      ./internal/gdengine/binding/web ./pkg/ispx ./internal/coroutine
+      ./internal/gdengine/binding/web ./internal/gdengine/impl ./internal/engine/wrap ./pkg/ispx ./internal/coroutine
     ;;
   web-process)
     covered_web_test coverage-web-process.out \

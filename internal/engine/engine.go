@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spx/v4/internal/engine/profiler"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
 	gde "github.com/goplus/spx/v4/internal/gdengine"
 	itime "github.com/goplus/spx/v4/internal/time"
 

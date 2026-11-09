@@ -37,7 +37,7 @@ import (
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"

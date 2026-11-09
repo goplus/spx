@@ -20,25 +20,63 @@ package enginewrap
 
 import (
 	. "github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/engine/platform"
 	"github.com/goplus/spx/v4/internal/input"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
-var mainCallback func(call func())
+// A nil binding is a zero-value facade. A non-nil binding keeps its own backend,
+// including after release, when that backend is cleared and calls must fail.
+type managerBinding[T comparable] struct {
+	backend T
+}
 
-const (
-	MOUSE_BUTTON_LEFT   int64 = input.MouseButtonLeft
-	MOUSE_BUTTON_RIGHT  int64 = input.MouseButtonRight
-	MOUSE_BUTTON_MIDDLE int64 = input.MouseButtonMiddle
-)
+func (m *managerBinding[T]) binding() *managerBinding[T] { return m }
+
+// W is the concrete generated wrapper. Other implementations may embed a
+// wrapper and override methods, so they must remain valid backend targets.
+func resolveManager[W interface{ binding() *managerBinding[T] }, T comparable](binding *managerBinding[T], current T, name string) T {
+	var backend, zero T
+	if binding == nil {
+		if wrapper, ok := any(current).(W); ok {
+			binding = wrapper.binding()
+		} else {
+			backend = current
+		}
+	}
+	if binding != nil {
+		backend = binding.backend
+	}
+	if backend == zero {
+		panic("enginewrap: " + name + " manager is not bound")
+	}
+	return backend
+}
+
+func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
+	*slot = wrapper
+	return func() {
+		var zero T
+		if *slot == wrapper {
+			*slot = zero
+		}
+		m.backend = zero
+	}
+}
+
+var mainCallback func(call func())
 
 func Init(call func(f func())) {
 	mainCallback = call
 }
 
 // CallInMainThread runs call synchronously on the engine main thread.
+// Without a dispatcher, only calls already on the engine thread may run.
 func CallInMainThread(call func()) {
 	if mainCallback == nil {
+		if platform.TryCallEngineDirectly(call) {
+			return
+		}
 		panic("enginewrap: Init must be called before using manager methods off the main thread")
 	}
 	mainCallback(call)
@@ -53,24 +91,20 @@ func CallInMainThreadValue[T any](call func() T) (result T) {
 	return
 }
 
-func (*inputMgrImpl) MousePressed() bool {
-	return inputMgr.GetMouseState(MOUSE_BUTTON_LEFT) || inputMgr.GetMouseState(MOUSE_BUTTON_RIGHT)
+func (i *InputMgrImpl) MousePressed() bool {
+	return i.GetMouseState(input.MouseButtonLeft) || i.GetMouseState(input.MouseButtonRight)
 }
 
-func (*platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
+func (*PlatformMgrImpl) SetRunnableOnUnfocused(flag bool) {
 	if !flag {
 		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
 	}
 }
 
-func (c *cameraMgrImpl) GetPosition() Vec2 {
+func (c *CameraMgrImpl) GetPosition() Vec2 {
 	return c.GetCameraPosition()
 }
 
-func (c *cameraMgrImpl) SetPosition(position Vec2) {
+func (c *CameraMgrImpl) SetPosition(position Vec2) {
 	c.SetCameraPosition(position)
-}
-
-func callInMainThread(call func()) {
-	CallInMainThread(call)
 }

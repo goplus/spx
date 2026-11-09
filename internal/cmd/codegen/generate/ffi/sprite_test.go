@@ -142,11 +142,15 @@ func TestManagerAndObjectReceiversAvoidPublicParameters(t *testing.T) {
 			signature := generation.ManagerMethodSignature(&function)
 			method := generation.getManagerImpl(&function, tt.className)
 			managerType := strings.ToLower(tt.managerName) + "Mgr"
+			wrapperType := tt.managerName + "MgrImpl"
+			wrapperMethod := generation.genManagerWrapFunction(&function)
 			// Parsing/formatting alone accepts a receiver and parameter with the
 			// same name. Type-check both the shared native/Web signature and the
-			// object forwarding body, without needing cgo or engine dependencies.
+			// object/wrapper forwarding bodies, without cgo or engine dependencies.
 			source := fmt.Sprintf("package generated\ntype Object int64\ntype %s struct{ Id Object }\ntype %s struct{}\nvar %sMgr %s\nfunc %s {}\n%s",
 				tt.className, managerType, tt.managerName, managerType, signature, method)
+			source += fmt.Sprintf("\ntype %s struct{}\nfunc (*%s) target() *%s { return &%sMgr }\nfunc CallInMainThread(call func()) { call() }\n%s",
+				wrapperType, wrapperType, managerType, tt.managerName, strings.ReplaceAll(wrapperMethod, "gdx.Object", "Object"))
 			positions := token.NewFileSet()
 			file, err := parser.ParseFile(positions, "receiver.go", source, 0)
 			require.NoError(t, err)

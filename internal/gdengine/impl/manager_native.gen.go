@@ -36,12 +36,10 @@ package impl
 import "C"
 
 import (
-	"fmt"
 	"math"
 	"unsafe"
 
 	. "github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/enginewrap"
 	. "github.com/goplus/spx/v4/internal/gdengine/binding/native"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -112,2726 +110,1998 @@ func CreateManagers() []IManager {
 	}
 }
 
-func BindManagers(mgrs []IManager) {
-	for _, mgr := range mgrs {
-		switch v := mgr.(type) {
-		case IAudioMgr:
-			AudioMgr = v
-
-		case ICameraMgr:
-			CameraMgr = v
-
-		case IDebugMgr:
-			DebugMgr = v
-
-		case IExtMgr:
-			ExtMgr = v
-
-		case IInputMgr:
-			InputMgr = v
-
-		case INavigationMgr:
-			NavigationMgr = v
-
-		case IPenMgr:
-			PenMgr = v
-
-		case IPhysicsMgr:
-			PhysicsMgr = v
-
-		case IPlatformMgr:
-			PlatformMgr = v
-
-		case IResMgr:
-			ResMgr = v
-
-		case ISceneMgr:
-			SceneMgr = v
-
-		case ISpriteMgr:
-			SpriteMgr = v
-
-		case ITilemapMgr:
-			TilemapMgr = v
-
-		case ITilemapparserMgr:
-			TilemapparserMgr = v
-
-		case IUiMgr:
-			UiMgr = v
-
-		default:
-			panic(fmt.Sprintf("engine init error: unknown manager type %T", mgr))
-		}
-	}
-}
-
 // call gdextension interface functions
 
 func (a *audioMgr) StopAll() {
-	enginewrap.CallInMainThread(func() {
-		CallAudioStopAll()
-	})
+	CallAudioStopAll()
 }
 func (a *audioMgr) CreateAudio() Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		retValue := CallAudioCreateAudio()
-		return ToObject(retValue)
-	})
+	retValue := CallAudioCreateAudio()
+	return ToObject(retValue)
 }
 func (a *audioMgr) DestroyAudio(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallAudioDestroyAudio(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallAudioDestroyAudio(arg0)
 }
 func (a *audioMgr) SetPitch(obj Object, pitch float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(pitch)
-		CallAudioSetPitch(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(pitch)
+	CallAudioSetPitch(arg0, arg1)
 }
 func (a *audioMgr) GetPitch(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallAudioGetPitch(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallAudioGetPitch(arg0)
+	return ToFloat64(retValue)
 }
 func (a *audioMgr) SetPan(obj Object, pan float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(pan)
-		CallAudioSetPan(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(pan)
+	CallAudioSetPan(arg0, arg1)
 }
 func (a *audioMgr) GetPan(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallAudioGetPan(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallAudioGetPan(arg0)
+	return ToFloat64(retValue)
 }
 func (a *audioMgr) SetVolume(obj Object, volume float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(volume)
-		CallAudioSetVolume(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(volume)
+	CallAudioSetVolume(arg0, arg1)
 }
 func (a *audioMgr) GetVolume(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallAudioGetVolume(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallAudioGetVolume(arg0)
+	return ToFloat64(retValue)
 }
 func (a *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Object, attenuation float64, max_distance float64) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdObj(owner_id)
-		arg3 := ToGdFloat(attenuation)
-		arg4 := ToGdFloat(max_distance)
-		retValue := CallAudioPlayWithAttenuation(arg0, arg1, arg2, arg3, arg4)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdObj(owner_id)
+	arg3 := ToGdFloat(attenuation)
+	arg4 := ToGdFloat(max_distance)
+	retValue := CallAudioPlayWithAttenuation(arg0, arg1, arg2, arg3, arg4)
+	return ToInt64(retValue)
 }
 func (a *audioMgr) Play(obj Object, path string) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallAudioPlay(arg0, arg1)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallAudioPlay(arg0, arg1)
+	return ToInt64(retValue)
 }
 func (a *audioMgr) Pause(aid int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(aid)
-		CallAudioPause(arg0)
-	})
+	arg0 := ToGdInt(aid)
+	CallAudioPause(arg0)
 }
 func (a *audioMgr) Resume(aid int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(aid)
-		CallAudioResume(arg0)
-	})
+	arg0 := ToGdInt(aid)
+	CallAudioResume(arg0)
 }
 func (a *audioMgr) Stop(aid int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(aid)
-		CallAudioStop(arg0)
-	})
+	arg0 := ToGdInt(aid)
+	CallAudioStop(arg0)
 }
 func (a *audioMgr) Restart(aid int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(aid)
-		retValue := CallAudioRestart(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioRestart(arg0)
+	return ToBool(retValue)
 }
 func (a *audioMgr) SetLoop(aid int64, loop bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(aid)
-		arg1 := ToGdBool(loop)
-		CallAudioSetLoop(arg0, arg1)
-	})
+	arg0 := ToGdInt(aid)
+	arg1 := ToGdBool(loop)
+	CallAudioSetLoop(arg0, arg1)
 }
 func (a *audioMgr) GetLoop(aid int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(aid)
-		retValue := CallAudioGetLoop(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioGetLoop(arg0)
+	return ToBool(retValue)
 }
 func (a *audioMgr) GetTimer(aid int64) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdInt(aid)
-		retValue := CallAudioGetTimer(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioGetTimer(arg0)
+	return ToFloat64(retValue)
 }
 func (a *audioMgr) SetTimer(aid int64, time float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(aid)
-		arg1 := ToGdFloat(time)
-		CallAudioSetTimer(arg0, arg1)
-	})
+	arg0 := ToGdInt(aid)
+	arg1 := ToGdFloat(time)
+	CallAudioSetTimer(arg0, arg1)
 }
 func (a *audioMgr) IsPlaying(aid int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(aid)
-		retValue := CallAudioIsPlaying(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(aid)
+	retValue := CallAudioIsPlaying(arg0)
+	return ToBool(retValue)
 }
 func (c *cameraMgr) GetCameraPosition() Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		retValue := CallCameraGetCameraPosition()
-		return ToVec2(retValue)
-	})
+	retValue := CallCameraGetCameraPosition()
+	return ToVec2(retValue)
 }
 func (c *cameraMgr) SetCameraPosition(position Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(position)
-		CallCameraSetCameraPosition(arg0)
-	})
+	arg0 := ToGdVec2(position)
+	CallCameraSetCameraPosition(arg0)
 }
 func (c *cameraMgr) GetCameraZoom() Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		retValue := CallCameraGetCameraZoom()
-		return ToVec2(retValue)
-	})
+	retValue := CallCameraGetCameraZoom()
+	return ToVec2(retValue)
 }
 func (c *cameraMgr) SetCameraZoom(size Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(size)
-		CallCameraSetCameraZoom(arg0)
-	})
+	arg0 := ToGdVec2(size)
+	CallCameraSetCameraZoom(arg0)
 }
 func (c *cameraMgr) GetViewportRect() Rect2 {
-	return enginewrap.CallInMainThreadValue(func() Rect2 {
-		retValue := CallCameraGetViewportRect()
-		return ToRect2(retValue)
-	})
+	retValue := CallCameraGetViewportRect()
+	return ToRect2(retValue)
 }
 func (c *cameraMgr) GetGlobalCameraRect() Rect2 {
-	return enginewrap.CallInMainThreadValue(func() Rect2 {
-		retValue := CallCameraGetGlobalCameraRect()
-		return ToRect2(retValue)
-	})
+	retValue := CallCameraGetGlobalCameraRect()
+	return ToRect2(retValue)
 }
 func (c *cameraMgr) GetStageLimitsRect() Rect2 {
-	return enginewrap.CallInMainThreadValue(func() Rect2 {
-		retValue := CallCameraGetStageLimitsRect()
-		return ToRect2(retValue)
-	})
+	retValue := CallCameraGetStageLimitsRect()
+	return ToRect2(retValue)
 }
 func (c *cameraMgr) SetCameraLimit(side int64, limit int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(side)
-		arg1 := ToGdInt(limit)
-		CallCameraSetCameraLimit(arg0, arg1)
-	})
+	arg0 := ToGdInt(side)
+	arg1 := ToGdInt(limit)
+	CallCameraSetCameraLimit(arg0, arg1)
 }
 func (c *cameraMgr) SetCameraSmoothing(enabled bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(enabled)
-		CallCameraSetCameraSmoothing(arg0)
-	})
+	arg0 := ToGdBool(enabled)
+	CallCameraSetCameraSmoothing(arg0)
 }
 func (d *debugMgr) DebugDrawCircle(pos Vec2, radius float64, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		arg1 := ToGdFloat(radius)
-		arg2 := ToGdColor(color)
-		CallDebugDebugDrawCircle(arg0, arg1, arg2)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1 := ToGdFloat(radius)
+	arg2 := ToGdColor(color)
+	CallDebugDebugDrawCircle(arg0, arg1, arg2)
 }
 func (d *debugMgr) DebugDrawRect(pos Vec2, size Vec2, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		arg1 := ToGdVec2(size)
-		arg2 := ToGdColor(color)
-		CallDebugDebugDrawRect(arg0, arg1, arg2)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1 := ToGdVec2(size)
+	arg2 := ToGdColor(color)
+	CallDebugDebugDrawRect(arg0, arg1, arg2)
 }
 func (d *debugMgr) DebugDrawLine(from Vec2, to Vec2, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(from)
-		arg1 := ToGdVec2(to)
-		arg2 := ToGdColor(color)
-		CallDebugDebugDrawLine(arg0, arg1, arg2)
-	})
+	arg0 := ToGdVec2(from)
+	arg1 := ToGdVec2(to)
+	arg2 := ToGdColor(color)
+	CallDebugDebugDrawLine(arg0, arg1, arg2)
 }
 func (e *extMgr) RequestExit(exit_code int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(exit_code)
-		CallExtRequestExit(arg0)
-	})
+	arg0 := ToGdInt(exit_code)
+	CallExtRequestExit(arg0)
 }
 func (e *extMgr) RequestReset(exit_code int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(exit_code)
-		CallExtRequestReset(arg0)
-	})
+	arg0 := ToGdInt(exit_code)
+	CallExtRequestReset(arg0)
 }
 func (e *extMgr) RequestRestart() {
-	enginewrap.CallInMainThread(func() {
-		CallExtRequestRestart()
-	})
+	CallExtRequestRestart()
 }
 func (e *extMgr) OnRuntimePanic(msg string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(msg)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallExtOnRuntimePanic(arg0)
-	})
+	arg0Str := C.CString(msg)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallExtOnRuntimePanic(arg0)
 }
 func (e *extMgr) Pause() {
-	enginewrap.CallInMainThread(func() {
-		CallExtPause()
-	})
+	CallExtPause()
 }
 func (e *extMgr) Resume() {
-	enginewrap.CallInMainThread(func() {
-		CallExtResume()
-	})
+	CallExtResume()
 }
 func (e *extMgr) IsPaused() bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		retValue := CallExtIsPaused()
-		return ToBool(retValue)
-	})
+	retValue := CallExtIsPaused()
+	return ToBool(retValue)
 }
 func (e *extMgr) NextFrame() {
-	enginewrap.CallInMainThread(func() {
-		CallExtNextFrame()
-	})
+	CallExtNextFrame()
 }
 func (e *extMgr) SetLayerSorterMode(mode int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(mode)
-		CallExtSetLayerSorterMode(arg0)
-	})
+	arg0 := ToGdInt(mode)
+	CallExtSetLayerSorterMode(arg0)
 }
 func (i *inputMgr) GetGlobalMousePos() Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		retValue := CallInputGetGlobalMousePos()
-		return ToVec2(retValue)
-	})
+	retValue := CallInputGetGlobalMousePos()
+	return ToVec2(retValue)
 }
 func (i *inputMgr) GetKey(key int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(key)
-		retValue := CallInputGetKey(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(key)
+	retValue := CallInputGetKey(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) GetMouseState(mouse_id int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(mouse_id)
-		retValue := CallInputGetMouseState(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(mouse_id)
+	retValue := CallInputGetMouseState(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) GetKeyState(key int64) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdInt(key)
-		retValue := CallInputGetKeyState(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdInt(key)
+	retValue := CallInputGetKeyState(arg0)
+	return ToInt64(retValue)
 }
 func (i *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0Str := C.CString(neg_action)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Str := C.CString(pos_action)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallInputGetAxis(arg0, arg1)
-		return ToFloat64(retValue)
-	})
+	arg0Str := C.CString(neg_action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(pos_action)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallInputGetAxis(arg0, arg1)
+	return ToFloat64(retValue)
 }
 func (i *inputMgr) IsActionPressed(action string) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0Str := C.CString(action)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallInputIsActionPressed(arg0)
-		return ToBool(retValue)
-	})
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallInputIsActionPressed(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) IsActionJustPressed(action string) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0Str := C.CString(action)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallInputIsActionJustPressed(arg0)
-		return ToBool(retValue)
-	})
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallInputIsActionJustPressed(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) IsActionJustReleased(action string) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0Str := C.CString(action)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallInputIsActionJustReleased(arg0)
-		return ToBool(retValue)
-	})
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallInputIsActionJustReleased(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) RegisterAction(action string) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0Str := C.CString(action)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallInputRegisterAction(arg0)
-		return ToInt64(retValue)
-	})
+	arg0Str := C.CString(action)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallInputRegisterAction(arg0)
+	return ToInt64(retValue)
 }
 func (i *inputMgr) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdInt(neg_action_id)
-		arg1 := ToGdInt(pos_action_id)
-		retValue := CallInputGetAxisId(arg0, arg1)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdInt(neg_action_id)
+	arg1 := ToGdInt(pos_action_id)
+	retValue := CallInputGetAxisId(arg0, arg1)
+	return ToFloat64(retValue)
 }
 func (i *inputMgr) IsActionPressedId(action_id int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(action_id)
-		retValue := CallInputIsActionPressedId(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(action_id)
+	retValue := CallInputIsActionPressedId(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) IsActionJustPressedId(action_id int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(action_id)
-		retValue := CallInputIsActionJustPressedId(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(action_id)
+	retValue := CallInputIsActionJustPressedId(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) IsActionJustReleasedId(action_id int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdInt(action_id)
-		retValue := CallInputIsActionJustReleasedId(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdInt(action_id)
+	retValue := CallInputIsActionJustReleasedId(arg0)
+	return ToBool(retValue)
 }
 func (i *inputMgr) WriteSnapshot(out *[3]float32) {
-	enginewrap.CallInMainThread(func() {
-		if out == nil {
-			panic("GDExtensionSpxInputWriteSnapshot requires a non-nil array: out")
-		}
-		arg0 := unsafe.SliceData(out[:])
-		CallInputWriteSnapshot(arg0)
-	})
+	if out == nil {
+		panic("GDExtensionSpxInputWriteSnapshot requires a non-nil array: out")
+	}
+	arg0 := unsafe.SliceData(out[:])
+	CallInputWriteSnapshot(arg0)
 }
 func (n *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(grid_size)
-		arg1 := ToGdVec2(cell_size)
-		arg2 := ToGdBool(with_jump)
-		arg3 := ToGdBool(with_debug)
-		CallNavigationSetupPathFinderWithSize(arg0, arg1, arg2, arg3)
-	})
+	arg0 := ToGdVec2(grid_size)
+	arg1 := ToGdVec2(cell_size)
+	arg2 := ToGdBool(with_jump)
+	arg3 := ToGdBool(with_debug)
+	CallNavigationSetupPathFinderWithSize(arg0, arg1, arg2, arg3)
 }
 func (n *navigationMgr) SetupPathFinder(with_jump bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(with_jump)
-		CallNavigationSetupPathFinder(arg0)
-	})
+	arg0 := ToGdBool(with_jump)
+	CallNavigationSetupPathFinder(arg0)
 }
 func (n *navigationMgr) SetObstacle(obj Object, enabled bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(enabled)
-		CallNavigationSetObstacle(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(enabled)
+	CallNavigationSetObstacle(arg0, arg1)
 }
 func (n *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Array {
-	return enginewrap.CallInMainThreadValue(func() Array {
-		arg0 := ToGdVec2(p_from)
-		arg1 := ToGdVec2(p_to)
-		arg2 := ToGdBool(with_jump)
-		retValue := CallNavigationFindPath(arg0, arg1, arg2)
-		return ToArray(retValue)
-	})
+	arg0 := ToGdVec2(p_from)
+	arg1 := ToGdVec2(p_to)
+	arg2 := ToGdBool(with_jump)
+	retValue := CallNavigationFindPath(arg0, arg1, arg2)
+	return ToArray(retValue)
 }
 func (p *penMgr) DestroyAllPens() {
-	enginewrap.CallInMainThread(func() {
-		CallPenDestroyAllPens()
-	})
+	CallPenDestroyAllPens()
 }
 func (p *penMgr) SetCanvasSize(width int64, height int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(width)
-		arg1 := ToGdInt(height)
-		CallPenSetCanvasSize(arg0, arg1)
-	})
+	arg0 := ToGdInt(width)
+	arg1 := ToGdInt(height)
+	CallPenSetCanvasSize(arg0, arg1)
 }
 func (p *penMgr) CreatePen() Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		retValue := CallPenCreatePen()
-		return ToObject(retValue)
-	})
+	retValue := CallPenCreatePen()
+	return ToObject(retValue)
 }
 func (p *penMgr) DestroyPen(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallPenDestroyPen(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallPenDestroyPen(arg0)
 }
 func (p *penMgr) BatchUpdateCommands(buffer []float32) {
-	enginewrap.CallInMainThread(func() {
-		if len(buffer) > math.MaxInt32 {
-			panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
-		}
-		arg0 := unsafe.SliceData(buffer)
-		arg1 := int32(len(buffer))
-		CallPenBatchUpdateCommands(arg0, arg1)
-	})
+	if len(buffer) > math.MaxInt32 {
+		panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
+	}
+	arg0 := unsafe.SliceData(buffer)
+	arg1 := int32(len(buffer))
+	CallPenBatchUpdateCommands(arg0, arg1)
 }
 func (p *penMgr) PenStamp(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallPenPenStamp(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallPenPenStamp(arg0)
 }
 func (p *penMgr) PenStampSprite(sprite_id Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(sprite_id)
-		CallPenPenStampSprite(arg0)
-	})
+	arg0 := ToGdObj(sprite_id)
+	CallPenPenStampSprite(arg0)
 }
 func (p *penMgr) MovePenTo(obj Object, position Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(position)
-		CallPenMovePenTo(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(position)
+	CallPenMovePenTo(arg0, arg1)
 }
 func (p *penMgr) RestorePenState(obj Object, position Vec2, is_down bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(position)
-		arg2 := ToGdBool(is_down)
-		CallPenRestorePenState(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(position)
+	arg2 := ToGdBool(is_down)
+	CallPenRestorePenState(arg0, arg1, arg2)
 }
 func (p *penMgr) PenDown(obj Object, move_by_mouse bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(move_by_mouse)
-		CallPenPenDown(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(move_by_mouse)
+	CallPenPenDown(arg0, arg1)
 }
 func (p *penMgr) PenUp(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallPenPenUp(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallPenPenUp(arg0)
 }
 func (p *penMgr) SetPenColorTo(obj Object, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdColor(color)
-		CallPenSetPenColorTo(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdColor(color)
+	CallPenSetPenColorTo(arg0, arg1)
 }
 func (p *penMgr) ChangePenBy(obj Object, property int64, amount float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(property)
-		arg2 := ToGdFloat(amount)
-		CallPenChangePenBy(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(property)
+	arg2 := ToGdFloat(amount)
+	CallPenChangePenBy(arg0, arg1, arg2)
 }
 func (p *penMgr) SetPenTo(obj Object, property int64, value float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(property)
-		arg2 := ToGdFloat(value)
-		CallPenSetPenTo(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(property)
+	arg2 := ToGdFloat(value)
+	CallPenSetPenTo(arg0, arg1, arg2)
 }
 func (p *penMgr) ChangePenSizeBy(obj Object, amount float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(amount)
-		CallPenChangePenSizeBy(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(amount)
+	CallPenChangePenSizeBy(arg0, arg1)
 }
 func (p *penMgr) SetPenSizeTo(obj Object, size float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(size)
-		CallPenSetPenSizeTo(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(size)
+	CallPenSetPenSizeTo(arg0, arg1)
 }
 func (p *penMgr) SetPenStampTexture(obj Object, texture_path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(texture_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallPenSetPenStampTexture(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallPenSetPenStampTexture(arg0, arg1)
 }
 func (p *penMgr) PenStampWithTransform(obj Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(texture_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdVec2(position)
-		arg3 := ToGdFloat(rotation_radians)
-		arg4 := ToGdVec2(scale)
-		CallPenPenStampWithTransform(arg0, arg1, arg2, arg3, arg4)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdVec2(position)
+	arg3 := ToGdFloat(rotation_radians)
+	arg4 := ToGdVec2(scale)
+	CallPenPenStampWithTransform(arg0, arg1, arg2, arg3, arg4)
 }
 func (p *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0 := ToGdVec2(from)
-		arg1 := ToGdVec2(to)
-		arg2 := ToGdInt(collision_mask)
-		retValue := CallPhysicsRaycast(arg0, arg1, arg2)
-		return ToObject(retValue)
-	})
+	arg0 := ToGdVec2(from)
+	arg1 := ToGdVec2(to)
+	arg2 := ToGdInt(collision_mask)
+	retValue := CallPhysicsRaycast(arg0, arg1, arg2)
+	return ToObject(retValue)
 }
 func (p *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdVec2(from)
-		arg1 := ToGdVec2(to)
-		arg2 := ToGdInt(collision_mask)
-		arg3 := ToGdBool(collide_with_areas)
-		arg4 := ToGdBool(collide_with_bodies)
-		retValue := CallPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdVec2(from)
+	arg1 := ToGdVec2(to)
+	arg2 := ToGdInt(collision_mask)
+	arg3 := ToGdBool(collide_with_areas)
+	arg4 := ToGdBool(collide_with_bodies)
+	retValue := CallPhysicsCheckCollision(arg0, arg1, arg2, arg3, arg4)
+	return ToBool(retValue)
 }
 func (p *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallPhysicsCheckTouchedCameraBoundaries(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicsCheckTouchedCameraBoundaries(arg0)
+	return ToInt64(retValue)
 }
 func (p *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(board_type)
-		retValue := CallPhysicsCheckTouchedCameraBoundary(arg0, arg1)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(board_type)
+	retValue := CallPhysicsCheckTouchedCameraBoundary(arg0, arg1)
+	return ToBool(retValue)
 }
 func (p *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallPhysicsCheckNearestTouchedCameraBoundary(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicsCheckNearestTouchedCameraBoundary(arg0)
+	return ToInt64(retValue)
 }
 func (p *physicsMgr) CheckTouchedStageBoundaries(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallPhysicsCheckTouchedStageBoundaries(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicsCheckTouchedStageBoundaries(arg0)
+	return ToInt64(retValue)
 }
 func (p *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(board_type)
-		retValue := CallPhysicsCheckTouchedStageBoundary(arg0, arg1)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(board_type)
+	retValue := CallPhysicsCheckTouchedStageBoundary(arg0, arg1)
+	return ToBool(retValue)
 }
 func (p *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallPhysicsCheckNearestTouchedStageBoundary(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallPhysicsCheckNearestTouchedStageBoundary(arg0)
+	return ToInt64(retValue)
 }
 func (p *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(is_collision_by_alpha)
-		CallPhysicsSetCollisionSystemType(arg0)
-	})
+	arg0 := ToGdBool(is_collision_by_alpha)
+	CallPhysicsSetCollisionSystemType(arg0)
 }
 func (p *physicsMgr) SetGlobalGravity(gravity float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdFloat(gravity)
-		CallPhysicsSetGlobalGravity(arg0)
-	})
+	arg0 := ToGdFloat(gravity)
+	CallPhysicsSetGlobalGravity(arg0)
 }
 func (p *physicsMgr) GetGlobalGravity() float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		retValue := CallPhysicsGetGlobalGravity()
-		return ToFloat64(retValue)
-	})
+	retValue := CallPhysicsGetGlobalGravity()
+	return ToFloat64(retValue)
 }
 func (p *physicsMgr) SetGlobalFriction(friction float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdFloat(friction)
-		CallPhysicsSetGlobalFriction(arg0)
-	})
+	arg0 := ToGdFloat(friction)
+	CallPhysicsSetGlobalFriction(arg0)
 }
 func (p *physicsMgr) GetGlobalFriction() float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		retValue := CallPhysicsGetGlobalFriction()
-		return ToFloat64(retValue)
-	})
+	retValue := CallPhysicsGetGlobalFriction()
+	return ToFloat64(retValue)
 }
 func (p *physicsMgr) SetGlobalAirDrag(air_drag float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdFloat(air_drag)
-		CallPhysicsSetGlobalAirDrag(arg0)
-	})
+	arg0 := ToGdFloat(air_drag)
+	CallPhysicsSetGlobalAirDrag(arg0)
 }
 func (p *physicsMgr) GetGlobalAirDrag() float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		retValue := CallPhysicsGetGlobalAirDrag()
-		return ToFloat64(retValue)
-	})
+	retValue := CallPhysicsGetGlobalAirDrag()
+	return ToFloat64(retValue)
 }
 func (p *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
-	return enginewrap.CallInMainThreadValue(func() Array {
-		arg0 := ToGdVec2(pos)
-		arg1 := ToGdVec2(size)
-		arg2 := ToGdInt(collision_mask)
-		retValue := CallPhysicsCheckCollisionRect(arg0, arg1, arg2)
-		return ToArray(retValue)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1 := ToGdVec2(size)
+	arg2 := ToGdInt(collision_mask)
+	retValue := CallPhysicsCheckCollisionRect(arg0, arg1, arg2)
+	return ToArray(retValue)
 }
 func (p *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
-	return enginewrap.CallInMainThreadValue(func() Array {
-		arg0 := ToGdVec2(pos)
-		arg1 := ToGdFloat(radius)
-		arg2 := ToGdInt(collision_mask)
-		retValue := CallPhysicsCheckCollisionCircle(arg0, arg1, arg2)
-		return ToArray(retValue)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1 := ToGdFloat(radius)
+	arg2 := ToGdInt(collision_mask)
+	retValue := CallPhysicsCheckCollisionCircle(arg0, arg1, arg2)
+	return ToArray(retValue)
 }
 func (p *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
-	return enginewrap.CallInMainThreadValue(func() Array {
-		arg0 := ToGdVec2(from)
-		arg1 := ToGdVec2(to)
-		arg2Info := ToGdArrayInfo(ignore_sprites)
-		if arg2Info != nil {
-			defer arg2Info.Free()
-		}
-		arg2 := GdArray(nil)
-		if arg2Info != nil {
-			arg2 = arg2Info.Raw()
-		}
-		arg3 := ToGdInt(collision_mask)
-		arg4 := ToGdBool(collide_with_areas)
-		arg5 := ToGdBool(collide_with_bodies)
-		retValue := CallPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5)
-		return ToArray(retValue)
-	})
+	arg0 := ToGdVec2(from)
+	arg1 := ToGdVec2(to)
+	arg2Info := ToGdArrayInfo(ignore_sprites)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	arg3 := ToGdInt(collision_mask)
+	arg4 := ToGdBool(collide_with_areas)
+	arg5 := ToGdBool(collide_with_bodies)
+	retValue := CallPhysicsRaycastWithDetails(arg0, arg1, arg2, arg3, arg4, arg5)
+	return ToArray(retValue)
 }
 func (p *platformMgr) SetStretch(enabled bool, content_width int64, content_height int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(enabled)
-		arg1 := ToGdInt(content_width)
-		arg2 := ToGdInt(content_height)
-		CallPlatformSetStretch(arg0, arg1, arg2)
-	})
+	arg0 := ToGdBool(enabled)
+	arg1 := ToGdInt(content_width)
+	arg2 := ToGdInt(content_height)
+	CallPlatformSetStretch(arg0, arg1, arg2)
 }
 func (p *platformMgr) SetWindowPosition(pos Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		CallPlatformSetWindowPosition(arg0)
-	})
+	arg0 := ToGdVec2(pos)
+	CallPlatformSetWindowPosition(arg0)
 }
 func (p *platformMgr) GetWindowPosition() Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		retValue := CallPlatformGetWindowPosition()
-		return ToVec2(retValue)
-	})
+	retValue := CallPlatformGetWindowPosition()
+	return ToVec2(retValue)
 }
 func (p *platformMgr) SetWindowSize(width int64, height int64, with_content_scale bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(width)
-		arg1 := ToGdInt(height)
-		arg2 := ToGdBool(with_content_scale)
-		CallPlatformSetWindowSize(arg0, arg1, arg2)
-	})
+	arg0 := ToGdInt(width)
+	arg1 := ToGdInt(height)
+	arg2 := ToGdBool(with_content_scale)
+	CallPlatformSetWindowSize(arg0, arg1, arg2)
 }
 func (p *platformMgr) GetWindowSize() Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		retValue := CallPlatformGetWindowSize()
-		return ToVec2(retValue)
-	})
+	retValue := CallPlatformGetWindowSize()
+	return ToVec2(retValue)
 }
 func (p *platformMgr) SetWindowTitle(title string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(title)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallPlatformSetWindowTitle(arg0)
-	})
+	arg0Str := C.CString(title)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallPlatformSetWindowTitle(arg0)
 }
 func (p *platformMgr) GetWindowTitle() string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		retValue := CallPlatformGetWindowTitle()
-		return ToString(retValue)
-	})
+	retValue := CallPlatformGetWindowTitle()
+	return ToString(retValue)
 }
 func (p *platformMgr) SetWindowFullscreen(enable bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(enable)
-		CallPlatformSetWindowFullscreen(arg0)
-	})
+	arg0 := ToGdBool(enable)
+	CallPlatformSetWindowFullscreen(arg0)
 }
 func (p *platformMgr) IsWindowFullscreen() bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		retValue := CallPlatformIsWindowFullscreen()
-		return ToBool(retValue)
-	})
+	retValue := CallPlatformIsWindowFullscreen()
+	return ToBool(retValue)
 }
 func (p *platformMgr) SetDebugMode(enable bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(enable)
-		CallPlatformSetDebugMode(arg0)
-	})
+	arg0 := ToGdBool(enable)
+	CallPlatformSetDebugMode(arg0)
 }
 func (p *platformMgr) IsDebugMode() bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		retValue := CallPlatformIsDebugMode()
-		return ToBool(retValue)
-	})
+	retValue := CallPlatformIsDebugMode()
+	return ToBool(retValue)
 }
 func (p *platformMgr) IsMainThread() bool {
 	retValue := CallPlatformIsMainThread()
 	return ToBool(retValue)
 }
 func (p *platformMgr) GetTimeScale() float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		retValue := CallPlatformGetTimeScale()
-		return ToFloat64(retValue)
-	})
+	retValue := CallPlatformGetTimeScale()
+	return ToFloat64(retValue)
 }
 func (p *platformMgr) SetTimeScale(time_scale float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdFloat(time_scale)
-		CallPlatformSetTimeScale(arg0)
-	})
+	arg0 := ToGdFloat(time_scale)
+	CallPlatformSetTimeScale(arg0)
 }
 func (p *platformMgr) GetMaxFps() int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		retValue := CallPlatformGetMaxFps()
-		return ToInt64(retValue)
-	})
+	retValue := CallPlatformGetMaxFps()
+	return ToInt64(retValue)
 }
 func (p *platformMgr) SetMaxFps(fps int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(fps)
-		CallPlatformSetMaxFps(arg0)
-	})
+	arg0 := ToGdInt(fps)
+	CallPlatformSetMaxFps(arg0)
 }
 func (p *platformMgr) GetPersistentDataDir() string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		retValue := CallPlatformGetPersistentDataDir()
-		return ToString(retValue)
-	})
+	retValue := CallPlatformGetPersistentDataDir()
+	return ToString(retValue)
 }
 func (p *platformMgr) SetPersistentDataDir(path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallPlatformSetPersistentDataDir(arg0)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallPlatformSetPersistentDataDir(arg0)
 }
 func (p *platformMgr) IsInPersistentDataDir(path string) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallPlatformIsInPersistentDataDir(arg0)
-		return ToBool(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallPlatformIsInPersistentDataDir(arg0)
+	return ToBool(retValue)
 }
 func (r *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(p_sprite_type)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Str := C.CString(p_anim_name)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2Str := C.CString(p_json_ctx)
-		arg2 := (GdString)(arg2Str)
-		defer C.free(unsafe.Pointer(arg2Str))
-		arg3 := ToGdInt(fps)
-		arg4 := ToGdBool(is_atlas)
-		CallResCreateAnimation(arg0, arg1, arg2, arg3, arg4)
-	})
+	arg0Str := C.CString(p_sprite_type)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(p_anim_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2Str := C.CString(p_json_ctx)
+	arg2 := (GdString)(arg2Str)
+	defer C.free(unsafe.Pointer(arg2Str))
+	arg3 := ToGdInt(fps)
+	arg4 := ToGdBool(is_atlas)
+	CallResCreateAnimation(arg0, arg1, arg2, arg3, arg4)
 }
 func (r *resMgr) SetLoadMode(is_direct_mode bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(is_direct_mode)
-		CallResSetLoadMode(arg0)
-	})
+	arg0 := ToGdBool(is_direct_mode)
+	CallResSetLoadMode(arg0)
 }
 func (r *resMgr) GetLoadMode() bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		retValue := CallResGetLoadMode()
-		return ToBool(retValue)
-	})
+	retValue := CallResGetLoadMode()
+	return ToBool(retValue)
 }
 func (r *resMgr) GetBoundFromAlpha(p_path string) Rect2 {
-	return enginewrap.CallInMainThreadValue(func() Rect2 {
-		arg0Str := C.CString(p_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallResGetBoundFromAlpha(arg0)
-		return ToRect2(retValue)
-	})
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResGetBoundFromAlpha(arg0)
+	return ToRect2(retValue)
 }
 func (r *resMgr) GetImageSize(p_path string) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0Str := C.CString(p_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallResGetImageSize(arg0)
-		return ToVec2(retValue)
-	})
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResGetImageSize(arg0)
+	return ToVec2(retValue)
 }
 func (r *resMgr) GetImageLogicalSize(p_path string) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0Str := C.CString(p_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallResGetImageLogicalSize(arg0)
-		return ToVec2(retValue)
-	})
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResGetImageLogicalSize(arg0)
+	return ToVec2(retValue)
 }
 func (r *resMgr) ReadAllText(p_path string) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0Str := C.CString(p_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallResReadAllText(arg0)
-		return ToString(retValue)
-	})
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResReadAllText(arg0)
+	return ToString(retValue)
 }
 func (r *resMgr) HasFile(p_path string) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0Str := C.CString(p_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallResHasFile(arg0)
-		return ToBool(retValue)
-	})
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResHasFile(arg0)
+	return ToBool(retValue)
 }
 func (r *resMgr) ListDirectories(p_path string) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0Str := C.CString(p_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallResListDirectories(arg0)
-		return ToString(retValue)
-	})
+	arg0Str := C.CString(p_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallResListDirectories(arg0)
+	return ToString(retValue)
 }
 func (r *resMgr) ReloadTexture(path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallResReloadTexture(arg0)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallResReloadTexture(arg0)
 }
 func (r *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0Str := C.CString(default_font_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Info := ToGdArrayInfo(font_paths)
-		if arg1Info != nil {
-			defer arg1Info.Free()
-		}
-		arg1 := GdArray(nil)
-		if arg1Info != nil {
-			arg1 = arg1Info.Raw()
-		}
-		arg2Info := ToGdArrayInfo(font_families)
-		if arg2Info != nil {
-			defer arg2Info.Free()
-		}
-		arg2 := GdArray(nil)
-		if arg2Info != nil {
-			arg2 = arg2Info.Raw()
-		}
-		arg3Info := ToGdArrayInfo(preferences)
-		if arg3Info != nil {
-			defer arg3Info.Free()
-		}
-		arg3 := GdArray(nil)
-		if arg3Info != nil {
-			arg3 = arg3Info.Raw()
-		}
-		retValue := CallResApplyProjectFonts(arg0, arg1, arg2, arg3)
-		return ToString(retValue)
-	})
+	arg0Str := C.CString(default_font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Info := ToGdArrayInfo(font_paths)
+	if arg1Info != nil {
+		defer arg1Info.Free()
+	}
+	arg1 := GdArray(nil)
+	if arg1Info != nil {
+		arg1 = arg1Info.Raw()
+	}
+	arg2Info := ToGdArrayInfo(font_families)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	arg3Info := ToGdArrayInfo(preferences)
+	if arg3Info != nil {
+		defer arg3Info.Free()
+	}
+	arg3 := GdArray(nil)
+	if arg3Info != nil {
+		arg3 = arg3Info.Raw()
+	}
+	retValue := CallResApplyProjectFonts(arg0, arg1, arg2, arg3)
+	return ToString(retValue)
 }
 func (r *resMgr) SetDefaultFont(font_path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(font_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallResSetDefaultFont(arg0)
-	})
+	arg0Str := C.CString(font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallResSetDefaultFont(arg0)
 }
 func (r *resMgr) RegisterFontFace(font_path string, family string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(font_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Str := C.CString(family)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallResRegisterFontFace(arg0, arg1)
-	})
+	arg0Str := C.CString(font_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(family)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallResRegisterFontFace(arg0, arg1)
 }
 func (r *resMgr) SetFontPreferences(preferences Array) {
-	enginewrap.CallInMainThread(func() {
-		arg0Info := ToGdArrayInfo(preferences)
-		if arg0Info != nil {
-			defer arg0Info.Free()
-		}
-		arg0 := GdArray(nil)
-		if arg0Info != nil {
-			arg0 = arg0Info.Raw()
-		}
-		CallResSetFontPreferences(arg0)
-	})
+	arg0Info := ToGdArrayInfo(preferences)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
+	CallResSetFontPreferences(arg0)
 }
 func (s *sceneMgr) ChangeSceneToFile(path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallSceneChangeSceneToFile(arg0)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallSceneChangeSceneToFile(arg0)
 }
 func (s *sceneMgr) DestroyAllSprites() {
-	enginewrap.CallInMainThread(func() {
-		CallSceneDestroyAllSprites()
-	})
+	CallSceneDestroyAllSprites()
 }
 func (s *sceneMgr) ReloadCurrentScene() int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		retValue := CallSceneReloadCurrentScene()
-		return ToInt64(retValue)
-	})
+	retValue := CallSceneReloadCurrentScene()
+	return ToInt64(retValue)
 }
 func (s *sceneMgr) UnloadCurrentScene() {
-	enginewrap.CallInMainThread(func() {
-		CallSceneUnloadCurrentScene()
-	})
+	CallSceneUnloadCurrentScene()
 }
 func (s *sceneMgr) ClearPureSprites() {
-	enginewrap.CallInMainThread(func() {
-		CallSceneClearPureSprites()
-	})
+	CallSceneClearPureSprites()
 }
 func (s *sceneMgr) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(texture_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdVec2(pos)
-		arg2 := ToGdInt(zindex)
-		CallSceneCreatePureSprite(arg0, arg1, arg2)
-	})
+	arg0Str := C.CString(texture_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdVec2(pos)
+	arg2 := ToGdInt(zindex)
+	CallSceneCreatePureSprite(arg0, arg1, arg2)
 }
 func (s *sceneMgr) DestroyPureSprite(id Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(id)
-		CallSceneDestroyPureSprite(arg0)
-	})
+	arg0 := ToGdObj(id)
+	CallSceneDestroyPureSprite(arg0)
 }
 func (s *sceneMgr) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(texture_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdVec2(pos)
-		arg2 := ToGdFloat(degree)
-		arg3 := ToGdVec2(scale)
-		arg4 := ToGdInt(zindex)
-		arg5 := ToGdVec2(pivot)
-		retValue := CallSceneCreateRenderSprite(arg0, arg1, arg2, arg3, arg4, arg5)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(texture_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdVec2(pos)
+	arg2 := ToGdFloat(degree)
+	arg3 := ToGdVec2(scale)
+	arg4 := ToGdInt(zindex)
+	arg5 := ToGdVec2(pivot)
+	retValue := CallSceneCreateRenderSprite(arg0, arg1, arg2, arg3, arg4, arg5)
+	return ToObject(retValue)
 }
 func (s *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params Array) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(texture_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdVec2(pos)
-		arg2 := ToGdFloat(degree)
-		arg3 := ToGdVec2(scale)
-		arg4 := ToGdInt(zindex)
-		arg5 := ToGdVec2(pivot)
-		arg6 := ToGdInt(collider_type)
-		arg7 := ToGdVec2(collider_pivot)
-		arg8Info := ToGdArrayInfo(collider_params)
-		if arg8Info != nil {
-			defer arg8Info.Free()
-		}
-		arg8 := GdArray(nil)
-		if arg8Info != nil {
-			arg8 = arg8Info.Raw()
-		}
-		retValue := CallSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(texture_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdVec2(pos)
+	arg2 := ToGdFloat(degree)
+	arg3 := ToGdVec2(scale)
+	arg4 := ToGdInt(zindex)
+	arg5 := ToGdVec2(pivot)
+	arg6 := ToGdInt(collider_type)
+	arg7 := ToGdVec2(collider_pivot)
+	arg8Info := ToGdArrayInfo(collider_params)
+	if arg8Info != nil {
+		defer arg8Info.Free()
+	}
+	arg8 := GdArray(nil)
+	if arg8Info != nil {
+		arg8 = arg8Info.Raw()
+	}
+	retValue := CallSceneCreateStaticSprite(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+	return ToObject(retValue)
 }
 func (s *spriteMgr) SetDontDestroyOnLoad(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallSpriteSetDontDestroyOnLoad(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallSpriteSetDontDestroyOnLoad(arg0)
 }
 func (s *spriteMgr) SetProcess(obj Object, is_on bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(is_on)
-		CallSpriteSetProcess(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(is_on)
+	CallSpriteSetProcess(arg0, arg1)
 }
 func (s *spriteMgr) SetPhysicProcess(obj Object, is_on bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(is_on)
-		CallSpriteSetPhysicProcess(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(is_on)
+	CallSpriteSetPhysicProcess(arg0, arg1)
 }
 func (s *spriteMgr) SetTypeName(obj Object, type_name string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(type_name)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallSpriteSetTypeName(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(type_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallSpriteSetTypeName(arg0, arg1)
 }
 func (s *spriteMgr) SetPivot(obj Object, pivot Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(pivot)
-		CallSpriteSetPivot(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(pivot)
+	CallSpriteSetPivot(arg0, arg1)
 }
 func (s *spriteMgr) GetPivot(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetPivot(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetPivot(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) SetChildPosition(obj Object, path string, pos Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdVec2(pos)
-		CallSpriteSetChildPosition(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdVec2(pos)
+	CallSpriteSetChildPosition(arg0, arg1, arg2)
 }
 func (s *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallSpriteGetChildPosition(arg0, arg1)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteGetChildPosition(arg0, arg1)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdFloat(rot)
-		CallSpriteSetChildRotation(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdFloat(rot)
+	CallSpriteSetChildRotation(arg0, arg1, arg2)
 }
 func (s *spriteMgr) GetChildRotation(obj Object, path string) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallSpriteGetChildRotation(arg0, arg1)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteGetChildRotation(arg0, arg1)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetChildScale(obj Object, path string, scale Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdVec2(scale)
-		CallSpriteSetChildScale(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdVec2(scale)
+	CallSpriteSetChildScale(arg0, arg1, arg2)
 }
 func (s *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallSpriteGetChildScale(arg0, arg1)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteGetChildScale(arg0, arg1)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdObj(target)
-		arg2 := ToGdBool(is_src_trigger)
-		arg3 := ToGdBool(is_dst_trigger)
-		retValue := CallSpriteCheckCollision(arg0, arg1, arg2, arg3)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdObj(target)
+	arg2 := ToGdBool(is_src_trigger)
+	arg3 := ToGdBool(is_dst_trigger)
+	retValue := CallSpriteCheckCollision(arg0, arg1, arg2, arg3)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(point)
-		arg2 := ToGdBool(is_click_query)
-		retValue := CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(point)
+	arg2 := ToGdBool(is_click_query)
+	retValue := CallSpriteCheckCollisionWithPoint(arg0, arg1, arg2)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(visible)
-		CallSpriteSetDebugCollisionVisible(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(visible)
+	CallSpriteSetDebugCollisionVisible(arg0, arg1)
 }
 func (s *spriteMgr) IsDebugCollisionVisible(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsDebugCollisionVisible(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsDebugCollisionVisible(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) CreateBackdrop(path string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallSpriteCreateBackdrop(arg0)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallSpriteCreateBackdrop(arg0)
+	return ToObject(retValue)
 }
 func (s *spriteMgr) CreateSprite(path string, pos Vec2) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdVec2(pos)
-		retValue := CallSpriteCreateSprite(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdVec2(pos)
+	retValue := CallSpriteCreateSprite(arg0, arg1)
+	return ToObject(retValue)
 }
 func (s *spriteMgr) CreateBareSprite(pos Vec2) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0 := ToGdVec2(pos)
-		retValue := CallSpriteCreateBareSprite(arg0)
-		return ToObject(retValue)
-	})
+	arg0 := ToGdVec2(pos)
+	retValue := CallSpriteCreateBareSprite(arg0)
+	return ToObject(retValue)
 }
 func (s *spriteMgr) CloneSprite(obj Object) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteCloneSprite(arg0)
-		return ToObject(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteCloneSprite(arg0)
+	return ToObject(retValue)
 }
 func (s *spriteMgr) DestroySprite(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteDestroySprite(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteDestroySprite(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) IsSpriteAlive(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsSpriteAlive(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsSpriteAlive(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetPosition(obj Object, pos Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(pos)
-		CallSpriteSetPosition(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(pos)
+	CallSpriteSetPosition(arg0, arg1)
 }
 func (s *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(pos)
-		arg2 := ToGdFloat(rot)
-		arg3 := ToGdVec2(scale)
-		arg4 := ToGdBool(visible)
-		arg5 := ToGdVec2(pivot)
-		CallSpriteSetTransform(arg0, arg1, arg2, arg3, arg4, arg5)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(pos)
+	arg2 := ToGdFloat(rot)
+	arg3 := ToGdVec2(scale)
+	arg4 := ToGdBool(visible)
+	arg5 := ToGdVec2(pivot)
+	CallSpriteSetTransform(arg0, arg1, arg2, arg3, arg4, arg5)
 }
 func (s *spriteMgr) GetPosition(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetPosition(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetPosition(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) SetRotation(obj Object, rot float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(rot)
-		CallSpriteSetRotation(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(rot)
+	CallSpriteSetRotation(arg0, arg1)
 }
 func (s *spriteMgr) GetRotation(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetRotation(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetRotation(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetScale(obj Object, scale Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(scale)
-		CallSpriteSetScale(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(scale)
+	CallSpriteSetScale(arg0, arg1)
 }
 func (s *spriteMgr) GetScale(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetScale(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetScale(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(scale)
-		CallSpriteSetRenderScale(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(scale)
+	CallSpriteSetRenderScale(arg0, arg1)
 }
 func (s *spriteMgr) GetRenderScale(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetRenderScale(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetRenderScale(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) SetColor(obj Object, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdColor(color)
-		CallSpriteSetColor(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdColor(color)
+	CallSpriteSetColor(arg0, arg1)
 }
 func (s *spriteMgr) GetColor(obj Object) Color {
-	return enginewrap.CallInMainThreadValue(func() Color {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetColor(arg0)
-		return ToColor(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetColor(arg0)
+	return ToColor(retValue)
 }
 func (s *spriteMgr) SetMaterialShader(obj Object, path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallSpriteSetMaterialShader(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallSpriteSetMaterialShader(arg0, arg1)
 }
 func (s *spriteMgr) GetMaterialShader(obj Object) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetMaterialShader(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetMaterialShader(arg0)
+	return ToString(retValue)
 }
 func (s *spriteMgr) SetMaterialParams(obj Object, effect string, amount float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdFloat(amount)
-		CallSpriteSetMaterialParams(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdFloat(amount)
+	CallSpriteSetMaterialParams(arg0, arg1, arg2)
 }
 func (s *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallSpriteGetMaterialParams(arg0, arg1)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteGetMaterialParams(arg0, arg1)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdFloat(x)
-		arg3 := ToGdFloat(y)
-		arg4 := ToGdFloat(z)
-		arg5 := ToGdFloat(w)
-		CallSpriteSetMaterialParamsVec(arg0, arg1, arg2, arg3, arg4, arg5)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdFloat(x)
+	arg3 := ToGdFloat(y)
+	arg4 := ToGdFloat(z)
+	arg5 := ToGdFloat(w)
+	CallSpriteSetMaterialParamsVec(arg0, arg1, arg2, arg3, arg4, arg5)
 }
 func (s *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdVec4(vec4)
-		CallSpriteSetMaterialParamsVec4(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdVec4(vec4)
+	CallSpriteSetMaterialParamsVec4(arg0, arg1, arg2)
 }
 func (s *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
-	return enginewrap.CallInMainThreadValue(func() Vec4 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallSpriteGetMaterialParamsVec4(arg0, arg1)
-		return ToVec4(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteGetMaterialParamsVec4(arg0, arg1)
+	return ToVec4(retValue)
 }
 func (s *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdColor(color)
-		CallSpriteSetMaterialParamsColor(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdColor(color)
+	CallSpriteSetMaterialParamsColor(arg0, arg1, arg2)
 }
 func (s *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color {
-	return enginewrap.CallInMainThreadValue(func() Color {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(effect)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallSpriteGetMaterialParamsColor(arg0, arg1)
-		return ToColor(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(effect)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteGetMaterialParamsColor(arg0, arg1)
+	return ToColor(retValue)
 }
 func (s *spriteMgr) SetTextureAtlas(obj Object, path string, rect2 Rect2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdRect2(rect2)
-		CallSpriteSetTextureAtlas(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdRect2(rect2)
+	CallSpriteSetTextureAtlas(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetTexture(obj Object, path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallSpriteSetTexture(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallSpriteSetTexture(arg0, arg1)
 }
 func (s *spriteMgr) SetTextureAtlasDirect(obj Object, path string, rect2 Rect2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdRect2(rect2)
-		CallSpriteSetTextureAtlasDirect(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdRect2(rect2)
+	CallSpriteSetTextureAtlasDirect(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetTextureDirect(obj Object, path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallSpriteSetTextureDirect(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallSpriteSetTextureDirect(arg0, arg1)
 }
 func (s *spriteMgr) GetTexture(obj Object) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetTexture(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetTexture(arg0)
+	return ToString(retValue)
 }
 func (s *spriteMgr) SetVisible(obj Object, visible bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(visible)
-		CallSpriteSetVisible(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(visible)
+	CallSpriteSetVisible(arg0, arg1)
 }
 func (s *spriteMgr) GetVisible(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetVisible(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetVisible(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) GetZIndex(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetZIndex(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetZIndex(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetZIndex(obj Object, z int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(z)
-		CallSpriteSetZIndex(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(z)
+	CallSpriteSetZIndex(arg0, arg1)
 }
 func (s *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(p_name)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdFloat(p_speed)
-		arg3 := ToGdBool(isLoop)
-		arg4 := ToGdBool(p_revert)
-		CallSpritePlayAnim(arg0, arg1, arg2, arg3, arg4)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(p_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdFloat(p_speed)
+	arg3 := ToGdBool(isLoop)
+	arg4 := ToGdBool(p_revert)
+	CallSpritePlayAnim(arg0, arg1, arg2, arg3, arg4)
 }
 func (s *spriteMgr) PlayBackwardsAnim(obj Object, p_name string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(p_name)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallSpritePlayBackwardsAnim(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(p_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallSpritePlayBackwardsAnim(arg0, arg1)
 }
 func (s *spriteMgr) PauseAnim(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallSpritePauseAnim(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallSpritePauseAnim(arg0)
 }
 func (s *spriteMgr) StopAnim(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallSpriteStopAnim(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallSpriteStopAnim(arg0)
 }
 func (s *spriteMgr) IsPlayingAnim(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsPlayingAnim(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsPlayingAnim(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetAnim(obj Object, p_name string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(p_name)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallSpriteSetAnim(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(p_name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallSpriteSetAnim(arg0, arg1)
 }
 func (s *spriteMgr) GetAnim(obj Object) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetAnim(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetAnim(arg0)
+	return ToString(retValue)
 }
 func (s *spriteMgr) SetAnimFrame(obj Object, p_frame int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(p_frame)
-		CallSpriteSetAnimFrame(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(p_frame)
+	CallSpriteSetAnimFrame(arg0, arg1)
 }
 func (s *spriteMgr) GetAnimFrame(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetAnimFrame(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetAnimFrame(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetAnimSpeedScale(obj Object, p_speed_scale float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(p_speed_scale)
-		CallSpriteSetAnimSpeedScale(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(p_speed_scale)
+	CallSpriteSetAnimSpeedScale(arg0, arg1)
 }
 func (s *spriteMgr) GetAnimSpeedScale(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetAnimSpeedScale(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetAnimSpeedScale(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) GetAnimPlayingSpeed(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetAnimPlayingSpeed(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetAnimPlayingSpeed(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetAnimCentered(obj Object, p_center bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(p_center)
-		CallSpriteSetAnimCentered(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(p_center)
+	CallSpriteSetAnimCentered(arg0, arg1)
 }
 func (s *spriteMgr) IsAnimCentered(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsAnimCentered(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsAnimCentered(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetAnimOffset(obj Object, p_offset Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(p_offset)
-		CallSpriteSetAnimOffset(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(p_offset)
+	CallSpriteSetAnimOffset(arg0, arg1)
 }
 func (s *spriteMgr) GetAnimOffset(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetAnimOffset(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetAnimOffset(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(p_flip)
-		CallSpriteSetAnimFlipH(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(p_flip)
+	CallSpriteSetAnimFlipH(arg0, arg1)
 }
 func (s *spriteMgr) IsAnimFlippedH(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsAnimFlippedH(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsAnimFlippedH(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(p_flip)
-		CallSpriteSetAnimFlipV(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(p_flip)
+	CallSpriteSetAnimFlipV(arg0, arg1)
 }
 func (s *spriteMgr) IsAnimFlippedV(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsAnimFlippedV(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsAnimFlippedV(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) GetCurrentAnimName(obj Object) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetCurrentAnimName(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetCurrentAnimName(arg0)
+	return ToString(retValue)
 }
 func (s *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(velocity)
-		CallSpriteSetVelocity(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(velocity)
+	CallSpriteSetVelocity(arg0, arg1)
 }
 func (s *spriteMgr) GetVelocity(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetVelocity(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetVelocity(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) IsOnFloor(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsOnFloor(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsOnFloor(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) IsOnFloorOnly(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsOnFloorOnly(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsOnFloorOnly(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) IsOnWall(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsOnWall(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsOnWall(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) IsOnWallOnly(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsOnWallOnly(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsOnWallOnly(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) IsOnCeiling(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsOnCeiling(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsOnCeiling(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) IsOnCeilingOnly(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsOnCeilingOnly(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsOnCeilingOnly(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) GetLastMotion(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetLastMotion(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetLastMotion(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) GetPositionDelta(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetPositionDelta(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetPositionDelta(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) GetFloorNormal(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetFloorNormal(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetFloorNormal(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) GetWallNormal(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetWallNormal(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetWallNormal(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) GetRealVelocity(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetRealVelocity(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetRealVelocity(arg0)
+	return ToVec2(retValue)
 }
 func (s *spriteMgr) MoveAndSlide(obj Object) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		CallSpriteMoveAndSlide(arg0)
-	})
+	arg0 := ToGdObj(obj)
+	CallSpriteMoveAndSlide(arg0)
 }
 func (s *spriteMgr) SetGravity(obj Object, gravity float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(gravity)
-		CallSpriteSetGravity(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(gravity)
+	CallSpriteSetGravity(arg0, arg1)
 }
 func (s *spriteMgr) GetGravity(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetGravity(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetGravity(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetMass(obj Object, mass float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(mass)
-		CallSpriteSetMass(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(mass)
+	CallSpriteSetMass(arg0, arg1)
 }
 func (s *spriteMgr) GetMass(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetMass(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetMass(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) AddForce(obj Object, force Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(force)
-		CallSpriteAddForce(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(force)
+	CallSpriteAddForce(arg0, arg1)
 }
 func (s *spriteMgr) AddImpulse(obj Object, impulse Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(impulse)
-		CallSpriteAddImpulse(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(impulse)
+	CallSpriteAddImpulse(arg0, arg1)
 }
 func (s *spriteMgr) SetPhysicsMode(obj Object, mode int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(mode)
-		CallSpriteSetPhysicsMode(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(mode)
+	CallSpriteSetPhysicsMode(arg0, arg1)
 }
 func (s *spriteMgr) GetPhysicsMode(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetPhysicsMode(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetPhysicsMode(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetUseGravity(obj Object, enabled bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(enabled)
-		CallSpriteSetUseGravity(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(enabled)
+	CallSpriteSetUseGravity(arg0, arg1)
 }
 func (s *spriteMgr) IsUseGravity(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsUseGravity(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsUseGravity(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetGravityScale(obj Object, scale float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(scale)
-		CallSpriteSetGravityScale(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(scale)
+	CallSpriteSetGravityScale(arg0, arg1)
 }
 func (s *spriteMgr) GetGravityScale(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetGravityScale(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetGravityScale(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetDrag(obj Object, drag float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(drag)
-		CallSpriteSetDrag(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(drag)
+	CallSpriteSetDrag(arg0, arg1)
 }
 func (s *spriteMgr) GetDrag(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetDrag(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetDrag(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetFriction(obj Object, friction float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(friction)
-		CallSpriteSetFriction(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(friction)
+	CallSpriteSetFriction(arg0, arg1)
 }
 func (s *spriteMgr) GetFriction(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetFriction(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetFriction(arg0)
+	return ToFloat64(retValue)
 }
 func (s *spriteMgr) SetCollisionLayer(obj Object, layer int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(layer)
-		CallSpriteSetCollisionLayer(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(layer)
+	CallSpriteSetCollisionLayer(arg0, arg1)
 }
 func (s *spriteMgr) GetCollisionLayer(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetCollisionLayer(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetCollisionLayer(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetCollisionMask(obj Object, mask int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(mask)
-		CallSpriteSetCollisionMask(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(mask)
+	CallSpriteSetCollisionMask(arg0, arg1)
 }
 func (s *spriteMgr) GetCollisionMask(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetCollisionMask(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetCollisionMask(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetTriggerLayer(obj Object, layer int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(layer)
-		CallSpriteSetTriggerLayer(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(layer)
+	CallSpriteSetTriggerLayer(arg0, arg1)
 }
 func (s *spriteMgr) GetTriggerLayer(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetTriggerLayer(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetTriggerLayer(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetTriggerMask(obj Object, mask int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(mask)
-		CallSpriteSetTriggerMask(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(mask)
+	CallSpriteSetTriggerMask(arg0, arg1)
 }
 func (s *spriteMgr) GetTriggerMask(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteGetTriggerMask(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetTriggerMask(arg0)
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2 := ToGdVec2(size)
-		CallSpriteSetColliderRect(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdVec2(size)
+	CallSpriteSetColliderRect(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetColliderCircle(obj Object, center Vec2, radius float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2 := ToGdFloat(radius)
-		CallSpriteSetColliderCircle(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdFloat(radius)
+	CallSpriteSetColliderCircle(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2 := ToGdVec2(size)
-		CallSpriteSetColliderCapsule(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdVec2(size)
+	CallSpriteSetColliderCapsule(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2Info := ToGdArrayInfo(points)
-		if arg2Info != nil {
-			defer arg2Info.Free()
-		}
-		arg2 := GdArray(nil)
-		if arg2Info != nil {
-			arg2 = arg2Info.Raw()
-		}
-		CallSpriteSetColliderPolygon(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2Info := ToGdArrayInfo(points)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	CallSpriteSetColliderPolygon(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(enabled)
-		CallSpriteSetCollisionEnabled(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(enabled)
+	CallSpriteSetCollisionEnabled(arg0, arg1)
 }
 func (s *spriteMgr) IsCollisionEnabled(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsCollisionEnabled(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsCollisionEnabled(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetTriggerRect(obj Object, center Vec2, size Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2 := ToGdVec2(size)
-		CallSpriteSetTriggerRect(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdVec2(size)
+	CallSpriteSetTriggerRect(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetTriggerCircle(obj Object, center Vec2, radius float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2 := ToGdFloat(radius)
-		CallSpriteSetTriggerCircle(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdFloat(radius)
+	CallSpriteSetTriggerCircle(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2 := ToGdVec2(size)
-		CallSpriteSetTriggerCapsule(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2 := ToGdVec2(size)
+	CallSpriteSetTriggerCapsule(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(center)
-		arg2Info := ToGdArrayInfo(points)
-		if arg2Info != nil {
-			defer arg2Info.Free()
-		}
-		arg2 := GdArray(nil)
-		if arg2Info != nil {
-			arg2 = arg2Info.Raw()
-		}
-		CallSpriteSetTriggerPolygon(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(center)
+	arg2Info := ToGdArrayInfo(points)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	CallSpriteSetTriggerPolygon(arg0, arg1, arg2)
 }
 func (s *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(trigger)
-		CallSpriteSetTriggerEnabled(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(trigger)
+	CallSpriteSetTriggerEnabled(arg0, arg1)
 }
 func (s *spriteMgr) IsTriggerEnabled(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsTriggerEnabled(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteIsTriggerEnabled(arg0)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdColor(color)
-		arg2 := ToGdFloat(color_threshold)
-		arg3 := ToGdFloat(alpha_threshold)
-		retValue := CallSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdColor(color)
+	arg2 := ToGdFloat(color_threshold)
+	arg3 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionByColor(arg0, arg1, arg2, arg3)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdColor(sprite_color)
-		arg2 := ToGdColor(target_color)
-		arg3 := ToGdFloat(color_threshold)
-		arg4 := ToGdFloat(alpha_threshold)
-		retValue := CallSpriteCheckCollisionByColors(arg0, arg1, arg2, arg3, arg4)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdColor(sprite_color)
+	arg2 := ToGdColor(target_color)
+	arg3 := ToGdFloat(color_threshold)
+	arg4 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionByColors(arg0, arg1, arg2, arg3, arg4)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(alpha_threshold)
-		retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(alpha_threshold)
+	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdObj(obj_b)
-		arg2 := ToGdFloat(alpha_threshold)
-		arg3 := ToGdBool(use_pixel_perfect)
-		retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdObj(obj_b)
+	arg2 := ToGdFloat(alpha_threshold)
+	arg3 := ToGdBool(use_pixel_perfect)
+	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(step)
-		CallSpriteSetPixelCollisionSamplingStep(arg0)
-	})
+	arg0 := ToGdInt(step)
+	CallSpriteSetPixelCollisionSamplingStep(arg0)
 }
 func (s *spriteMgr) GetPixelCollisionSamplingStep() int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		retValue := CallSpriteGetPixelCollisionSamplingStep()
-		return ToInt64(retValue)
-	})
+	retValue := CallSpriteGetPixelCollisionSamplingStep()
+	return ToInt64(retValue)
 }
 func (s *spriteMgr) BatchUpdateTransforms(buffer []float32) {
-	enginewrap.CallInMainThread(func() {
-		if len(buffer) > math.MaxInt32 {
-			panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
-		}
-		arg0 := unsafe.SliceData(buffer)
-		arg1 := int32(len(buffer))
-		CallSpriteBatchUpdateTransforms(arg0, arg1)
-	})
+	if len(buffer) > math.MaxInt32 {
+		panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
+	}
+	arg0 := unsafe.SliceData(buffer)
+	arg1 := int32(len(buffer))
+	CallSpriteBatchUpdateTransforms(arg0, arg1)
 }
 func (s *spriteMgr) BatchUpdateVisuals(buffer []float32) {
-	enginewrap.CallInMainThread(func() {
-		if len(buffer) > math.MaxInt32 {
-			panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
-		}
-		arg0 := unsafe.SliceData(buffer)
-		arg1 := int32(len(buffer))
-		CallSpriteBatchUpdateVisuals(arg0, arg1)
-	})
+	if len(buffer) > math.MaxInt32 {
+		panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
+	}
+	arg0 := unsafe.SliceData(buffer)
+	arg1 := int32(len(buffer))
+	CallSpriteBatchUpdateVisuals(arg0, arg1)
 }
 func (s *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		if len(objs) > math.MaxInt32 {
-			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
-		}
-		arg0 := unsafe.SliceData(objs)
-		arg1 := int32(len(objs))
-		if len(out) > math.MaxInt32 {
-			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: out")
-		}
-		arg2 := unsafe.SliceData(out)
-		arg3 := int32(len(out))
-		retValue := CallSpriteBatchRetrievePositions((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, arg3)
-		return ToBool(retValue)
-	})
+	if len(objs) > math.MaxInt32 {
+		panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
+	}
+	arg0 := unsafe.SliceData(objs)
+	arg1 := int32(len(objs))
+	if len(out) > math.MaxInt32 {
+		panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: out")
+	}
+	arg2 := unsafe.SliceData(out)
+	arg3 := int32(len(out))
+	retValue := CallSpriteBatchRetrievePositions((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, arg3)
+	return ToBool(retValue)
 }
 func (s *spriteMgr) BatchUpdatePhysics(buffer []float32) {
-	enginewrap.CallInMainThread(func() {
-		if len(buffer) > math.MaxInt32 {
-			panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
-		}
-		arg0 := unsafe.SliceData(buffer)
-		arg1 := int32(len(buffer))
-		CallSpriteBatchUpdatePhysics(arg0, arg1)
-	})
+	if len(buffer) > math.MaxInt32 {
+		panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
+	}
+	arg0 := unsafe.SliceData(buffer)
+	arg1 := int32(len(buffer))
+	CallSpriteBatchUpdatePhysics(arg0, arg1)
 }
 func (t *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(tile_size)
-		CallTilemapOpenDrawTilesWithSize(arg0)
-	})
+	arg0 := ToGdInt(tile_size)
+	CallTilemapOpenDrawTilesWithSize(arg0)
 }
 func (t *tilemapMgr) OpenDrawTiles() {
-	enginewrap.CallInMainThread(func() {
-		CallTilemapOpenDrawTiles()
-	})
+	CallTilemapOpenDrawTiles()
 }
 func (t *tilemapMgr) SetLayerIndex(index int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(index)
-		CallTilemapSetLayerIndex(arg0)
-	})
+	arg0 := ToGdInt(index)
+	CallTilemapSetLayerIndex(arg0)
 }
 func (t *tilemapMgr) SetTile(texture_path string, with_collision bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(texture_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdBool(with_collision)
-		CallTilemapSetTile(arg0, arg1)
-	})
+	arg0Str := C.CString(texture_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdBool(with_collision)
+	CallTilemapSetTile(arg0, arg1)
 }
 func (t *tilemapMgr) SetTileWithCollisionInfo(texture_path string, collision_points Array) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(texture_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Info := ToGdArrayInfo(collision_points)
-		if arg1Info != nil {
-			defer arg1Info.Free()
-		}
-		arg1 := GdArray(nil)
-		if arg1Info != nil {
-			arg1 = arg1Info.Raw()
-		}
-		CallTilemapSetTileWithCollisionInfo(arg0, arg1)
-	})
+	arg0Str := C.CString(texture_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Info := ToGdArrayInfo(collision_points)
+	if arg1Info != nil {
+		defer arg1Info.Free()
+	}
+	arg1 := GdArray(nil)
+	if arg1Info != nil {
+		arg1 = arg1Info.Raw()
+	}
+	CallTilemapSetTileWithCollisionInfo(arg0, arg1)
 }
 func (t *tilemapMgr) SetLayerOffset(index int64, offset Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(index)
-		arg1 := ToGdVec2(offset)
-		CallTilemapSetLayerOffset(arg0, arg1)
-	})
+	arg0 := ToGdInt(index)
+	arg1 := ToGdVec2(offset)
+	CallTilemapSetLayerOffset(arg0, arg1)
 }
 func (t *tilemapMgr) GetLayerOffset(index int64) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdInt(index)
-		retValue := CallTilemapGetLayerOffset(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdInt(index)
+	retValue := CallTilemapGetLayerOffset(arg0)
+	return ToVec2(retValue)
 }
 func (t *tilemapMgr) PlaceTiles(positions Array, texture_path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Info := ToGdArrayInfo(positions)
-		if arg0Info != nil {
-			defer arg0Info.Free()
-		}
-		arg0 := GdArray(nil)
-		if arg0Info != nil {
-			arg0 = arg0Info.Raw()
-		}
-		arg1Str := C.CString(texture_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallTilemapPlaceTiles(arg0, arg1)
-	})
+	arg0Info := ToGdArrayInfo(positions)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallTilemapPlaceTiles(arg0, arg1)
 }
 func (t *tilemapMgr) PlaceTilesWithLayer(positions Array, texture_path string, layer_index int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0Info := ToGdArrayInfo(positions)
-		if arg0Info != nil {
-			defer arg0Info.Free()
-		}
-		arg0 := GdArray(nil)
-		if arg0Info != nil {
-			arg0 = arg0Info.Raw()
-		}
-		arg1Str := C.CString(texture_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdInt(layer_index)
-		CallTilemapPlaceTilesWithLayer(arg0, arg1, arg2)
-	})
+	arg0Info := ToGdArrayInfo(positions)
+	if arg0Info != nil {
+		defer arg0Info.Free()
+	}
+	arg0 := GdArray(nil)
+	if arg0Info != nil {
+		arg0 = arg0Info.Raw()
+	}
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdInt(layer_index)
+	CallTilemapPlaceTilesWithLayer(arg0, arg1, arg2)
 }
 func (t *tilemapMgr) PlaceTile(pos Vec2, texture_path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		arg1Str := C.CString(texture_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallTilemapPlaceTile(arg0, arg1)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallTilemapPlaceTile(arg0, arg1)
 }
 func (t *tilemapMgr) PlaceTileWithLayer(pos Vec2, texture_path string, layer_index int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		arg1Str := C.CString(texture_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdInt(layer_index)
-		CallTilemapPlaceTileWithLayer(arg0, arg1, arg2)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1Str := C.CString(texture_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdInt(layer_index)
+	CallTilemapPlaceTileWithLayer(arg0, arg1, arg2)
 }
 func (t *tilemapMgr) EraseTile(pos Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		CallTilemapEraseTile(arg0)
-	})
+	arg0 := ToGdVec2(pos)
+	CallTilemapEraseTile(arg0)
 }
 func (t *tilemapMgr) EraseTileWithLayer(pos Vec2, layer_index int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdVec2(pos)
-		arg1 := ToGdInt(layer_index)
-		CallTilemapEraseTileWithLayer(arg0, arg1)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1 := ToGdInt(layer_index)
+	CallTilemapEraseTileWithLayer(arg0, arg1)
 }
 func (t *tilemapMgr) GetTile(pos Vec2) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdVec2(pos)
-		retValue := CallTilemapGetTile(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdVec2(pos)
+	retValue := CallTilemapGetTile(arg0)
+	return ToString(retValue)
 }
 func (t *tilemapMgr) GetTileWithLayer(pos Vec2, layer_index int64) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdVec2(pos)
-		arg1 := ToGdInt(layer_index)
-		retValue := CallTilemapGetTileWithLayer(arg0, arg1)
-		return ToString(retValue)
-	})
+	arg0 := ToGdVec2(pos)
+	arg1 := ToGdInt(layer_index)
+	retValue := CallTilemapGetTileWithLayer(arg0, arg1)
+	return ToString(retValue)
 }
 func (t *tilemapMgr) CloseDrawTiles() {
-	enginewrap.CallInMainThread(func() {
-		CallTilemapCloseDrawTiles()
-	})
+	CallTilemapCloseDrawTiles()
 }
 func (t *tilemapMgr) ExitTilemapEditorMode() {
-	enginewrap.CallInMainThread(func() {
-		CallTilemapExitTilemapEditorMode()
-	})
+	CallTilemapExitTilemapEditorMode()
 }
 func (t *tilemapparserMgr) LoadTilemap(json_path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(json_path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallTilemapparserLoadTilemap(arg0)
-	})
+	arg0Str := C.CString(json_path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallTilemapparserLoadTilemap(arg0)
 }
 func (t *tilemapparserMgr) UnloadTilemap(name string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(name)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallTilemapparserUnloadTilemap(arg0)
-	})
+	arg0Str := C.CString(name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	CallTilemapparserUnloadTilemap(arg0)
 }
 func (t *tilemapparserMgr) DestroyAllTilemaps() {
-	enginewrap.CallInMainThread(func() {
-		CallTilemapparserDestroyAllTilemaps()
-	})
+	CallTilemapparserDestroyAllTilemaps()
 }
 func (t *tilemapparserMgr) HasTilemap(name string) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0Str := C.CString(name)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallTilemapparserHasTilemap(arg0)
-		return ToBool(retValue)
-	})
+	arg0Str := C.CString(name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallTilemapparserHasTilemap(arg0)
+	return ToBool(retValue)
 }
 func (t *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0Str := C.CString(name)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallTilemapparserGetTilemapLayerCount(arg0)
-		return ToInt64(retValue)
-	})
+	arg0Str := C.CString(name)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallTilemapparserGetTilemapLayerCount(arg0)
+	return ToInt64(retValue)
 }
 func (u *uiMgr) BindNode(obj Object, rel_path string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(rel_path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallUiBindNode(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(rel_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallUiBindNode(arg0, arg1)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateNode(path string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallUiCreateNode(arg0)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallUiCreateNode(arg0)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateButton(path string, text string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Str := C.CString(text)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallUiCreateButton(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallUiCreateButton(arg0, arg1)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateLabel(path string, text string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Str := C.CString(text)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallUiCreateLabel(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallUiCreateLabel(arg0, arg1)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateImage(path string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallUiCreateImage(arg0)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	retValue := CallUiCreateImage(arg0)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateToggle(path string, value bool) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdBool(value)
-		retValue := CallUiCreateToggle(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdBool(value)
+	retValue := CallUiCreateToggle(arg0, arg1)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateSlider(path string, value float64) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1 := ToGdFloat(value)
-		retValue := CallUiCreateSlider(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1 := ToGdFloat(value)
+	retValue := CallUiCreateSlider(arg0, arg1)
+	return ToObject(retValue)
 }
 func (u *uiMgr) CreateInput(path string, text string) Object {
-	return enginewrap.CallInMainThreadValue(func() Object {
-		arg0Str := C.CString(path)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		arg1Str := C.CString(text)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		retValue := CallUiCreateInput(arg0, arg1)
-		return ToObject(retValue)
-	})
+	arg0Str := C.CString(path)
+	arg0 := (GdString)(arg0Str)
+	defer C.free(unsafe.Pointer(arg0Str))
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallUiCreateInput(arg0, arg1)
+	return ToObject(retValue)
 }
 func (u *uiMgr) DestroyNode(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiDestroyNode(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiDestroyNode(arg0)
+	return ToBool(retValue)
 }
 func (u *uiMgr) GetType(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetType(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetType(arg0)
+	return ToInt64(retValue)
 }
 func (u *uiMgr) SetText(obj Object, text string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(text)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallUiSetText(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallUiSetText(arg0, arg1)
 }
 func (u *uiMgr) SetTextMaxWidth(obj Object, text string, max_width float64) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(text)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2 := ToGdFloat(max_width)
-		retValue := CallUiSetTextMaxWidth(arg0, arg1, arg2)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(text)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2 := ToGdFloat(max_width)
+	retValue := CallUiSetTextMaxWidth(arg0, arg1, arg2)
+	return ToFloat64(retValue)
 }
 func (u *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(label)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		arg2Info := ToGdArrayInfo(items)
-		if arg2Info != nil {
-			defer arg2Info.Free()
-		}
-		arg2 := GdArray(nil)
-		if arg2Info != nil {
-			arg2 = arg2Info.Raw()
-		}
-		arg3 := ToGdColor(color)
-		CallUiSetListItems(arg0, arg1, arg2, arg3)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(label)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2Info := ToGdArrayInfo(items)
+	if arg2Info != nil {
+		defer arg2Info.Free()
+	}
+	arg2 := GdArray(nil)
+	if arg2Info != nil {
+		arg2 = arg2Info.Raw()
+	}
+	arg3 := ToGdColor(color)
+	CallUiSetListItems(arg0, arg1, arg2, arg3)
 }
 func (u *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step float64, value float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(minimum)
-		arg2 := ToGdFloat(maximum)
-		arg3 := ToGdFloat(step)
-		arg4 := ToGdFloat(value)
-		CallUiSetRange(arg0, arg1, arg2, arg3, arg4)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(minimum)
+	arg2 := ToGdFloat(maximum)
+	arg3 := ToGdFloat(step)
+	arg4 := ToGdFloat(value)
+	CallUiSetRange(arg0, arg1, arg2, arg3, arg4)
 }
 func (u *uiMgr) GetRangeValue(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetRangeValue(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetRangeValue(arg0)
+	return ToFloat64(retValue)
 }
 func (u *uiMgr) GetText(obj Object) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetText(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetText(arg0)
+	return ToString(retValue)
 }
 func (u *uiMgr) SetTexture(obj Object, path string) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1Str := C.CString(path)
-		arg1 := (GdString)(arg1Str)
-		defer C.free(unsafe.Pointer(arg1Str))
-		CallUiSetTexture(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	CallUiSetTexture(arg0, arg1)
 }
 func (u *uiMgr) GetTexture(obj Object) string {
-	return enginewrap.CallInMainThreadValue(func() string {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetTexture(arg0)
-		return ToString(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetTexture(arg0)
+	return ToString(retValue)
 }
 func (u *uiMgr) SetColor(obj Object, color Color) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdColor(color)
-		CallUiSetColor(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdColor(color)
+	CallUiSetColor(arg0, arg1)
 }
 func (u *uiMgr) GetColor(obj Object) Color {
-	return enginewrap.CallInMainThreadValue(func() Color {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetColor(arg0)
-		return ToColor(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetColor(arg0)
+	return ToColor(retValue)
 }
 func (u *uiMgr) SetFontSize(obj Object, size int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(size)
-		CallUiSetFontSize(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(size)
+	CallUiSetFontSize(arg0, arg1)
 }
 func (u *uiMgr) GetFontSize(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetFontSize(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetFontSize(arg0)
+	return ToInt64(retValue)
 }
 func (u *uiMgr) SetVisible(obj Object, visible bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(visible)
-		CallUiSetVisible(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(visible)
+	CallUiSetVisible(arg0, arg1)
 }
 func (u *uiMgr) GetVisible(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetVisible(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetVisible(arg0)
+	return ToBool(retValue)
 }
 func (u *uiMgr) SetInteractable(obj Object, interactable bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(interactable)
-		CallUiSetInteractable(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(interactable)
+	CallUiSetInteractable(arg0, arg1)
 }
 func (u *uiMgr) GetInteractable(obj Object) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetInteractable(arg0)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetInteractable(arg0)
+	return ToBool(retValue)
 }
 func (u *uiMgr) SetRect(obj Object, rect Rect2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdRect2(rect)
-		CallUiSetRect(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdRect2(rect)
+	CallUiSetRect(arg0, arg1)
 }
 func (u *uiMgr) GetRect(obj Object) Rect2 {
-	return enginewrap.CallInMainThreadValue(func() Rect2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetRect(arg0)
-		return ToRect2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetRect(arg0)
+	return ToRect2(retValue)
 }
 func (u *uiMgr) GetLayoutDirection(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetLayoutDirection(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetLayoutDirection(arg0)
+	return ToInt64(retValue)
 }
 func (u *uiMgr) SetLayoutDirection(obj Object, value int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(value)
-		CallUiSetLayoutDirection(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(value)
+	CallUiSetLayoutDirection(arg0, arg1)
 }
 func (u *uiMgr) GetLayoutMode(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetLayoutMode(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetLayoutMode(arg0)
+	return ToInt64(retValue)
 }
 func (u *uiMgr) SetLayoutMode(obj Object, value int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(value)
-		CallUiSetLayoutMode(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(value)
+	CallUiSetLayoutMode(arg0, arg1)
 }
 func (u *uiMgr) GetAnchorsPreset(obj Object) int64 {
-	return enginewrap.CallInMainThreadValue(func() int64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetAnchorsPreset(arg0)
-		return ToInt64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetAnchorsPreset(arg0)
+	return ToInt64(retValue)
 }
 func (u *uiMgr) SetAnchorsPreset(obj Object, value int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdInt(value)
-		CallUiSetAnchorsPreset(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdInt(value)
+	CallUiSetAnchorsPreset(arg0, arg1)
 }
 func (u *uiMgr) GetScale(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetScale(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetScale(arg0)
+	return ToVec2(retValue)
 }
 func (u *uiMgr) GetCanvasScale(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetCanvasScale(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetCanvasScale(arg0)
+	return ToVec2(retValue)
 }
 func (u *uiMgr) SetScale(obj Object, value Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(value)
-		CallUiSetScale(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(value)
+	CallUiSetScale(arg0, arg1)
 }
 func (u *uiMgr) GetPosition(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetPosition(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetPosition(arg0)
+	return ToVec2(retValue)
 }
 func (u *uiMgr) SetPosition(obj Object, value Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(value)
-		CallUiSetPosition(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(value)
+	CallUiSetPosition(arg0, arg1)
 }
 func (u *uiMgr) GetSize(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetSize(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetSize(arg0)
+	return ToVec2(retValue)
 }
 func (u *uiMgr) SetSize(obj Object, value Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(value)
-		CallUiSetSize(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(value)
+	CallUiSetSize(arg0, arg1)
 }
 func (u *uiMgr) GetGlobalPosition(obj Object) Vec2 {
-	return enginewrap.CallInMainThreadValue(func() Vec2 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetGlobalPosition(arg0)
-		return ToVec2(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetGlobalPosition(arg0)
+	return ToVec2(retValue)
 }
 func (u *uiMgr) SetGlobalPosition(obj Object, value Vec2) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdVec2(value)
-		CallUiSetGlobalPosition(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdVec2(value)
+	CallUiSetGlobalPosition(arg0, arg1)
 }
 func (u *uiMgr) GetRotation(obj Object) float64 {
-	return enginewrap.CallInMainThreadValue(func() float64 {
-		arg0 := ToGdObj(obj)
-		retValue := CallUiGetRotation(arg0)
-		return ToFloat64(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	retValue := CallUiGetRotation(arg0)
+	return ToFloat64(retValue)
 }
 func (u *uiMgr) SetRotation(obj Object, value float64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdFloat(value)
-		CallUiSetRotation(arg0, arg1)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdFloat(value)
+	CallUiSetRotation(arg0, arg1)
 }
 func (u *uiMgr) GetFlip(obj Object, horizontal bool) bool {
-	return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(horizontal)
-		retValue := CallUiGetFlip(arg0, arg1)
-		return ToBool(retValue)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(horizontal)
+	retValue := CallUiGetFlip(arg0, arg1)
+	return ToBool(retValue)
 }
 func (u *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(horizontal)
-		arg2 := ToGdBool(is_flip)
-		CallUiSetFlip(arg0, arg1, arg2)
-	})
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(horizontal)
+	arg2 := ToGdBool(is_flip)
+	CallUiSetFlip(arg0, arg1, arg2)
 }

@@ -12,19 +12,6 @@ func CreateManagers() []IManager {
 	}
 }
 
-func BindManagers(mgrs []IManager) {
-	for _, mgr := range mgrs {
-		switch v := mgr.(type) {
-{{- range $name := .Managers }}
-		case I{{camelCase $name}}Mgr:
-			{{camelCase $name}}Mgr = v
-{{ end }}
-		default:
-			panic(fmt.Sprintf("engine init error: unknown manager type %T", mgr))
-		}
-	}
-}
-
 // call gdextension interface functions
 {{range $f := .AST.CollectGDExtensionInterfaceFunctions -}}
 {{ if isManagerMethod $f }}

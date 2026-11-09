@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -59,8 +60,45 @@ func TestCreateManagersLifecycleDoesNotBind(t *testing.T) {
 			}
 		})
 	}
-	BindManagers(managers[:1])
-	if engine.AudioMgr != managers[0].(engine.IAudioMgr) {
-		t.Fatal("BindManagers did not bind the constructed audio manager")
+	unbind := enginewrap.BindManagers(managers[:1])
+	t.Cleanup(unbind)
+	if engine.AudioMgr == nil || engine.AudioMgr == managers[0].(engine.IAudioMgr) {
+		t.Fatal("BindManagers did not wrap the constructed audio manager")
+	}
+	unbind()
+	if engine.AudioMgr != nil {
+		t.Fatal("unbinding retained the public audio manager")
+	}
+}
+
+func TestBoundManagersDispatchBeforeBackendCalls(t *testing.T) {
+	previousAudio := engine.AudioMgr
+	t.Cleanup(func() {
+		engine.AudioMgr = previousAudio
+		// This package's tests do not install an engine runtime.
+		enginewrap.Init(nil)
+	})
+	t.Cleanup(enginewrap.BindManagers([]engine.IManager{new(audioMgr)}))
+	var managers enginewrap.EngineManagers
+	for _, test := range []struct {
+		name string
+		call func()
+	}{
+		{"direct setter", func() { engine.AudioMgr.SetVolume(1, 0.75) }},
+		{"wrapped setter", func() { managers.AudioMgr.SetVolume(1, 0.75) }},
+		{"direct getter", func() { engine.AudioMgr.GetVolume(1) }},
+		{"wrapped getter", func() { managers.AudioMgr.GetVolume(1) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dispatches := 0
+			enginewrap.Init(func(func()) {
+				dispatches++
+				// Keep unbound backend functions behind the dispatch boundary.
+			})
+			test.call()
+			if dispatches != 1 {
+				t.Fatalf("dispatches = %d, want one", dispatches)
+			}
+		})
 	}
 }

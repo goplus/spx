@@ -801,3 +801,35 @@ func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.Ty
 	function := ast.CollectGDExtensionInterfaceFunctions()[0]
 	return &function
 }
+
+func TestManagerBackendKeepsCacheAndBridgeWithoutDispatch(t *testing.T) {
+	parsed, err := clang.ParseCString(`
+typedef void (*GDExtensionSpxAudioSetVolume)(GdObj obj, GdFloat volume);
+typedef GdFloat (*GDExtensionSpxAudioGetVolume)(GdObj obj);
+typedef GdBool (*GDExtensionSpxInputGetKey)(GdInt key);
+typedef GdBool (*GDExtensionSpxPlatformIsMainThread)();`)
+	require.NoError(t, err)
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	cacheDir := filepath.Join(codegenDir, WebRelDir)
+	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "input_cache.go"), []byte(`package webffi
+func CachedInputGetKey(key int64, fallback func() bool) bool { return fallback() }
+`), 0o600))
+	generation := &Generator{
+		Output: &common.OutputPlan{},
+		GenerationContext: common.NewGenerationContext(parsed, common.GenerationMetadata{
+			ManagerNames: []string{"audio", "input", "platform"},
+		}),
+	}
+	require.NoError(t, generation.renderManager(codegenDir))
+	require.NoError(t, generation.Output.Commit())
+	path := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_web.gen.go")
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	source := string(body)
+	require.NotContains(t, source, "enginewrap", "raw backends must not depend on shared dispatch")
+	for _, method := range []string{"AudioSetVolume", "AudioGetVolume", "InputGetKey", "PlatformIsMainThread"} {
+		require.Equal(t, 1, strings.Count(source, "API.Spx"+method+".Invoke("), "retain each bridge call, including cache fallback")
+	}
+	require.Contains(t, source, "CachedInputGetKey(key, func() bool {")
+}

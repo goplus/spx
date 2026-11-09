@@ -33,7 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
+func TestGenerateNativeManagersLeaveDispatchToSharedWrapper(t *testing.T) {
 	metadata := common.GenerationMetadata{}
 
 	metadata.ManagerNames = append(metadata.ManagerNames, "sprite")
@@ -66,21 +66,16 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	require.NoError(t, err)
 
 	setTriggerEnabled := generatedMethod(t, generatedPath, generated, "SetTriggerEnabled")
-	require.Contains(t, setTriggerEnabled, `enginewrap.CallInMainThread(func() {
-		arg0 := ToGdObj(obj)
-		arg1 := ToGdBool(trigger)
-		CallSpriteSetTriggerEnabled(arg0, arg1)
-	})`)
+	require.Contains(t, setTriggerEnabled, "arg0 := ToGdObj(obj)")
+	require.Contains(t, setTriggerEnabled, "arg1 := ToGdBool(trigger)")
+	require.Contains(t, setTriggerEnabled, "CallSpriteSetTriggerEnabled(arg0, arg1)")
 
 	isCollisionEnabled := generatedMethod(t, generatedPath, generated, "IsCollisionEnabled")
-	require.Contains(t, isCollisionEnabled, `return enginewrap.CallInMainThreadValue(func() bool {
-		arg0 := ToGdObj(obj)
-		retValue := CallSpriteIsCollisionEnabled(arg0)
-		return ToBool(retValue)
-	})`)
+	require.Contains(t, isCollisionEnabled, "retValue := CallSpriteIsCollisionEnabled(arg0)")
+	require.Contains(t, isCollisionEnabled, "return ToBool(retValue)")
+	require.NotContains(t, string(generated), "enginewrap", "native backends must not depend on shared dispatch")
 
 	isMainThread := generatedMethod(t, generatedPath, generated, "IsMainThread")
-	require.NotContains(t, isMainThread, "enginewrap.CallInMainThread")
 	require.Contains(t, isMainThread, "retValue := CallPlatformIsMainThread()")
 	require.Contains(t, isMainThread, "return ToBool(retValue)")
 }
@@ -140,28 +135,32 @@ func TestGenerateWrapperPreservesCEnumValues(t *testing.T) {
 	}
 }
 
-func TestGenerateSyncAPI(t *testing.T) {
+func TestGenerateManagerWrappersOwnDispatch(t *testing.T) {
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{
 		{Function: managerFunction("GDExtensionSpxSpriteSetTriggerEnabled", "void",
 			managerArgument("obj", "GdObj"), managerArgument("trigger", "GdBool"))},
 		{Function: managerFunction("GDExtensionSpxSpriteIsCollisionEnabled", "GdBool",
 			managerArgument("obj", "GdObj"))},
+		{Function: managerFunction("GDExtensionSpxPlatformIsMainThread", "GdBool")},
 	}}
 	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast,
-		common.GenerationMetadata{ManagerNames: []string{"sprite"}})}
+		common.GenerationMetadata{ManagerNames: []string{"sprite", "platform"}})}
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.renderSyncAPI(codegenDir))
+	require.NoError(t, generation.renderManagerWrappers(codegenDir))
 	require.NoError(t, generation.Output.Commit())
 
-	path := filepath.Join(codegenDir, common.EngineWrapRelDir, "sync.gen.go")
+	path := filepath.Join(codegenDir, common.EngineWrapRelDir, "managers.gen.go")
 	generated, err := os.ReadFile(path)
 	require.NoError(t, err)
 	setter := generatedMethod(t, path, generated, "SetTriggerEnabled")
 	getter := generatedMethod(t, path, generated, "IsCollisionEnabled")
-	require.Contains(t, setter, "func (*spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)")
-	require.Contains(t, getter, "func (*spriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool")
-	require.Contains(t, setter, "callInMainThread(func() {\n\t\tgdx.SpriteMgr.SetTriggerEnabled(obj, trigger)\n\t})")
-	require.Contains(t, getter, "callInMainThread(func() {\n\t\t_ret1 = gdx.SpriteMgr.IsCollisionEnabled(obj)\n\t})\n\treturn _ret1")
+	require.Contains(t, setter, "func (s *SpriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)")
+	require.Contains(t, getter, "func (s *SpriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool")
+	require.Contains(t, setter, "CallInMainThread(func() {\n\t\ts.target().SetTriggerEnabled(obj, trigger)\n\t})")
+	require.Contains(t, getter, "return CallInMainThreadValue(func() bool {\n\t\treturn s.target().IsCollisionEnabled(obj)\n\t})")
+	probe := generatedMethod(t, path, generated, "IsMainThread")
+	require.NotContains(t, probe, "CallInMainThread")
+	require.Contains(t, probe, "return p.target().IsMainThread()")
 }
 
 func TestNativeStringArgumentRetainsTemporaryOwnership(t *testing.T) {
@@ -287,7 +286,7 @@ public:
 		generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
 		function := ast.CollectGDExtensionInterfaceFunctions()[0]
 		body := generation.managerBody(&function)
-		require.Contains(t, body, "return enginewrap.CallInMainThreadValue(func() bool")
+		require.NotContains(t, body, "CallInMainThread")
 		require.Contains(t, body, "unsafe.SliceData(out)")
 		require.Contains(t, body, "int32(len(out))")
 		require.Contains(t, body, "return ToBool(retValue)")

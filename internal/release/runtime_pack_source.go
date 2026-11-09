@@ -102,7 +102,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/engine":                  {},
 	"internal/engine/platform":         {},
 	"internal/engine/profiler":         {},
-	"internal/enginewrap":              {},
+	"internal/engine/wrap":             {},
 	"internal/gdengine":                {},
 	"internal/gdengine/binding/facade": {},
 	"internal/gdengine/binding/native": {},

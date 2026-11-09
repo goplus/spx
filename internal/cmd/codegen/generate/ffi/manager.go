@@ -34,15 +34,6 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	returnType := g.EffectiveRawReturnType(function)
 	goReturnType := g.EffectiveGoReturnType(function)
 	hasSyntheticReturn := g.HasSyntheticReturn(function)
-	dispatchToMainThread := function.Name != "GDExtensionSpxPlatformIsMainThread"
-	if dispatchToMainThread {
-		if returnType != "" {
-			fmt.Fprintf(&sb, "\treturn enginewrap.CallInMainThreadValue(func() %s {\n", goReturnType)
-		} else {
-			sb.WriteString("\tenginewrap.CallInMainThread(func() {\n")
-		}
-		indent += "\t"
-	}
 
 	for _, param := range args {
 		if param.IsLength {
@@ -94,9 +85,6 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	fmt.Fprintf(&sb, "Call%s(%s)", strings.TrimPrefix(function.Name, "GDExtensionSpx"), strings.Join(params, ", "))
 	if returnType != "" {
 		fmt.Fprintf(&sb, "\n%sreturn To%s(retValue)", indent, strcase.ToCamel(goReturnType))
-	}
-	if dispatchToMainThread {
-		sb.WriteString("\n\t})")
 	}
 	return sb.String()
 }

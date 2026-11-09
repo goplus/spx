@@ -16,7 +16,7 @@
 
 package engine
 
-import "github.com/goplus/spx/v4/internal/enginewrap"
+import enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
 
 var managers enginewrap.EngineManagers
 

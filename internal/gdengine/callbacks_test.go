@@ -168,6 +168,15 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 						if activeLink != nil || isWebInterpreterMode || !reflect.ValueOf(coreCallbacks).IsZero() {
 							t.Error("Unlink retained the active session or callbacks")
 						}
+						for i, manager := range []any{
+							engine.AudioMgr, engine.CameraMgr, engine.DebugMgr, engine.ExtMgr, engine.InputMgr,
+							engine.NavigationMgr, engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr, engine.ResMgr,
+							engine.SceneMgr, engine.SpriteMgr, engine.TilemapMgr, engine.TilemapparserMgr, engine.UiMgr,
+						} {
+							if manager != nil {
+								t.Errorf("Unlink retained manager %d", i)
+							}
+						}
 					})
 					if activeLink != session || session.backend == nil {
 						t.Fatal("PrepareLink did not install its backend session")

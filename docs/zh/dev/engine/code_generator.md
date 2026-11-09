@@ -128,9 +128,14 @@ graph TD
 - `internal/gdengine/impl/manager_native.gen.go`
 - `internal/gdengine/impl/manager_web.gen.go`
 
-#### 引擎同步包装层
+#### 引擎管理器包装层
 
-- `internal/enginewrap/sync.gen.go`
+- `internal/engine/wrap/managers.gen.go`
+
+公开的 manager 接口注册为共享包装器，由此统一执行主线程调度，再调用私有保存的
+Native 或 Web 原始后端。内部零值包装对象解析当前注册的原始后端，避免再次调用包装器。
+参数转换、Web 缓存命中和输出回写均在调度内完成；`IsMainThread` 直接查询原始后端。
+会话解绑时作废其包装器，并清除仍属于该会话的公开接口。
 
 #### 对外 Go API
 
