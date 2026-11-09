@@ -466,6 +466,10 @@ func TestRunCmdBuildsOnceBeforeImportAndAction(t *testing.T) {
 		testCase{name: "cached build failure", command: "editor", cache: true, failure: "dll", want: "tidy generate tidy dll", errorContext: "go shared-library build"},
 		testCase{name: "template fresh", command: "exporttemplateweb", want: built + " import run"},
 		testCase{name: "template cached", command: "exporttemplateweb", cache: true, want: "tidy run"},
+		testCase{name: "template generation failure", command: "exporttemplateweb", failure: "generate", want: "tidy generate", errorContext: "code generation failed"},
+		testCase{name: "template tidy failure", command: "exporttemplateweb", failure: "tidy:2", want: "tidy generate tidy", errorContext: "go mod tidy failed"},
+		testCase{name: "template build failure", command: "exporttemplateweb", failure: "dll", want: "tidy generate tidy dll", errorContext: "go shared-library build"},
+		testCase{name: "template import failure", command: "exporttemplateweb", failure: "import", want: built + " import", errorContext: "godot import failed"},
 		testCase{name: "runtime skips import", command: "runnative", want: built + " run"},
 		testCase{name: "custom build tags retain import and DLL", command: "build", tags: "custom_tag", want: built + " import"},
 		testCase{name: "wasm skips import", command: "buildweb", want: "tidy generate tidy wasm"},
@@ -473,9 +477,6 @@ func TestRunCmdBuildsOnceBeforeImportAndAction(t *testing.T) {
 		testCase{name: "init skips import", command: "init"},
 		testCase{name: "clear skips import", command: "clear"},
 		testCase{name: "clearbuild skips import", command: "clearbuild"},
-		// Mobile exports still build after staging assets; stop before SDK work.
-		testCase{name: "apk retains export build", command: "exportapk", failure: "generate:2", want: built + " import generate", errorContext: "code generation failed"},
-		testCase{name: "ios retains export build", command: "exportios", failure: "generate:2", want: built + " import generate", errorContext: "code generation failed"},
 	)
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -634,7 +635,7 @@ func TestCommandRejectsInvalidPhases(t *testing.T) {
 	if err := cmd.prepareCommand(commandSpec{name: "invalid", setup: 99}, "", ""); err == nil || !strings.Contains(err.Error(), "invalid setup") {
 		t.Fatalf("setup error = %v", err)
 	}
-	if err := cmd.buildCommand(commandSpec{build: 99}); err == nil || !strings.Contains(err.Error(), "invalid command build phase") {
+	if err := cmd.buildCommand(99); err == nil || !strings.Contains(err.Error(), "invalid command build phase") {
 		t.Fatalf("build error = %v", err)
 	}
 	if got := cmd.SafeTagArgs(); got != "-tags=custom_tag" {

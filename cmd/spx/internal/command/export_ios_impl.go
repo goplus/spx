@@ -60,14 +60,18 @@ const (
 
 // ExportIos exports the current project for iOS.
 func (cmd *CmdTool) ExportIos() error {
-	logInfof("Starting iOS export process")
-
 	if err := cmd.prepareExport(); err != nil {
 		return err
 	}
 	if err := cmd.BuildDll(); err != nil {
 		return err
 	}
+	return cmd.executeExportIos()
+}
+
+func (cmd *CmdTool) executeExportIos() error {
+	logInfof("Starting iOS export process")
+
 	if err := cmd.renameIosArtifacts(); err != nil {
 		return err
 	}

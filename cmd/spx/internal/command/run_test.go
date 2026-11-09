@@ -130,7 +130,7 @@ func TestWebCommandSetup(t *testing.T) {
 		{name: "exportwebworker", cmdName: "exportwebworker", setup: webExportSetup},
 		{name: "exportminigame", cmdName: "exportminigame", setup: webExportSetup},
 		{name: "exportminiprogram", cmdName: "exportminiprogram", setup: webExportSetup},
-		{name: "exporttemplateweb", cmdName: "exporttemplateweb", setup: projectSetup},
+		{name: "exporttemplateweb", cmdName: "exporttemplateweb", setup: projectSetup, build: initialDllBuild},
 	}
 
 	for _, tt := range tests {

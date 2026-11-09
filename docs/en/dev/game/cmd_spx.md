@@ -113,6 +113,8 @@ spx exportapk --install
 spx exportios
 ```
 
+Both commands stage project assets, build the host library, then run the initial resource import if its cache is missing. Import is a separate phase using Godot recovery mode, which skips loading GDExtensions; the host library is needed by later export steps. A cached project still rebuilds the host library. Platform-specific libraries and the final export follow.
+
 Android export requires the Android SDK/NDK and JDK. iOS export requires the Apple toolchain and signing setup. Engine templates must match the SPX release.
 
 ### Mini-game targets

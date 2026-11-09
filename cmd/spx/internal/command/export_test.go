@@ -282,6 +282,13 @@ func TestMobileExportToolWorkflows(t *testing.T) {
 					t.Fatalf("export error = %v, want context %q", err, wantError)
 				}
 				calls := readTestFile(t, logPath)
+				wantDLLs := 1
+				if runtime.GOOS == "darwin" {
+					wantDLLs = 2
+				}
+				if strings.Count(calls, "generate|") != 1 || strings.Count(calls, "dll|") != wantDLLs {
+					t.Fatalf("direct export must generate and build the host libraries once: %s", calls)
+				}
 				if !strings.Contains(calls, "import|") || !strings.Contains(calls, "export|") {
 					t.Fatalf("missing import/export invocation: %s", calls)
 				}
@@ -334,6 +341,74 @@ func TestMobileExportToolWorkflows(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestRunCmdMobileExportsBuildOnce(t *testing.T) {
+	dll := "dll"
+	if runtime.GOOS == "darwin" {
+		dll = "dll dll"
+	}
+	built := "tidy generate tidy " + dll
+	for _, platform := range []struct{ command, mobile, sdkFailure, sdkError string }{
+		{"exportapk", "go:android:arm64 go:android:arm", "go:android:arm64", "failed to build Android libraries"},
+		{"exportios", "sdk:iphonesimulator sdk:iphoneos go:darwin:amd64 go:darwin:arm64 go:darwin:arm64 lipo xcrun", "sdk:iphonesimulator", "failed to build iOS libraries"},
+	} {
+		for _, cached := range []bool{false, true} {
+			imported := built
+			if !cached {
+				imported += " reimport"
+			}
+			for _, tt := range []struct{ name, failure, want, wantError string }{
+				{"success", "", imported + " " + platform.mobile + " import export", ""},
+				{"assets", "", "tidy", "inspect project assets"},
+				{"generation", "generate", "tidy generate", "code generation failed"},
+				{"tidy", "tidy:2", "tidy generate tidy", "go mod tidy failed"},
+				{"host build", "dll", "tidy generate tidy dll", "go shared-library build"},
+				{"reimport", "reimport", built + " reimport", "godot import failed"},
+				{"mobile build", platform.sdkFailure, imported + " " + platform.sdkFailure, platform.sdkError},
+			} {
+				if cached && tt.name == "reimport" {
+					continue
+				}
+				t.Run(fmt.Sprintf("%s/cached=%t/%s", platform.command, cached, tt.name), func(t *testing.T) {
+					cmd, logPath := newMobileExportFixture(t)
+					binDir := filepath.Dir(cmd.CmdPath)
+					// RunCmd resolves the engine from GOPATH/bin, not PATH.
+					gopath := t.TempDir()
+					if err := os.Symlink(binDir, filepath.Join(gopath, "bin")); err != nil {
+						t.Fatal(err)
+					}
+					t.Setenv("GOPATH", gopath)
+					t.Setenv("GODEBUG", "")
+					t.Setenv(projectImportTimeoutEnvVar, "0")
+					t.Setenv("SPX_MOBILE_FAIL", tt.failure)
+					writeCommandTestFile(t, filepath.Join(cmd.TargetDir, "main.spx"), "onStart => {}")
+					if cached {
+						writeProjectImportCache(t, cmd.ProjectDir)
+						writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "assets", "index.json"), "stale assets")
+					}
+					if tt.name == "assets" {
+						if err := os.RemoveAll(filepath.Join(cmd.TargetDir, "assets")); err != nil {
+							t.Fatal(err)
+						}
+					}
+					setTestCommandLine(t, "spx", platform.command, "--path", cmd.TargetDir)
+					err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project")
+					if tt.wantError == "" && err != nil || tt.wantError != "" && (err == nil || !strings.Contains(err.Error(), tt.wantError)) {
+						t.Fatalf("RunCmd error = %v, want %q", err, tt.wantError)
+					}
+					var steps []string
+					for _, line := range strings.Split(strings.TrimSpace(readTestFile(t, logPath)), "\n") {
+						step, _, _ := strings.Cut(line, "|")
+						steps = append(steps, step)
+					}
+					if got := strings.Join(steps, " "); got != tt.want {
+						t.Fatalf("command order = %q, want %q", got, tt.want)
+					}
+				})
+			}
 		}
 	}
 }
@@ -504,13 +579,34 @@ func newMobileExportFixture(t *testing.T) (*CmdTool, string) {
 tool=${0##*/}
 step=$tool
 case "$tool" in
-  go) step="go:${GOOS-}:${GOARCH-}" ;;
+  go)
+    step="go:${GOOS-}:${GOARCH-}"
+    if [ "$1" = mod ]; then step=tidy; elif [ -z "${GOOS-}" ]; then step=dll; fi ;;
+  xgo) step=generate ;;
   xcrun) if [ "$1" = --sdk ]; then step="sdk:$2"; fi ;;
-  godot) case "$*" in *--editor*) step=import ;; *) step=export ;; esac ;;
+  godot|gdspxtest)
+    case "$*" in
+      --version) exit 0 ;;
+      *--import*) step=reimport ;;
+      *--editor*) step=import ;;
+      *) step=export ;;
+    esac ;;
   adb) step="adb:$1" ;;
 esac
 printf '%s|%s|%s|%s|%s|%s|%s\n' "$step" "$PWD" "$*" "${CGO_ENABLED-}" "${CC-}" "${CGO_CFLAGS-}" "${CGO_LDFLAGS-}" >> "$SPX_MOBILE_LOG"
-if [ "$step" = "$SPX_MOBILE_FAIL" ]; then exit 29; fi
+count=0
+while IFS='|' read -r previous rest; do
+  if [ "$previous" = "$step" ]; then count=$((count + 1)); fi
+done < "$SPX_MOBILE_LOG"
+if [ "$step" = "$SPX_MOBILE_FAIL" ] || [ "$step:$count" = "$SPX_MOBILE_FAIL" ]; then exit 29; fi
+case "$step" in
+  generate|dll|reimport)
+    test "$(/bin/cat "$SPX_MOBILE_PROJECT/assets/index.json")" = '{}'
+    test -f "$SPX_MOBILE_PROJECT/go/ios_bridge.m.txt"
+    test ! -e "$SPX_MOBILE_PROJECT/go/ios_bridge.m" ;;
+  go:darwin:*) test -f "$SPX_MOBILE_PROJECT/go/ios_bridge.m" ;;
+  go:android:*) test -f "$SPX_MOBILE_PROJECT/go/ios_bridge.m.txt" ;;
+esac
 case "$tool" in
   xgo) printf 'package main\n' > xgo_autogen.go ;;
   xcrun)
@@ -520,7 +616,7 @@ case "$tool" in
       for arg do output=$arg; done
       /bin/mkdir -p "$output"
     fi ;;
-  godot)
+  godot|gdspxtest)
     if [ "$step" = export ] && [ "$SPX_MOBILE_OUTPUT" != missing ]; then
       for arg do output=$arg; done
       printf 'exported artifact' > "$output"
@@ -532,7 +628,7 @@ case "$tool" in
 esac
 `
 	tools := map[string]string{}
-	for _, name := range []string{"go", "xgo", "godot", "xcrun", "lipo", "adb", "ios-deploy"} {
+	for _, name := range []string{"go", "xgo", "godot", "gdspxtest", "xcrun", "lipo", "adb", "ios-deploy"} {
 		tools[name] = script
 	}
 	binDir := installCommandTestTools(t, tools)
@@ -542,6 +638,7 @@ esac
 	}
 	logPath := filepath.Join(root, "commands.log")
 	t.Setenv("SPX_MOBILE_LOG", logPath)
+	t.Setenv("SPX_MOBILE_PROJECT", filepath.Join(root, "project"))
 	t.Setenv("SPX_MOBILE_FAIL", "")
 	t.Setenv("SPX_MOBILE_OUTPUT", "artifact")
 	t.Setenv("SPX_MOBILE_DEVICES", "List of devices attached\ntest-device\tdevice")
