@@ -27,6 +27,7 @@ import (
 
 	"github.com/goplus/spx/v4/cmd/spx/internal/pack"
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 const (
@@ -139,7 +140,7 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	if err := os.MkdirAll(dstPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create web export directory: %w", err)
 	}
-	if err := util.CopyDir2(templateDir, dstPath); err != nil {
+	if err := fileutil.CopyDir(templateDir, dstPath); err != nil {
 		return fmt.Errorf("failed to copy web runtime from %s: %w", templateDir, err)
 	}
 
@@ -156,7 +157,7 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	if err != nil {
 		return err
 	}
-	if err := util.CopyDir2(ispxWebDir, cmd.WebDir); err != nil {
+	if err := fileutil.CopyDir(ispxWebDir, cmd.WebDir); err != nil {
 		return fmt.Errorf("failed to copy interpreter web runtime from %s: %w", ispxWebDir, err)
 	}
 
@@ -170,7 +171,7 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	}
 	goroot := strings.TrimSpace(string(output))
 	wasmExecPath := filepath.Join(goroot, "lib", "wasm", "wasm_exec.js")
-	if err := util.CopyFile(wasmExecPath, filepath.Join(cmd.WebDir, "go.wasm.exec.js")); err != nil {
+	if err := fileutil.CopyFile(wasmExecPath, filepath.Join(cmd.WebDir, "go.wasm.exec.js")); err != nil {
 		return fmt.Errorf("failed to copy wasm_exec.js: %w", err)
 	}
 	if err := pack.PackProject(cmd.TargetDir, filepath.Join(cmd.WebDir, "game.zip")); err != nil {
@@ -199,12 +200,12 @@ func (cmd *CmdTool) writeWebLogicAssets(mode string) error {
 	wasmDstPath := filepath.Join(cmd.WebDir, "ispx.wasm")
 	wasmPath := filepath.Join(cmd.GoBinPath, "ispx.wasm")
 	wasmBrPath := wasmPath + ".br"
-	if err := util.CopyFile(wasmPath, wasmDstPath); err != nil {
+	if err := fileutil.CopyFile(wasmPath, wasmDstPath); err != nil {
 		return fmt.Errorf("failed to copy interpreter wasm from %s: %w", wasmPath, err)
 	}
 	// Minigame exports either use raw wasm or recompress it during preparation.
 	if mode != webMinigameMode && util.IsFileExist(wasmBrPath) {
-		if err := util.CopyFile(wasmBrPath, wasmDstPath+".br"); err != nil {
+		if err := fileutil.CopyFile(wasmBrPath, wasmDstPath+".br"); err != nil {
 			return fmt.Errorf("failed to copy compressed ispx wasm from %s: %w", wasmBrPath, err)
 		}
 	} else if err := os.Remove(wasmDstPath + ".br"); err != nil && !os.IsNotExist(err) {

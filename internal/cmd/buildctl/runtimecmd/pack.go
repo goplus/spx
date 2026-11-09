@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/engine"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
@@ -87,7 +88,7 @@ func exportPackRuntime(cfg runtimeExportPackConfig, runner shared.ScriptRunner) 
 	if err != nil {
 		return err
 	}
-	if err := shared.CopyFile(exportedPack, workspace.outputPack); err != nil {
+	if err := fileutil.CopyFile(exportedPack, workspace.outputPack); err != nil {
 		return err
 	}
 
@@ -95,7 +96,7 @@ func exportPackRuntime(cfg runtimeExportPackConfig, runner shared.ScriptRunner) 
 	if !shared.FileExists(runtimeExtension) {
 		return fmt.Errorf("runtime extension not found at %s", runtimeExtension)
 	}
-	if err := shared.WriteNamedZip(filepath.Join(workspace.goBinDir, release.RuntimeAssetZipName), map[string]string{
+	if err := fileutil.WriteNamedZip(filepath.Join(workspace.goBinDir, release.RuntimeAssetZipName), map[string]string{
 		"gdspxrt.pck":         workspace.outputPack,
 		"runtime.gdextension": runtimeExtension,
 	}); err != nil {

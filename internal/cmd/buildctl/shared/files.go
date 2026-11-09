@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/httpclient"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
@@ -48,14 +47,6 @@ type HTTPStatusError struct {
 }
 
 type writerFunc func([]byte) (int, error)
-
-func CopyDir(src, dst string) error {
-	return fileutil.CopyDir(src, dst)
-}
-
-func ZipDirectory(srcDir, dstZip string) error {
-	return fileutil.ZipDirectory(srcDir, dstZip)
-}
 
 func ExtractZip(srcZip, dstDir string) error {
 	return ExtractZipWithOptions(srcZip, dstDir, ZipExtractOptions{})

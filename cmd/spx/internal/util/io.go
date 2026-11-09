@@ -24,16 +24,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 var errFileFound = errors.New("file found")
-
-// CopyDir2 copies a directory from the local filesystem.
-func CopyDir2(src string, dst string) error {
-	return fileutil.CopyDir(src, dst)
-}
 
 // CheckFileExist reports whether dir contains a file with ext.
 func CheckFileExist(dir, ext string, recursive bool) bool {
@@ -72,11 +65,6 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 func IsFileExist(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-// CopyFile copies a file.
-func CopyFile(src, dst string) error {
-	return fileutil.CopyFile(src, dst)
 }
 
 // CopyDir copies a directory from fsys into dstDir.

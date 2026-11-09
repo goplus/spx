@@ -1,7 +1,6 @@
 package util
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -71,38 +70,23 @@ func TestCheckFileExist(t *testing.T) {
 	}
 }
 
-func TestLocalCopiesAndExistence(t *testing.T) {
-	source, destination := t.TempDir(), t.TempDir()
-	writeIOTestFile(t, filepath.Join(source, "nested", "data.txt"), "payload")
+func TestIsFileExist(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	writeIOTestFile(t, file, "payload")
 	for _, tt := range []struct {
-		name string
-		copy func() error
-		path string
+		name, path string
+		want       bool
 	}{
-		{"file", func() error {
-			return CopyFile(filepath.Join(source, "nested", "data.txt"), filepath.Join(destination, "single.txt"))
-		}, "single.txt"},
-		{"directory", func() error { return CopyDir2(source, filepath.Join(destination, "all")) }, "all/nested/data.txt"},
+		{"file", file, true},
+		{"directory", root, true},
+		{"missing", filepath.Join(root, "missing"), false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.copy(); err != nil {
-				t.Fatal(err)
-			}
-			path := filepath.Join(destination, tt.path)
-			data, err := os.ReadFile(path)
-			if err != nil || string(data) != "payload" || !IsFileExist(path) {
-				t.Fatalf("copy = %q, %v; want existing payload", data, err)
+			if got := IsFileExist(tt.path); got != tt.want {
+				t.Fatalf("IsFileExist = %v, want %v", got, tt.want)
 			}
 		})
-	}
-	if IsFileExist(filepath.Join(destination, "missing")) {
-		t.Fatal("missing file reported as existing")
-	}
-	if err := CopyFile(filepath.Join(source, "missing"), filepath.Join(destination, "bad")); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("missing source error = %v", err)
-	}
-	if err := CopyDir2(filepath.Join(source, "missing"), filepath.Join(destination, "bad-dir")); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("missing directory error = %v", err)
 	}
 }
 

@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v4/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 func (cmd *CmdTool) prepareExport() error {
@@ -35,7 +35,7 @@ func (cmd *CmdTool) prepareExport() error {
 	if err := validateExportStage(source, destination); err != nil {
 		return err
 	}
-	if err := util.CopyDir2(source, destination); err != nil {
+	if err := fileutil.CopyDir(source, destination); err != nil {
 		return fmt.Errorf("stage project-local resources from %s: %w", source, err)
 	}
 	return nil

@@ -286,60 +286,23 @@ func TestDownloadURLRejectsInvalidInputBeforeRequest(t *testing.T) {
 	}
 }
 
-func TestFileHelpersRoundTrip(t *testing.T) {
+func TestDirExists(t *testing.T) {
 	root := t.TempDir()
-	src := filepath.Join(root, "source")
-	if err := os.MkdirAll(filepath.Join(src, "nested"), 0755); err != nil {
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, []byte("payload"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	original := filepath.Join(src, "nested", "asset.txt")
-	if err := os.WriteFile(original, []byte("payload"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	copied := filepath.Join(root, "copy")
-	if err := CopyDir(src, copied); err != nil {
-		t.Fatal(err)
-	}
-	if !DirExists(copied) || DirExists(original) || DirExists(filepath.Join(root, "missing")) {
-		t.Fatal("incorrect directory classification")
-	}
-	single := filepath.Join(root, "single", "asset.txt")
-	if err := CopyFile(original, single); err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct {
-		name  string
-		write func(string) error
-		entry string
+	for _, tt := range []struct {
+		name, path string
+		want       bool
 	}{
-		{"directory", func(dst string) error { return ZipDirectory(copied, dst) }, "nested/asset.txt"},
-		{"named", func(dst string) error { return WriteNamedZip(dst, map[string]string{"renamed.txt": single}) }, "renamed.txt"},
+		{"directory", root, true},
+		{"file", file, false},
+		{"missing", filepath.Join(root, "missing"), false},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			archive := filepath.Join(root, tc.name+".zip")
-			if err := tc.write(archive); err != nil {
-				t.Fatal(err)
-			}
-			out := filepath.Join(root, tc.name+"-extracted")
-			if err := ExtractZip(archive, out); err != nil {
-				t.Fatal(err)
-			}
-			if data, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(tc.entry))); err != nil || string(data) != "payload" {
-				t.Fatalf("round trip = %q, %v", data, err)
-			}
-		})
-	}
-	for name, call := range map[string]func() error{
-		"copy file":      func() error { return CopyFile(filepath.Join(root, "absent"), single) },
-		"copy directory": func() error { return CopyDir(filepath.Join(root, "absent"), copied) },
-		"zip directory":  func() error { return ZipDirectory(single, filepath.Join(root, "bad.zip")) },
-		"named zip": func() error {
-			return WriteNamedZip(filepath.Join(root, "bad.zip"), map[string]string{"missing": filepath.Join(root, "absent")})
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := call(); err == nil {
-				t.Fatal("missing source or wrong kind accepted")
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DirExists(tt.path); got != tt.want {
+				t.Fatalf("DirExists = %v, want %v", got, tt.want)
 			}
 		})
 	}
