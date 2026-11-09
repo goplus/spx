@@ -29,7 +29,7 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className st
 	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
 	funcName := function.Name[len("GDExtensionSpx")+len(mgrName):]
 	retType := g.EffectiveGoReturnType(function)
-	receiver := strings.ToLower(className[:1])
+	receiver := g.ReceiverName(function, className)
 	var params, callArgs []string
 	for i, arg := range g.Parameters(function) {
 		if arg.IsLength {

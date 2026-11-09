@@ -17,8 +17,14 @@
 package ffi
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
@@ -68,5 +74,87 @@ typedef GdString (*GDExtensionSpxSpriteLabel)();`)
 	for _, method := range methods {
 		require.Equal(t, "func (s *Sprite) "+method.signature+" {\n\t"+method.call+"\n}",
 			generatedMethod(t, path, output, method.name))
+	}
+}
+
+func TestManagerAndObjectReceiversAvoidPublicParameters(t *testing.T) {
+	for _, tt := range []struct {
+		name, className, managerName string
+		cArgs, managerArgs, args     string
+		receiver, callArgs           string
+		buffer                       *common.ArrayBuffer
+	}{
+		{
+			name: "sprite initial", className: "Sprite", managerName: "Sprite",
+			cArgs: "GdObj obj, GdString value", managerArgs: "obj Object, value string", args: "value string",
+			receiver: "s", callArgs: "s.Id, value",
+		},
+		{
+			name: "UI initial", className: "UiNode", managerName: "Ui",
+			cArgs: "GdObj obj, GdString value", managerArgs: "obj Object, value string", args: "value string",
+			receiver: "u", callArgs: "u.Id, value",
+		},
+		{
+			name: "single collision", className: "Sprite", managerName: "Sprite",
+			cArgs: "GdObj obj, GdString s", managerArgs: "obj Object, s string", args: "s string",
+			receiver: "s1", callArgs: "s1.Id, s",
+		},
+		{
+			name: "successive collisions", className: "Sprite", managerName: "Sprite",
+			cArgs:       "GdObj obj, GdString s2, GdString s, GdString s1",
+			managerArgs: "obj Object, s2 string, s string, s1 string", args: "s2 string, s string, s1 string",
+			receiver: "s3", callArgs: "s3.Id, s2, s, s1",
+		},
+		{
+			name: "first free suffix", className: "UiNode", managerName: "Ui",
+			cArgs: "GdObj obj, GdString u2, GdString u", managerArgs: "obj Object, u2 string, u string", args: "u2 string, u string",
+			receiver: "u1", callArgs: "u1.Id, u2, u",
+		},
+		{
+			name: "public buffer name", className: "Sprite", managerName: "Sprite",
+			cArgs: "GdObj obj, const float *s_data, int count", managerArgs: "obj Object, s []float32", args: "s []float32",
+			receiver: "s1", callArgs: "s1.Id, s",
+			buffer: &common.ArrayBuffer{
+				Data:   common.CParam{CType: "const float *", Name: "s_data"},
+				Length: common.CParam{CType: "int", Name: "count"}, Type: common.ArrayFloat,
+			},
+		},
+		{
+			name: "hidden length does not collide", className: "Sprite", managerName: "Sprite",
+			cArgs: "GdObj obj, const float *values, int s", managerArgs: "obj Object, values []float32", args: "values []float32",
+			receiver: "s", callArgs: "s.Id, values",
+			buffer: &common.ArrayBuffer{
+				Data:   common.CParam{CType: "const float *", Name: "values"},
+				Length: common.CParam{CType: "int", Name: "s"}, Type: common.ArrayFloat,
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			functionName := "GDExtensionSpx" + tt.managerName + "Forward"
+			header, err := clang.ParseCString(fmt.Sprintf("typedef void (*%s)(%s);", functionName, tt.cArgs))
+			require.NoError(t, err)
+			metadata := common.GenerationMetadata{}
+			if tt.buffer != nil {
+				metadata.ArrayBridges = map[string]common.ArrayBridge{functionName: {Buffers: []common.ArrayBuffer{*tt.buffer}}}
+			}
+			generation := &Generator{GenerationContext: common.NewGenerationContext(header, metadata)}
+			function := header.CollectGDExtensionInterfaceFunctions()[0]
+			signature := generation.ManagerMethodSignature(&function)
+			method := generation.getManagerImpl(&function, tt.className)
+			managerType := strings.ToLower(tt.managerName) + "Mgr"
+			// Parsing/formatting alone accepts a receiver and parameter with the
+			// same name. Type-check both the shared native/Web signature and the
+			// object forwarding body, without needing cgo or engine dependencies.
+			source := fmt.Sprintf("package generated\ntype Object int64\ntype %s struct{ Id Object }\ntype %s struct{}\nvar %sMgr %s\nfunc %s {}\n%s",
+				tt.className, managerType, tt.managerName, managerType, signature, method)
+			positions := token.NewFileSet()
+			file, err := parser.ParseFile(positions, "receiver.go", source, 0)
+			require.NoError(t, err)
+			_, err = (&types.Config{}).Check("generated", positions, []*ast.File{file}, nil)
+			require.NoError(t, err)
+			require.Equal(t, fmt.Sprintf("(%s *%s) Forward(%s)", tt.receiver, managerType, tt.managerArgs), signature)
+			require.Equal(t, fmt.Sprintf("func (%s *%s) Forward(%s) {\n\t%sMgr.Forward(%s)\n}\n",
+				tt.receiver, tt.className, tt.args, tt.managerName, tt.callArgs), method)
+		})
 	}
 }
