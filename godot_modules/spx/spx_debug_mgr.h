@@ -37,8 +37,7 @@
 
 class SpxDebugMgr : public SpxManager {
 private:
-	Vector<Node2D *> debug_nodes;
-	Node2D *debug_root;
+	Node2D *debug_root = nullptr;
 
 	void _clear_debug_nodes();
 	static Mutex lock;

@@ -69,6 +69,9 @@ TEST_CASE("[SceneTree][SPX] Debug shapes convert SPX coordinates and expire afte
 	CHECK(large->get_points().size() == 25);
 	manager->on_reset(0);
 	CHECK(large->is_queued_for_deletion());
+	manager->debug_draw_line(Vector2(), Vector2(1, 1), Color(1, 1, 1));
+	memdelete(root->get_child(-1)); // External deletion must not leave a cached pointer.
+	manager->on_reset(0);
 }
 } // namespace TestSpxDebugMgr
 #endif

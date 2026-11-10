@@ -50,7 +50,6 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 		return;
 	}
 
-	const Rect2 screen_rect = SpxEngine::get_singleton()->get_camera()->get_global_camera_rect();
 	std::vector<SortInfo> sorted;
 	sorted.reserve(sortables.size());
 	HashMap<GdObj, ISortableSprite *> sprites;
@@ -60,7 +59,7 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 		}
 		const Point2 pos = sprite->get_sort_position();
 		const GdObj id = sprite->get_sort_id();
-		if (!screen_rect.has_point(pos) || sprites.has(id)) {
+		if (sprites.has(id)) {
 			continue;
 		}
 		sprites.insert(id, sprite);
@@ -102,7 +101,7 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 		drawer_id = drawer->get_instance_id();
 		root->add_child(drawer);
 	}
-	drawer->update(sorted, screen_rect);
+	drawer->update(sorted, SpxEngine::get_singleton()->get_camera()->get_global_camera_rect());
 }
 
 void SpxLayerSorter::reset() {

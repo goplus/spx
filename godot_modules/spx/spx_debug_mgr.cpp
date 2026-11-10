@@ -67,12 +67,12 @@ void SpxDebugMgr::on_reset(int reset_code) {
 }
 
 void SpxDebugMgr::_clear_debug_nodes() {
-	for (Node2D *node : debug_nodes) {
-		if (node && node->is_inside_tree()) {
-			node->queue_free();
-		}
+	if (!debug_root) {
+		return;
 	}
-	debug_nodes.clear();
+	for (int i = 0; i < debug_root->get_child_count(); ++i) {
+		debug_root->get_child(i)->queue_free();
+	}
 }
 
 void SpxDebugMgr::debug_draw_circle(GdVec2 pos, GdFloat radius, GdColor color) {
@@ -95,8 +95,6 @@ void SpxDebugMgr::debug_draw_circle(GdVec2 pos, GdFloat radius, GdColor color) {
 	circle->set_position(pos);
 
 	debug_root->add_child(circle);
-
-	debug_nodes.push_back(circle);
 }
 
 void SpxDebugMgr::debug_draw_rect(GdVec2 pos, GdVec2 size, GdColor color) {
@@ -120,8 +118,6 @@ void SpxDebugMgr::debug_draw_rect(GdVec2 pos, GdVec2 size, GdColor color) {
 	rect->set_position(pos);
 
 	debug_root->add_child(rect);
-
-	debug_nodes.push_back(rect);
 }
 
 void SpxDebugMgr::debug_draw_line(GdVec2 from, GdVec2 to, GdColor color) {
@@ -143,6 +139,4 @@ void SpxDebugMgr::debug_draw_line(GdVec2 from, GdVec2 to, GdColor color) {
 	line->set_position(from);
 
 	debug_root->add_child(line);
-
-	debug_nodes.push_back(line);
 }

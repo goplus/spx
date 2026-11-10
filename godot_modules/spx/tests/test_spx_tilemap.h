@@ -94,14 +94,14 @@ TEST_CASE("[SPX] Tilemap JSON preserves nested atlas physics and layer propertie
 	CHECK(map.layers[0].enabled);
 	CHECK_FALSE(map.layers[1].enabled);
 
-	CHECK(map.from_json(map_document()));
+	map.from_json(map_document());
 	CHECK(map.tileset.sources.size() == 1);
 	CHECK(map.layers.size() == 2);
 }
 
 TEST_CASE("[SPX] Tilemap defaults and empty collections reset optional data") {
 	SpxTileMapData map;
-	REQUIRE(map.from_json(Dictionary()));
+	map.from_json(Dictionary());
 	CHECK(map.version == 1);
 	CHECK(map.tileset.tile_size == Vector2i(16, 16));
 	CHECK(map.layers.is_empty());

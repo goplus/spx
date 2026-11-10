@@ -106,7 +106,7 @@ static Dictionary make_tilemap_data() {
 
 TEST_CASE("[SPX] Tile map data parses every nested field") {
 	SpxTileMapData data;
-	REQUIRE(data.from_json(make_tilemap_data()));
+	data.from_json(make_tilemap_data());
 	CHECK(data.version == 3);
 	CHECK(data.name == "level");
 	CHECK(data.node_offset == Vector2(12.5, -8.25));
@@ -151,7 +151,7 @@ TEST_CASE("[SPX] Tile map data applies defaults and ignores short vectors") {
 	input["layers"] = one(Dictionary());
 
 	SpxTileMapData data;
-	REQUIRE(data.from_json(input));
+	data.from_json(input);
 	CHECK(data.version == 1);
 	CHECK(data.name.is_empty());
 	CHECK(data.node_offset == Vector2());

@@ -125,7 +125,7 @@ TEST_CASE("[SceneTree][SPX] Layer sorter preserves order without redundant z upd
 	CHECK_EQ(fixed.z_index, 4);
 }
 
-TEST_CASE("[SceneTree][SPX] Layer sorter filters offscreen sprites and reinserts returning ones") {
+TEST_CASE("[SceneTree][SPX] Layer sorter keeps offscreen anchors ordered as viewport and membership change") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());
 	SorterFixture fixture;
 	SortableSprite left(1, Point2(100, 100));
@@ -140,15 +140,25 @@ TEST_CASE("[SceneTree][SPX] Layer sorter filters offscreen sprites and reinserts
 	CHECK_EQ(right.z_index, 1);
 	CHECK_EQ(left.z_index, 2);
 
+	// A large sprite may still be visible after its sort anchor leaves the viewport.
+	fixture.viewport->set_size(Size2i(150, 200));
+	REQUIRE_FALSE(SpxEngine::get_singleton()->get_camera()->get_global_camera_rect().has_point(right.position));
+	SortableSprite entering(3, Point2(120, 50));
+	sprites.push_back(&entering);
+	fixture.sorter.update(sprites);
+	CHECK_EQ(entering.z_index, 1);
+	CHECK_EQ(right.z_index, 2);
+	CHECK_EQ(left.z_index, 3);
+
 	right.position.x = 400;
 	fixture.sorter.update(sprites);
-	CHECK_EQ(right.z_updates, 1);
-	CHECK_EQ(left.z_index, 1);
+	CHECK_EQ(right.z_updates, 2);
+	CHECK_EQ(left.z_index, 3);
 
 	right.position.x = 50;
 	fixture.sorter.update(sprites);
-	CHECK_EQ(left.z_index, 1);
-	CHECK_EQ(right.z_index, 2);
+	CHECK_EQ(left.z_index, 2);
+	CHECK_EQ(right.z_index, 3);
 }
 
 TEST_CASE("[SceneTree][SPX] Static-only layers update z-order when members disappear") {

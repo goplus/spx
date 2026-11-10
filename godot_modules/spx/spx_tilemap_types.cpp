@@ -51,13 +51,12 @@ static Vector2 _parse_vector2(const Array &arr) {
 	return Vector2();
 }
 
-bool SpxPhysicsLayerData::from_json(const Dictionary &dict) {
+void SpxPhysicsLayerData::from_json(const Dictionary &dict) {
 	collision_layer = dict.get("collision_layer", 1);
 	collision_mask = dict.get("collision_mask", 1);
-	return true;
 }
 
-bool SpxTilePhysicsData::from_json(const Dictionary &dict) {
+void SpxTilePhysicsData::from_json(const Dictionary &dict) {
 	layer = dict.get("layer", 0);
 
 	polygons.clear();
@@ -72,10 +71,9 @@ bool SpxTilePhysicsData::from_json(const Dictionary &dict) {
 			polygons.push_back(poly);
 		}
 	}
-	return true;
 }
 
-bool SpxTileData::from_json(const Dictionary &dict) {
+void SpxTileData::from_json(const Dictionary &dict) {
 	if (dict.has("atlas_coords")) {
 		atlas_coords = _parse_vector2i(dict["atlas_coords"]);
 	}
@@ -91,15 +89,13 @@ bool SpxTileData::from_json(const Dictionary &dict) {
 		Array physics_arr = dict["physics"];
 		for (int i = 0; i < physics_arr.size(); i++) {
 			SpxTilePhysicsData phys_data;
-			if (phys_data.from_json(physics_arr[i])) {
-				physics.push_back(phys_data);
-			}
+			phys_data.from_json(physics_arr[i]);
+			physics.push_back(phys_data);
 		}
 	}
-	return true;
 }
 
-bool SpxTileSetSourceData::from_json(const Dictionary &dict) {
+void SpxTileSetSourceData::from_json(const Dictionary &dict) {
 	id = dict.get("id", 0);
 	type = dict.get("type", "atlas");
 	texture = dict.get("texture", "");
@@ -121,15 +117,13 @@ bool SpxTileSetSourceData::from_json(const Dictionary &dict) {
 		Array tiles_arr = dict["tiles"];
 		for (int i = 0; i < tiles_arr.size(); i++) {
 			SpxTileData tile_data;
-			if (tile_data.from_json(tiles_arr[i])) {
-				tiles.push_back(tile_data);
-			}
+			tile_data.from_json(tiles_arr[i]);
+			tiles.push_back(tile_data);
 		}
 	}
-	return true;
 }
 
-bool SpxTileSetData::from_json(const Dictionary &dict) {
+void SpxTileSetData::from_json(const Dictionary &dict) {
 	if (dict.has("tile_size")) {
 		tile_size = _parse_vector2i(dict["tile_size"]);
 	}
@@ -141,9 +135,8 @@ bool SpxTileSetData::from_json(const Dictionary &dict) {
 		Array layers_arr = dict["physics_layers"];
 		for (int i = 0; i < layers_arr.size(); i++) {
 			SpxPhysicsLayerData layer_data;
-			if (layer_data.from_json(layers_arr[i])) {
-				physics_layers.push_back(layer_data);
-			}
+			layer_data.from_json(layers_arr[i]);
+			physics_layers.push_back(layer_data);
 		}
 	}
 
@@ -152,15 +145,13 @@ bool SpxTileSetData::from_json(const Dictionary &dict) {
 		Array sources_arr = dict["sources"];
 		for (int i = 0; i < sources_arr.size(); i++) {
 			SpxTileSetSourceData source_data;
-			if (source_data.from_json(sources_arr[i])) {
-				sources.push_back(source_data);
-			}
+			source_data.from_json(sources_arr[i]);
+			sources.push_back(source_data);
 		}
 	}
-	return true;
 }
 
-bool SpxTileMapLayerData::from_json(const Dictionary &dict) {
+void SpxTileMapLayerData::from_json(const Dictionary &dict) {
 	name = dict.get("name", "");
 	z_index = dict.get("z_index", 0);
 	enabled = dict.get("enabled", true);
@@ -170,10 +161,9 @@ bool SpxTileMapLayerData::from_json(const Dictionary &dict) {
 	}
 
 	tile_map_data_base64 = dict.get("tile_map_data", "");
-	return true;
 }
 
-bool SpxTileMapData::from_json(const Dictionary &dict) {
+void SpxTileMapData::from_json(const Dictionary &dict) {
 	version = dict.get("version", 1);
 	name = dict.get("name", "");
 
@@ -182,9 +172,7 @@ bool SpxTileMapData::from_json(const Dictionary &dict) {
 	}
 
 	if (dict.has("tileset")) {
-		if (!tileset.from_json(dict["tileset"])) {
-			return false;
-		}
+		tileset.from_json(dict["tileset"]);
 	}
 
 	layers.clear();
@@ -192,12 +180,10 @@ bool SpxTileMapData::from_json(const Dictionary &dict) {
 		Array layers_arr = dict["layers"];
 		for (int i = 0; i < layers_arr.size(); i++) {
 			SpxTileMapLayerData layer_data;
-			if (layer_data.from_json(layers_arr[i])) {
-				layers.push_back(layer_data);
-			}
+			layer_data.from_json(layers_arr[i]);
+			layers.push_back(layer_data);
 		}
 	}
-	return true;
 }
 
 bool SpxTileMapData::parse_from_file(const String &json_path, SpxTileMapData &out_data) {
@@ -227,5 +213,6 @@ bool SpxTileMapData::parse_from_file(const String &json_path, SpxTileMapData &ou
 		return false;
 	}
 
-	return out_data.from_json(data);
+	out_data.from_json(data);
+	return true;
 }

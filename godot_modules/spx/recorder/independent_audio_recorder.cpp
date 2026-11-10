@@ -299,9 +299,6 @@ void IndependentAudioRecorder::update_buffer_level() {
 void IndependentAudioRecorder::handle_buffer_underrun() {
 	MutexLock lock(stats_mutex);
 	stats.buffer_underruns++;
-
-	// Fill with silence data
-	chunk_buffer.fill(0);
 }
 
 void IndependentAudioRecorder::handle_buffer_overrun() {
