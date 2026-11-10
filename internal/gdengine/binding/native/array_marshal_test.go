@@ -273,3 +273,68 @@ func TestNativeArrayAllocationRejectsByteSizeOverflow(t *testing.T) {
 		info.Free()
 	}
 }
+
+func TestNativeFloatArrayConversion(t *testing.T) {
+	values := []float64{
+		0, math.Copysign(0, -1), math.Inf(1), math.Inf(-1), math.NaN(),
+		math.MaxFloat32, -math.MaxFloat32, math.MaxFloat64, -math.MaxFloat64,
+		math.SmallestNonzeroFloat32, -math.SmallestNonzeroFloat32,
+		math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
+		1 + 0x1p-24, 1 + 3*0x1p-24, // Ties round to the nearest even float32.
+		math.Nextafter(1+0x1p-24, 0), math.Nextafter(1+0x1p-24, 2),
+	}
+	want := make([]float32, len(values))
+	for i, value := range values {
+		want[i] = float32(value)
+	}
+	for _, tc := range []struct {
+		name  string
+		input any
+	}{
+		{"float32", append([]float32(nil), want...)},
+		{"float64", values},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			info := ToGdArrayInfo(tc.input)
+			if info == nil {
+				t.Fatal("failed to allocate native float array")
+			}
+			defer info.Free()
+			// Encoding must not retain the caller's storage.
+			reflect.ValueOf(tc.input).Clear()
+			got := info.ToFloat32s()
+			info.Free()
+			if len(got) != len(want) {
+				t.Fatalf("decoded length = %d, want %d", len(got), len(want))
+			}
+			for i, value := range got {
+				if math.IsNaN(float64(want[i])) {
+					if !math.IsNaN(float64(value)) {
+						t.Errorf("value[%d] = %v, want NaN", i, value)
+					}
+				} else if math.Float32bits(value) != math.Float32bits(want[i]) {
+					t.Errorf("value[%d] bits = %#08x, want %#08x", i, math.Float32bits(value), math.Float32bits(want[i]))
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkNativeFloat64ArrayEncoding(b *testing.B) {
+	for _, size := range []int{16, 1024, 65536} {
+		b.Run(strconv.Itoa(size), func(b *testing.B) {
+			values := make([]float64, size)
+			for i := range values {
+				values[i] = float64(i) / 3
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				info := ToGdArrayInfo(values)
+				if info == nil {
+					b.Fatal("failed to allocate native float array")
+				}
+				info.Free()
+			}
+		})
+	}
+}
