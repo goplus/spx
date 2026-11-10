@@ -742,6 +742,15 @@ TEST_CASE("[SceneTree][SPX] Sprite materials reject missing shaders without chan
 	CHECK(sprite->get_anim2d()->get_material().is_null());
 	CHECK(Color(manager->get_color(id)).is_equal_approx(tint));
 	CHECK(manager->get_material_shader(id) == nullptr);
+
+	Ref<ShaderMaterial> empty_material;
+	empty_material.instantiate();
+	sprite->get_anim2d()->set_material(empty_material);
+	const Color fallback(0.8, 0.6, 0.4, 0.2);
+	manager->set_color(id, fallback);
+	CHECK(Color(manager->get_color(id)).is_equal_approx(fallback));
+	CHECK(sprite->get_anim2d()->get_self_modulate().is_equal_approx(fallback));
+	CHECK(manager->get_material_shader(id) == nullptr);
 }
 
 TEST_CASE("[SceneTree][SPX] Point collision falls back to trigger geometry without readable pixels") {

@@ -169,6 +169,14 @@ TEST_CASE("[SceneTree][SPX] Pure sprite indices tolerate deletion detachment and
 	CHECK(cleared_node->is_queued_for_deletion());
 	CHECK(manager->id_pure_sprites.is_empty());
 	memdelete(cleared_node);
+	const GdObj destroyed = create();
+	memdelete(ObjectDB::get_instance(manager->id_pure_sprites[destroyed]));
+	manager->destroy_pure_sprite(destroyed);
+	CHECK_FALSE(manager->id_pure_sprites.has(destroyed));
+	const GdObj expired = create();
+	memdelete(ObjectDB::get_instance(manager->id_pure_sprites[expired]));
+	manager->clear_pure_sprites();
+	CHECK(manager->id_pure_sprites.is_empty());
 	const GdObj replacement = create();
 	CHECK(replacement != cleared);
 	sprites.clear();

@@ -44,6 +44,7 @@
 #include "../recorder/thread_safe_frame_buffer.h"
 #include "core/io/marshalls.h"
 #include "main/main_loop_phase_callback_bus.h"
+#include "servers/audio/effects/audio_effect_amplify.h"
 #include "servers/rendering_server.h"
 #include "spx_test_fixtures.h"
 
@@ -382,7 +383,13 @@ TEST_CASE("[SceneTree][SPX] Audio capture saturates PCM, preserves the master mi
 	driver.capture_audio_data(unused, 0);
 	effect->process(input, output, 4);
 	REQUIRE(wait_for([&] { return first.get_statistics().total_chunks_recorded >= 2; }));
+	Ref<AudioEffectAmplify> project_effect;
+	project_effect.instantiate();
+	server->add_bus_effect(0, project_effect);
 	driver.finish();
+	CHECK(server->get_bus_effect_count(0) == before + 1);
+	CHECK(server->get_bus_effect(0, before) == project_effect);
+	server->remove_bus_effect(0, before);
 	CHECK(server->get_bus_effect_count(0) == before);
 	CHECK(driver.get_registered_recorder_count() == 0);
 	CHECK_FALSE(driver.is_recording_enabled());
@@ -408,6 +415,15 @@ TEST_CASE("[SceneTree][SPX] Audio capture saturates PCM, preserves the master mi
 		CHECK(decode_uint32(bytes.ptr() + chunk + 36) == uint32_t(INT32_MIN));
 		chunk += 40;
 	}
+
+	REQUIRE(driver.init(100) == OK);
+	auto detached_effect = server->get_bus_effect(0, before)->instantiate();
+	REQUIRE(detached_effect.is_valid());
+	server->remove_bus_effect(0, before); // The project can remove the effect before shutdown.
+	driver.finish();
+	detached_effect->process(input, output, 4);
+	CHECK(output[0].left == input[0].left);
+	CHECK(server->get_bus_effect_count(0) == before);
 }
 
 TEST_CASE("[SceneTree][SPX] Audio recorder consumes captured PCM and closes the worker file") {
