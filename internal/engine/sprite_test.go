@@ -329,7 +329,7 @@ func TestRuntimeFactoriesRegisterBeforeStart(t *testing.T) {
 		{"project UI", func() *factoryUI {
 			return (runtimeBridge{}).CreateUI(reflect.TypeFor[factoryUI](), "Panel", false).Addr().Interface().(*factoryUI)
 		}, "res://assets/ui/Panel.tscn", 0},
-		{"bind public", func() *factoryUI { return BridgeBindUI[factoryUI](30, "Child") }, "Child", 30},
+		{"bind typed", func() *factoryUI { return BindUIForType[factoryUI](30, "Child") }, "Child", 30},
 		{"bind", func() *factoryUI {
 			return (runtimeBridge{}).BindUI(reflect.TypeFor[factoryUI](), 30, "Child").Addr().Interface().(*factoryUI)
 		}, "Child", 30},

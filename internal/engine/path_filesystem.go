@@ -31,13 +31,6 @@ func SetAssetDir(dir string) {
 		resolver = newLegacyFilesystemAssetResolver(prefix, dir, !platform.IsWeb())
 	}
 	Managers().ResMgr.SetLoadMode(true)
-	if resolver.explicitFSRoots {
-		if resolver.compatibilityRoot != "" {
-			resolver.extAssetDir = readExtAssetDirFromFilesystem(resolver.projectRoot, true)
-		}
-	} else {
-		resolver.extAssetDir = readExtAssetDirFromProjectConfig(prefix)
-	}
 	assetPaths = resolver
 }
 

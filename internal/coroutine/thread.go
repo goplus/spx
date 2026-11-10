@@ -90,7 +90,7 @@ func (p *Scheduler) newThread(owner any) Thread {
 	return th
 }
 
-// ID returns the thread's manager-local ID.
+// ID returns the thread's scheduler-local ID.
 func (th Thread) ID() int64 {
 	return th.id
 }

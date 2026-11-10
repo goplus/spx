@@ -35,7 +35,7 @@ func SetScheduler(next *coroutine.Scheduler) {
 }
 
 func IsInCoroutine() bool {
-	return scheduler.Caller() != nil
+	return scheduler.IsInCoroutine()
 }
 
 func Go(owner any, fn func(ctx context.Context, owner any)) {
@@ -57,8 +57,8 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 		return
 	}
 	current := scheduler
-	if current.Caller() == nil {
-		owner = resolveOwner(owner)
+	if owner == nil && current.Caller() == nil {
+		owner = GetGame()
 	}
 	current.RunSync(owner, func(thread coroutine.Thread) {
 		if isRuntimeWorkCurrent(binding) {
@@ -142,11 +142,7 @@ func NewControlFlowWaiter() func() {
 	current := scheduler
 	thread := current.Caller()
 	if thread == nil {
-		return func() {
-			if ShouldWaitNextFrame() {
-				WaitNextFrame()
-			}
-		}
+		return func() { WaitNextFrameIfNeeded() }
 	}
 
 	return func() {

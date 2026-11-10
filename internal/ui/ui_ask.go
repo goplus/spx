@@ -37,11 +37,11 @@ func NewUiAsk() *UiAsk {
 
 // OnStart binds UI nodes and subscribes to clicks in the engine callback context.
 func (p *UiAsk) OnStart() {
-	p.askBody = engine.BridgeBindUI[UiNode](p.GetId(), "MF/Frame/AskBody")
-	p.askLabel = engine.BridgeBindUI[UiNode](p.GetId(), "MF/Frame/AskBody/LabelAsk")
+	p.askBody = engine.BindUIForType[UiNode](p.GetId(), "MF/Frame/AskBody")
+	p.askLabel = engine.BindUIForType[UiNode](p.GetId(), "MF/Frame/AskBody/LabelAsk")
 
-	p.input = engine.BridgeBindUI[UiNode](p.GetId(), "M/Input")
-	p.checkBtn = engine.BridgeBindUI[UiNode](p.GetId(), "M/Input/Check")
+	p.input = engine.BindUIForType[UiNode](p.GetId(), "M/Input")
+	p.checkBtn = engine.BindUIForType[UiNode](p.GetId(), "M/Input/Check")
 
 	p.checkBtn.OnUiClickEvent.Subscribe(func() {
 		p.handleCheck()

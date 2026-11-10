@@ -132,11 +132,6 @@ func NewUiNode[T any]() *T {
 	})
 }
 
-// BridgeBindUI binds and initializes a node in the caller's main-thread operation.
-func BridgeBindUI[T any](parentNode Object, path string) *T {
-	return BindUIForType[T](parentNode, path)
-}
-
 func bridgeCameraTransform() (mathf.Vec2, float64) {
 	cameraMgr := Managers().CameraMgr
 	cameraPos := cameraMgr.GetCameraPosition()

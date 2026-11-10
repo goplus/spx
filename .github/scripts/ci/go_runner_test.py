@@ -184,6 +184,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         "native": {
             "coverage.out": ["github.com/goplus/spx/v4"],
             "cmd/ispx/coverage.out": ["github.com/goplus/spx/v4/cmd/ispx"],
+            "coverage-engine-packmode.out": ["./internal/engine"],
         },
     }
 
@@ -223,7 +224,9 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     options = [f"-coverprofile={Path(profile).name}", "-covermode=atomic"]
                     if web:
                         options.append('-exec="/mock/go root/lib/wasm/go_js_wasm_exec"')
-                    if suite in ("native", "codegen"):
+                    if profile == "coverage-engine-packmode.out":
+                        options.extend(["-tags", "packmode"])
+                    elif suite in ("native", "codegen"):
                         options.append("-coverpkg=" + ",".join(packages))
                     if suite in ("native", "tools", "macos", "windows"):
                         options.append("-v")

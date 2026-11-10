@@ -385,3 +385,38 @@ func TestSpriteTriggerIgnoresOtherImplementations(t *testing.T) {
 		t.Fatalf("trigger events=%v", events)
 	}
 }
+
+func TestFrameBufferResetReleasesStorage(t *testing.T) {
+	var buffer frameBuffer[*Sprite]
+	first, second := &Sprite{}, &Sprite{}
+	buffer.enqueue(first)
+	buffer.publish()
+	buffer.enqueue(second)
+
+	buffer.reset()
+	if buffer.pending != nil || buffer.ready != nil {
+		t.Fatal("reset retained event storage")
+	}
+	if events := buffer.drain(nil); len(events) != 0 {
+		t.Fatalf("events after reset = %v, want none", events)
+	}
+	buffer.enqueue(second)
+	buffer.publish()
+	if events := buffer.drain(nil); len(events) != 1 || events[0] != second {
+		t.Fatalf("events after reuse = %v, want new event", events)
+	}
+}
+
+func TestFrameBufferDrainOwnsSnapshot(t *testing.T) {
+	var buffer frameBuffer[*Sprite]
+	first, second := &Sprite{}, &Sprite{}
+	buffer.enqueue(first)
+	buffer.publish()
+	events := buffer.drain(nil)
+	buffer.enqueue(second)
+	buffer.publish()
+	buffer.reset()
+	if len(events) != 1 || events[0] != first {
+		t.Fatalf("drained snapshot changed = %v, want first event", events)
+	}
+}

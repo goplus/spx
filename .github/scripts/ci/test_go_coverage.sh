@@ -84,6 +84,7 @@ case "${1:-}" in
   native)
     bash .github/scripts/ci/test_go.sh --cover -v -coverprofile=coverage.out -covermode=atomic
     coverage_files=(coverage.out cmd/ispx/coverage.out)
+    covered_test coverage-engine-packmode.out -v -tags packmode ./internal/engine
     ;;
   *)
     echo "Unknown Go coverage suite: ${1:-}" >&2

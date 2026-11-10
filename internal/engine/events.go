@@ -293,7 +293,5 @@ func (b *frameBuffer[T]) discard() {
 }
 
 func (b *frameBuffer[T]) reset() {
-	b.discard()
-	b.pending = nil
-	b.ready = nil
+	*b = frameBuffer[T]{}
 }

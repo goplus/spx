@@ -25,7 +25,7 @@ type Latch struct {
 	waiters waiterSet
 }
 
-// NewLatch creates a closed latch associated with this coroutine manager.
+// NewLatch creates a closed latch associated with this coroutine scheduler.
 func (p *Scheduler) NewLatch() *Latch {
 	return &Latch{
 		manager: p,
@@ -43,7 +43,7 @@ func (p *Latch) Open() {
 	p.manager.wakeWaiters(p.waiters.close(p.done))
 }
 
-// Wait yields inside this manager and blocks other callers until the latch opens.
+// Wait yields inside this scheduler and blocks other callers until the latch opens.
 func (p *Latch) Wait() {
 	p.manager.waitOn(p.manager.Caller(), p.done, &p.waiters)
 }

@@ -135,11 +135,6 @@ func TestBackendAdaptersForwardResourcesCameraAndLayerMode(t *testing.T) {
 	if err := SetLayerSortMode("invalid"); err == nil || !slices.Equal(ext.modes, []int64{1, 0, 0}) {
 		t.Fatalf("layer commands=%v,error=%v", ext.modes, err)
 	}
-	for _, value := range []float64{-2.5, 0, 3.25} {
-		if ConvertToFloat64(ConvertToInt64(value)) != value {
-			t.Fatalf("fixed-point round trip=%v", value)
-		}
-	}
 }
 
 func TestPublicFactoriesInitializeProxyAndUI(t *testing.T) {

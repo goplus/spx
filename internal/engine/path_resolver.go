@@ -197,11 +197,7 @@ func (r assetResolver) extAssetSuffix(relPath string) (string, bool) {
 
 // parseAssetReference shares lexical validation across filesystem and archive paths.
 func parseAssetReference(reference string) (name string, projectResource, ok bool) {
-	projectResource = strings.HasPrefix(reference, packmodeAssetPrefix)
-	name = reference
-	if projectResource {
-		name = strings.TrimPrefix(reference, packmodeAssetPrefix)
-	}
+	name, projectResource = strings.CutPrefix(reference, packmodeAssetPrefix)
 	return name, projectResource, isPortableRelativeResourcePath(name)
 }
 

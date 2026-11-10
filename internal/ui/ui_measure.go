@@ -38,10 +38,10 @@ func NewUiMeasure() *UiMeasure {
 
 // OnStart binds UI nodes in the engine callback context.
 func (p *UiMeasure) OnStart() {
-	p.container = engine.BridgeBindUI[UiNode](p.GetId(), "C")
-	p.imageLine = engine.BridgeBindUI[UiNode](p.GetId(), "C/Line")
-	p.labelContainer = engine.BridgeBindUI[UiNode](p.GetId(), "LC")
-	p.labelValue = engine.BridgeBindUI[UiNode](p.GetId(), "LC/Label")
+	p.container = engine.BindUIForType[UiNode](p.GetId(), "C")
+	p.imageLine = engine.BindUIForType[UiNode](p.GetId(), "C/Line")
+	p.labelContainer = engine.BindUIForType[UiNode](p.GetId(), "LC")
+	p.labelValue = engine.BindUIForType[UiNode](p.GetId(), "LC/Label")
 }
 
 func (p *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {

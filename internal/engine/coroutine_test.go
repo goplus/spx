@@ -413,35 +413,45 @@ func TestWarpRestoresStateAfterPanic(t *testing.T) {
 }
 
 func TestControlFlowWaiterFollowsWarpMode(t *testing.T) {
-	current := setupExecuteTest(t)
-	warpDone, done := make(chan struct{}), make(chan struct{})
-	thread := current.Create("loop", func(coroutine.Thread) {
-		wait := NewControlFlowWaiter()
-		SetRunWithoutScreenRefresh(true)
-		wait()
-		close(warpDone)
-		SetRunWithoutScreenRefresh(false)
-		wait()
-		close(done)
-	})
-	current.JoinFirstSlice(thread)
-	select {
-	case <-warpDone:
-	default:
-		t.Fatal("warp loop yielded before its budget was exhausted")
-	}
-	select {
-	case <-done:
-		t.Fatal("normal loop did not yield")
-	default:
-	}
-	itime.Update(0, 0)
-	current.Update()
-	current.Join(thread)
-	select {
-	case <-done:
-	default:
-		t.Fatal("normal loop did not resume in the next frame")
+	for _, origin := range []string{"managed", "external"} {
+		t.Run(origin, func(t *testing.T) {
+			current := setupExecuteTest(t)
+			var wait func()
+			if origin == "external" {
+				wait = NewControlFlowWaiter()
+			}
+			warpDone, done := make(chan struct{}), make(chan struct{})
+			thread := current.Create("loop", func(coroutine.Thread) {
+				if wait == nil {
+					wait = NewControlFlowWaiter()
+				}
+				SetRunWithoutScreenRefresh(true)
+				wait()
+				close(warpDone)
+				SetRunWithoutScreenRefresh(false)
+				wait()
+				close(done)
+			})
+			current.JoinFirstSlice(thread)
+			select {
+			case <-warpDone:
+			default:
+				t.Fatal("warp loop yielded before its budget was exhausted")
+			}
+			select {
+			case <-done:
+				t.Fatal("normal loop did not yield")
+			default:
+			}
+			itime.Update(0, 0)
+			current.Update()
+			current.Join(thread)
+			select {
+			case <-done:
+			default:
+				t.Fatal("normal loop did not resume in the next frame")
+			}
+		})
 	}
 }
 

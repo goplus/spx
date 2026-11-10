@@ -22,6 +22,14 @@ import (
 	"testing"
 )
 
+func TestFixedPointConversions(t *testing.T) {
+	for _, value := range []float64{-2.5, 0, 3.25} {
+		if ConvertToFloat64(ConvertToInt64(value)) != value {
+			t.Fatalf("fixed-point round trip=%v", value)
+		}
+	}
+}
+
 func TestAnglesAndVectors(t *testing.T) {
 	for _, degree := range []float64{-360, -180, -90, 0, 90, 180, 360} {
 		rad := DegToRad(degree)

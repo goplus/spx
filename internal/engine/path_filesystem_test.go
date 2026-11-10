@@ -34,7 +34,7 @@ func TestSetAssetDirConfiguresLegacyPathsAndDefaultDirectory(t *testing.T) {
 	if platform.IsWeb() {
 		prefix = ""
 	}
-	resources.files[projectConfigPath(prefix)] = `{"extasset":"shared"}`
+	resources.files[projectConfigPath(prefix)] = `invalid unused config`
 	for _, dir := range []string{"", "images"} {
 		assetPaths = assetResolver{}
 		SetAssetDir(dir)
@@ -42,16 +42,19 @@ func TestSetAssetDirConfiguresLegacyPathsAndDefaultDirectory(t *testing.T) {
 		if wantDir == "" {
 			wantDir = "assets"
 		}
-		if assetPaths.root != prefix+wantDir+"/" || assetPaths.extAssetDir != "shared" || assetPaths.compatibilityRoot == "" || assetPaths.explicitFSRoots {
+		if assetPaths.root != prefix+wantDir+"/" || assetPaths.extAssetDir != "" || assetPaths.compatibilityRoot == "" || assetPaths.explicitFSRoots {
 			t.Fatalf("SetAssetDir(%q) = %+v", dir, assetPaths)
 		}
+	}
+	if resources.checks != 0 || resources.reads != 0 {
+		t.Fatalf("filesystem setup read unused archive config: checks=%d reads=%d", resources.checks, resources.reads)
 	}
 	if !slices.Equal(resources.modes, []bool{true, true}) {
 		t.Fatalf("resource load modes = %v, want filesystem mode for both calls", resources.modes)
 	}
 }
 
-func TestSetAssetDirPreservesExplicitRootsAndReloadsOnlyLegacyConfig(t *testing.T) {
+func TestSetAssetDirPreservesExplicitRoots(t *testing.T) {
 	resources := setupAssetPathTest(t)
 	projectDir := t.TempDir()
 	assetDir := filepath.Join(projectDir, "assets")
@@ -70,12 +73,12 @@ func TestSetAssetDirPreservesExplicitRootsAndReloadsOnlyLegacyConfig(t *testing.
 			t.Fatal(err)
 		}
 		SetAssetDir("ignored")
-		if legacy {
-			configured.extAssetDir = "updated"
-		}
 		if assetPaths != configured {
 			t.Fatalf("legacy=%v: SetAssetDir changed explicit roots: %+v, want %+v", legacy, assetPaths, configured)
 		}
+	}
+	if resources.checks != 0 || resources.reads != 0 {
+		t.Fatalf("filesystem setup read unused archive config: checks=%d reads=%d", resources.checks, resources.reads)
 	}
 	if !slices.Equal(resources.modes, []bool{true, true}) {
 		t.Fatalf("resource load modes = %v, want filesystem mode for both calls", resources.modes)

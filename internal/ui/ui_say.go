@@ -62,8 +62,8 @@ func (s *UiSay) OnStart() {
 		{"VRThink", "VRThink/BG/MC/Label"},
 	} {
 		s.variants[i] = sayNodes{
-			vbox:  engine.BridgeBindUI[UiNode](s.GetId(), paths.vbox),
-			label: engine.BridgeBindUI[UiNode](s.GetId(), paths.label),
+			vbox:  engine.BindUIForType[UiNode](s.GetId(), paths.vbox),
+			label: engine.BindUIForType[UiNode](s.GetId(), paths.label),
 		}
 	}
 

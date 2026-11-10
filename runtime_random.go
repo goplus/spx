@@ -142,14 +142,8 @@ func newRandomStream(seed int64) *rand.Rand {
 }
 
 func currentCoroutineID() int64 {
-	if scheduler == nil {
-		return 0
-	}
-	if !scheduler.IsInCoroutine() {
-		return 0
-	}
-	if th := scheduler.Current(); th != nil {
-		return th.ID()
+	if caller := scheduler.Caller(); caller != nil {
+		return caller.ID()
 	}
 	return 0
 }

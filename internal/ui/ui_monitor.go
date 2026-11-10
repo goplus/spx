@@ -138,7 +138,7 @@ func NewUiMonitor(style MonitorStyle) (panel *UiMonitor) {
 	engine.WaitMainThread(func() {
 		panel = engine.CreateEngineUIForType[UiMonitor]("")
 		panel.initialize(&engine.Managers().UiMgr, style, func(path string) *UiNode {
-			return engine.BridgeBindUI[UiNode](panel.GetId(), path)
+			return engine.BindUIForType[UiNode](panel.GetId(), path)
 		})
 	})
 	return panel

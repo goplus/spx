@@ -205,7 +205,13 @@ func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
 
 		done := make(chan []float64, 1)
 		currentScheduler.Create("wait-to-do-random", func(me coroutine.Thread) {
+			if got := currentCoroutineID(); got != me.ID() {
+				t.Errorf("managed random stream ID = %d, want %d", got, me.ID())
+			}
 			currentScheduler.WaitToDo(func() {
+				if got := currentCoroutineID(); got != 0 {
+					t.Errorf("native worker random stream ID = %d, want 0", got)
+				}
 				if drawOutsideCoroutine {
 					_ = Rand__1(0, 1)
 				}

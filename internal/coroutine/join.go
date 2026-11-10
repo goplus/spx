@@ -17,8 +17,8 @@
 package coroutine
 
 // Join waits until target has finished. It yields when called from a coroutine
-// managed by this manager and blocks the calling goroutine otherwise.
-// A non-nil target must belong to this manager, even if already finished.
+// managed by this scheduler and blocks the calling goroutine otherwise.
+// A non-nil target must belong to this scheduler, even if already finished.
 func (p *Scheduler) Join(target Thread) {
 	if target == nil {
 		return
@@ -37,7 +37,7 @@ func (p *Scheduler) JoinAll(targets []Thread) {
 	}
 }
 
-// JoinFirstSlice waits until target first yields or finishes in this manager.
+// JoinFirstSlice waits until target first yields or finishes in this scheduler.
 func (p *Scheduler) JoinFirstSlice(target Thread) {
 	if target == nil {
 		return

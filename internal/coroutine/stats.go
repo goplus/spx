@@ -45,7 +45,7 @@ func (p *Scheduler) SetPerfDebug(enabled bool) {
 	p.perfDebug.Store(enabled)
 }
 
-// UpdateStats returns this manager's most recent update statistics.
+// UpdateStats returns this scheduler's most recent update statistics.
 func (p *Scheduler) UpdateStats() UpdateStats {
 	p.statsMu.RLock()
 	stats := p.lastUpdateStats

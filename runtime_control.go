@@ -93,10 +93,7 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 		return
 	}
 
-	var caller coroutine.Thread
-	if scheduler.IsInCoroutine() {
-		caller = scheduler.Current()
-	}
+	caller := scheduler.Caller()
 	shouldStop := func(thread coroutine.Thread) bool {
 		return filter(thread.Owner, thread == caller)
 	}

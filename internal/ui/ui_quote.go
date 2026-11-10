@@ -35,9 +35,9 @@ func NewUiQuote() *UiQuote {
 
 // OnStart binds UI nodes in the engine callback context.
 func (p *UiQuote) OnStart() {
-	p.container = engine.BridgeBindUI[UiNode](p.GetId(), "C")
-	p.labelDes = engine.BridgeBindUI[UiNode](p.GetId(), "C/LabelDes")
-	p.labelMsg = engine.BridgeBindUI[UiNode](p.GetId(), "C/LabelMsg")
+	p.container = engine.BindUIForType[UiNode](p.GetId(), "C")
+	p.labelDes = engine.BindUIForType[UiNode](p.GetId(), "C/LabelDes")
+	p.labelMsg = engine.BindUIForType[UiNode](p.GetId(), "C/LabelMsg")
 }
 
 func (p *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
