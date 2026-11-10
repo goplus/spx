@@ -114,7 +114,7 @@ func TestBuildEngineDesktopCommands(t *testing.T) {
 						t.Fatal(err)
 					}
 					source, destination := plan.EditorSource, plan.EditorDestination
-					wantArgs := []string{"optimize=size", "debug_symbols=true", "target=editor", "dev_build=yes"}
+					wantArgs := []string{"optimize=size", "debug_symbols=true", "target=editor", "dev_build=yes", "compiledb=yes"}
 					if plan.EditorUseVSProj {
 						wantArgs = append(wantArgs, "vsproj=yes")
 					}
@@ -229,7 +229,7 @@ printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_RECORD.build"
 						t.Fatalf("error = %v, want exit 23", err)
 					}
 				}
-				wantBuild := []string{buildEnv.EngineDir, env["SPX_MARKER"], "target=editor", "dev_build=yes", "tests=yes"}
+				wantBuild := []string{buildEnv.EngineDir, env["SPX_MARKER"], "target=editor", "dev_build=yes", "compiledb=yes", "tests=yes"}
 				if plan.EditorUseVSProj {
 					wantBuild = append(wantBuild, "vsproj=yes")
 				}

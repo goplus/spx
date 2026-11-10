@@ -105,6 +105,18 @@ make dev MODE=normal
 
 如果只需要构建某个平台，可将 `dev` 换成 `build-editor`、`build-desktop`、`build-web MODE=...`、`build-android` 或 `build-ios`。
 
+`make dev` 和 `make build-editor` 会在本机 editor 构建时自动生成 `GODOT_SRC/compile_commands.json`，包含 Godot 和 `SPX_MODULE_SRC` 外置模块的实际编译参数。后续 desktop、Web 和移动端 template 构建不会覆盖这份本机编译数据库。新增源文件或调整构建参数后，重新运行其中一个命令即可更新。
+
+VS Code 的 Microsoft C/C++ 扩展可通过 `.vscode/settings.json` 使用它，实现跨仓库跳转定义。默认 `GODOT_SRC=./godot` 时配置如下；使用外部 Godot checkout 时，将路径替换为实际的绝对路径，例如 `/absolute/path/to/godot/compile_commands.json`：
+
+```json
+{
+  "C_Cpp.default.compileCommands": [
+    "${workspaceFolder}/godot/compile_commands.json"
+  ]
+}
+```
+
 ## 直接使用 buildctl
 
 直接调用 `buildctl` 主要用于 CI、构建系统维护和编排层调试。手动调用前先构建缓存的可执行文件：
