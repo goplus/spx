@@ -165,6 +165,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         "windows": {
             "coverage-buildctl-windows.out": ["./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool"],
             "coverage-engine-windows.out": ["./internal/cmd/buildctl/engine"],
+            "coverage-fileutil-windows.out": ["./internal/base/fileutil"],
             "coverage-runtimebundle-windows.out": ["./internal/runtimebundle"],
         },
         "web": {
@@ -244,6 +245,17 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *reports, "COVERAGE_PATHS"])
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
                 self.assertCountEqual(actual, reports)
+
+    def test_windows_coverage_includes_file_replacement_contract(self):
+        result = self.run_coverage_suite("windows")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        file_test, = [call for call in self.recorded_calls() if "./internal/base/fileutil" in call["args"]]
+        args = file_test["args"]
+        for name in ("TestReplaceRegularFile",
+                     "TestReplaceRegularFileRejectsDestinationBeforeRenaming",
+                     "TestReplaceRegularFilePreservesFilesystemErrors"):
+            with self.subTest(name=name):
+                self.assertRegex(name, args[args.index("-run") + 1])
 
     def test_windows_coverage_includes_cache_security_tests(self):
         result = self.run_coverage_suite("windows")

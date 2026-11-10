@@ -24,8 +24,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/release"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
@@ -151,7 +151,7 @@ func writeEngineBundle(path string, origin []byte, engineName, packName, engineP
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return replaceRuntimeFile(tmpPath, path, 0o600)
+	return fileutil.ReplaceRegularFile(tmpPath, path, 0o600)
 }
 
 func addFileToZip(zw *zip.Writer, name, path string, mode os.FileMode) error {
@@ -168,21 +168,4 @@ func addFileToZip(zw *zip.Writer, name, path string, mode os.FileMode) error {
 	defer file.Close()
 	_, err = io.Copy(writer, file)
 	return err
-}
-
-func replaceRuntimeFile(src, dst string, mode os.FileMode) error {
-	if info, err := os.Lstat(dst); err == nil {
-		if !isRegularNonSymlink(info) {
-			return fmt.Errorf("destination %q is not a regular non-symlink file", dst)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.Rename(src, dst); err != nil {
-		return err
-	}
-	if runtime.GOOS != "windows" {
-		return os.Chmod(dst, mode)
-	}
-	return nil
 }
