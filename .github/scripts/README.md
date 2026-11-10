@@ -76,11 +76,15 @@ consumer together when changing them.
 - `ci/test_go.sh` runs native Go tests in both modules and forwards Go test arguments.
   Its optional leading `--cover` flag uses the selected test packages as the `-coverpkg` list.
 - `ci/test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, `codegen`, `native`, `macos`, or `windows` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After all tests succeed, `compact-coverage` merges duplicate blocks in each profile, retaining zero-hit blocks and summing execution counts. Only then does the script report the profiles as newline-separated paths through the `coverage` step output when `GITHUB_OUTPUT` is set.
+- `web` also runs host-independent engine lifecycle tests in `coverage-web-engine.out`,
+  including the public Web exit path and repeated resets. Full engine startup tests
+  require a Godot JavaScript host and are not part of this Node suite.
 - `native` runs the selected root and `cmd/ispx` module packages once with cross-package
   instrumentation, producing one `coverage.out` per module. Both testing and
   instrumentation reuse `ci/test_go.sh`'s package selection, which excludes examples,
-  tutorials, and generated interpreter packages. Generated files in selected packages
-  remain in the profiles; `.github/codecov.yml` applies file exclusions when reporting.
+  tutorials, and generated interpreter packages. It also runs the engine package
+  with `packmode`, producing `coverage-engine-packmode.out`. Generated files in selected
+  packages remain in the profiles; `.github/codecov.yml` applies file exclusions when reporting.
 - `macos` and `windows` require their native OS and run targeted platform tests. macOS covers child toolchain environments, local Homebrew JDK/Brotli fixtures, and CLI permission repair; Windows covers command lookup, replacement, tool setup, and process locks. They neither install real tools nor download SDKs.
 - `tools` tests every automation command with `go test ./.github/cmd/...` and
   produces one `coverage-tools.out`. Root `go test ./...` does not discover

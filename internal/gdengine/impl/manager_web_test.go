@@ -149,15 +149,15 @@ func TestWebManagerDirectAndWrappedCallsDispatchOnce(t *testing.T) {
 	previousAPI, previousAudio := webffi.API, gdx.AudioMgr
 	t.Cleanup(func() { webffi.API, gdx.AudioMgr = previousAPI, previousAudio })
 	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(audioMgr)}))
-	co := coroutine.New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := coroutine.New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	dispatches := 0
 	inside := false
 	useWebManagerDispatch(t, func(call func()) {
 		dispatches++
 		inside = true
 		defer func() { inside = false }()
-		co.WaitMainThread(call)
+		scheduler.WaitMainThread(call)
 	})
 	sets, gets := 0, 0
 	set := js.FuncOf(func(_ js.Value, args []js.Value) any {
@@ -165,7 +165,7 @@ func TestWebManagerDirectAndWrappedCallsDispatchOnce(t *testing.T) {
 		if !inside || len(args) != 3 || args[0].Int() != 7 || args[1].Int() != 0 || args[2].Float() != 0.25 {
 			t.Errorf("setter escaped dispatch or changed arguments: inside=%v, args=%v", inside, args)
 		}
-		if got := catchWebManagerPanic(func() { co.RunAfterStop(nil) }); got != coroutine.ErrReentrantWait {
+		if got := catchWebManagerPanic(func() { scheduler.RunAfterStop(nil) }); got != coroutine.ErrReentrantWait {
 			t.Errorf("manager callback drain panic = %v, want %v", got, coroutine.ErrReentrantWait)
 		}
 		return nil
@@ -206,12 +206,12 @@ func TestWebManagerCacheHitStillChecksCancellation(t *testing.T) {
 	previousAPI, previousInput := webffi.API, gdx.InputMgr
 	t.Cleanup(func() { webffi.API, gdx.InputMgr = previousAPI, previousInput })
 	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(inputMgr)}))
-	co := coroutine.New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := coroutine.New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	dispatches := 0
 	useWebManagerDispatch(t, func(call func()) {
 		dispatches++
-		co.WaitMainThread(call)
+		scheduler.WaitMainThread(call)
 	})
 	fallbacks := 0
 	read := js.FuncOf(func(js.Value, []js.Value) any {
@@ -237,7 +237,7 @@ func TestWebManagerCacheHitStillChecksCancellation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			before := dispatches
 			var canceled any
-			co.RunSync(test.name, func(me coroutine.Thread) {
+			scheduler.RunSync(test.name, func(me coroutine.Thread) {
 				me.Cancel()
 				canceled = catchWebManagerPanic(func() { test.read(action) })
 			})
@@ -255,15 +255,15 @@ func TestWebManagerPropagatesBridgePanicAndRestoresScope(t *testing.T) {
 	previous, previousAudio := webffi.API.SpxAudioSetVolume, gdx.AudioMgr
 	t.Cleanup(func() { webffi.API.SpxAudioSetVolume, gdx.AudioMgr = previous, previousAudio })
 	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(audioMgr)}))
-	co := coroutine.New(nil)
-	useWebManagerDispatch(t, co.WaitMainThread)
+	scheduler := coroutine.New(nil)
+	useWebManagerDispatch(t, scheduler.WaitMainThread)
 	webffi.API.SpxAudioSetVolume = js.Global().Get("Function").New("throw new Error('web manager failure')")
 	value := catchWebManagerPanic(func() { gdx.AudioMgr.SetVolume(1, 0.5) })
 	if err, ok := value.(js.Error); !ok || !strings.Contains(err.Error(), "web manager failure") {
 		t.Fatalf("bridge panic = %#v, want original JavaScript error", value)
 	}
 	// A failed callback must remove its no-drain scope before returning.
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func TestWebManagerThreadProbeDoesNotDispatch(t *testing.T) {

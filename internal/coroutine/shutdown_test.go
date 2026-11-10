@@ -9,33 +9,33 @@ import (
 )
 
 func TestStopThisScriptPanicsWithSentinel(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	defer func() {
 		if recovered := recover(); recovered != ErrStopThisScript {
 			t.Fatalf("StopThisScript panic = %v, want %v", recovered, ErrStopThisScript)
 		}
 	}()
-	co.StopThisScript()
+	scheduler.StopThisScript()
 }
 
 func TestDrainWakesMultipleWaiters(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	workerStarted, release := make(chan struct{}), make(chan struct{})
 	releaseWorker := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(func() {
 		releaseWorker()
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
-	workerOwner := co.Create("worker-owner", func(Thread) {
-		co.WaitToDo(func() {
+	workerOwner := scheduler.Create("worker-owner", func(Thread) {
+		scheduler.WaitToDo(func() {
 			close(workerStarted)
 			<-release
 		})
 	})
 	waitForThreadSignal(t, workerStarted, "native worker did not start")
-	latch := co.NewLatch()
-	peer := co.Create("peer", func(Thread) { latch.Wait() })
+	latch := scheduler.NewLatch()
+	peer := scheduler.Create("peer", func(Thread) { latch.Wait() })
 	waitForThreadSignal(t, peer.firstSliceDone, "peer did not suspend")
 
 	const count = 6
@@ -43,7 +43,7 @@ func TestDrainWakesMultipleWaiters(t *testing.T) {
 	for range count {
 		go func() {
 			started <- struct{}{}
-			co.drain()
+			scheduler.drain()
 			completed <- struct{}{}
 		}()
 	}
@@ -51,7 +51,7 @@ func TestDrainWakesMultipleWaiters(t *testing.T) {
 		waitForThreadSignal(t, started, "drain waiter did not start")
 	}
 
-	co.Stop(workerOwner)
+	scheduler.Stop(workerOwner)
 	waitForThreadSignal(t, workerOwner.done, "native worker's caller did not stop")
 	releaseWorker()
 	select {
@@ -60,28 +60,28 @@ func TestDrainWakesMultipleWaiters(t *testing.T) {
 	default:
 	}
 
-	co.Stop(peer)
+	scheduler.Stop(peer)
 	for range count {
 		waitForThreadSignal(t, completed, "drain did not wake after its remaining work completed")
 	}
-	if co.hasPendingWork() {
+	if scheduler.hasPendingWork() {
 		t.Fatal("drain left work registered")
 	}
 }
 
 func TestShutdownRejectsManagedCallerWithoutSideEffects(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
-	latch := co.NewLatch()
-	peer := co.Create("peer", func(Thread) { latch.Wait() })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+	latch := scheduler.NewLatch()
+	peer := scheduler.Create("peer", func(Thread) { latch.Wait() })
 	waitForThreadSignal(t, peer.firstSliceDone, "peer did not suspend")
-	epoch := co.admissionEpoch.Load()
+	epoch := scheduler.admissionEpoch.Load()
 	var recovered any
-	caller := co.Create("caller", func(me Thread) {
+	caller := scheduler.Create("caller", func(me Thread) {
 		recovered = catchPanic(func() {
-			co.RunAfterStop(func() { t.Error("rejected shutdown ran its callback") })
+			scheduler.RunAfterStop(func() { t.Error("rejected shutdown ran its callback") })
 		})
-		if co.Current() != me || co.Caller() != me {
+		if scheduler.Current() != me || scheduler.Caller() != me {
 			t.Error("rejected shutdown changed the managed caller")
 		}
 	})
@@ -89,17 +89,17 @@ func TestShutdownRejectsManagedCallerWithoutSideEffects(t *testing.T) {
 	if recovered != ErrReentrantWait {
 		t.Fatalf("managed shutdown panic = %v, want %v", recovered, ErrReentrantWait)
 	}
-	if caller.Stopped() || peer.Stopped() || co.admissionClosed() || co.admissionEpoch.Load() != epoch {
+	if caller.Stopped() || peer.Stopped() || scheduler.admissionClosed() || scheduler.admissionEpoch.Load() != epoch {
 		t.Fatal("rejected shutdown canceled a script or changed admission")
 	}
 }
 
 func TestStopIfStopsActiveThread(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started := make(chan Thread, 1)
 	done := make(chan struct{})
 
-	co.Create("worker", func(me Thread) {
+	scheduler.Create("worker", func(me Thread) {
 		started <- me
 		for {
 			select {
@@ -128,7 +128,7 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 		t.Fatal("test precondition failed: spinning thread should not be suspended")
 	}
 
-	co.StopIf(func(candidate Thread) bool {
+	scheduler.StopIf(func(candidate Thread) bool {
 		return candidate == th
 	})
 
@@ -142,27 +142,27 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 }
 
 func TestStopIsIdempotentForSuspendedThread(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
-	blocked := co.NewLatch()
-	thread := co.Create("worker", func(Thread) {
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+	blocked := scheduler.NewLatch()
+	thread := scheduler.Create("worker", func(Thread) {
 		blocked.Wait()
 	})
 	waitForThreadSignal(t, thread.firstSliceDone, "coroutine did not suspend")
 
-	co.Stop(thread)
-	co.Stop(thread)
-	co.Stop(nil)
+	scheduler.Stop(thread)
+	scheduler.Stop(thread)
+	scheduler.Stop(nil)
 	waitForThreadSignal(t, thread.done, "suspended coroutine did not stop")
-	co.Stop(thread)
+	scheduler.Stop(thread)
 }
 
 func TestStopIfEvaluatesFilterWithoutHoldingMutex(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started := make(chan Thread, 1)
 	done := make(chan struct{})
 
-	co.Create("worker", func(me Thread) {
+	scheduler.Create("worker", func(me Thread) {
 		started <- me
 		for {
 			select {
@@ -187,8 +187,8 @@ func TestStopIfEvaluatesFilterWithoutHoldingMutex(t *testing.T) {
 	var reacquired bool
 	stopDone := make(chan struct{})
 	go func() {
-		co.StopIf(func(candidate Thread) bool {
-			reacquired = canLockRegistry(co)
+		scheduler.StopIf(func(candidate Thread) bool {
+			reacquired = canLockRegistry(scheduler)
 			return candidate == th
 		})
 		close(stopDone)
@@ -215,13 +215,13 @@ func TestStopIfEvaluatesFilterWithoutHoldingMutex(t *testing.T) {
 }
 
 func TestStopAllRejectsChildCreatedByCanceledOwner(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	childResult := make(chan Thread, 1)
 	var childRan atomic.Bool
 
-	co.Create("parent", func(Thread) {
-		co.StopAll()
-		childResult <- co.Create("late-child", func(Thread) {
+	scheduler.Create("parent", func(Thread) {
+		scheduler.StopAll()
+		childResult <- scheduler.Create("late-child", func(Thread) {
 			childRan.Store(true)
 		})
 	})
@@ -235,21 +235,21 @@ func TestStopAllRejectsChildCreatedByCanceledOwner(t *testing.T) {
 	if !child.Stopped() {
 		t.Fatal("child created by a canceled owner was admitted")
 	}
-	co.drain()
+	scheduler.drain()
 	if childRan.Load() {
 		t.Fatal("child created by a canceled owner ran user code")
 	}
 }
 
 func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
-	admission := co.captureAdmission()
-	co.StopAll()
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+	admission := scheduler.captureAdmission()
+	scheduler.StopAll()
 
 	joined := make(chan struct{})
-	fresh := co.Create("fresh", func(me Thread) {
-		thread := co.createThread(admission, Task{
+	fresh := scheduler.Create("fresh", func(me Thread) {
+		thread := scheduler.createThread(admission, Task{
 			Owner: "stale",
 			RegisterInvocation: func(Thread) func() {
 				t.Error("stale creation ran its registration callback")
@@ -268,15 +268,15 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 				t.Errorf("rejected thread %s remained open while the caller held runMu", name)
 			}
 		}
-		if !thread.Stopped() || co.Current() != me || co.Caller() != me {
+		if !thread.Stopped() || scheduler.Current() != me || scheduler.Caller() != me {
 			t.Error("rejected creation was not stopped or changed the current script")
 		}
-		if threads := co.snapshotThreads(); len(threads) != 1 || threads[0] != me {
+		if threads := scheduler.snapshotThreads(); len(threads) != 1 || threads[0] != me {
 			t.Error("rejected thread entered the lifecycle registry")
 		}
 		// Managed joins consult waiter sets, not just the completed channels.
-		co.JoinFirstSlice(thread)
-		co.Join(thread)
+		scheduler.JoinFirstSlice(thread)
+		scheduler.Join(thread)
 		close(joined)
 	})
 	waitForThreadSignal(t, joined, "managed joins blocked on a rejected thread")
@@ -287,33 +287,33 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 }
 
 func TestRunAfterStopOrdersInFlightRegistration(t *testing.T) {
-	co := New(nil)
-	co.admissionMu.Lock()
+	scheduler := New(nil)
+	scheduler.admissionMu.Lock()
 	registrationStarted := make(chan struct{})
 	created := make(chan Thread, 1)
 	go func() {
 		close(registrationStarted)
-		created <- co.Create("in-flight", func(Thread) {})
+		created <- scheduler.Create("in-flight", func(Thread) {})
 	}()
 	select {
 	case <-registrationStarted:
 	case <-time.After(time.Second):
-		co.admissionMu.Unlock()
+		scheduler.admissionMu.Unlock()
 		t.Fatal("registration did not start")
 	}
 
 	stopDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(stopDone)
 	}()
 	select {
 	case <-stopDone:
-		co.admissionMu.Unlock()
+		scheduler.admissionMu.Unlock()
 		t.Fatal("shutdown barrier returned while an earlier registration was in flight")
 	case <-time.After(20 * time.Millisecond):
 	}
-	co.admissionMu.Unlock()
+	scheduler.admissionMu.Unlock()
 
 	select {
 	case <-stopDone:
@@ -334,34 +334,34 @@ func TestRunAfterStopOrdersInFlightRegistration(t *testing.T) {
 }
 
 func TestRunAfterStopRejectsCreationDuringBarrier(t *testing.T) {
-	co := New(nil)
-	blocker := co.newThread("barrier-blocker")
-	co.registerThread(blocker)
+	scheduler := New(nil)
+	blocker := scheduler.newThread("barrier-blocker")
+	scheduler.registerThread(blocker)
 
 	stopDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(stopDone)
 	}()
 	deadline := time.Now().Add(time.Second)
 	for !blocker.Stopped() {
 		if time.Now().After(deadline) {
-			co.blockThread(blocker)
-			co.unregisterThread(blocker)
+			scheduler.blockThread(blocker)
+			scheduler.unregisterThread(blocker)
 			t.Fatal("shutdown barrier did not start")
 		}
 		runtime.Gosched()
 	}
 
 	var childRan atomic.Bool
-	child := co.Create("during-barrier", func(Thread) {
+	child := scheduler.Create("during-barrier", func(Thread) {
 		childRan.Store(true)
 	})
 	if !child.Stopped() {
 		t.Fatal("thread created during shutdown barrier was admitted")
 	}
-	co.blockThread(blocker)
-	co.unregisterThread(blocker)
+	scheduler.blockThread(blocker)
+	scheduler.unregisterThread(blocker)
 
 	select {
 	case <-stopDone:
@@ -380,15 +380,15 @@ func TestRunAfterStopRejectsCreationDuringBarrier(t *testing.T) {
 
 func TestRunAfterStopRejectsSynchronousPanicHandlerReentry(t *testing.T) {
 	guarded := make(chan any, 1)
-	var co *Coroutines
-	co = New(func(PanicReport) {
+	var scheduler *Scheduler
+	scheduler = New(func(PanicReport) {
 		func() {
 			defer func() { guarded <- recover() }()
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 		}()
 	})
 
-	worker := co.Create("panicking-worker", func(Thread) {
+	worker := scheduler.Create("panicking-worker", func(Thread) {
 		panic("worker failure")
 	})
 	waitForThreadSignal(t, worker.done, "panicking worker did not finish")
@@ -401,36 +401,36 @@ func TestRunAfterStopRejectsSynchronousPanicHandlerReentry(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("panic handler did not attempt reset barrier reentry")
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func TestRunAfterStopWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.T) {
 	handlerStarted, releaseHandler := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(releaseHandler) })
-	co := New(func(PanicReport) {
+	scheduler := New(func(PanicReport) {
 		close(handlerStarted)
 		<-releaseHandler
 	})
 	workerStarted := make(chan struct{})
-	worker := co.Create("panicking-worker", func(me Thread) {
+	worker := scheduler.Create("panicking-worker", func(me Thread) {
 		close(workerStarted)
 		<-me.Context().Done()
 		panic("worker failure")
 	})
 	t.Cleanup(func() {
 		release()
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	waitForThreadSignal(t, workerStarted, "panicking worker did not start")
 	callback, drained := make(chan struct{}), make(chan struct{})
 	go func() {
-		co.RunAfterStop(func() { close(callback) })
+		scheduler.RunAfterStop(func() { close(callback) })
 		close(drained)
 	}()
 	waitForThreadSignal(t, handlerStarted, "shutdown did not reach the panic handler")
 	// Script completion alone is insufficient: its panic handler still owns work.
 	waitForThreadSignal(t, worker.done, "panicking script did not finish")
-	assertShutdownRejectsCreation(t, co)
+	assertShutdownRejectsCreation(t, scheduler)
 	select {
 	case <-callback:
 		t.Fatal("shutdown callback ran before the panic handler finished")
@@ -441,33 +441,33 @@ func TestRunAfterStopWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.T) 
 	release()
 	waitForThreadSignal(t, drained, "shutdown did not finish after the panic handler")
 	waitForThreadSignal(t, callback, "shutdown did not run its callback")
-	fresh := co.Create("after-panic-handler", func(Thread) {})
+	fresh := scheduler.Create("after-panic-handler", func(Thread) {})
 	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
-	if fresh.Stopped() || co.admissionClosed() {
+	if fresh.Stopped() || scheduler.admissionClosed() {
 		t.Fatal("shutdown did not reopen admission after the panic handler")
 	}
 }
 
-func (p *Coroutines) hasPendingWork() bool {
+func (p *Scheduler) hasPendingWork() bool {
 	p.threadsMu.Lock()
 	defer p.threadsMu.Unlock()
 	return p.hasPendingWorkLocked()
 }
 
-func assertShutdownRejectsCreation(t *testing.T, co *Coroutines) {
+func assertShutdownRejectsCreation(t *testing.T, scheduler *Scheduler) {
 	t.Helper()
 	ran := false
-	thread := co.Create("during-shutdown", func(Thread) { ran = true })
+	thread := scheduler.Create("during-shutdown", func(Thread) { ran = true })
 	waitForThreadSignal(t, thread.done, "rejected coroutine did not finish")
-	if !co.admissionClosed() || !thread.Stopped() || ran {
+	if !scheduler.admissionClosed() || !thread.Stopped() || ran {
 		t.Fatal("shutdown admitted new work before drain completed")
 	}
 }
 
-func canLockRegistry(co *Coroutines) bool {
-	if !co.threadsMu.TryLock() {
+func canLockRegistry(scheduler *Scheduler) bool {
+	if !scheduler.threadsMu.TryLock() {
 		return false
 	}
-	co.threadsMu.Unlock()
+	scheduler.threadsMu.Unlock()
 	return true
 }

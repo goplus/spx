@@ -43,20 +43,20 @@ type startupExitGame struct {
 }
 
 func TestCoroutinePanicReachesRuntimeWithCauseAndFaultStack(t *testing.T) {
-	co := coroutine.New(OnPanic)
-	originalCo, originalPlatform, originalExt := gco, gdx.PlatformMgr, gdx.ExtMgr
+	current := coroutine.New(OnPanic)
+	originalScheduler, originalPlatform, originalExt := scheduler, gdx.PlatformMgr, gdx.ExtMgr
 	recorder := &panicRecordingExt{messages: make(chan string, 1), exits: make(chan int64, 1)}
-	SetCoroutines(co)
+	SetScheduler(current)
 	gdx.PlatformMgr = resetDirectPlatform{}
 	gdx.ExtMgr = recorder
 	wrap.Init(WaitMainThread)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		SetCoroutines(originalCo)
+		current.RunAfterStop(nil)
+		SetScheduler(originalScheduler)
 		gdx.PlatformMgr, gdx.ExtMgr = originalPlatform, originalExt
 	})
 
-	co.Create("panic-worker", panicWithSentinelCause)
+	current.Create("panic-worker", panicWithSentinelCause)
 	select {
 	case message := <-recorder.messages:
 		for _, want := range []string{"panic-worker: panic: sentinel cause", "stack:", "panicWithSentinelCause"} {
@@ -105,13 +105,13 @@ func TestPanicAdaptersReportCauseAndHonorExitPolicy(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			isolateGameBinding(t)
-			previousCo, previousExt := gco, gdx.ExtMgr
+			previousScheduler, previousExt := scheduler, gdx.ExtMgr
 			t.Cleanup(func() {
-				SetCoroutines(previousCo)
+				SetScheduler(previousScheduler)
 				gdx.ExtMgr = previousExt
 				wrap.Init(WaitMainThread)
 			})
-			SetCoroutines(nil)
+			SetScheduler(nil)
 			wrap.Init(func(call func()) { call() })
 			recorder := &panicCalls{}
 			gdx.ExtMgr = recorder
@@ -197,23 +197,23 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			isolateGameBinding(t)
-			co := coroutine.New(OnPanic)
-			previousCo, previousPlatform, previousExt := gco, gdx.PlatformMgr, gdx.ExtMgr
+			current := coroutine.New(OnPanic)
+			previousScheduler, previousPlatform, previousExt := scheduler, gdx.PlatformMgr, gdx.ExtMgr
 			platform := &startupExitPlatform{workerCall: make(chan struct{}, 1)}
 			recorder := &panicRecordingExt{messages: make(chan string, 1), exits: make(chan int64, 1)}
-			SetCoroutines(co)
+			SetScheduler(current)
 			gdx.PlatformMgr, gdx.ExtMgr = platform, recorder
 			wrap.Init(WaitMainThread)
 			t.Cleanup(func() {
-				co.RunAfterStop(nil)
-				SetCoroutines(previousCo)
+				current.RunAfterStop(nil)
+				SetScheduler(previousScheduler)
 				gdx.PlatformMgr, gdx.ExtMgr = previousPlatform, previousExt
 			})
 
 			game := new(startupExitGame)
 			var started, inFrame, exitedInFrame atomic.Bool
 			game.start = func() {
-				co.Create(game, func(coroutine.Thread) {
+				current.Create(game, func(coroutine.Thread) {
 					if test.beforeFrame {
 						test.exit()
 					} else {
@@ -244,7 +244,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 				close(updated)
 			}()
 			waitForEngineSignal(t, updated, time.Second, "first frame did not return after startup exit")
-			co.RunAfterStop(nil)
+			current.RunAfterStop(nil)
 			if !test.beforeFrame && !exitedInFrame.Load() {
 				t.Fatal("startup exit did not run inside the first frame")
 			}

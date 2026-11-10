@@ -53,7 +53,7 @@ func TestSpriteTouchStartOverloadsFilterNamedTargets(t *testing.T) {
 	source.OnTouchStart__3([]SpriteName{"first", "second"}, func(s Sprite) { got = append(got, "multiple:"+spriteOf(s).Name()) })
 	for _, target := range []*cloneLimitSprite{other, first, second} {
 		source.doWhenTouchStart(&target.SpriteImpl)
-		gco.Update()
+		scheduler.Update()
 	}
 	want := []string{"single", "single:first", "multiple", "multiple:first", "multiple", "multiple:second"}
 	if !slices.Equal(got, want) {
@@ -65,7 +65,7 @@ func TestSpriteTouchStartOverloadsFilterNamedTargets(t *testing.T) {
 }
 
 func TestStopIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
-	if current := gco.Current(); current != nil {
+	if current := scheduler.Current(); current != nil {
 		t.Fatalf("unexpected active coroutine before test: %v", current)
 	}
 
@@ -76,11 +76,11 @@ func TestStopIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
 }
 
 func TestStopIfCurrentCoroutineExternalCallerDoesNotStopActiveThread(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	sprite := &SpriteImpl{}
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.Create(sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		close(started)
 		<-release
 	})
@@ -97,7 +97,7 @@ func TestStopIfCurrentCoroutineExternalCallerDoesNotStopActiveThread(t *testing.
 		t.Fatal("external caller unexpectedly stopped the active coroutine")
 	}
 	close(release)
-	co.Join(thread)
+	currentScheduler.Join(thread)
 }
 
 func TestSpriteBaseLayoutKeepsLookupAndUserFields(t *testing.T) {

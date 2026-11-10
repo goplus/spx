@@ -81,7 +81,7 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 			name = "stop owner"
 		}
 		t.Run(name, func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			setupCaptureTest(t)
 			base := itime.Frame()
 
@@ -93,7 +93,7 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 			})
 			t.Cleanup(func() { engine.SetCaptureHandler(nil) })
 
-			thread := co.Create(game, func(coroutine.Thread) {
+			thread := currentScheduler.Create(game, func(coroutine.Thread) {
 				Snapshot("yielded.png", func() error {
 					bodyStarted = true
 					engine.WaitNextFrame()
@@ -101,7 +101,7 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 					return nil
 				})
 			})
-			co.JoinFirstSlice(thread)
+			currentScheduler.JoinFirstSlice(thread)
 			if !bodyStarted || bodyCompleted {
 				t.Fatal("capture body did not suspend at its next-frame wait")
 			}
@@ -113,8 +113,8 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 				game.Stop(OtherScriptsInGame)
 			}
 			itime.Update(0, 0)
-			co.Update()
-			co.Join(thread)
+			currentScheduler.Update()
+			currentScheduler.Join(thread)
 			if stopOwner {
 				if !thread.Stopped() || bodyCompleted || engine.HasPendingCaptures() {
 					t.Fatal("stopped owner's capture body resumed or queued a screenshot")

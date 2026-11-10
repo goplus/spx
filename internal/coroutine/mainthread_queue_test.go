@@ -7,7 +7,7 @@ import (
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 
-func (p *Coroutines) queueMainThreadCallForTest(caller Thread, call func()) *mainThreadCall {
+func (p *Scheduler) queueMainThreadCallForTest(caller Thread, call func()) *mainThreadCall {
 	pending := &mainThreadCall{caller: caller, call: call, done: make(chan callbackResult, 1)}
 	p.enqueueMainThreadCall(pending)
 	return pending
@@ -20,38 +20,38 @@ func TestMainThreadQueuePreservesPriorityAndStats(t *testing.T) {
 			name = "pump"
 		}
 		t.Run(name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			itime.Start()
-			t.Cleanup(func() { co.RunAfterStop(nil) })
-			waiter := co.Create("next-frame", func(Thread) { co.WaitNextFrame() })
-			co.JoinFirstSlice(waiter)
-			frame, round := itime.Frame(), co.ScriptRound()
+			t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+			waiter := scheduler.Create("next-frame", func(Thread) { scheduler.WaitNextFrame() })
+			scheduler.JoinFirstSlice(waiter)
+			frame, round := itime.Frame(), scheduler.ScriptRound()
 			var order []int
-			co.queueMainThreadCallForTest(nil, func() { order = append(order, 1) })
-			co.queueMainThreadCallForTest(nil, func() { order = append(order, 2) })
-			canceled := co.newThread("canceled")
+			scheduler.queueMainThreadCallForTest(nil, func() { order = append(order, 1) })
+			scheduler.queueMainThreadCallForTest(nil, func() { order = append(order, 2) })
+			canceled := scheduler.newThread("canceled")
 			canceled.Cancel()
-			pending := co.queueMainThreadCallForTest(canceled, func() { t.Error("canceled call ran") })
+			pending := scheduler.queueMainThreadCallForTest(canceled, func() { t.Error("canceled call ran") })
 			if pump {
 				for range 3 {
-					co.pumpMainThread()
+					scheduler.pumpMainThread()
 				}
-				if co.currentJobCount() != 1 || co.waitBatch.active {
+				if scheduler.currentJobCount() != 1 || scheduler.waitBatch.active {
 					t.Fatal("pumping engine calls consumed or scanned a script wait")
 				}
 			}
-			co.Update()
+			scheduler.Update()
 			if !slices.Equal(order, []int{2, 1}) {
 				t.Fatalf("main-thread order = %v, want [2 1]", order)
 			}
-			if itime.Frame() != frame || co.ScriptRound() != round {
+			if itime.Frame() != frame || scheduler.ScriptRound() != round {
 				t.Fatal("servicing engine calls advanced a frame or script round")
 			}
 			wantJobs, wantMain := 4, 2 // One script wait plus three engine calls, one canceled.
 			if pump {
 				wantJobs, wantMain = 1, 0 // Pumped work is outside Update's statistics.
 			}
-			if stats := co.UpdateStats(); stats.JobCount != wantJobs || stats.MainThreadCount != wantMain || stats.DeferredCount != 1 {
+			if stats := scheduler.UpdateStats(); stats.JobCount != wantJobs || stats.MainThreadCount != wantMain || stats.DeferredCount != 1 {
 				t.Fatalf("job/main/deferred counts = %d/%d/%d, want %d/%d/1", stats.JobCount, stats.MainThreadCount, stats.DeferredCount, wantJobs, wantMain)
 			}
 			if got := catchPanic(pending.wait); got != ErrAbortThread {
@@ -62,18 +62,18 @@ func TestMainThreadQueuePreservesPriorityAndStats(t *testing.T) {
 }
 
 func TestMainThreadQueuePrioritizesCallsEnqueuedDuringDispatch(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	var order []int
-	co.queueMainThreadCallForTest(nil, func() { order = append(order, 1) })
-	co.queueMainThreadCallForTest(nil, func() {
+	scheduler.queueMainThreadCallForTest(nil, func() { order = append(order, 1) })
+	scheduler.queueMainThreadCallForTest(nil, func() {
 		order = append(order, 2)
-		co.queueMainThreadCallForTest(nil, func() { order = append(order, 3) })
+		scheduler.queueMainThreadCallForTest(nil, func() { order = append(order, 3) })
 	})
-	co.Update()
+	scheduler.Update()
 	if !slices.Equal(order, []int{2, 3, 1}) {
 		t.Fatalf("main-thread order = %v, want [2 3 1]", order)
 	}
-	if stats := co.UpdateStats(); stats.JobCount != 3 || stats.MainThreadCount != 3 {
+	if stats := scheduler.UpdateStats(); stats.JobCount != 3 || stats.MainThreadCount != 3 {
 		t.Fatalf("job/main counts = %d/%d, want 3/3", stats.JobCount, stats.MainThreadCount)
 	}
 }

@@ -65,13 +65,13 @@ func TestListRandomPositionSharesScriptRandomSource(t *testing.T) {
 
 func TestListRandomPositionKeepsCoroutineSource(t *testing.T) {
 	t.Cleanup(ResetRandomSeed)
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	list := NewList(0, 1, 2, 3, 4, 5, 6)
 	run := func(useList bool, extraDraws int) []float64 {
 		t.Helper()
 		setDeterministicRandomSeed(91)
 		noiseDone := make(chan struct{}, 1)
-		co.Create("other-random-draws", func(me coroutine.Thread) {
+		currentScheduler.Create("other-random-draws", func(me coroutine.Thread) {
 			for range extraDraws {
 				_ = Rand__1(0, 1)
 			}
@@ -84,7 +84,7 @@ func TestListRandomPositionKeepsCoroutineSource(t *testing.T) {
 		}
 
 		done := make(chan []float64, 1)
-		co.Create("random-list-items", func(me coroutine.Thread) {
+		currentScheduler.Create("random-list-items", func(me coroutine.Thread) {
 			values := make([]float64, 17)
 			for i := range values[:16] {
 				if useList {

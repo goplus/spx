@@ -185,9 +185,9 @@ func TestScheduling(t *testing.T) {
 			{"expired", -2 * mainExecTimeoutSec * time.Second, true},
 		} {
 			t.Run(schedule.name+"/Main/"+tt.name, func(t *testing.T) {
-				co := setupRuntimeScheduler(t)
+				currentScheduler := setupRuntimeScheduler(t)
 				returned := false
-				thread := co.Create("main", func(thread coroutine.Thread) {
+				thread := currentScheduler.Create("main", func(thread coroutine.Thread) {
 					started := time.Now().Add(tt.offset)
 					end := thread.BeginMain(started)
 					defer end()
@@ -204,7 +204,7 @@ func TestScheduling(t *testing.T) {
 					}
 					returned = true
 				})
-				co.Join(thread)
+				currentScheduler.Join(thread)
 				if !returned {
 					t.Fatal("Main scheduling stopped the coroutine before its assertions completed")
 				}
@@ -212,10 +212,10 @@ func TestScheduling(t *testing.T) {
 		}
 
 		t.Run(schedule.name+"/ExternalCaller", func(t *testing.T) {
-			co := setupRuntimeScheduler(t)
+			currentScheduler := setupRuntimeScheduler(t)
 			started := make(chan struct{})
 			release := make(chan struct{})
-			thread := co.Create("main", func(thread coroutine.Thread) {
+			thread := currentScheduler.Create("main", func(thread coroutine.Thread) {
 				end := thread.BeginMain(time.Now().Add(-2 * mainExecTimeoutSec * time.Second))
 				defer end()
 				close(started)
@@ -223,7 +223,7 @@ func TestScheduling(t *testing.T) {
 			})
 			defer func() {
 				close(release)
-				co.Join(thread)
+				currentScheduler.Join(thread)
 			}()
 			select {
 			case <-started:
@@ -250,9 +250,9 @@ func TestScheduling(t *testing.T) {
 		})
 
 		t.Run(schedule.name+"/WithoutManager", func(t *testing.T) {
-			original := gco
-			gco = nil
-			defer func() { gco = original }()
+			original := scheduler
+			scheduler = nil
+			defer func() { scheduler = original }()
 			if got := schedule.call(); got != 0 {
 				t.Errorf("%s() = %d, want 0", schedule.name, got)
 			}
@@ -261,7 +261,7 @@ func TestScheduling(t *testing.T) {
 }
 
 func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	var game Game
 	for _, flags := range []dbgFlags{
 		DbgFlagInstr | DbgFlagEvent | DbgFlagPerf,
@@ -271,8 +271,8 @@ func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
 		0,
 	} {
 		game.setDebugFlags(flags)
-		co.Update()
-		if got, want := co.UpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
+		currentScheduler.Update()
+		if got, want := currentScheduler.UpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
 			t.Errorf("flags %v: performance statistics enabled = %v, want %v", flags, got, want)
 		}
 		if got, want := game.debugState.DebugInstr, flags&DbgFlagInstr != 0; got != want {
@@ -285,7 +285,7 @@ func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
 }
 
 func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	originalGame, originalFlags := engine.GetGame(), defaultDebugFlags.Load()
 	t.Cleanup(func() {
 		engine.SetGame(originalGame)
@@ -294,8 +294,8 @@ func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
 	})
 	engine.SetGame(nil)
 	SetDebug(DbgFlagPerf | dbgFlags(1<<20))
-	co.Update()
-	if defaultDebugFlags.Load() != uint32(DbgFlagPerf) || !co.UpdateStats().GCStatsEnabled {
+	currentScheduler.Update()
+	if defaultDebugFlags.Load() != uint32(DbgFlagPerf) || !currentScheduler.UpdateStats().GCStatsEnabled {
 		t.Fatal("default debug flags did not filter unknown flags or enable profiling")
 	}
 	var game Game

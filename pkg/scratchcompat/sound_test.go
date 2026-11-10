@@ -68,11 +68,11 @@ func TestSoundControlsYieldBeforeFollowingStatement(t *testing.T) {
 	for _, operation := range soundOperations {
 		for _, warp := range []bool{false, true} {
 			t.Run(operation.name+"/"+map[bool]string{false: "normal", true: "warp"}[warp], func(t *testing.T) {
-				co := newSoundCoroutines(t)
+				scheduler := newSoundScheduler(t)
 				target := new(soundTarget)
 				var order []string
 				var frames []int64
-				music := co.Create("music", func(thread coroutine.Thread) {
+				music := scheduler.Create("music", func(thread coroutine.Thread) {
 					thread.SetWarp(warp)
 					// A plain Go loop has no generated loop wait. Each sound
 					// operation must suspend before the following statement.
@@ -82,28 +82,28 @@ func TestSoundControlsYieldBeforeFollowingStatement(t *testing.T) {
 						frames = append(frames, itime.Frame())
 					}
 				})
-				co.JoinFirstSlice(music)
+				scheduler.JoinFirstSlice(music)
 				if want := []soundCall{operation.want}; !slices.Equal(target.calls, want) || len(order) != 0 {
 					t.Fatalf("first slice: calls = %v, following statements = %v; want %v before yielding", target.calls, order, want)
 				}
 
-				telescope := co.Create("telescope", func(coroutine.Thread) {
+				telescope := scheduler.Create("telescope", func(coroutine.Thread) {
 					order = append(order, "telescope")
 				})
-				co.Join(telescope)
-				co.Update()
+				scheduler.Join(telescope)
+				scheduler.Update()
 				if want := []string{"telescope"}; !slices.Equal(order, want) {
 					t.Fatalf("same-frame order = %v, want %v", order, want)
 				}
 
 				for frame := int64(1); frame <= 2; frame++ {
 					itime.Update(1.0/30, 30)
-					co.Update()
+					scheduler.Update()
 					if len(frames) != int(frame) || frames[len(frames)-1] != frame {
 						t.Fatalf("frame %d: subsequent statements ran at %v", frame, frames)
 					}
 				}
-				co.Join(music)
+				scheduler.Join(music)
 				if want := []string{"telescope", "music", "music"}; !slices.Equal(order, want) {
 					t.Fatalf("script order = %v, want %v", order, want)
 				}
@@ -119,7 +119,7 @@ func TestSoundControlsOutsideCoroutine(t *testing.T) {
 	for _, scheduler := range []bool{false, true} {
 		t.Run(map[bool]string{false: "no scheduler", true: "bound scheduler"}[scheduler], func(t *testing.T) {
 			if scheduler {
-				newSoundCoroutines(t)
+				newSoundScheduler(t)
 			}
 			for _, operation := range soundOperations {
 				t.Run(operation.name, func(t *testing.T) {
@@ -134,17 +134,17 @@ func TestSoundControlsOutsideCoroutine(t *testing.T) {
 	}
 }
 
-func newSoundCoroutines(t *testing.T) *coroutine.Coroutines {
+func newSoundScheduler(t *testing.T) *coroutine.Scheduler {
 	t.Helper()
 	itime.Start()
-	co := coroutine.New(func(report coroutine.PanicReport) {
+	scheduler := coroutine.New(func(report coroutine.PanicReport) {
 		t.Errorf("unexpected coroutine panic: %v", report.Value)
 	})
-	engine.SetCoroutines(co)
+	engine.SetScheduler(scheduler)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		engine.SetCoroutines(nil)
+		scheduler.RunAfterStop(nil)
+		engine.SetScheduler(nil)
 		itime.Start()
 	})
-	return co
+	return scheduler
 }

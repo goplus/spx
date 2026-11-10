@@ -8,10 +8,10 @@ import (
 )
 
 func TestDrainLetsJavaScriptCompleteWorker(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started, hostDone := make(chan struct{}), make(chan struct{})
-	co.Create("host-worker", func(Thread) {
-		co.WaitToDo(func() {
+	scheduler.Create("host-worker", func(Thread) {
+		scheduler.WaitToDo(func() {
 			close(started)
 			<-hostDone
 		})
@@ -21,7 +21,7 @@ func TestDrainLetsJavaScriptCompleteWorker(t *testing.T) {
 
 	// This runs in the Go test goroutine, outside a synchronous JS callback.
 	// With no deadline, only the host callback can let the worker finish.
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 	select {
 	case <-hostDone:
 	default:
@@ -30,11 +30,11 @@ func TestDrainLetsJavaScriptCompleteWorker(t *testing.T) {
 }
 
 func TestContendedDrainLetsJavaScriptFinishShutdown(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started, hostDone := make(chan struct{}), make(chan struct{})
 	firstDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(func() {
+		scheduler.RunAfterStop(func() {
 			close(started)
 			<-hostDone
 		})
@@ -43,17 +43,17 @@ func TestContendedDrainLetsJavaScriptFinishShutdown(t *testing.T) {
 	waitForThreadSignal(t, started, "first shutdown callback did not start")
 	closeFromJavaScript(t, hostDone)
 	// The first shutdown holds the gate until JavaScript calls back.
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 	waitForThreadSignal(t, firstDone, "first shutdown did not finish")
 }
 
 func TestEngineDispatchLetsJavaScriptCompleteWorker(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	hostDone := make(chan struct{})
 	completed := false
-	co.RunSync("host-dispatch", func(Thread) {
+	scheduler.RunSync("host-dispatch", func(Thread) {
 		closeFromJavaScript(t, hostDone)
-		co.WaitToDo(func() { <-hostDone })
+		scheduler.WaitToDo(func() { <-hostDone })
 		completed = true
 	})
 	if !completed {
@@ -62,9 +62,9 @@ func TestEngineDispatchLetsJavaScriptCompleteWorker(t *testing.T) {
 }
 
 func TestRunBetweenScriptsLetsJavaScriptReleaseScript(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started, hostDone := make(chan struct{}), make(chan struct{})
-	co.Create("host-owner", func(Thread) {
+	scheduler.Create("host-owner", func(Thread) {
 		close(started)
 		<-hostDone
 	})
@@ -72,7 +72,7 @@ func TestRunBetweenScriptsLetsJavaScriptReleaseScript(t *testing.T) {
 	closeFromJavaScript(t, hostDone)
 
 	called := false
-	co.RunBetweenScripts(func() { called = true })
+	scheduler.RunBetweenScripts(func() { called = true })
 	if !called {
 		t.Fatal("callback did not run after the script released execution")
 	}

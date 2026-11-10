@@ -38,7 +38,7 @@ type threadAdmission struct {
 }
 
 // Create creates a coroutine without explicitly yielding execution to it.
-func (p *Coroutines) Create(owner any, fn func(me Thread)) Thread {
+func (p *Scheduler) Create(owner any, fn func(me Thread)) Thread {
 	return p.createThread(p.captureAdmission(), Task{
 		Owner: owner,
 		Run:   fn,
@@ -46,11 +46,11 @@ func (p *Coroutines) Create(owner any, fn func(me Thread)) Thread {
 }
 
 // LastThreadID returns the most recently allocated thread ID.
-func (p *Coroutines) LastThreadID() int64 {
+func (p *Scheduler) LastThreadID() int64 {
 	return p.nextThreadID.Load()
 }
 
-func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
+func (p *Scheduler) createThread(admission threadAdmission, task Task) Thread {
 	th := p.registerTask(admission, task)
 	p.publishThreads([]Thread{th})
 	return th
@@ -58,7 +58,7 @@ func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 
 // registerTask admits a thread before its registration callback. Its body waits
 // for publication; canceled work can unwind once registration returns.
-func (p *Coroutines) registerTask(admission threadAdmission, task Task) Thread {
+func (p *Scheduler) registerTask(admission threadAdmission, task Task) Thread {
 	th := p.newThread(task.Owner)
 	p.admissionMu.RLock()
 	if !admission.valid(p.admissionEpoch.Load()) {
@@ -101,7 +101,7 @@ func (p *Coroutines) registerTask(admission threadAdmission, task Task) Thread {
 }
 
 // publishThreads publishes each newly registered thread once, as a batch.
-func (p *Coroutines) publishThreads(threads []Thread) {
+func (p *Scheduler) publishThreads(threads []Thread) {
 	p.schedulerMu.Lock()
 	for _, th := range threads {
 		th.published = true
@@ -112,7 +112,7 @@ func (p *Coroutines) publishThreads(threads []Thread) {
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
+func (p *Scheduler) runThread(th Thread, fn func(Thread), cleanup func()) {
 	gid := gid.Get()
 	p.goroutineThreads.Store(gid, th)
 	p.acquire(th)
@@ -132,7 +132,7 @@ func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
 	fn(th)
 }
 
-func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
+func (p *Scheduler) finishThread(th Thread, gid uint64, recovered any) {
 	p.schedulerMu.Lock()
 	// Both waiter groups participate in the same scheduler selection.
 	for waiter := range th.firstSliceWaiters.close(th.firstSliceDone) {
@@ -157,7 +157,7 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	p.handleThreadPanic(th, recovered)
 }
 
-func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
+func (p *Scheduler) handleThreadPanic(th Thread, recovered any) {
 	if recovered == nil || recovered == ErrAbortThread || recovered == ErrStopThisScript {
 		return
 	}
@@ -174,7 +174,7 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 	panic(recovered)
 }
 
-func (p *Coroutines) captureAdmission() threadAdmission {
+func (p *Scheduler) captureAdmission() threadAdmission {
 	epoch := p.admissionEpoch.Load()
 	return threadAdmission{
 		epoch:   epoch,
@@ -182,7 +182,7 @@ func (p *Coroutines) captureAdmission() threadAdmission {
 	}
 }
 
-func (p *Coroutines) finishSetup() {
+func (p *Scheduler) finishSetup() {
 	p.admissionMu.Lock()
 	if p.pendingSetups.Add(-1) == 0 && !p.stopping {
 		p.openAdmissionLocked()
@@ -190,36 +190,36 @@ func (p *Coroutines) finishSetup() {
 	p.admissionMu.Unlock()
 }
 
-func (p *Coroutines) closeAdmissionLocked() {
+func (p *Scheduler) closeAdmissionLocked() {
 	if !p.admissionClosed() {
 		p.admissionEpoch.Add(1)
 	}
 }
 
-func (p *Coroutines) openAdmissionLocked() {
+func (p *Scheduler) openAdmissionLocked() {
 	if p.admissionClosed() {
 		p.admissionEpoch.Add(1)
 	}
 }
 
-func (p *Coroutines) admissionClosed() bool {
+func (p *Scheduler) admissionClosed() bool {
 	return p.admissionEpoch.Load()&1 != 0
 }
 
-func (p *Coroutines) registerThread(th Thread) {
+func (p *Scheduler) registerThread(th Thread) {
 	p.threadsMu.Lock()
 	p.allThreads[th] = struct{}{}
 	p.threadsMu.Unlock()
 }
 
-func (p *Coroutines) unregisterThread(th Thread) {
+func (p *Scheduler) unregisterThread(th Thread) {
 	p.threadsMu.Lock()
 	delete(p.allThreads, th)
 	p.notifyDrainLocked()
 	p.threadsMu.Unlock()
 }
 
-func (p *Coroutines) snapshotThreads() []Thread {
+func (p *Scheduler) snapshotThreads() []Thread {
 	p.threadsMu.Lock()
 	threads := make([]Thread, 0, len(p.allThreads))
 	for th := range p.allThreads {
@@ -229,7 +229,7 @@ func (p *Coroutines) snapshotThreads() []Thread {
 	return threads
 }
 
-func (p *Coroutines) notifyDrainLocked() {
+func (p *Scheduler) notifyDrainLocked() {
 	if p.drainDone != nil && !p.hasPendingWorkLocked() {
 		close(p.drainDone)
 		p.drainDone = nil

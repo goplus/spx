@@ -17,40 +17,20 @@
 package engine
 
 import (
-	"maps"
 	"reflect"
-	"slices"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type runtimeBridge struct{}
-
-// runtimeCallbacks batches SPX game callbacks so later callbacks can run when
-// an earlier one yields. Other clients invoke callbacks synchronously.
-type runtimeCallbacks struct {
-	binding *gameBinding
-	tasks   []coroutine.Task
-}
 
 func init() {
 	gdx.SetRuntimeBridge(runtimeBridge{})
 }
 
 func (runtimeBridge) InternalUpdateFrame(delta float64, update func(float64)) {
-	callbacks := runtimeCallbacks{binding: activeGame.Load()}
-	callbacks.updateSprites(delta)
-	// Run the hook before advancing timers and tweens it may create.
-	if update != nil {
-		update(delta)
-	}
-	updateTimers(delta, callbacks.emit)
-	updateTweens(delta, callbacks.emit)
-	if len(callbacks.tasks) != 0 && isRuntimeWorkCurrent(callbacks.binding) {
-		gco.StartBatch(callbacks.tasks, coroutine.BatchAsync)
-	}
+	updateRuntimeFrame(delta, update)
 }
 
 func (runtimeBridge) AdvanceTimeSinceGameStart(delta float64) float64 {
@@ -62,6 +42,7 @@ func (runtimeBridge) TimeSinceGameStarted() float64 {
 	return state.timeSinceStart
 }
 
+// Sprites retains the legacy live-map contract. Runtime writes use registry helpers.
 func (runtimeBridge) Sprites() map[Object]gdx.ISpriter {
 	return state.sprites
 }
@@ -78,20 +59,21 @@ func (runtimeBridge) ClearAllSprites() {
 	clearAllSprites()
 }
 
+// UiNodes retains the legacy live-map contract. Runtime writes use registry helpers.
 func (runtimeBridge) UiNodes() map[Object]gdx.IUiNode {
 	return state.uiNodes
 }
 
 func (runtimeBridge) GetUINode(id Object) gdx.IUiNode {
-	return state.uiNodes[id]
+	return lookupUINode(id)
 }
 
 func (runtimeBridge) DeleteUINode(id Object) {
-	delete(state.uiNodes, id)
+	deleteUINode(id)
 }
 
 func (runtimeBridge) RegisterSpriteType(t reflect.Type) {
-	state.spriteTypes[t.Name()] = t
+	registerSpriteType(t)
 }
 
 func (runtimeBridge) BindSceneInstantiatedSprite(id Object, typeName string) {
@@ -132,49 +114,4 @@ func (runtimeBridge) TweenPos(node gdx.ISpriter, pos mathf.Vec2, duration float6
 
 func (runtimeBridge) TweenPos2(node gdx.ISpriter, pos mathf.Vec2, duration float64, pos2 mathf.Vec2, duration2 float64, callback func()) {
 	tweenPos2(node, pos, duration, pos2, duration2, callback)
-}
-
-func (p *runtimeCallbacks) updateSprites(delta float64) {
-	if p.binding == nil || p.binding.callbacks == nil {
-		// Sprite callbacks may change the registry; finish this frame's snapshot.
-		sprites := slices.AppendSeq(make([]gdx.ISpriter, 0, len(state.sprites)), maps.Values(state.sprites))
-		for _, sprite := range sprites {
-			sprite.OnUpdate(delta)
-		}
-		return
-	}
-	for _, sprite := range state.sprites {
-		switch sprite.(type) {
-		case *Sprite, *gdx.Sprite:
-			// Standard proxies inherit the empty OnUpdate method.
-			continue
-		}
-		// Each frame starts an independent update; waiting calls may overlap.
-		// Object deletion cancels every outstanding invocation.
-		p.emit(sprite, func() { sprite.OnUpdate(delta) })
-	}
-}
-
-func (p *runtimeCallbacks) emit(sprite gdx.ISpriter, call func()) {
-	binding := p.binding
-	if binding == nil || binding.callbacks == nil {
-		invokeRuntimeCallback(sprite, call)
-		return
-	}
-	p.tasks = append(p.tasks, coroutine.Task{
-		Owner: resolveOwner(runtimeSpriteOwner(sprite)),
-		Run: func(coroutine.Thread) {
-			if isRuntimeWorkCurrent(binding) {
-				invokeRuntimeCallback(sprite, call)
-			}
-		},
-	})
-}
-
-// A nil sprite identifies a global callback; object callbacks recheck lifetime
-// when invoked, after state advancement or an asynchronous batch start.
-func invokeRuntimeCallback(sprite gdx.ISpriter, call func()) {
-	if sprite == nil || runtimeSpriteAlive(sprite) {
-		call()
-	}
 }

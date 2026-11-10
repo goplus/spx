@@ -18,41 +18,18 @@ package engine
 
 import gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 
-type delaySpriteCallInfo struct {
-	timer    float64
-	sprite   gdx.ISpriter
-	callback func()
-}
-
-var (
-	delaySpriteCalls     = make([]*delaySpriteCallInfo, 0)
-	tempDelaySpriteCalls = make([]*delaySpriteCallInfo, 0)
-)
-
-func updateTimers(delta float64, emit func(gdx.ISpriter, func())) {
-	delaySpriteCalls, tempDelaySpriteCalls = tempDelaySpriteCalls[:0], delaySpriteCalls
-	for _, info := range tempDelaySpriteCalls {
-		if info.sprite != nil && !runtimeSpriteAlive(info.sprite) {
-			continue
-		}
-		info.timer -= delta
-		if info.timer > 0 {
-			delaySpriteCalls = append(delaySpriteCalls, info)
-		}
-	}
-	for _, info := range tempDelaySpriteCalls {
-		if info.timer <= 0 {
-			emit(info.sprite, info.callback)
-		}
-	}
-	clear(tempDelaySpriteCalls)
-	tempDelaySpriteCalls = tempDelaySpriteCalls[:0]
+type timerCall struct {
+	remaining float64
+	sprite    gdx.ISpriter
+	callback  func()
 }
 
 func delayCall(delay float64, callback func()) {
 	delaySpriteCall(delay, nil, callback)
 }
 
+// Registration runs in the caller's serialized runtime context. The frame
+// dispatcher decides whether the callback runs inline or in a managed script.
 func delaySpriteCall(delay float64, sprite gdx.ISpriter, callback func()) {
 	if sprite != nil {
 		sprite = resolveRuntimeSprite(sprite)
@@ -61,9 +38,36 @@ func delaySpriteCall(delay float64, sprite gdx.ISpriter, callback func()) {
 		}
 	}
 
-	delaySpriteCalls = append(delaySpriteCalls, &delaySpriteCallInfo{
-		timer:    delay,
-		sprite:   sprite,
-		callback: callback,
+	state.jobs.timers = append(state.jobs.timers, &timerCall{
+		remaining: delay,
+		sprite:    sprite,
+		callback:  callback,
 	})
+}
+
+func (p *frameJobs) updateTimers(delta float64, emit func(gdx.ISpriter, func())) {
+	current := p.timers
+	p.timers, p.timerScratch = p.timerScratch[:0], nil
+	defer func() {
+		clear(current)
+		if cap(current) > cap(p.timerScratch) {
+			p.timerScratch = current[:0]
+		}
+	}()
+	ready := 0
+	for _, call := range current {
+		if call.sprite != nil && !runtimeSpriteAlive(call.sprite) {
+			continue
+		}
+		call.remaining -= delta
+		if call.remaining > 0 {
+			p.timers = append(p.timers, call)
+		} else if call.remaining <= 0 {
+			current[ready] = call
+			ready++
+		}
+	}
+	for _, call := range current[:ready] {
+		emit(call.sprite, call.callback)
+	}
 }

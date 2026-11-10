@@ -26,12 +26,12 @@ import (
 )
 
 func TestRestartHandlerIgnoresRetiredCleanup(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	state := NewHandlerState(RestartExisting)
-	first, second, third := co.newThread("first"), co.newThread("second"), co.newThread("third")
-	defer co.Stop(first)
-	defer co.Stop(second)
-	defer co.Stop(third)
+	first, second, third := scheduler.newThread("first"), scheduler.newThread("second"), scheduler.newThread("third")
+	defer scheduler.Stop(first)
+	defer scheduler.Stop(second)
+	defer scheduler.Stop(third)
 	retireFirst := state.RegisterInvocation(first)
 	retireSecond := state.RegisterInvocation(second)
 	defer retireSecond()
@@ -49,9 +49,9 @@ func TestRestartHandlerIgnoresRetiredCleanup(t *testing.T) {
 func TestRestartHandlerPreservesOnlyActiveOrder(t *testing.T) {
 	for _, name := range []string{"absent", "active", "canceled", "completed"} {
 		t.Run(name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			state := NewHandlerState(RestartExisting)
-			previous, next := co.newThread("previous"), co.newThread("next")
+			previous, next := scheduler.newThread("previous"), scheduler.newThread("next")
 			defer previous.Cancel()
 			defer next.Cancel()
 			if name != "absent" {
@@ -78,9 +78,9 @@ func TestRestartHandlerPreservesOnlyActiveOrder(t *testing.T) {
 }
 
 func TestRestartHandlerAllowsNilReplacement(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	state := NewHandlerState(RestartExisting)
-	previous := co.newThread("previous")
+	previous := scheduler.newThread("previous")
 	defer previous.Cancel()
 	state.RegisterInvocation(previous)
 	cleanup := state.RegisterInvocation(nil)
@@ -91,9 +91,9 @@ func TestRestartHandlerAllowsNilReplacement(t *testing.T) {
 }
 
 func TestConcurrentHandlerRestartWaitsForPreviousCancellation(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	state := NewHandlerState(RestartExisting)
-	previous, first, latest := co.newThread("previous"), co.newThread("first"), co.newThread("latest")
+	previous, first, latest := scheduler.newThread("previous"), scheduler.newThread("first"), scheduler.newThread("latest")
 	state.RegisterInvocation(previous)
 	cancelEntered := make(chan struct{})
 	releaseCancel := make(chan struct{})
@@ -101,9 +101,9 @@ func TestConcurrentHandlerRestartWaitsForPreviousCancellation(t *testing.T) {
 	release := func() { releaseOnce.Do(func() { close(releaseCancel) }) }
 	t.Cleanup(func() {
 		release()
-		co.Stop(previous)
-		co.Stop(first)
-		co.Stop(latest)
+		scheduler.Stop(previous)
+		scheduler.Stop(first)
+		scheduler.Stop(latest)
 	})
 	cancel := previous.cancelFunc
 	previous.cancelFunc = func() {
@@ -143,18 +143,18 @@ func TestConcurrentHandlerRestartWaitsForPreviousCancellation(t *testing.T) {
 }
 
 func TestIgnoreHandlerAllowsCanceledAndCompletedInvocations(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	state := NewHandlerState(IgnoreWhileRunning)
-	first, second := co.newThread("first"), co.newThread("second")
-	defer co.Stop(first)
-	defer co.Stop(second)
+	first, second := scheduler.newThread("first"), scheduler.newThread("second")
+	defer scheduler.Stop(first)
+	defer scheduler.Stop(second)
 	retireFirst := state.RegisterInvocation(first)
 	if cleanup := state.RegisterInvocation(second); cleanup != nil || !second.Stopped() {
 		t.Fatal("overlapping invocation was admitted")
 	}
-	co.Stop(first)
-	third := co.newThread("third")
-	defer co.Stop(third)
+	scheduler.Stop(first)
+	third := scheduler.newThread("third")
+	defer scheduler.Stop(third)
 	retireThird := state.RegisterInvocation(third)
 	if retireThird == nil || third.Stopped() {
 		t.Fatal("canceled invocation retained admission")
@@ -162,14 +162,14 @@ func TestIgnoreHandlerAllowsCanceledAndCompletedInvocations(t *testing.T) {
 	retireFirst()
 	// Context completion alone must not release admission before cleanup.
 	third.cancelFunc()
-	fourth := co.newThread("fourth")
-	defer co.Stop(fourth)
+	fourth := scheduler.newThread("fourth")
+	defer scheduler.Stop(fourth)
 	if cleanup := state.RegisterInvocation(fourth); cleanup != nil || !fourth.Stopped() {
 		t.Fatal("retired cleanup released the current invocation")
 	}
 	retireThird()
-	fifth := co.newThread("fifth")
-	defer co.Stop(fifth)
+	fifth := scheduler.newThread("fifth")
+	defer scheduler.Stop(fifth)
 	retireFifth := state.RegisterInvocation(fifth)
 	if retireFifth == nil || fifth.Stopped() {
 		t.Fatal("completed invocation retained admission")
@@ -195,56 +195,56 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 		{"ignore after completion", IgnoreWhileRunning, true, false, 1, []string{"sibling", "replacement"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			itime.Start()
 			t.Cleanup(func() {
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
 			state := NewHandlerState(test.policy)
 			var order []string
 			startHandler := func(name string, completed bool) Thread {
-				return co.createThread(co.captureAdmission(), Task{
+				return scheduler.createThread(scheduler.captureAdmission(), Task{
 					Owner:              name,
 					RegisterInvocation: state.RegisterInvocation,
 					Run: func(Thread) {
 						if !completed {
-							co.WaitNextFrame()
+							scheduler.WaitNextFrame()
 							order = append(order, name)
 						}
 					},
 				})
 			}
 			first := startHandler("first", test.completed)
-			co.JoinFirstSlice(first)
+			scheduler.JoinFirstSlice(first)
 			if test.completed {
-				co.Join(first)
+				scheduler.Join(first)
 			}
-			sibling := co.Create("sibling", func(Thread) {
-				co.WaitNextFrame()
+			sibling := scheduler.Create("sibling", func(Thread) {
+				scheduler.WaitNextFrame()
 				order = append(order, "sibling")
 			})
-			co.JoinFirstSlice(sibling)
+			scheduler.JoinFirstSlice(sibling)
 
 			var replacement Thread
 			for range test.restarts {
 				if test.canceled {
 					// Keep the old invocation's cleanup pending during registration.
-					co.runMu.Lock()
-					co.Stop(first)
+					scheduler.runMu.Lock()
+					scheduler.Stop(first)
 					replacement = startHandler("replacement", false)
-					co.runMu.Unlock()
+					scheduler.runMu.Unlock()
 				} else {
 					replacement = startHandler("replacement", false)
 				}
-				co.JoinFirstSlice(replacement)
+				scheduler.JoinFirstSlice(replacement)
 			}
 			if replacement.ID() <= sibling.ID() || first.ID() >= sibling.ID() {
 				t.Fatal("restarting a handler changed thread identity order")
 			}
 
-			co.Update()
+			scheduler.Update()
 			itime.Update(1.0/30, 30)
-			co.Update()
+			scheduler.Update()
 			if !slices.Equal(order, test.want) {
 				t.Fatalf("frame order = %v, want %v", order, test.want)
 			}

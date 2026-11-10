@@ -30,7 +30,7 @@ const (
 // BatchWaitFirstSlice requires a managed caller for non-empty batches.
 // BatchWaitDone waits for completion; managed callers resume in script order.
 // RegisterInvocation may cancel work but must not wait for its task.
-func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
+func (p *Scheduler) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
 	}
@@ -57,7 +57,7 @@ func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	return threads
 }
 
-func (p *Coroutines) registerBatch(tasks []Task) []Thread {
+func (p *Scheduler) registerBatch(tasks []Task) []Thread {
 	threads := make([]Thread, len(tasks))
 	registered := false
 	defer func() {

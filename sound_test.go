@@ -528,7 +528,7 @@ func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
 }
 
 func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
@@ -537,11 +537,11 @@ func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
 	sprite.g.audioState.AudioAttenuation = 0.35
 	sprite.g.audioState.AudioMaxDistance = 640
 	finished := false
-	thread := co.Create(sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.PlayAndWait("walk")
 		finished = true
 	})
-	co.JoinFirstSlice(thread)
+	currentScheduler.JoinFirstSlice(thread)
 	if finished || len(backend.plays) != 1 {
 		t.Fatalf("blocking playback finished = %v, plays = %d; want false and 1", finished, len(backend.plays))
 	}
@@ -550,13 +550,13 @@ func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
 		t.Fatalf("blocking playback parameters = %+v, loops = %v", play, backend.loops)
 	}
 	itime.Update(0, 0)
-	co.Update()
+	currentScheduler.Update()
 	if finished {
 		t.Fatal("PlayAndWait returned while the backend still reported active playback")
 	}
 	backend.playing[backend.nextID] = false
 	itime.Update(0, 0)
-	co.Update()
+	currentScheduler.Update()
 	if !finished {
 		t.Fatal("PlayAndWait did not resume after playback completed")
 	}

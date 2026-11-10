@@ -38,6 +38,7 @@ type bindingTestGame struct {
 	paused    atomic.Bool
 	ownerSeen atomic.Pointer[struct{}]
 	onReset   func()
+	onDestroy func()
 }
 
 type frameRecordingGame struct {
@@ -80,37 +81,6 @@ func TestSetGameCannotReplaceRuntimeBinding(t *testing.T) {
 		}
 	}()
 	SetGame(new(struct{}))
-}
-
-func TestInactiveGameRejectsRuntimeWork(t *testing.T) {
-	for _, test := range []struct {
-		name  string
-		phase gamePhase
-	}{
-		{"starting", gameStarting},
-		{"stopped", gameStopped},
-		{"closing", gameClosing},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			isolateGameBinding(t)
-			co := setupExecuteTest(t)
-			game := new(bindingTestGame)
-			binding, err := bindGameAtPhase(game, game, test.phase)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { releaseGame(binding) })
-
-			var calls atomic.Int32
-			threadID := co.LastThreadID()
-			Go(game, func(context.Context, any) { calls.Add(1) })
-			Execute(game, func(context.Context, any) { calls.Add(1) })
-			onPause(true)
-			if calls.Load() != 0 || co.LastThreadID() != threadID || game.paused.Load() {
-				t.Fatal("inactive game admitted runtime work or forwarded pause")
-			}
-		})
-	}
 }
 
 func TestBindGameHasSingleConcurrentWinner(t *testing.T) {
@@ -160,105 +130,189 @@ func TestReleaseGameDoesNotClearNewerBinding(t *testing.T) {
 	}
 }
 
-func TestDestroyRoutesCallbackBeforeReleasingBinding(t *testing.T) {
+func TestMainReleasesBindingWhenInitializePanics(t *testing.T) {
 	isolateGameBinding(t)
-	game, owner := new(bindingTestGame), new(struct{})
-	if _, err := bindGame(game, owner); err != nil {
-		t.Fatal(err)
-	}
-	onPause(true)
-	onDestroy()
-	if got := GetGame(); got != owner {
-		t.Fatalf("active owner before backend teardown = %p, want %p", got, owner)
-	}
-	// Teardown notifications may repeat while the backend is still closing.
-	onDestroy()
-	onReset()
-	if game.destroyed.Load() != 1 || game.reset.Load() != 0 {
-		t.Fatalf("closing game received duplicate callbacks: destroy=%d reset=%d", game.destroyed.Load(), game.reset.Load())
-	}
-	onDestroyed()
-	if !game.paused.Load() || game.destroyed.Load() != 1 {
-		t.Fatalf("pause=%v destroyed=%d, want true/1", game.paused.Load(), game.destroyed.Load())
-	}
-	if got := game.ownerSeen.Load(); got != owner {
-		t.Fatalf("destroy callback owner = %p, want %p", got, owner)
-	}
-	if got := GetGame(); got != nil {
-		t.Fatalf("active owner after destroy = %v, want nil", got)
-	}
-	// Late callbacks must remain harmless after ownership is released.
-	onStart()
-	onUpdate(0.25)
-	onPause(false)
-	onReset()
-	onDestroy()
-	onDestroyed()
-	if activeGame.Load() != nil || !game.paused.Load() || game.destroyed.Load() != 1 || game.reset.Load() != 0 {
-		t.Fatal("late callbacks changed a released game")
-	}
-}
-
-func TestDestroyBeforeAwakeReleasesBinding(t *testing.T) {
-	isolateGameBinding(t)
-	game := new(bindingTestGame)
-	binding, err := bindGame(game, new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	onDestroy()
-	onDestroyed()
-	if got := activeGame.Load(); got != nil {
-		t.Fatalf("binding after pre-awake shutdown = %p, want nil", got)
-	}
-	if got := game.destroyed.Load(); got != 1 {
-		t.Fatalf("destroy callbacks before awake = %d, want 1", got)
-	}
-	if _, err := bindGame(new(bindingTestGame), new(struct{})); err != nil {
-		t.Fatalf("bind after pre-awake shutdown: %v", err)
-	}
-	releaseGame(activeGame.Load())
-	if got := binding.loadPhase(); got != gameClosing {
-		t.Fatalf("pre-awake binding phase = %d, want closing", got)
-	}
-}
-
-func TestDestroyDuringStartPreventsActivation(t *testing.T) {
-	isolateGameBinding(t)
-	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
-	if err != nil {
-		t.Fatal(err)
-	}
-	finishStart := sync.OnceFunc(func() { close(binding.startDone) })
-	t.Cleanup(finishStart)
-
-	done := make(chan struct{})
-	go func() {
-		onDestroy()
-		onDestroyed()
-		close(done)
+	owner := new(struct{})
+	defer func() {
+		if recovered := recover(); recovered != "initialize failed" {
+			t.Fatalf("recovered = %v, want initialize failed", recovered)
+		}
+		if got := GetGame(); got != nil {
+			t.Fatalf("active owner after initialize panic = %v, want nil", got)
+		}
 	}()
-	deadline := time.Now().Add(time.Second)
-	for binding.loadPhase() != gameClosing && time.Now().Before(deadline) {
-		runtime.Gosched()
+	_ = Main(new(bindingTestGame), owner, func() {
+		if got := GetGame(); got != owner {
+			t.Fatalf("active owner during initialize = %p, want %p", got, owner)
+		}
+		panic("initialize failed")
+	})
+}
+
+func TestMainRejectsSecondGameBeforeInitialize(t *testing.T) {
+	isolateGameBinding(t)
+	first, err := bindGame(new(bindingTestGame), new(struct{}))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := binding.loadPhase(); got != gameClosing {
-		t.Fatalf("phase during pre-awake shutdown = %d, want closing", got)
+	t.Cleanup(func() { releaseGame(first) })
+
+	initialized := false
+	err = Main(new(bindingTestGame), new(struct{}), func() {
+		initialized = true
+	})
+	if !errors.Is(err, ErrGameAlreadyRunning) {
+		t.Fatalf("Main error = %v, want %v", err, ErrGameAlreadyRunning)
 	}
-	if activateGame(binding, gdx.CoreCallbackInfo{}) {
-		t.Fatal("closed startup activated")
+	if initialized {
+		t.Fatal("rejected game was initialized")
 	}
-	if binding.link != nil {
-		t.Fatal("closed startup prepared a backend")
+}
+
+func TestMainStartsAndReleasesBinding(t *testing.T) {
+	isolateGameBinding(t)
+	owner := new(struct{})
+	game := new(bindingTestGame)
+	if err := Main(game, owner, nil); err != nil {
+		t.Fatal(err)
 	}
-	if got := activeGame.Load(); got != binding {
-		t.Fatalf("startup binding released before initialization finished: %p", got)
+	binding := activeGame.Load()
+	if binding == nil || binding.callbacks != game || binding.loadPhase() != gameRunning || binding.link == nil {
+		t.Fatalf("main binding = %+v, want running binding with a link", binding)
 	}
-	finishStart()
-	waitForEngineSignal(t, done, time.Second, "destroyed callback did not finish after startup")
-	if got := activeGame.Load(); got != nil {
-		t.Fatalf("startup binding after backend teardown = %p, want nil", got)
+	if got := GetGame(); got != owner {
+		t.Fatalf("active owner = %p, want %p", got, owner)
+	}
+	if !releaseGame(binding) {
+		t.Fatal("main binding was not released")
+	}
+}
+
+func TestStartupCleanupDrainsSession(t *testing.T) {
+	for _, cancel := range []bool{false, true} {
+		t.Run(map[bool]string{false: "failed", true: "canceled"}[cancel], func(t *testing.T) {
+			isolateGameBinding(t)
+			current := setupExecuteTest(t)
+			resetRuntimeState()
+			t.Cleanup(func() { current.RunAfterStop(resetRuntimeState) })
+			started, finished := make(chan struct{}), make(chan struct{})
+			var cleaned, stale atomic.Bool
+			var recovered any
+			func() {
+				defer func() { recovered = recover() }()
+				if err := Main(new(bindingTestGame), "startup", func() {
+					current.Create("startup", func(thread coroutine.Thread) {
+						defer func() {
+							delayCall(1, func() { stale.Store(true) })
+							cleaned.Store(true)
+						}()
+						close(started)
+						<-thread.Context().Done()
+					})
+					waitForEngineSignal(t, started, time.Second, "startup work did not start")
+					if !cancel {
+						panic("startup failure")
+					}
+					binding, _ := beginDeferredReset()
+					go func() {
+						finishWebReset(current, binding, 0)
+						close(finished)
+					}()
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}()
+			var want any = "startup failure"
+			if cancel {
+				want = nil
+				waitForEngineSignal(t, finished, time.Second, "canceled startup did not finish")
+			}
+			if recovered != want || !cleaned.Load() || activeGame.Load() != nil {
+				t.Fatalf("startup cleanup: panic=%v cleanup=%v binding=%v", recovered, cleaned.Load(), activeGame.Load())
+			}
+			updateRuntimeFrame(2, nil)
+			if stale.Load() {
+				t.Fatal("startup retained work enqueued by coroutine cleanup")
+			}
+		})
+	}
+}
+
+func TestInactiveGameRejectsRuntimeWork(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		phase gamePhase
+	}{
+		{"starting", gameStarting},
+		{"stopped", gameStopped},
+		{"closing", gameClosing},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			isolateGameBinding(t)
+			current := setupExecuteTest(t)
+			game := new(bindingTestGame)
+			binding, err := bindGameAtPhase(game, game, test.phase)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { releaseGame(binding) })
+
+			var calls atomic.Int32
+			threadID := current.LastThreadID()
+			Go(game, func(context.Context, any) { calls.Add(1) })
+			Execute(game, func(context.Context, any) { calls.Add(1) })
+			onPause(true)
+			if calls.Load() != 0 || current.LastThreadID() != threadID || game.paused.Load() {
+				t.Fatal("inactive game admitted runtime work or forwarded pause")
+			}
+		})
+	}
+}
+
+func TestQueuedRuntimeWorkRechecksPhaseBeforeRunning(t *testing.T) {
+	isolateGameBinding(t)
+	current := setupExecuteTest(t)
+	binding, err := bindGame(new(bindingTestGame), new(struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { releaseGame(binding) })
+
+	releaseScheduler := blockExecuteScheduler(t, current)
+	var calls atomic.Int32
+	Go("queued-before-close", func(context.Context, any) { calls.Add(1) })
+	if !beginGameClose(binding) {
+		t.Fatal("failed to close the active binding")
+	}
+	releaseScheduler()
+	current.RunAfterStop(nil)
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("queued work ran after closing: calls = %d", got)
+	}
+}
+
+func TestQueuedRuntimeWorkCannotRunInReplacementGame(t *testing.T) {
+	isolateGameBinding(t)
+	current := setupExecuteTest(t)
+	first, err := bindGame(new(bindingTestGame), new(struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	releaseScheduler := blockExecuteScheduler(t, current)
+	var calls atomic.Int32
+	Go("queued-for-first", func(context.Context, any) { calls.Add(1) })
+	releaseGame(first)
+	second, err := bindGame(new(bindingTestGame), new(struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { releaseGame(second) })
+
+	releaseScheduler()
+	current.RunAfterStop(nil)
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("stale work ran in the replacement game: calls = %d", got)
 	}
 }
 
@@ -468,14 +522,14 @@ func TestResetRoutesCallbackBeforeReleasingBinding(t *testing.T) {
 
 func TestDirectResetDrainsCoroutinesBeforeReleasingBinding(t *testing.T) {
 	isolateGameBinding(t)
-	co := setupExecuteTest(t)
+	current := setupExecuteTest(t)
 	game := new(bindingTestGame)
 	binding, err := bindGame(game, new(struct{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	releaseWorker := blockExecuteScheduler(t, co)
+	releaseWorker := blockExecuteScheduler(t, current)
 	resetDone := make(chan struct{})
 	go func() {
 		onReset()
@@ -503,64 +557,6 @@ func TestDirectResetDrainsCoroutinesBeforeReleasingBinding(t *testing.T) {
 	}
 	if got := GetGame(); got != nil {
 		t.Fatalf("active owner after reset = %v, want nil", got)
-	}
-}
-
-func TestMainReleasesBindingWhenInitializePanics(t *testing.T) {
-	isolateGameBinding(t)
-	owner := new(struct{})
-	defer func() {
-		if recovered := recover(); recovered != "initialize failed" {
-			t.Fatalf("recovered = %v, want initialize failed", recovered)
-		}
-		if got := GetGame(); got != nil {
-			t.Fatalf("active owner after initialize panic = %v, want nil", got)
-		}
-	}()
-	_ = Main(new(bindingTestGame), owner, func() {
-		if got := GetGame(); got != owner {
-			t.Fatalf("active owner during initialize = %p, want %p", got, owner)
-		}
-		panic("initialize failed")
-	})
-}
-
-func TestMainRejectsSecondGameBeforeInitialize(t *testing.T) {
-	isolateGameBinding(t)
-	first, err := bindGame(new(bindingTestGame), new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { releaseGame(first) })
-
-	initialized := false
-	err = Main(new(bindingTestGame), new(struct{}), func() {
-		initialized = true
-	})
-	if !errors.Is(err, ErrGameAlreadyRunning) {
-		t.Fatalf("Main error = %v, want %v", err, ErrGameAlreadyRunning)
-	}
-	if initialized {
-		t.Fatal("rejected game was initialized")
-	}
-}
-
-func TestMainStartsAndReleasesBinding(t *testing.T) {
-	isolateGameBinding(t)
-	owner := new(struct{})
-	game := new(bindingTestGame)
-	if err := Main(game, owner, nil); err != nil {
-		t.Fatal(err)
-	}
-	binding := activeGame.Load()
-	if binding == nil || binding.callbacks != game || binding.loadPhase() != gameRunning || binding.link == nil {
-		t.Fatalf("main binding = %+v, want running binding with a link", binding)
-	}
-	if got := GetGame(); got != owner {
-		t.Fatalf("active owner = %p, want %p", got, owner)
-	}
-	if !releaseGame(binding) {
-		t.Fatal("main binding was not released")
 	}
 }
 
@@ -613,56 +609,111 @@ func TestDeferredResetSentinelBlocksBindUntilResetFinishes(t *testing.T) {
 	releaseGame(binding)
 }
 
-func TestQueuedRuntimeWorkRechecksPhaseBeforeRunning(t *testing.T) {
+func TestDestroyRoutesCallbackBeforeReleasingBinding(t *testing.T) {
 	isolateGameBinding(t)
-	co := setupExecuteTest(t)
-	binding, err := bindGame(new(bindingTestGame), new(struct{}))
-	if err != nil {
+	game, owner := new(bindingTestGame), new(struct{})
+	if _, err := bindGame(game, owner); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { releaseGame(binding) })
-
-	releaseScheduler := blockExecuteScheduler(t, co)
-	var calls atomic.Int32
-	Go("queued-before-close", func(context.Context, any) { calls.Add(1) })
-	if !beginGameClose(binding) {
-		t.Fatal("failed to close the active binding")
+	onPause(true)
+	onDestroy()
+	if got := GetGame(); got != owner {
+		t.Fatalf("active owner before backend teardown = %p, want %p", got, owner)
 	}
-	releaseScheduler()
-	co.RunAfterStop(nil)
-	if got := calls.Load(); got != 0 {
-		t.Fatalf("queued work ran after closing: calls = %d", got)
+	// Teardown notifications may repeat while the backend is still closing.
+	onDestroy()
+	onReset()
+	if game.destroyed.Load() != 1 || game.reset.Load() != 0 {
+		t.Fatalf("closing game received duplicate callbacks: destroy=%d reset=%d", game.destroyed.Load(), game.reset.Load())
+	}
+	onDestroyed()
+	if !game.paused.Load() || game.destroyed.Load() != 1 {
+		t.Fatalf("pause=%v destroyed=%d, want true/1", game.paused.Load(), game.destroyed.Load())
+	}
+	if got := game.ownerSeen.Load(); got != owner {
+		t.Fatalf("destroy callback owner = %p, want %p", got, owner)
+	}
+	if got := GetGame(); got != nil {
+		t.Fatalf("active owner after destroy = %v, want nil", got)
+	}
+	// Late callbacks must remain harmless after ownership is released.
+	onStart()
+	onUpdate(0.25)
+	onPause(false)
+	onReset()
+	onDestroy()
+	onDestroyed()
+	if activeGame.Load() != nil || !game.paused.Load() || game.destroyed.Load() != 1 || game.reset.Load() != 0 {
+		t.Fatal("late callbacks changed a released game")
 	}
 }
 
-func TestQueuedRuntimeWorkCannotRunInReplacementGame(t *testing.T) {
+func TestDestroyBeforeAwakeReleasesBinding(t *testing.T) {
 	isolateGameBinding(t)
-	co := setupExecuteTest(t)
-	first, err := bindGame(new(bindingTestGame), new(struct{}))
+	game := new(bindingTestGame)
+	binding, err := bindGame(game, new(struct{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	releaseScheduler := blockExecuteScheduler(t, co)
-	var calls atomic.Int32
-	Go("queued-for-first", func(context.Context, any) { calls.Add(1) })
-	releaseGame(first)
-	second, err := bindGame(new(bindingTestGame), new(struct{}))
+	onDestroy()
+	onDestroyed()
+	if got := activeGame.Load(); got != nil {
+		t.Fatalf("binding after pre-awake shutdown = %p, want nil", got)
+	}
+	if got := game.destroyed.Load(); got != 1 {
+		t.Fatalf("destroy callbacks before awake = %d, want 1", got)
+	}
+	if _, err := bindGame(new(bindingTestGame), new(struct{})); err != nil {
+		t.Fatalf("bind after pre-awake shutdown: %v", err)
+	}
+	releaseGame(activeGame.Load())
+	if got := binding.loadPhase(); got != gameClosing {
+		t.Fatalf("pre-awake binding phase = %d, want closing", got)
+	}
+}
+
+func TestDestroyDuringStartPreventsActivation(t *testing.T) {
+	isolateGameBinding(t)
+	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { releaseGame(second) })
+	finishStart := sync.OnceFunc(func() { close(binding.startDone) })
+	t.Cleanup(finishStart)
 
-	releaseScheduler()
-	co.RunAfterStop(nil)
-	if got := calls.Load(); got != 0 {
-		t.Fatalf("stale work ran in the replacement game: calls = %d", got)
+	done := make(chan struct{})
+	go func() {
+		onDestroy()
+		onDestroyed()
+		close(done)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for binding.loadPhase() != gameClosing && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if got := binding.loadPhase(); got != gameClosing {
+		t.Fatalf("phase during pre-awake shutdown = %d, want closing", got)
+	}
+	if activateGame(binding, gdx.CoreCallbackInfo{}) {
+		t.Fatal("closed startup activated")
+	}
+	if binding.link != nil {
+		t.Fatal("closed startup prepared a backend")
+	}
+	if got := activeGame.Load(); got != binding {
+		t.Fatalf("startup binding released before initialization finished: %p", got)
+	}
+	finishStart()
+	waitForEngineSignal(t, done, time.Second, "destroyed callback did not finish after startup")
+	if got := activeGame.Load(); got != nil {
+		t.Fatalf("startup binding after backend teardown = %p, want nil", got)
 	}
 }
 
 func TestDestroyRejectsRuntimeWorkUntilBackendTeardown(t *testing.T) {
 	isolateGameBinding(t)
-	co := setupExecuteTest(t)
+	current := setupExecuteTest(t)
 	game := new(bindingTestGame)
 	owner := new(struct{})
 	if _, err := bindGame(game, owner); err != nil {
@@ -673,14 +724,14 @@ func TestDestroyRejectsRuntimeWorkUntilBackendTeardown(t *testing.T) {
 	if got := GetGame(); got != owner {
 		t.Fatalf("destroy released the binding before backend teardown: %p", got)
 	}
-	threadID := co.LastThreadID()
+	threadID := current.LastThreadID()
 	var calls atomic.Int32
 	Go("destroy-go", func(context.Context, any) { calls.Add(1) })
 	Execute("destroy-execute", func(context.Context, any) { calls.Add(1) })
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("runtime work ran during destroy: calls = %d", got)
 	}
-	if got := co.LastThreadID(); got != threadID {
+	if got := current.LastThreadID(); got != threadID {
 		t.Fatalf("destroy admitted a coroutine: last thread ID = %d, want %d", got, threadID)
 	}
 
@@ -692,7 +743,7 @@ func TestDestroyRejectsRuntimeWorkUntilBackendTeardown(t *testing.T) {
 
 func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
 	isolateGameBinding(t)
-	co := setupExecuteTest(t)
+	current := setupExecuteTest(t)
 	game := new(bindingTestGame)
 	binding, err := bindGame(game, new(struct{}))
 	if err != nil {
@@ -701,7 +752,7 @@ func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	finish := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(finish)
-	co.Create("slow-destroy", func(coroutine.Thread) {
+	current.Create("slow-destroy", func(coroutine.Thread) {
 		close(started)
 		<-release
 	})
@@ -731,16 +782,81 @@ func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
 	}
 }
 
+func TestGameCleanupClearsSession(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		close func(*gameBinding)
+	}{
+		{"reset", func(*gameBinding) { onReset() }},
+		{"deferred reset", func(binding *gameBinding) {
+			beginDeferredReset()
+			onReset()
+			releaseGame(binding)
+		}},
+		{"destroy", func(*gameBinding) {
+			onDestroy()
+			onDestroyed()
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			isolateGameBinding(t)
+			current := setupExecuteTest(t)
+			resetRuntimeState()
+			t.Cleanup(func() { current.RunAfterStop(resetRuntimeState) })
+
+			var stale, fresh atomic.Int32
+			cleanupRan := false
+			cleanup := func() {
+				cleanupRan = true
+				if state.timeSinceStart != 7 {
+					t.Error("session state was cleared before game cleanup")
+				}
+				// Cleanup may itself enqueue work; it still belongs to this game.
+				delayCall(1, func() { stale.Add(1) })
+			}
+			game := &bindingTestGame{onReset: cleanup, onDestroy: cleanup}
+			binding, err := bindGame(game, "old")
+			if err != nil {
+				t.Fatal(err)
+			}
+			Execute(nil, func(context.Context, any) {
+				(runtimeBridge{}).AdvanceTimeSinceGameStart(7)
+				delayCall(1, func() { stale.Add(1) })
+			})
+			test.close(binding)
+			if !cleanupRan || activeGame.Load() != nil || state.timeSinceStart != 0 {
+				t.Fatal("game cleanup did not finish before clearing and releasing the session")
+			}
+
+			next, err := bindGame(new(bindingTestGame), "new")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				current.RunAfterStop(func() { releaseGame(next) })
+			})
+			Execute(nil, func(context.Context, any) {
+				delayCall(1, func() { fresh.Add(1) })
+				updateRuntimeFrame(2, nil)
+			})
+			current.Update()
+			if stale.Load() != 0 || fresh.Load() != 1 {
+				t.Fatalf("callbacks after replacement: stale=%d fresh=%d, want 0/1", stale.Load(), fresh.Load())
+			}
+		})
+	}
+}
+
 func TestFrameRuntimeUpdatesPrecedeScriptsAndCapture(t *testing.T) {
 	for _, stop := range []bool{false, true} {
 		t.Run(map[bool]string{false: "running", true: "stopped"}[stop], func(t *testing.T) {
 			isolateGameBinding(t)
-			co := setupExecuteTest(t)
+			current := setupExecuteTest(t)
 			isolateCaptureState(t)
-			resetRuntimeDeltaTestState()
+			resetFrameTestState()
 			t.Cleanup(func() {
-				co.RunAfterStop(nil)
-				resetRuntimeDeltaTestState()
+				current.RunAfterStop(nil)
+				resetFrameTestState()
 			})
 			var steps []string
 			var scriptValue atomic.Int32
@@ -868,6 +984,9 @@ func (*bindingTestGame) OnEngineRender(float64) {}
 func (*bindingTestGame) OnEngineFrameEnd() {}
 
 func (g *bindingTestGame) OnEngineDestroy() {
+	if g.onDestroy != nil {
+		g.onDestroy()
+	}
 	g.destroyed.Add(1)
 	if owner, ok := GetGame().(*struct{}); ok {
 		g.ownerSeen.Store(owner)

@@ -72,14 +72,14 @@ type queuedQuerySpriteMgr struct {
 }
 
 func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
-	co, game, input := setupInputSourceTest(t)
+	currentScheduler, game, input := setupInputSourceTest(t)
 	platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 	var returned chan struct{}
 	t.Cleanup(func() {
-		co.StopAll()
+		currentScheduler.StopAll()
 		if returned != nil {
 			<-returned
 		}
@@ -91,8 +91,8 @@ func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
 		sampled = value
 		return game.MouseX() == 23
 	}, func() { handled++ })
-	co.Create(game, func(coroutine.Thread) {
-		co.WaitMainThread(func() { input.point.X = 23 })
+	currentScheduler.Create(game, func(coroutine.Thread) {
+		currentScheduler.WaitMainThread(func() { input.point.X = 23 })
 		value = 42
 	})
 	select {
@@ -117,14 +117,14 @@ func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
 	}
 	itime.Update(1.0/30, 30)
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 	if handled != 1 {
 		t.Fatalf("condition handlers = %d, want 1", handled)
 	}
 }
 
 func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform
@@ -138,8 +138,8 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 			wrongThread.Store(true)
 		}
 	}
-	active := co.Create("active", func(coroutine.Thread) {
-		co.WaitMainThread(engineCall)
+	active := currentScheduler.Create("active", func(coroutine.Thread) {
+		currentScheduler.WaitMainThread(engineCall)
 	})
 	select {
 	case <-platform.workerSeen:
@@ -163,8 +163,8 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 	event := scriptEventDispatch{
 		mode: coroutine.BatchAsync,
 		run: func(coroutine.Thread, *eventSink) {
-			co.WaitMainThread(engineCall)
-			co.WaitMainThread(engineCall)
+			currentScheduler.WaitMainThread(engineCall)
+			currentScheduler.WaitMainThread(engineCall)
 			close(handlerDone)
 		},
 	}
@@ -177,7 +177,7 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 		})
 		close(producerReturned)
 		<-resumeEngine
-		co.Update()
+		currentScheduler.Update()
 		close(engineDone)
 	}()
 
@@ -219,22 +219,22 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 	if got := cleaned.Load(); got != 1 {
 		t.Fatalf("lifecycle cleanups = %d, want 1", got)
 	}
-	co.Join(active)
+	currentScheduler.Join(active)
 }
 
 func TestWorkerAsyncEventDispatchRegistersBeforeReturning(t *testing.T) {
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = &eventDispatchPlatform{}
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
-	co := setupRuntimeScheduler(t)
-	gate := co.NewLatch()
+	currentScheduler := setupRuntimeScheduler(t)
+	gate := currentScheduler.NewLatch()
 	var registered int
 	var dispatcherOwner any
 	var finished atomic.Bool
 	handler := eventLifecycleFunc(func(coroutine.Thread) func() {
 		registered++
-		if co.IsInCoroutine() {
-			dispatcherOwner = co.Current().Owner
+		if currentScheduler.IsInCoroutine() {
+			dispatcherOwner = currentScheduler.Current().Owner
 		}
 		return nil
 	})
@@ -263,20 +263,20 @@ func TestWorkerAsyncEventDispatchRegistersBeforeReturning(t *testing.T) {
 		t.Fatal("handler finished before its gate opened")
 	}
 	gate.Open()
-	co.Update()
+	currentScheduler.Update()
 	if !finished.Load() {
 		t.Fatal("registered handler did not finish after its gate opened")
 	}
 }
 
 func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = &eventDispatchPlatform{}
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
 	called := false
-	co.RunAfterStop(func() {
+	currentScheduler.RunAfterStop(func() {
 		withEventRegistrationBarrier(nil, func() { called = true })
 	})
 	if called {
@@ -285,7 +285,7 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 }
 
 func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	platform := &eventDispatchPlatform{}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform
@@ -309,7 +309,7 @@ func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
 	}
 	go func() {
 		platform.useCurrentAsMainThread()
-		co.RunSync("outer", func(thread coroutine.Thread) {
+		currentScheduler.RunSync("outer", func(thread coroutine.Thread) {
 			callbackStarted <- thread
 			<-releaseCallback
 			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: lifecycle}}, event)
@@ -325,7 +325,7 @@ func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
 
 	stopDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		currentScheduler.RunAfterStop(nil)
 		close(stopDone)
 	}()
 	// Cancellation is the handshake that admission has closed. The outer callback
@@ -357,12 +357,12 @@ func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
 	if ran.Load() {
 		t.Fatal("rejected nested handler ran during shutdown")
 	}
-	co.StartBatch([]coroutine.Task{{
+	currentScheduler.StartBatch([]coroutine.Task{{
 		Owner:              handler,
 		RegisterInvocation: handler.RegisterInvocation,
 		Run:                func(coroutine.Thread) { ran.Store(true) },
 	}}, coroutine.BatchAsync)
-	co.Update()
+	currentScheduler.Update()
 	if !ran.Load() {
 		t.Fatal("handler could not run after shutdown reopened admission")
 	}
@@ -528,7 +528,7 @@ func TestOnEngineStartReportsResourceLoadFailure(t *testing.T) {
 	if isolatedGameTest(t) {
 		return
 	}
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	setupImmediateEngineCalls(t)
 	previous := pkgengine.ExtMgr
 	recorder := &runtimePanicRecorder{}
@@ -543,7 +543,7 @@ func TestOnEngineStartReportsResourceLoadFailure(t *testing.T) {
 	})
 	t.Cleanup(func() { spxfs.RegisterSchema("", asset.Open) })
 	game.OnEngineStart()
-	co.Update()
+	currentScheduler.Update()
 	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], failure.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
 		t.Fatalf("startup failure messages=%v exits=%v", recorder.messages, recorder.exits)
 	}
@@ -572,7 +572,7 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) { return resource, nil })
 	t.Cleanup(func() { spxfs.RegisterSchema("", asset.Open) })
 	game.OnEngineStart()
-	gco.Update()
+	scheduler.Update()
 	if platform.title != "stale startup" || game.fs != resource || resource.closeCalls != 0 {
 		t.Fatalf("resource loading did not finish: title=%q fs=%v closes=%d", platform.title, game.fs, resource.closeCalls)
 	}
@@ -593,7 +593,7 @@ func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
 		{name: "set unchanged X", writeX: true, x: 10, want: mathf.NewVec2(10, 30)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			co, game, backend := setupFrameSyncGame(t)
+			currentScheduler, game, backend := setupFrameSyncGame(t)
 			sprite := addFrameSyncSprite(game, 1, "moving")
 			sprite.SetXYpos(10, 11)
 			game.OnEngineRender(0)
@@ -607,7 +607,7 @@ func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
 			wrap.Init(engine.WaitMainThread)
 
 			release := make(chan struct{})
-			thread := co.Create(sprite, func(coroutine.Thread) {
+			thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 				engine.WaitForChan(release)
 				if tt.writeX {
 					sprite.SetXpos(tt.x)
@@ -615,7 +615,7 @@ func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
 				sprite.Hide()
 				sprite.TouchingColor__0(Color{})
 			})
-			co.JoinFirstSlice(thread)
+			currentScheduler.JoinFirstSlice(thread)
 			// Physics advances while the script waits for external work.
 			mgr.positions[1] = mathf.NewVec2(20, 30)
 			close(release)
@@ -627,7 +627,7 @@ func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
 			// The entry boundary must service the query before it can acquire
 			// the script lock and perform its normal physics snapshot.
 			game.OnEngineBeforeUpdate(1.0 / 60)
-			co.Join(thread)
+			currentScheduler.Join(thread)
 			if mgr.queriedPosition != tt.want || mgr.positions[1] != tt.want {
 				t.Fatalf("query position=%v backend=%v, want %v", mgr.queriedPosition, mgr.positions[1], tt.want)
 			}

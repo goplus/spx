@@ -23,51 +23,51 @@ import (
 )
 
 func TestLatchResumesManagedWaitersOnce(t *testing.T) {
-	co := New(nil)
-	latch := co.NewLatch()
+	scheduler := New(nil)
+	latch := scheduler.NewLatch()
 	var order []string
 
-	waiter := co.Create("waiter", func(Thread) {
+	waiter := scheduler.Create("waiter", func(Thread) {
 		order = append(order, "before")
 		latch.Wait()
 		order = append(order, "after")
 	})
-	co.JoinFirstSlice(waiter)
+	scheduler.JoinFirstSlice(waiter)
 	if want := []string{"before"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order before Open = %v, want %v", order, want)
 	}
 
 	latch.Open()
 	latch.Open()
-	co.Join(waiter)
+	scheduler.Join(waiter)
 	if want := []string{"before", "after"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order after Open = %v, want %v", order, want)
 	}
 }
 
 func TestLatchAlreadyOpenReturns(t *testing.T) {
-	co := New(nil)
-	latch := co.NewLatch()
+	scheduler := New(nil)
+	latch := scheduler.NewLatch()
 	latch.Open()
 
-	thread := co.Create("waiter", func(Thread) {
+	thread := scheduler.Create("waiter", func(Thread) {
 		latch.Wait()
 	})
-	co.Join(thread)
+	scheduler.Join(thread)
 }
 
 func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
-	co := New(nil)
-	latch := co.NewLatch()
+	scheduler := New(nil)
+	latch := scheduler.NewLatch()
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	var resumed int
-	waiter := co.Create("waiter", func(Thread) {
+	waiter := scheduler.Create("waiter", func(Thread) {
 		latch.Wait()
 		resumed++
 	})
-	co.JoinFirstSlice(waiter)
+	scheduler.JoinFirstSlice(waiter)
 
 	const callers = 32
 	start := make(chan struct{})
@@ -95,15 +95,15 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 }
 
 func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
-	co := New(nil)
-	latch := co.NewLatch()
+	scheduler := New(nil)
+	latch := scheduler.NewLatch()
 
-	waiter := co.Create("waiter", func(Thread) {
+	waiter := scheduler.Create("waiter", func(Thread) {
 		latch.Wait()
 	})
-	co.JoinFirstSlice(waiter)
-	co.StopIf(func(thread Thread) bool { return thread == waiter })
-	co.Join(waiter)
+	scheduler.JoinFirstSlice(waiter)
+	scheduler.StopIf(func(thread Thread) bool { return thread == waiter })
+	scheduler.Join(waiter)
 
 	latch.waiters.mu.Lock()
 	defer latch.waiters.mu.Unlock()
@@ -113,8 +113,8 @@ func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 }
 
 func TestLatchWaitsOutsideCoroutine(t *testing.T) {
-	co := New(nil)
-	latch := co.NewLatch()
+	scheduler := New(nil)
+	latch := scheduler.NewLatch()
 	started := make(chan struct{})
 	done := make(chan struct{})
 	go func() {

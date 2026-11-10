@@ -80,7 +80,7 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	owner := p.owner
 	if kind == ThisScript {
 		// Procedure handles this signal without stopping its caller.
-		gco.StopThisScript()
+		scheduler.StopThisScript()
 		return
 	}
 	filter, stopCaller := coreevent.ResolveStop(
@@ -93,17 +93,14 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 		return
 	}
 
-	var caller coroutine.Thread
-	if gco.IsInCoroutine() {
-		caller = gco.Current()
-	}
+	caller := scheduler.Caller()
 	shouldStop := func(thread coroutine.Thread) bool {
 		return filter(thread.Owner, thread == caller)
 	}
 
 	if kind == AllStop {
 		p.scriptEventRegistry.stopAllEpoch.Add(1)
-		gco.StopIf(func(thread coroutine.Thread) bool {
+		scheduler.StopIf(func(thread coroutine.Thread) bool {
 			// Keep the caller for cleanup; pending starts use the new epoch.
 			return thread != caller && !p.scriptEventRegistry.isPendingStartThread(thread) && shouldStop(thread)
 		})
@@ -111,10 +108,10 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 			game.stopAllResources()
 		}
 	} else {
-		gco.StopIf(shouldStop)
+		scheduler.StopIf(shouldStop)
 	}
 	if stopCaller {
-		gco.StopCurrent()
+		scheduler.StopCurrent()
 	}
 }
 

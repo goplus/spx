@@ -38,7 +38,7 @@ func SetDebug(flags dbgFlags) {
 		g.setDebugFlags(flags)
 		return
 	}
-	gco.SetPerfDebug(flags&DbgFlagPerf != 0)
+	scheduler.SetPerfDebug(flags&DbgFlagPerf != 0)
 }
 
 // XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
@@ -57,14 +57,14 @@ func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 // Scheduling
 // -----------------------------------------------------------------------------
 func SchedNow() int {
-	if thread := currentScriptThread(); thread != nil && !handleMainExecutionTimeout(thread) {
-		gco.Sched(thread)
+	if thread := scheduler.Caller(); thread != nil && !handleMainExecutionTimeout(thread) {
+		scheduler.Sched(thread)
 	}
 	return 0
 }
 
 func Sched() int {
-	thread := currentScriptThread()
+	thread := scheduler.Caller()
 	if thread == nil || handleMainExecutionTimeout(thread) || !thread.IsSchedTimeout(schedTimeoutMs) {
 		return 0
 	}
@@ -92,15 +92,8 @@ func WaitUntil(__xgo_autoclosure_condition func() bool) {
 }
 
 func init() {
-	gco = coroutine.New(engine.OnPanic)
-	engine.SetCoroutines(gco)
-}
-
-func currentScriptThread() coroutine.Thread {
-	if gco == nil {
-		return nil
-	}
-	return gco.Caller()
+	scheduler = coroutine.New(engine.OnPanic)
+	engine.SetScheduler(scheduler)
 }
 
 func handleMainExecutionTimeout(thread coroutine.Thread) bool {
@@ -110,6 +103,6 @@ func handleMainExecutionTimeout(thread coroutine.Thread) bool {
 	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.GetStackTrace())
 	// Warn once, then schedule Main as a regular coroutine.
 	thread.DisableMainTimeout()
-	gco.Sched(thread)
+	scheduler.Sched(thread)
 	return true
 }

@@ -16,10 +16,8 @@
 
 package engine
 
-//lint:file-ignore ST1001 Bridge code intentionally dot-imports mathf to mirror engine type names.
-
 import (
-	. "github.com/goplus/spbase/mathf"
+	"github.com/goplus/spbase/mathf"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -30,7 +28,7 @@ type Sprite struct {
 	// CallbackAlive also rejects callbacks while logical deletion awaits a commit.
 	CallbackAlive func() bool
 	// MirrorPosition receives successful direct writes without movement effects.
-	MirrorPosition func(*Sprite, Vec2, PositionAxes)
+	MirrorPosition func(*Sprite, mathf.Vec2, PositionAxes)
 }
 
 // PositionAxes identifies the coordinates explicitly written by a position helper.
@@ -42,7 +40,7 @@ const (
 	PositionXY = PositionX | PositionY
 )
 
-func (s *Sprite) SetPosition(position Vec2) {
+func (s *Sprite) SetPosition(position mathf.Vec2) {
 	s.setPosition(position, PositionXY)
 }
 
@@ -81,7 +79,7 @@ func (s *Sprite) UpdateTexture(path string, renderScale float64, updateTexture b
 	s.SetRenderScale(UniformVec2(renderScale))
 }
 
-func (s *Sprite) UpdateTextureAtlas(path string, rect Rect2, renderScale float64, updateTexture bool) {
+func (s *Sprite) UpdateTextureAtlas(path string, rect mathf.Rect2, renderScale float64, updateTexture bool) {
 	if path == "" {
 		return
 	}
@@ -117,7 +115,7 @@ func (s *Sprite) UnRegisterOnAnimationFinished() {
 
 // Collider values use SPX coordinates.
 
-func (s *Sprite) SetColliderShapeRect(trigger bool, center Vec2, size Vec2) {
+func (s *Sprite) SetColliderShapeRect(trigger bool, center mathf.Vec2, size mathf.Vec2) {
 	if trigger {
 		s.Sprite.SetTriggerRect(center, size)
 	} else {
@@ -125,7 +123,7 @@ func (s *Sprite) SetColliderShapeRect(trigger bool, center Vec2, size Vec2) {
 	}
 }
 
-func (s *Sprite) SetColliderShapeCircle(trigger bool, center Vec2, radius float64) {
+func (s *Sprite) SetColliderShapeCircle(trigger bool, center mathf.Vec2, radius float64) {
 	if trigger {
 		s.Sprite.SetTriggerCircle(center, radius)
 	} else {
@@ -133,7 +131,7 @@ func (s *Sprite) SetColliderShapeCircle(trigger bool, center Vec2, radius float6
 	}
 }
 
-func (s *Sprite) SetColliderShapeCapsule(trigger bool, center Vec2, size Vec2) {
+func (s *Sprite) SetColliderShapeCapsule(trigger bool, center mathf.Vec2, size mathf.Vec2) {
 	if trigger {
 		s.Sprite.SetTriggerCapsule(center, size)
 	} else {
@@ -141,7 +139,7 @@ func (s *Sprite) SetColliderShapeCapsule(trigger bool, center Vec2, size Vec2) {
 	}
 }
 
-func (s *Sprite) SetColliderShapePolygon(trigger bool, center Vec2, points []float64) {
+func (s *Sprite) SetColliderShapePolygon(trigger bool, center mathf.Vec2, points []float64) {
 	points32 := F64Tof32(points)
 	if trigger {
 		s.Sprite.SetTriggerPolygon(center, points32)
@@ -158,7 +156,7 @@ func (s *Sprite) SetColliderEnabled(trigger bool, enabled bool) {
 	}
 }
 
-func (s *Sprite) setPosition(position Vec2, axes PositionAxes) {
+func (s *Sprite) setPosition(position mathf.Vec2, axes PositionAxes) {
 	s.Sprite.SetPosition(position)
 	if s.MirrorPosition != nil {
 		s.MirrorPosition(s, position, axes)

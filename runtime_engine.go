@@ -145,7 +145,7 @@ func (p *Game) dispatchShapeUpdates() {
 			})
 		}
 	}
-	gco.StartBatch(tasks, coroutine.BatchWaitFirstSlice)
+	scheduler.StartBatch(tasks, coroutine.BatchWaitFirstSlice)
 }
 
 // -----------------------------------------------------------------------------
@@ -214,7 +214,7 @@ func (p *Game) markStartDispatched(generation uint64) bool {
 }
 
 func (p *Game) initLogicLoop() {
-	gco.Create("logicLoop", p.logicLoop)
+	scheduler.Create("logicLoop", p.logicLoop)
 }
 
 func (p *Game) logicLoop(coroutine.Thread) {
@@ -258,7 +258,7 @@ func (p *Game) showDebugPanel() {
 	updateInfo, _ := profiler.GetStats("GameUpdate")
 	coroInfo, _ := profiler.GetStats("CoroUpdateJobs")
 	renderInfo, _ := profiler.GetStats("GameRender")
-	lastInfo := gco.UpdateStats()
+	lastInfo := scheduler.UpdateStats()
 
 	msg := fmt.Sprintf("FPS: %.f\n", itime.FPS())
 	msg += fmt.Sprintf("Shape: %v\n", p.shapeMgr.count())
@@ -283,23 +283,23 @@ func (p *Game) showDebugPanel() {
 
 // runBetweenScripts excludes script slices during frame snapshots and commits.
 func runBetweenScripts(call func()) {
-	if gco == nil {
+	if scheduler == nil {
 		call()
 		return
 	}
-	gco.RunBetweenScripts(call)
+	scheduler.RunBetweenScripts(call)
 }
 
 func runMainUntilYield(owner any, mainFn func()) {
-	thread := gco.Create(owner, func(coroutine.Thread) {
+	thread := scheduler.Create(owner, func(coroutine.Thread) {
 		runMain(mainFn)
 	})
-	gco.JoinFirstSlice(thread)
+	scheduler.JoinFirstSlice(thread)
 }
 
 // runMain calls Main synchronously while tracking its execution timeout.
 func runMain(call func()) {
-	if thread := currentScriptThread(); thread != nil {
+	if thread := scheduler.Caller(); thread != nil {
 		end := thread.BeginMain(time.Now())
 		defer end()
 	}

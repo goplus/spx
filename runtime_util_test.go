@@ -151,14 +151,14 @@ func TestNumericAndClockUtilities(t *testing.T) {
 
 func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
 	t.Cleanup(ResetRandomSeed)
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 
 	runScenario := func(extraDraws int) []float64 {
 		t.Helper()
 		setDeterministicRandomSeed(123)
 
 		doneA := make(chan struct{}, 1)
-		co.Create("extra-draws", func(me coroutine.Thread) {
+		currentScheduler.Create("extra-draws", func(me coroutine.Thread) {
 			for range extraDraws {
 				_ = Rand__1(0, 1)
 			}
@@ -171,7 +171,7 @@ func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
 		}
 
 		doneB := make(chan []float64, 1)
-		co.Create("captured-sequence", func(me coroutine.Thread) {
+		currentScheduler.Create("captured-sequence", func(me coroutine.Thread) {
 			doneB <- []float64{Rand__1(0, 1), Rand__1(0, 1)}
 		})
 		select {
@@ -197,15 +197,21 @@ func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
 
 func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
 	t.Cleanup(ResetRandomSeed)
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 
 	runScenario := func(drawOutsideCoroutine bool) []float64 {
 		t.Helper()
 		setDeterministicRandomSeed(123)
 
 		done := make(chan []float64, 1)
-		co.Create("wait-to-do-random", func(me coroutine.Thread) {
-			co.WaitToDo(func() {
+		currentScheduler.Create("wait-to-do-random", func(me coroutine.Thread) {
+			if got := currentCoroutineID(); got != me.ID() {
+				t.Errorf("managed random stream ID = %d, want %d", got, me.ID())
+			}
+			currentScheduler.WaitToDo(func() {
+				if got := currentCoroutineID(); got != 0 {
+					t.Errorf("native worker random stream ID = %d, want 0", got)
+				}
 				if drawOutsideCoroutine {
 					_ = Rand__1(0, 1)
 				}
@@ -232,9 +238,9 @@ func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
 }
 
 func TestRandomWithoutSchedulerAndInt31Sequence(t *testing.T) {
-	previous := gco
-	gco = nil
-	t.Cleanup(func() { gco = previous; ResetRandomSeed() })
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous; ResetRandomSeed() })
 	if currentCoroutineID() != 0 || lastAllocatedCoroutineID() != 0 {
 		t.Fatal("scheduler-free random has a coroutine identity")
 	}

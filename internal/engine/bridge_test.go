@@ -17,10 +17,11 @@
 package engine
 
 import (
-	"math"
+	"fmt"
 	"slices"
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -37,6 +38,33 @@ type bridgeDestroyNode struct {
 	calls int
 }
 
+type adapterResourceSpy struct {
+	gdx.IResMgr
+	files map[string]string
+}
+
+type adapterCameraSpy struct {
+	gdx.ICameraMgr
+	position, zoom mathf.Vec2
+}
+
+type adapterPlatformSpy struct {
+	bridgeMainThreadPlatform
+	debug bool
+}
+
+type adapterExtSpy struct {
+	gdx.IExtMgr
+	modes []int64
+}
+
+type backdropProxySpy struct {
+	factorySpriteManager
+	settings []string
+	texture  string
+	scale    mathf.Vec2
+}
+
 func TestManagersReturnsStableSingleton(t *testing.T) {
 	first := Managers()
 	if first == nil {
@@ -44,6 +72,102 @@ func TestManagersReturnsStableSingleton(t *testing.T) {
 	}
 	if got := Managers(); got != first {
 		t.Fatalf("Managers() = %p, want stable singleton %p", got, first)
+	}
+}
+
+func TestWindowScale(t *testing.T) {
+	previous := WindowScale()
+	t.Cleanup(func() { SetWindowScale(previous) })
+	for _, scale := range []float64{0.5, 1, 2.5} {
+		SetWindowScale(scale)
+		if got := WindowScale(); got != scale {
+			t.Fatalf("WindowScale = %v, want %v", got, scale)
+		}
+	}
+}
+
+func TestBackendAdaptersForwardResourcesCameraAndLayerMode(t *testing.T) {
+	setupSpriteManagerTest(t)
+	previousRes, previousCamera, previousPlatform, previousExt := gdx.ResMgr, gdx.CameraMgr, gdx.PlatformMgr, gdx.ExtMgr
+	previousScheduler, previousScale, previousMode := scheduler, windowScale, state.layerSortMode
+	t.Cleanup(func() {
+		gdx.ResMgr, gdx.CameraMgr, gdx.PlatformMgr, gdx.ExtMgr = previousRes, previousCamera, previousPlatform, previousExt
+		SetScheduler(previousScheduler)
+		windowScale, state.layerSortMode = previousScale, previousMode
+	})
+	resources := &adapterResourceSpy{files: map[string]string{"data": "contents", "res://.config": `{"extasset":"shared"}`}}
+	camera := &adapterCameraSpy{position: mathf.NewVec2(10, -5), zoom: mathf.NewVec2(4, 4)}
+	platform, ext := &adapterPlatformSpy{}, &adapterExtSpy{}
+	gdx.ResMgr, gdx.CameraMgr, gdx.PlatformMgr, gdx.ExtMgr = resources, camera, platform, ext
+	SetScheduler(coroutine.New(nil))
+	SetWindowScale(2)
+	if ReadAllText("data") != "contents" || !HasFile("data") || HasFile("missing") || ListDirectories("assets") != "directories:assets" {
+		t.Fatal("resource arguments/results changed")
+	}
+	SetDebugMode(true)
+	if !platform.debug {
+		t.Fatal("debug setting not forwarded")
+	}
+	if got := readExtAssetDirFromProjectConfig("res://"); got != "shared" {
+		t.Fatalf("extension assets=%q", got)
+	}
+	resources.files["res://.config"] = "invalid"
+	if readExtAssetDirFromProjectConfig("res://") != "" || readExtAssetDirFromProjectConfig("missing/") != "" {
+		t.Fatal("invalid/missing project config accepted")
+	}
+	world := mathf.NewVec2(13, 2)
+	wantView := mathf.NewVec2(6, 14)
+	if BridgeWorldToView(world) != wantView {
+		t.Fatal("camera transform did not apply position, zoom, and window scale")
+	}
+	BridgeSetCameraPosition(mathf.NewVec2(8, 9))
+	if camera.position != mathf.NewVec2(8, 9) {
+		t.Fatal("camera position not forwarded")
+	}
+	for _, name := range []string{"vertical", "none", ""} {
+		if err := SetLayerSortMode(name); err != nil {
+			t.Fatal(err)
+		}
+		if HasLayerSortMethod() != (name == "vertical") {
+			t.Fatalf("layer mode %q", name)
+		}
+	}
+	if err := SetLayerSortMode("invalid"); err == nil || !slices.Equal(ext.modes, []int64{1, 0, 0}) {
+		t.Fatalf("layer commands=%v,error=%v", ext.modes, err)
+	}
+}
+
+func TestPublicFactoriesInitializeProxyAndUI(t *testing.T) {
+	setupSpriteManagerTest(t)
+	previousState, previousScheduler, previousPlatform, previousUI, previousPaths := state, scheduler, gdx.PlatformMgr, gdx.UiMgr, assetPaths
+	t.Cleanup(func() {
+		state, assetPaths = previousState, previousPaths
+		SetScheduler(previousScheduler)
+		gdx.PlatformMgr, gdx.UiMgr = previousPlatform, previousUI
+	})
+	state = runtimeState{sprites: map[Object]gdx.ISpriter{}, uiNodes: map[Object]gdx.IUiNode{}}
+	gdx.PlatformMgr = bridgeMainThreadPlatform{}
+	SetScheduler(coroutine.New(nil))
+	manager := &backdropProxySpy{}
+	gdx.SpriteMgr = manager
+	ui := &factoryUIManager{result: 20}
+	gdx.UiMgr = ui
+	assetPaths = assetResolver{root: "assets/", projectRoot: "."}
+	target := &struct{}{}
+	proxy := NewBackdropProxy(target, "backdrop.png", 2)
+	if proxy.Target != target || manager.texture != ToAssetPath("backdrop.png") || manager.scale != mathf.NewVec2(2, 2) {
+		t.Fatalf("backdrop proxy=%#v texture=%q scale=%v", proxy, manager.texture, manager.scale)
+	}
+	if !slices.Equal(manager.settings, []string{"z:12:-1", "trigger-layer:12:0", "collision-layer:12:0", "collision-mask:12:0", "trigger-mask:12:0"}) {
+		t.Fatalf("backdrop initialization=%v", manager.settings)
+	}
+	bare := BridgeNewBareSprite(target, mathf.NewVec2(4, 5))
+	if bare.Target != target || bare.GetId() != 11 || manager.position != mathf.NewVec2(4, 5) {
+		t.Fatalf("bare sprite=%#v", bare)
+	}
+	node := NewUiNode[factoryUI]()
+	if !node.started || node.GetId() != 20 || ui.path != "res://engine/ui/factoryUI.tscn" {
+		t.Fatalf("UI=%#v path=%s", node, ui.path)
 	}
 }
 
@@ -75,13 +199,13 @@ func TestBridgeGetSpriteChecksConcreteType(t *testing.T) {
 }
 
 func TestBridgeClearAllSpritesDestroysAndUnregistersNodes(t *testing.T) {
-	previousState, previousCo, previousPlatform := state, gco, gdx.PlatformMgr
+	previousState, previousScheduler, previousPlatform := state, scheduler, gdx.PlatformMgr
 	t.Cleanup(func() {
 		state = previousState
-		SetCoroutines(previousCo)
+		SetScheduler(previousScheduler)
 		gdx.PlatformMgr = previousPlatform
 	})
-	SetCoroutines(coroutine.New(nil))
+	SetScheduler(coroutine.New(nil))
 	gdx.PlatformMgr = bridgeMainThreadPlatform{}
 
 	for _, tc := range []struct {
@@ -110,79 +234,6 @@ func TestBridgeClearAllSpritesDestroysAndUnregistersNodes(t *testing.T) {
 	}
 }
 
-func TestFloatSliceConversions(t *testing.T) {
-	t.Run("nil and empty", func(t *testing.T) {
-		if F64Tof32(nil) != nil || F32Tof64(nil) != nil {
-			t.Fatal("conversion did not preserve nil")
-		}
-		if got := F64Tof32([]float64{}); got == nil || len(got) != 0 {
-			t.Fatalf("F64Tof32(empty) = %#v, want non-nil empty slice", got)
-		}
-		if got := F32Tof64([]float32{}); got == nil || len(got) != 0 {
-			t.Fatalf("F32Tof64(empty) = %#v, want non-nil empty slice", got)
-		}
-	})
-	t.Run("values and ownership", func(t *testing.T) {
-		input := []float64{-2.5, 0, 1.25}
-		narrowed := F64Tof32(input)
-		if !slices.Equal(narrowed, []float32{-2.5, 0, 1.25}) {
-			t.Fatalf("F64Tof32 = %v", narrowed)
-		}
-		widened := F32Tof64(narrowed)
-		if !slices.Equal(widened, input) {
-			t.Fatalf("F32Tof64 = %v, want %v", widened, input)
-		}
-		narrowed[0] = 7
-		widened[1] = 8
-		if input[0] != -2.5 || input[1] != 0 || widened[0] != -2.5 || narrowed[1] != 0 {
-			t.Fatal("conversion shared mutable storage")
-		}
-	})
-	t.Run("IEEE values", func(t *testing.T) {
-		input := []float64{math.Copysign(0, -1), math.Inf(1), math.Inf(-1), math.NaN(), math.MaxFloat64, -math.MaxFloat64}
-		got := F32Tof64(F64Tof32(input))
-		if len(got) != len(input) {
-			t.Fatalf("converted length = %d, want %d", len(got), len(input))
-		}
-		if got[0] != 0 || !math.Signbit(got[0]) || !math.IsInf(got[1], 1) || !math.IsInf(got[2], -1) || !math.IsNaN(got[3]) {
-			t.Fatalf("special values were not preserved: %v", got[:4])
-		}
-		if !math.IsInf(got[4], 1) || !math.IsInf(got[5], -1) {
-			t.Fatalf("overflow did not preserve sign: %v", got[4:])
-		}
-	})
-}
-
-func TestBridgeMathAndWindowScale(t *testing.T) {
-	previous := WindowScale()
-	t.Cleanup(func() { SetWindowScale(previous) })
-	for _, scale := range []float64{0.5, 1, 2.5} {
-		SetWindowScale(scale)
-		if got := WindowScale(); got != scale {
-			t.Fatalf("WindowScale = %v, want %v", got, scale)
-		}
-	}
-	for _, degree := range []float64{-360, -180, -90, 0, 90, 180, 360} {
-		rad := DegToRad(degree)
-		if math.Abs(rad-degree*math.Pi/180) > 1e-12 || math.Abs(RadToDeg(rad)-degree) > 1e-12 {
-			t.Errorf("angle conversion failed for %v degrees", degree)
-		}
-	}
-	for _, tc := range []struct{ rad, sin, cos float64 }{
-		{0, 0, 1}, {math.Pi / 2, 1, 0}, {math.Pi, 0, -1}, {-math.Pi / 2, -1, 0},
-	} {
-		got := Sincos(tc.rad)
-		if math.Abs(got.X-tc.sin) > 1e-12 || math.Abs(got.Y-tc.cos) > 1e-12 {
-			t.Errorf("Sincos(%v) = %v, want (%v, %v)", tc.rad, got, tc.sin, tc.cos)
-		}
-	}
-	for _, value := range []float64{-2.5, 0, 3.25} {
-		if got := UniformVec2(value); got.X != value || got.Y != value {
-			t.Errorf("UniformVec2(%v) = %v", value, got)
-		}
-	}
-}
-
 func (bridgeMainThreadPlatform) IsMainThread() bool { return true }
 
 func (s *bridgeDestroySprite) Destroy() bool {
@@ -194,3 +245,43 @@ func (n *bridgeDestroyNode) Destroy() bool {
 	n.calls++
 	return true
 }
+
+func (m *adapterResourceSpy) ReadAllText(path string) string { return m.files[path] }
+
+func (m *adapterResourceSpy) HasFile(path string) bool { _, ok := m.files[path]; return ok }
+
+func (m *adapterResourceSpy) ListDirectories(path string) string { return "directories:" + path }
+
+func (m *adapterCameraSpy) GetCameraPosition() mathf.Vec2 { return m.position }
+
+func (m *adapterCameraSpy) GetCameraZoom() mathf.Vec2 { return m.zoom }
+
+func (m *adapterCameraSpy) SetCameraPosition(value mathf.Vec2) { m.position = value }
+
+func (m *adapterPlatformSpy) SetDebugMode(value bool) { m.debug = value }
+
+func (m *adapterExtSpy) SetLayerSorterMode(value int64) { m.modes = append(m.modes, value) }
+
+func (m *backdropProxySpy) SetZIndex(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("z:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetTriggerLayer(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("trigger-layer:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetCollisionLayer(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("collision-layer:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetCollisionMask(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("collision-mask:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetTriggerMask(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("trigger-mask:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetTexture(_ Object, path string) { m.texture = path }
+
+func (m *backdropProxySpy) SetRenderScale(_ Object, value mathf.Vec2) { m.scale = value }

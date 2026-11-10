@@ -27,7 +27,7 @@ type namedOwner struct{}
 type invalidNamedOwner struct{}
 
 func TestThreadIdentity(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	var wantID int64
 	for _, test := range []struct {
 		name  string
@@ -43,7 +43,7 @@ func TestThreadIdentity(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			wantID++
-			thread := co.newThread(test.owner)
+			thread := scheduler.newThread(test.owner)
 			t.Cleanup(thread.Cancel)
 			if got := thread.ID(); got != wantID {
 				t.Errorf("ID = %d, want %d", got, wantID)
@@ -180,13 +180,13 @@ func TestBeginMainRestoresEnclosingStart(t *testing.T) {
 }
 
 func TestCancelStopsSuspendedThread(t *testing.T) {
-	co := New(nil)
-	thread := co.Create("suspended", func(me Thread) {
-		co.WaitYield(me)
+	scheduler := New(nil)
+	thread := scheduler.Create("suspended", func(me Thread) {
+		scheduler.WaitYield(me)
 		t.Error("canceled script continued")
 	})
-	t.Cleanup(func() { co.RunAfterStop(nil) })
-	co.JoinFirstSlice(thread)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+	scheduler.JoinFirstSlice(thread)
 	thread.Cancel()
 	waitForThreadSignal(t, thread.done, "Cancel did not wake the suspended script")
 	if !thread.Stopped() || thread.Context().Err() == nil {
@@ -195,14 +195,28 @@ func TestCancelStopsSuspendedThread(t *testing.T) {
 }
 
 func TestIsInCoroutineTracksCaller(t *testing.T) {
-	co := New(nil)
-	if co.IsInCoroutine() {
+	var absent *Scheduler
+	if got := absent.Caller(); got != nil {
+		t.Fatalf("nil scheduler Caller() = %v, want nil", got)
+	}
+	if absent.IsInCoroutine() {
+		t.Fatal("nil scheduler reported a coroutine")
+	}
+	scheduler := New(nil)
+	other := New(nil)
+	if scheduler.Caller() != nil || scheduler.IsInCoroutine() {
 		t.Fatal("external caller was reported as a coroutine")
 	}
 
 	managed := make(chan bool, 1)
-	co.Create("managed", func(Thread) {
-		managed <- co.IsInCoroutine()
+	scheduler.Create("managed", func(me Thread) {
+		if got := scheduler.Caller(); got != me {
+			t.Errorf("scheduler.Caller() = %v, want %v", got, me)
+		}
+		if got := other.Caller(); got != nil {
+			t.Errorf("other.Caller() = %v, want nil", got)
+		}
+		managed <- scheduler.IsInCoroutine()
 	})
 	select {
 	case got := <-managed:
@@ -212,23 +226,23 @@ func TestIsInCoroutineTracksCaller(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("managed caller did not run")
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func TestExternalCallsPreserveActiveThread(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started, release := make(chan struct{}), make(chan struct{})
-	thread := co.Create("active", func(Thread) {
+	thread := scheduler.Create("active", func(Thread) {
 		close(started)
 		<-release
 	})
 	t.Cleanup(func() {
 		close(release)
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	waitForThreadSignal(t, started, "coroutine did not start")
-	if co.Current() != thread {
-		t.Fatalf("Current() = %v, want running coroutine %v", co.Current(), thread)
+	if scheduler.Current() != thread {
+		t.Fatalf("Current() = %v, want running coroutine %v", scheduler.Current(), thread)
 	}
 
 	called := false
@@ -238,12 +252,12 @@ func TestExternalCallsPreserveActiveThread(t *testing.T) {
 		wantPanic any
 		wantCall  bool
 	}{
-		{"worker", func(Thread) { co.WaitToDo(func() { called = true }) }, nil, true},
-		{"yield", co.yield, ErrNotCurrent, false},
-		{"wait yield", co.WaitYield, ErrNotCurrent, false},
-		{"frame", co.WaitNextFrameFor, ErrNotCurrent, false},
-		{"loop", co.YieldLoopFor, ErrNotCurrent, false},
-		{"round", co.YieldToNextRoundFor, ErrNotCurrent, false},
+		{"worker", func(Thread) { scheduler.WaitToDo(func() { called = true }) }, nil, true},
+		{"yield", scheduler.yield, ErrNotCurrent, false},
+		{"wait yield", scheduler.WaitYield, ErrNotCurrent, false},
+		{"frame", scheduler.WaitNextFrameFor, ErrNotCurrent, false},
+		{"loop", scheduler.YieldLoopFor, ErrNotCurrent, false},
+		{"round", scheduler.YieldToNextRoundFor, ErrNotCurrent, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			called = false
@@ -253,13 +267,13 @@ func TestExternalCallsPreserveActiveThread(t *testing.T) {
 			if called != test.wantCall {
 				t.Fatalf("callback called = %v, want %v", called, test.wantCall)
 			}
-			if co.Current() != thread || co.Caller() != nil {
+			if scheduler.Current() != thread || scheduler.Caller() != nil {
 				t.Fatal("external call changed script ownership or caller identity")
 			}
-			co.schedulerMu.Lock()
-			defer co.schedulerMu.Unlock()
-			_, pending := co.pendingExecution[thread]
-			if !pending || co.currentJobs.len() != 0 {
+			scheduler.schedulerMu.Lock()
+			defer scheduler.schedulerMu.Unlock()
+			_, pending := scheduler.pendingExecution[thread]
+			if !pending || scheduler.currentJobs.len() != 0 {
 				t.Fatal("external call changed the running script or queued work")
 			}
 		})

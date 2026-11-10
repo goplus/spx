@@ -30,17 +30,17 @@ import (
 func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 	for _, wait := range []struct {
 		name    string
-		yield   func(*Coroutines, Thread)
+		yield   func(*Scheduler, Thread)
 		advance bool
 	}{
-		{"frame", (*Coroutines).WaitNextFrameFor, true},
-		{"loop", (*Coroutines).YieldLoopFor, false},
+		{"frame", (*Scheduler).WaitNextFrameFor, true},
+		{"loop", (*Scheduler).YieldLoopFor, false},
 	} {
 		for _, count := range []int{2, 256} {
 			t.Run(fmt.Sprintf("%s/%d", wait.name, count), func(t *testing.T) {
-				co := New(nil)
+				scheduler := New(nil)
 				itime.Start()
-				t.Cleanup(func() { co.RunAfterStop(nil) })
+				t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 				var mu sync.Mutex
 				var order []string
@@ -50,42 +50,42 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 					mu.Unlock()
 				}
 				for i := range count {
-					thread := co.Create(nil, func(me Thread) {
-						wait.yield(co, me)
+					thread := scheduler.Create(nil, func(me Thread) {
+						wait.yield(scheduler, me)
 						switch i {
 						case 0:
 							record("A")
-							co.Create(nil, func(Thread) { record("C") })
+							scheduler.Create(nil, func(Thread) { record("C") })
 						case count - 1:
 							record("B")
 						}
 					})
-					co.JoinFirstSlice(thread)
+					scheduler.JoinFirstSlice(thread)
 				}
-				co.RunBetweenScripts(func() {})
+				scheduler.RunBetweenScripts(func() {})
 				if wait.advance {
 					itime.Update(1.0/30, 30)
 				}
 
 				// Expire at the first watchdog checkpoint, including when the
 				// entire small batch has been scanned but not yet published.
-				expireUpdateAtFirstCheckpoint(co)
-				co.Update()
-				if got := co.UpdateStats().JobCount; got == 0 || count == 256 && got >= count {
+				expireUpdateAtFirstCheckpoint(scheduler)
+				scheduler.Update()
+				if got := scheduler.UpdateStats().JobCount; got == 0 || count == 256 && got >= count {
 					t.Fatalf("scanned %d of %d waits before watchdog, want bounded progress", got, count)
 				}
 
 				// The engine synchronously runs dispatchers before its next Update.
 				// A suspended wait batch must allow these scripts to finish.
-				dispatcher := co.Create(nil, func(Thread) { record("dispatcher") })
+				dispatcher := scheduler.Create(nil, func(Thread) { record("dispatcher") })
 				waitForThreadSignal(t, dispatcher.done, "incomplete wait batch blocked the engine dispatcher")
 				want := []string{"dispatcher"}
 				// A priority engine call arriving during the pause must neither
 				// publish the partial batch nor consume its remaining wait count.
-				co.queueMainThreadCallForTest(nil, func() { record("main") })
-				expireUpdateAtFirstCheckpoint(co)
-				co.Update()
-				if stats := co.UpdateStats(); stats.JobCount != 1 || stats.MainThreadCount != 1 {
+				scheduler.queueMainThreadCallForTest(nil, func() { record("main") })
+				expireUpdateAtFirstCheckpoint(scheduler)
+				scheduler.Update()
+				if stats := scheduler.UpdateStats(); stats.JobCount != 1 || stats.MainThreadCount != 1 {
 					t.Fatalf("engine call consumed waiting scripts: %+v", stats)
 				}
 				want = append(want, "main")
@@ -96,9 +96,9 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 					t.Fatalf("scripts ran while the wait batch was unpublished: %v", got)
 				}
 
-				co.updateWatchdogNow = time.Now
+				scheduler.updateWatchdogNow = time.Now
 				itime.Update(1.0/30, 30)
-				co.Update()
+				scheduler.Update()
 				mu.Lock()
 				got = slices.Clone(order)
 				mu.Unlock()
@@ -112,61 +112,61 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 }
 
 func TestInterruptedWaitBatchKeepsClockSnapshot(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	var resumed atomic.Int32
 	const count = 256
 	for range count {
-		thread := co.Create(nil, func(Thread) {
-			co.Wait(1)
+		thread := scheduler.Create(nil, func(Thread) {
+			scheduler.Wait(1)
 			resumed.Add(1)
 		})
-		co.JoinFirstSlice(thread)
+		scheduler.JoinFirstSlice(thread)
 	}
-	co.Update()
+	scheduler.Update()
 	itime.Update(0.5, 30)
-	expireUpdateAtFirstCheckpoint(co)
-	co.Update()
-	if got := co.UpdateStats().JobCount; got == 0 || got >= count {
+	expireUpdateAtFirstCheckpoint(scheduler)
+	scheduler.Update()
+	if got := scheduler.UpdateStats().JobCount; got == 0 || got >= count {
 		t.Fatalf("processed %d waits, want a partially scanned batch", got)
 	}
 
 	// All waits were unexpired at the original batch clock. Crossing their
 	// deadline while paused must not recheck only the already-scanned prefix.
 	itime.Update(0.5, 30)
-	co.updateWatchdogNow = time.Now
-	co.Update()
+	scheduler.updateWatchdogNow = time.Now
+	scheduler.Update()
 	if got := resumed.Load(); got != 0 {
 		t.Fatalf("%d waits resumed using a different clock from the rest of their batch", got)
 	}
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	if got := resumed.Load(); got != count {
 		t.Fatalf("resumed %d waits after the next frame, want %d", got, count)
 	}
 }
 
 func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(co.StopAll)
+	t.Cleanup(scheduler.StopAll)
 	var cleaned, resumed atomic.Int32
 	threads := make([]Thread, 256)
 	for i := range threads {
-		threads[i] = co.Create(nil, func(Thread) {
+		threads[i] = scheduler.Create(nil, func(Thread) {
 			defer cleaned.Add(1)
-			co.WaitNextFrame()
+			scheduler.WaitNextFrame()
 			resumed.Add(1)
 		})
-		co.JoinFirstSlice(threads[i])
+		scheduler.JoinFirstSlice(threads[i])
 	}
-	co.Update()
+	scheduler.Update()
 	itime.Update(1.0/30, 30)
 
-	expireUpdateAtFirstCheckpoint(co)
-	co.Update()
-	if got := co.UpdateStats().JobCount; got == 0 || got >= len(threads) {
+	expireUpdateAtFirstCheckpoint(scheduler)
+	scheduler.Update()
+	if got := scheduler.UpdateStats().JobCount; got == 0 || got >= len(threads) {
 		t.Fatalf("watchdog processed %d of %d waits, want an incomplete batch", got, len(threads))
 	}
 	if got := resumed.Load(); got != 0 {
@@ -175,22 +175,22 @@ func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 
 	// Cancellation must wake both an unpublished eligible script and a script
 	// whose wait job has not yet been scanned, without another Update.
-	co.Stop(threads[0])
-	co.Stop(threads[len(threads)-1])
+	scheduler.Stop(threads[0])
+	scheduler.Stop(threads[len(threads)-1])
 	waitForThreadSignal(t, threads[0].done, "staged script did not finish cancellation")
 	waitForThreadSignal(t, threads[len(threads)-1].done, "unscanned script did not finish cancellation")
-	co.schedulerMu.Lock()
+	scheduler.schedulerMu.Lock()
 	for _, thread := range []Thread{threads[0], threads[len(threads)-1]} {
-		_, published := co.pendingExecution[thread]
-		_, staged := co.waitBatch.runnable.pendingExecution[thread]
+		_, published := scheduler.pendingExecution[thread]
+		_, staged := scheduler.waitBatch.runnable.pendingExecution[thread]
 		if thread.readyHeap != nil || published || staged {
 			t.Error("finished script remains in runnable state")
 		}
 	}
-	co.schedulerMu.Unlock()
+	scheduler.schedulerMu.Unlock()
 	drained := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(drained)
 	}()
 	waitForThreadSignal(t, drained, "interrupted wait batch prevented shutdown from draining")
@@ -201,25 +201,25 @@ func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 		t.Fatalf("%d canceled scripts resumed normally", got)
 	}
 
-	co.updateWatchdogNow = time.Now
+	scheduler.updateWatchdogNow = time.Now
 	updated := make(chan struct{})
 	go func() {
-		co.Update()
+		scheduler.Update()
 		close(updated)
 	}()
 	waitForThreadSignal(t, updated, "canceled wait batch left permanently pending execution")
 
-	restarted := co.Create(nil, func(Thread) { co.WaitNextFrame() })
+	restarted := scheduler.Create(nil, func(Thread) { scheduler.WaitNextFrame() })
 	waitForThreadSignal(t, restarted.firstSliceDone, "scheduler did not accept new work after shutdown")
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	waitForThreadSignal(t, restarted.done, "new script did not resume after shutdown")
 }
 
-func expireUpdateAtFirstCheckpoint(co *Coroutines) {
+func expireUpdateAtFirstCheckpoint(scheduler *Scheduler) {
 	now := time.Now()
 	first := true
-	co.updateWatchdogNow = func() time.Time {
+	scheduler.updateWatchdogNow = func() time.Time {
 		if first {
 			first = false
 			return now

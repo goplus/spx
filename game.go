@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	gco      *coroutine.Coroutines
-	tySprite = reflect.TypeFor[Sprite]()
+	scheduler *coroutine.Scheduler
+	tySprite  = reflect.TypeFor[Sprite]()
 )
 
 var defaultDebugFlags atomic.Uint32
@@ -172,7 +172,7 @@ type gameBootstrapState struct {
 func (p *Game) setDebugFlags(flags dbgFlags) {
 	p.debugState.DebugInstr = flags&DbgFlagInstr != 0
 	p.debugState.DebugEvent = flags&DbgFlagEvent != 0
-	gco.SetPerfDebug(flags&DbgFlagPerf != 0)
+	scheduler.SetPerfDebug(flags&DbgFlagPerf != 0)
 }
 
 func (p *Game) reset() {

@@ -32,7 +32,7 @@ type mainThreadCall struct {
 
 // WaitMainThread runs call on the engine thread, directly when the platform allows.
 // Managed callers retain their script slice while waiting.
-func (p *Coroutines) WaitMainThread(call func()) {
+func (p *Scheduler) WaitMainThread(call func()) {
 	caller := p.Caller()
 	if p.callbackScope()&callbackCleanup != 0 {
 		// Engine wrappers nested in cleanup inherit its cancellation exemption.
@@ -43,7 +43,7 @@ func (p *Coroutines) WaitMainThread(call func()) {
 
 // CleanupMainThread runs call on the engine thread, ignoring script cancellation.
 // Call must not yield; shutdown waits for managed callers to finish.
-func (p *Coroutines) CleanupMainThread(call func()) {
+func (p *Scheduler) CleanupMainThread(call func()) {
 	p.waitMainThread(func() {
 		id, previous := p.enterCallback(callbackExclusive | callbackCleanup)
 		defer p.leaveCallback(id, previous)
@@ -54,7 +54,7 @@ func (p *Coroutines) CleanupMainThread(call func()) {
 // RunBetweenScripts runs call on the caller between script slices while
 // servicing queued engine-thread jobs. Native callers must use the engine thread.
 // Calls that already hold a script slice are rejected.
-func (p *Coroutines) RunBetweenScripts(call func()) {
+func (p *Scheduler) RunBetweenScripts(call func()) {
 	if p.Caller() != nil || p.callbackScope()&callbackExclusive != 0 {
 		panic(ErrReentrantWait)
 	}
@@ -72,7 +72,7 @@ func (p *Coroutines) RunBetweenScripts(call func()) {
 	call()
 }
 
-func (p *Coroutines) waitMainThread(call func(), caller Thread) {
+func (p *Scheduler) waitMainThread(call func(), caller Thread) {
 	if platform.TryCallEngineDirectly(func() {
 		p.invokeMainThreadDirect(caller, call)
 	}) {
@@ -88,7 +88,7 @@ func (p *Coroutines) waitMainThread(call func(), caller Thread) {
 	pending.wait()
 }
 
-func (p *Coroutines) invokeMainThreadDirect(caller Thread, call func()) {
+func (p *Scheduler) invokeMainThreadDirect(caller Thread, call func()) {
 	if caller.canceled() {
 		panic(ErrAbortThread)
 	}
@@ -112,7 +112,7 @@ func (p *Coroutines) invokeMainThreadDirect(caller Thread, call func()) {
 	checkMainThreadResult(caller, callbackResult{})
 }
 
-func (p *Coroutines) invokeMainThread(caller Thread, call func()) callbackResult {
+func (p *Scheduler) invokeMainThread(caller Thread, call func()) callbackResult {
 	if caller.canceled() {
 		return callbackResult{}
 	}
@@ -135,7 +135,7 @@ func checkMainThreadResult(caller Thread, result callbackResult) {
 
 // waitForSignal serves native engine jobs while waiting, without advancing frames.
 // Other callers park so the host can progress.
-func (p *Coroutines) waitForSignal(ready <-chan struct{}) {
+func (p *Scheduler) waitForSignal(ready <-chan struct{}) {
 	if hasMainThreadQueue && platform.TryCallEngineDirectly(func() {
 		for {
 			select {
@@ -152,7 +152,7 @@ func (p *Coroutines) waitForSignal(ready <-chan struct{}) {
 }
 
 // pumpMainThread serves only engine jobs; it never advances script rounds or frames.
-func (p *Coroutines) pumpMainThread() {
+func (p *Scheduler) pumpMainThread() {
 	pending := p.takeMainThreadCall()
 	if pending == nil {
 		runtime.Gosched()
@@ -163,21 +163,21 @@ func (p *Coroutines) pumpMainThread() {
 	}
 }
 
-func (p *Coroutines) enqueueMainThreadCall(pending *mainThreadCall) {
+func (p *Scheduler) enqueueMainThreadCall(pending *mainThreadCall) {
 	p.schedulerMu.Lock()
 	p.mainCalls = append(p.mainCalls, pending)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) takeMainThreadCall() *mainThreadCall {
+func (p *Scheduler) takeMainThreadCall() *mainThreadCall {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
 	return p.takeMainThreadCallLocked()
 }
 
 // Select and remove together so Update and engine waiters cannot claim the same call.
-func (p *Coroutines) takeMainThreadCallLocked() *mainThreadCall {
+func (p *Scheduler) takeMainThreadCallLocked() *mainThreadCall {
 	if len(p.mainCalls) == 0 {
 		return nil
 	}
@@ -188,7 +188,7 @@ func (p *Coroutines) takeMainThreadCallLocked() *mainThreadCall {
 	return pending
 }
 
-func (c *mainThreadCall) run(p *Coroutines) {
+func (c *mainThreadCall) run(p *Scheduler) {
 	if !c.claimed.CompareAndSwap(false, true) {
 		return
 	}

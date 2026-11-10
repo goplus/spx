@@ -20,7 +20,7 @@ import "github.com/goplus/spx/v4/internal/time"
 
 // WaitForChan receives one value from ch. Inside a coroutine it yields while
 // waiting; otherwise it blocks the caller directly.
-func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
+func WaitForChan[T any](p *Scheduler, ch <-chan T) T {
 	me := p.Caller()
 	if me == nil {
 		select {
@@ -44,7 +44,7 @@ func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
 }
 
 // Wait suspends the current coroutine for t seconds of level time.
-func (p *Coroutines) Wait(t float64) {
+func (p *Scheduler) Wait(t float64) {
 	me := p.Caller()
 	if me == nil {
 		return
@@ -58,13 +58,13 @@ func (p *Coroutines) Wait(t float64) {
 }
 
 // WaitYield suspends me until an Update pass processes its yield job.
-func (p *Coroutines) WaitYield(me Thread) {
+func (p *Scheduler) WaitYield(me Thread) {
 	p.enqueueAndYield(&waitJob{thread: me, kind: waitYield})
 }
 
 // WaitToDo runs fn in a worker and yields when called from a coroutine.
 // Other callers run fn directly.
-func (p *Coroutines) WaitToDo(fn func()) {
+func (p *Scheduler) WaitToDo(fn func()) {
 	me := p.Caller()
 	if me == nil {
 		fn()
@@ -100,7 +100,7 @@ func (p *Coroutines) WaitToDo(fn func()) {
 }
 
 // admitWorker registers external work under the admission barrier.
-func (p *Coroutines) admitWorker(me Thread) bool {
+func (p *Scheduler) admitWorker(me Thread) bool {
 	p.admissionMu.RLock()
 	defer p.admissionMu.RUnlock()
 	if p.admissionClosed() || me.canceled() {
@@ -113,14 +113,14 @@ func (p *Coroutines) admitWorker(me Thread) bool {
 }
 
 // WaitToDo pairs each admission with one deferred finish in the worker.
-func (p *Coroutines) finishWorker() {
+func (p *Scheduler) finishWorker() {
 	p.threadsMu.Lock()
 	p.workerCount--
 	p.notifyDrainLocked()
 	p.threadsMu.Unlock()
 }
 
-func (p *Coroutines) enqueueAndYield(job *waitJob) {
+func (p *Scheduler) enqueueAndYield(job *waitJob) {
 	me := job.thread
 	p.requireCurrent(me)
 	p.requireCanWait()

@@ -24,21 +24,27 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+// CreateBareSpriteForType registers and initializes the sprite on the caller.
+// Callers serialize runtime access; backend manager calls dispatch separately.
 func CreateBareSpriteForType[T any](pos mathf.Vec2) *T {
 	value := createBareSprite(reflect.TypeFor[T](), pos)
 	return value.Addr().Interface().(*T)
 }
 
+// CreateBackdropForType uses the same caller context as CreateBareSpriteForType.
 func CreateBackdropForType[T any]() *T {
 	value := createBackdrop(reflect.TypeFor[T]())
 	return value.Addr().Interface().(*T)
 }
 
+// CreateEngineUIForType registers the node and invokes OnStart on the caller.
+// Callers must serialize runtime access, including nested UI construction.
 func CreateEngineUIForType[T any](prefabName string) *T {
 	value := createUI(reflect.TypeFor[T](), prefabName, true)
 	return value.Addr().Interface().(*T)
 }
 
+// BindUIForType uses the same caller context as CreateEngineUIForType.
 func BindUIForType[T any](parentNode Object, path string) *T {
 	value := bindUI(reflect.TypeFor[T](), parentNode, path)
 	if !value.IsValid() {
@@ -48,7 +54,7 @@ func BindUIForType[T any](parentNode Object, path string) *T {
 }
 
 func bindSceneInstantiatedSprite(id Object, typeName string) {
-	if t, ok := state.spriteTypes[typeName]; ok {
+	if t, ok := spriteTypes[typeName]; ok {
 		createSpriteValue(t, id)
 		return
 	}
@@ -92,18 +98,14 @@ func bindUI(t reflect.Type, parentNode Object, path string) reflect.Value {
 
 func initUIValue(value reflect.Value, id Object) reflect.Value {
 	node := value.Addr().Interface().(gdx.IUiNode)
-	gdx.InitUINodeInstance(id, node, func(id Object, node gdx.IUiNode) {
-		state.uiNodes[id] = node
-	})
+	gdx.InitUINodeInstance(id, node, registerUINode)
 	return value
 }
 
 func createSpriteValue(t reflect.Type, id Object) reflect.Value {
 	spriteValue := reflect.New(t).Elem()
 	sprite := spriteValue.Addr().Interface().(gdx.ISpriter)
-	gdx.InitSpriteInstance(id, sprite, func(id Object, sprite gdx.ISpriter) {
-		state.sprites[id] = sprite
-	})
+	gdx.InitSpriteInstance(id, sprite, registerSprite)
 	return spriteValue
 }
 

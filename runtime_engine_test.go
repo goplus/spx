@@ -79,7 +79,7 @@ func TestOnEngineStartSchedulesBootstrapOnce(t *testing.T) {
 		t.Run(fmt.Sprintf("reset=%v", reset), func(t *testing.T) {
 			previousBounds := cachedBounds
 			t.Cleanup(func() { cachedBounds = previousBounds })
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			gamer := &engineStartTestGame{Game: game}
 			game.gamer = gamer
 			game.lifecycleState.IsRunned.Store(true)
@@ -87,14 +87,14 @@ func TestOnEngineStartSchedulesBootstrapOnce(t *testing.T) {
 			game.queueBootstrap(game.bootstrapGeneration(), func() { bootstrapCalls++ })
 
 			// Hold execution until both host callbacks and any reset finish.
-			co.RunBetweenScripts(func() {
+			currentScheduler.RunBetweenScripts(func() {
 				game.OnEngineStart()
 				game.OnEngineStart()
 				if reset {
 					game.resetBootstrap()
 				}
 			})
-			co.Update()
+			currentScheduler.Update()
 
 			wantCalls := 1
 			if reset {
@@ -109,10 +109,10 @@ func TestOnEngineStartSchedulesBootstrapOnce(t *testing.T) {
 			if game.lifecycleState.StartDispatched.Load() {
 				t.Fatal("bootstrap dispatched OnStart before the first frame")
 			}
-			threads := co.LastThreadID()
+			threads := currentScheduler.LastThreadID()
 			game.OnEngineStart()
-			co.Update()
-			if co.LastThreadID() != threads {
+			currentScheduler.Update()
+			if currentScheduler.LastThreadID() != threads {
 				t.Fatal("repeated OnEngineStart scheduled more work")
 			}
 		})
@@ -125,23 +125,23 @@ func TestDebugPanelShowsLatestCoroutineStats(t *testing.T) {
 	pkgengine.UiMgr = mgr
 	previousDebug := profiler.Debug
 	t.Cleanup(func() { profiler.Debug = previousDebug })
-	co := setupRuntimeScheduler(t)
-	thread := co.Create("debug", func(me coroutine.Thread) {
-		co.WaitYield(me)
-		co.WaitNextFrameFor(me)
+	currentScheduler := setupRuntimeScheduler(t)
+	thread := currentScheduler.Create("debug", func(me coroutine.Thread) {
+		currentScheduler.WaitYield(me)
+		currentScheduler.WaitNextFrameFor(me)
 	})
-	co.JoinFirstSlice(thread)
+	currentScheduler.JoinFirstSlice(thread)
 	var game Game
 	game.debugState.Debug = true
 	for range 2 {
-		co.Update()
+		currentScheduler.Update()
 		game.showDebugPanel()
 		panel := game.debugState.DebugPanel
 		game.showDebugPanel()
 		if panel == nil || game.debugState.DebugPanel != panel || !profiler.Debug {
 			t.Fatal("debug panel was not created and reused")
 		}
-		stats := co.UpdateStats()
+		stats := currentScheduler.UpdateStats()
 		for _, want := range []string{
 			fmt.Sprintf("coro: MoveTime: %.2f\n", stats.MoveTime),
 			fmt.Sprintf("coro: WaitTime: %.2f\n", stats.WaitTime),
@@ -344,7 +344,7 @@ func TestFrameSyncUpdatesCustomShapesAndMonitors(t *testing.T) {
 }
 
 func TestFrameSyncReadsPhysicsBeforeConditionsAndPreservesVisualEdits(t *testing.T) {
-	co, game, mgr := setupFrameSyncGame(t)
+	currentScheduler, game, mgr := setupFrameSyncGame(t)
 	sprite := addFrameSyncSprite(game, 1, "moving")
 	sprite.transform().setPositionRaw(10, 0)
 	game.OnEngineRender(0)
@@ -357,7 +357,7 @@ func TestFrameSyncReadsPhysicsBeforeConditionsAndPreservesVisualEdits(t *testing
 		sampled = mathf.NewVec2(sprite.Xpos(), sprite.Ypos())
 		return false
 	}, func() {})
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 
 	if want := mathf.NewVec2(20, 30); sampled != want || mgr.positions[1] != want {
 		t.Fatalf("condition=%v backend=%v, want physical position %v", sampled, mgr.positions[1], want)
@@ -368,7 +368,7 @@ func TestFrameSyncReadsPhysicsBeforeConditionsAndPreservesVisualEdits(t *testing
 }
 
 func TestFrameSyncCommitsCollisionSliceAndKeepsFutureWait(t *testing.T) {
-	co, game, mgr := setupFrameSyncGame(t)
+	currentScheduler, game, mgr := setupFrameSyncGame(t)
 	source := addFrameSyncSprite(game, 1, "source")
 	target := addFrameSyncSprite(game, 2, "target")
 	game.OnEngineRender(0)
@@ -380,18 +380,18 @@ func TestFrameSyncCommitsCollisionSliceAndKeepsFutureWait(t *testing.T) {
 	})
 	game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 	if source.Xpos() != 42 || mgr.positions[1].X != 42 || len(mgr.batches) != 1 {
 		t.Fatalf("collision frame: logical=%v backend=%v batches=%d", source.Xpos(), mgr.positions[1], len(mgr.batches))
 	}
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 	if source.Xpos() != 84 || mgr.positions[1].X != 84 || len(mgr.batches) != 2 {
 		t.Fatalf("following frame: logical=%v backend=%v batches=%d", source.Xpos(), mgr.positions[1], len(mgr.batches))
 	}
 }
 
 func TestFrameSyncRetainsBootstrapContactsUntilFirstActiveFrame(t *testing.T) {
-	co, game, mgr := setupFrameSyncGame(t)
+	currentScheduler, game, mgr := setupFrameSyncGame(t)
 	source := addFrameSyncSprite(game, 1, "source")
 	target := addFrameSyncSprite(game, 2, "target")
 	game.lifecycleState.IsRunned.Store(false)
@@ -409,32 +409,32 @@ func TestFrameSyncRetainsBootstrapContactsUntilFirstActiveFrame(t *testing.T) {
 	})
 	game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 	game.OnEngineUpdate(0)
-	co.Update()
+	currentScheduler.Update()
 	game.OnEngineRender(0)
 	if touches != 0 || starts != 0 || len(game.triggerEvents) != 1 {
 		t.Fatal("incomplete bootstrap consumed contacts or started handlers")
 	}
 	game.lifecycleState.IsRunned.Store(true)
 	game.lifecycleState.BootstrapDone.Store(true)
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 	if touches != 1 || starts != 1 || mgr.positions[1].X != 42 {
 		t.Fatalf("first active frame: touches=%d starts=%d position=%v", touches, starts, mgr.positions[1])
 	}
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 	if touches != 1 || starts != 1 {
 		t.Fatal("startup events were repeated")
 	}
 }
 
 func TestFrameSyncShapeCallbacksCanBroadcastBeforeCommit(t *testing.T) {
-	co, game, mgr := setupFrameSyncGame(t)
+	currentScheduler, game, mgr := setupFrameSyncGame(t)
 	sprite := addFrameSyncSprite(game, 1, "moving")
 	game.OnMsg__1("move", func() { sprite.SetXpos(42) })
 	game.shapeMgr.add(frameUpdateFunc(func(float64) {
 		game.Broadcast__0("move")
 	}))
 
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 	if sprite.Xpos() != 42 || mgr.positions[1].X != 42 || len(mgr.batches) != 1 {
 		t.Fatalf("shape callback: logical=%v backend=%v batches=%d", sprite.Xpos(), mgr.positions[1], len(mgr.batches))
 	}
@@ -451,7 +451,7 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 		{"duration", func() { engine.Wait(2.0 / 60) }, 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co, game, mgr := setupFrameSyncGame(t)
+			currentScheduler, game, mgr := setupFrameSyncGame(t)
 			source := addFrameSyncSprite(game, 1, "source")
 			target := addFrameSyncSprite(game, 2, "target")
 			game.lifecycleState.StartDispatched.Store(false)
@@ -459,7 +459,7 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 			started, completed, active, later, keys, touches, starts := 0, 0, 0, 0, 0, 0, 0
 			var threads []coroutine.Thread
 			game.shapeMgr.add(frameUpdateFunc(func(float64) {
-				threads = append(threads, currentScriptThread())
+				threads = append(threads, scheduler.Caller())
 				started++
 				active++
 				defer func() { active-- }()
@@ -477,9 +477,9 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 			game.OnEngineBeforeUpdate(1.0 / 60)
 			game.inputMgr.frame.pending.events = append(game.inputMgr.frame.pending.events, &eventKeyDown{Key: KeyA})
 			itime.Update(1.0/60, 60)
-			runFrameSyncCall(t, co, func() {
+			runFrameSyncCall(t, currentScheduler, func() {
 				game.OnEngineUpdate(1.0 / 60)
-				co.Update()
+				currentScheduler.Update()
 				game.OnEngineRender(1.0 / 60)
 			})
 			if started != 1 || completed != 0 || active != 1 || later != 1 || keys != 1 || touches != 1 || starts != 1 {
@@ -489,7 +489,7 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 				t.Fatal("waiting shape interrupted event registration or frame commit")
 			}
 			for frame := 1; frame <= test.frames; frame++ {
-				runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+				runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 				wantCompleted := 0
 				if frame == test.frames {
 					wantCompleted = 1
@@ -498,10 +498,10 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 					t.Fatalf("frame %d: started/completed/active/later=%d/%d/%d/%d", frame+1, started, completed, active, later)
 				}
 			}
-			runFrameSyncCall(t, co, func() {
+			runFrameSyncCall(t, currentScheduler, func() {
 				game.Stop(AllOtherScripts)
-				co.JoinAll(threads)
-				co.Update()
+				currentScheduler.JoinAll(threads)
+				currentScheduler.Update()
 			})
 			if active != 0 {
 				t.Fatalf("stopped shape updates still active: %d", active)
@@ -519,11 +519,11 @@ func TestFrameSyncMonitorWaitSkipsBusyAndCleansStoppedGetter(t *testing.T) {
 		{"next_frame", func(*Game) { engine.WaitNextFrame() }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co, game, _ := setupFrameSyncGame(t)
+			currentScheduler, game, _ := setupFrameSyncGame(t)
 			getter := &frameMonitorWaitGame{Game: game, wait: func() { test.wait(game) }}
 			monitor, panel := addFrameSyncMonitor(t, getter)
 			for frame := range 2 {
-				runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+				runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 				if getter.started != 1 || getter.completed != frame || getter.active != 1-frame {
 					t.Fatalf("frame %d: getter started/completed/active=%d/%d/%d", frame+1, getter.started, getter.completed, getter.active)
 				}
@@ -533,25 +533,25 @@ func TestFrameSyncMonitorWaitSkipsBusyAndCleansStoppedGetter(t *testing.T) {
 			}
 			monitor.isDirty = true
 			getter.wait = func() { engine.Wait(10) }
-			runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+			runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 			monitor.SetSize(2)
-			runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+			runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 			if monitor.isDirty || panel.scale != 2 {
 				t.Fatal("busy getter blocked the pending UI refresh")
 			}
-			runFrameSyncCall(t, co, func() {
+			runFrameSyncCall(t, currentScheduler, func() {
 				game.Stop(AllOtherScripts)
-				co.Join(getter.thread)
-				co.Update()
+				currentScheduler.Join(getter.thread)
+				currentScheduler.Update()
 			})
 			if getter.started != 2 || getter.completed != 1 || getter.active != 0 {
 				t.Fatalf("stop: getter started/completed/active=%d/%d/%d", getter.started, getter.completed, getter.active)
 			}
-			runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+			runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 			if getter.started != 3 || getter.active != 1 {
 				t.Fatal("canceled getter retained its admission state")
 			}
-			co.RunAfterStop(nil)
+			currentScheduler.RunAfterStop(nil)
 		})
 	}
 }
@@ -568,8 +568,8 @@ func TestFrameSyncMonitorWaitAppliesVisibilityAndLayout(t *testing.T) {
 	} {
 		for _, hide := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/hide=%v", test.name, hide), func(t *testing.T) {
-				co, game, _ := setupFrameSyncGame(t)
-				defer co.RunAfterStop(nil)
+				currentScheduler, game, _ := setupFrameSyncGame(t)
+				defer currentScheduler.RunAfterStop(nil)
 				getter := &frameMonitorWaitGame{Game: game}
 				getter.wait = func() {
 					if getter.started == 2 {
@@ -584,7 +584,7 @@ func TestFrameSyncMonitorWaitAppliesVisibilityAndLayout(t *testing.T) {
 						lateEdit = false
 					}
 				}))
-				frame := func() { runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) }) }
+				frame := func() { runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) }) }
 				frame()
 				if !panel.visible || getter.started != 1 || getter.completed != 1 {
 					t.Fatal("initial getter did not show the monitor")
@@ -637,22 +637,22 @@ func TestFrameSyncMonitorWaitAppliesVisibilityAndLayout(t *testing.T) {
 }
 
 func TestFrameSyncMonitorWaitStopsBeforeGameDestroy(t *testing.T) {
-	co, game, _ := setupFrameSyncGame(t)
+	currentScheduler, game, _ := setupFrameSyncGame(t)
 	getter := &frameMonitorWaitGame{Game: game, wait: func() { engine.WaitNextFrame() }}
 	monitor, panel := addFrameSyncMonitor(t, getter)
-	runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+	runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 	if getter.started != 1 || getter.active != 1 {
 		t.Fatal("getter did not wait before destroy")
 	}
 	stoppedBeforeDestroy := false
 	// The engine drains script work before destroying the game.
-	co.RunAfterStop(func() {
+	currentScheduler.RunAfterStop(func() {
 		stoppedBeforeDestroy = getter.active == 0 && !monitor.evaluating
 		game.OnEngineDestroy()
 	})
-	runFrameSyncCall(t, co, func() {
+	runFrameSyncCall(t, currentScheduler, func() {
 		itime.Update(1.0/60, 60)
-		co.Update()
+		currentScheduler.Update()
 	})
 	if !stoppedBeforeDestroy || getter.completed != 0 || getter.active != 0 || len(panel.events) != 0 {
 		t.Fatalf("destroy: stopped=%v, getter completed/active=%d/%d, UI events=%v", stoppedBeforeDestroy, getter.completed, getter.active, panel.events)
@@ -660,7 +660,7 @@ func TestFrameSyncMonitorWaitStopsBeforeGameDestroy(t *testing.T) {
 }
 
 func TestFrameSyncShapeBroadcastWaitResumesAfterReceiver(t *testing.T) {
-	co, game, mgr := setupFrameSyncGame(t)
+	currentScheduler, game, mgr := setupFrameSyncGame(t)
 	sprite := addFrameSyncSprite(game, 1, "moving")
 	var order []string
 	game.OnMsg__1("move", func() {
@@ -677,11 +677,11 @@ func TestFrameSyncShapeBroadcastWaitResumesAfterReceiver(t *testing.T) {
 		game.BroadcastAndWait__0("move")
 		order = append(order, "sender finished")
 	}))
-	runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+	runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 	if !slices.Equal(order, []string{"sender started", "receiver started"}) || sprite.Xpos() != 0 {
 		t.Fatalf("first frame: order=%v position=%v", order, sprite.Xpos())
 	}
-	runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+	runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 	if !slices.Equal(order, []string{"sender started", "receiver started", "receiver finished", "sender finished"}) || mgr.positions[1].X != 42 {
 		t.Fatalf("second frame: order=%v backend=%v", order, mgr.positions[1])
 	}
@@ -690,7 +690,7 @@ func TestFrameSyncShapeBroadcastWaitResumesAfterReceiver(t *testing.T) {
 func TestFrameSyncShapeBatchRejectsStaleGame(t *testing.T) {
 	for _, reset := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reset=%v", reset), func(t *testing.T) {
-			co, game, _ := setupFrameSyncGame(t)
+			currentScheduler, game, _ := setupFrameSyncGame(t)
 			later := 0
 			game.shapeMgr.add(frameUpdateFunc(func(float64) {
 				if reset {
@@ -700,7 +700,7 @@ func TestFrameSyncShapeBatchRejectsStaleGame(t *testing.T) {
 				}
 			}))
 			game.shapeMgr.add(frameUpdateFunc(func(float64) { later++ }))
-			runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
+			runFrameSyncCall(t, currentScheduler, func() { runFrameSyncGame(currentScheduler, game) })
 			if later != 0 {
 				t.Fatal("queued shape started after its game changed")
 			}
@@ -709,7 +709,7 @@ func TestFrameSyncShapeBatchRejectsStaleGame(t *testing.T) {
 }
 
 func TestFrameSyncDestroyCancelsOnlyItsSpriteContinuations(t *testing.T) {
-	co, game, _ := setupFrameSyncGame(t)
+	currentScheduler, game, _ := setupFrameSyncGame(t)
 	destroyed := addFrameSyncSprite(game, 1, "destroyed")
 	survivor := addFrameSyncSprite(game, 2, "survivor")
 	pkgengine.InitSpriteInstance(1, destroyed.runtimeState.syncSprite, nil)
@@ -718,23 +718,23 @@ func TestFrameSyncDestroyCancelsOnlyItsSpriteContinuations(t *testing.T) {
 	continued := make([]bool, len(owners))
 	cleaned := make([]bool, len(owners))
 	for i, owner := range owners {
-		threads[i] = co.Create(owner, func(coroutine.Thread) {
+		threads[i] = currentScheduler.Create(owner, func(coroutine.Thread) {
 			defer func() { cleaned[i] = true }()
 			engine.WaitNextFrame()
 			continued[i] = true
 		})
-		co.JoinFirstSlice(threads[i])
+		currentScheduler.JoinFirstSlice(threads[i])
 	}
-	runFrameSyncCall(t, co, func() {
+	runFrameSyncCall(t, currentScheduler, func() {
 		destroyed.Destroy()
-		co.Join(threads[0])
+		currentScheduler.Join(threads[0])
 	})
 	if !cleaned[0] || continued[0] || !destroyed.isDestroyed() || destroyed.runtimeState.syncSprite == nil {
 		t.Fatal("public Destroy did not cancel its continuation before proxy deletion committed")
 	}
-	runFrameSyncCall(t, co, func() {
-		runFrameSyncGame(co, game)
-		co.JoinAll(threads)
+	runFrameSyncCall(t, currentScheduler, func() {
+		runFrameSyncGame(currentScheduler, game)
+		currentScheduler.JoinAll(threads)
 	})
 	if !slices.Equal(continued, []bool{false, true, true}) || !slices.Equal(cleaned, []bool{true, true, true}) {
 		t.Fatalf("continued=%v cleaned=%v; want only the surviving sprite and global callbacks to continue", continued, cleaned)
@@ -742,7 +742,7 @@ func TestFrameSyncDestroyCancelsOnlyItsSpriteContinuations(t *testing.T) {
 }
 
 func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
-	co, game, mgr := setupFrameSyncGame(t)
+	currentScheduler, game, mgr := setupFrameSyncGame(t)
 	sprite := addFrameSyncSprite(game, 1, "moving")
 	sprite.SetXpos(10)
 	game.OnEngineBeforeUpdate(1.0 / 60)
@@ -755,7 +755,7 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 		sprite.Hide()
 	})
 	game.OnEngineUpdate(1.0 / 60)
-	co.Update()
+	currentScheduler.Update()
 	game.OnEngineRender(1.0 / 60)
 	if want := mathf.NewVec2(42, 43); mgr.positions[1] != want {
 		t.Fatalf("visual batch replaced direct engine write: got %v, want %v", mgr.positions[1], want)
@@ -765,7 +765,7 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 		t.Fatal("direct position write left superseded position intent pending")
 	}
 	mgr.positions[1] = mathf.NewVec2(50, 60)
-	runFrameSyncGame(co, game)
+	runFrameSyncGame(currentScheduler, game)
 	requirePosition(t, sprite, 50, 60)
 }
 
@@ -831,7 +831,7 @@ func (m *frameSyncSpriteMgr) BatchUpdateTransforms(data []float32) {
 func (f frameUpdateFunc) onUpdate(delta float64) { f(delta) }
 
 func (g *frameMonitorWaitGame) Value() float64 {
-	g.thread = currentScriptThread()
+	g.thread = scheduler.Caller()
 	g.started++
 	g.active++
 	defer func() { g.active-- }()
@@ -850,9 +850,9 @@ func setupCaptureFlushSpriteMgr(t *testing.T) *captureFlushSpriteMgr {
 	return mgr
 }
 
-func setupFrameSyncGame(t *testing.T) (*coroutine.Coroutines, *Game, *frameSyncSpriteMgr) {
+func setupFrameSyncGame(t *testing.T) (*coroutine.Scheduler, *Game, *frameSyncSpriteMgr) {
 	t.Helper()
-	co, game, _ := setupInputSourceTest(t)
+	currentScheduler, game, _ := setupInputSourceTest(t)
 	original := pkgengine.SpriteMgr
 	mgr := &frameSyncSpriteMgr{positions: make(map[int64]mathf.Vec2)}
 	pkgengine.SpriteMgr = mgr
@@ -862,7 +862,7 @@ func setupFrameSyncGame(t *testing.T) (*coroutine.Coroutines, *Game, *frameSyncS
 	game.syncBuffer = engine.NewSpriteSyncBuffer(2)
 	game.lifecycleState.IsRunned.Store(true)
 	game.lifecycleState.StartDispatched.Store(true)
-	return co, game, mgr
+	return currentScheduler, game, mgr
 }
 
 func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
@@ -877,17 +877,17 @@ func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
 	return sprite
 }
 
-func runFrameSyncGame(co *coroutine.Coroutines, game *Game) {
+func runFrameSyncGame(currentScheduler *coroutine.Scheduler, game *Game) {
 	const delta = 1.0 / 60
 	game.OnEngineBeforeUpdate(delta)
 	itime.Update(delta, 60)
 	game.OnEngineUpdate(delta)
-	co.Update()
+	currentScheduler.Update()
 	game.OnEngineRender(delta)
 }
 
 // A failed frame must release the host before fixture cleanup restores globals.
-func runFrameSyncCall(t *testing.T, co *coroutine.Coroutines, call func()) {
+func runFrameSyncCall(t *testing.T, currentScheduler *coroutine.Scheduler, call func()) {
 	t.Helper()
 	done := make(chan any, 1)
 	go func() {
@@ -900,7 +900,7 @@ func runFrameSyncCall(t *testing.T, co *coroutine.Coroutines, call func()) {
 			t.Fatalf("frame panicked: %v", recovered)
 		}
 	case <-time.After(time.Second):
-		co.StopAll()
+		currentScheduler.StopAll()
 		select {
 		case <-done:
 		case <-time.After(time.Second):

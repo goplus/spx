@@ -98,14 +98,14 @@ func TestScratchImmediateGlide(t *testing.T) {
 		{name: "NaN y", x: 30, y: math.NaN(), wantX: 30, wantY: 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			co := setupRuntimeScheduler(t)
+			currentScheduler := setupRuntimeScheduler(t)
 			sprite := newTestTransformSprite(12, -8)
 			finished := false
-			thread := co.Create(sprite, func(coroutine.Thread) {
+			thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 				sprite.GlideToXYpos(tt.x, tt.y, tt.duration)
 				finished = true
 			})
-			co.JoinFirstSlice(thread)
+			currentScheduler.JoinFirstSlice(thread)
 			if !finished || sprite.Xpos() != tt.wantX || sprite.Ypos() != tt.wantY {
 				t.Fatalf("immediate glide: finished=%v position=(%v,%v)", finished, sprite.Xpos(), sprite.Ypos())
 			}
@@ -119,15 +119,15 @@ func TestScratchImmediateGlide(t *testing.T) {
 func TestSpriteGlidePositiveDurationInterpolates(t *testing.T) {
 	itime.Start()
 	t.Cleanup(func() { itime.Start() })
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	sprite := newTestTransformSprite(12, -8)
 	finished := false
 	itime.Update(0.5, 30)
-	thread := co.Create(sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.GlideToXYpos(30, 40, 1)
 		finished = true
 	})
-	co.Update()
+	currentScheduler.Update()
 	if finished || sprite.Xpos() != 21 || sprite.Ypos() != 16 {
 		t.Fatalf("halfway glide: finished=%v position=(%v,%v)", finished, sprite.Xpos(), sprite.Ypos())
 	}
@@ -135,16 +135,16 @@ func TestSpriteGlidePositiveDurationInterpolates(t *testing.T) {
 		t.Fatal("positive-duration glide has no active tween")
 	}
 	itime.Update(0.5, 30)
-	co.Update()
+	currentScheduler.Update()
 	if sprite.Xpos() != 30 || sprite.Ypos() != 40 {
 		t.Fatalf("final glide position=(%v,%v), want (30,40)", sprite.Xpos(), sprite.Ypos())
 	}
 	itime.Update(0, 30)
-	co.Update()
+	currentScheduler.Update()
 	if !finished || sprite.animation().getCurTweenState() != nil {
 		t.Fatal("glide did not finish and release its tween after the final frame")
 	}
-	co.Join(thread)
+	currentScheduler.Join(thread)
 }
 
 func TestSpriteDirectionToPosNormalizesAngle(t *testing.T) {
@@ -254,7 +254,7 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 				{"turn to", (*SpriteImpl).TurnTo__2},
 			} {
 				t.Run(animation+"/"+action.name+"/"+input.name, func(t *testing.T) {
-					co := setupRuntimeScheduler(t)
+					currentScheduler := setupRuntimeScheduler(t)
 					sprite := newTestTransformSprite(0, 0)
 					sprite.SetHeading(45)
 					version := sprite.spriteState.dirtyVersion
@@ -264,17 +264,17 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 						}
 					}
 					finished := false
-					thread := co.Create(sprite, func(coroutine.Thread) {
+					thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 						action.apply(sprite, input.value)
 						finished = true
 					})
-					co.JoinFirstSlice(thread)
+					currentScheduler.JoinFirstSlice(thread)
 					if !finished || sprite.Heading() != 45 || sprite.spriteState.dirtyVersion != version ||
 						sprite.animation().getCurTweenState() != nil {
 						t.Fatalf("invalid turn: finished=%v heading=%v dirty=%v tween=%v",
 							finished, sprite.Heading(), sprite.spriteState.dirtyVersion, sprite.animation().getCurTweenState())
 					}
-					co.Join(thread)
+					currentScheduler.Join(thread)
 				})
 			}
 		}
@@ -283,7 +283,7 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 
 func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
 	t.Cleanup(func() { itime.Start() })
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	sprite := newTestTransformSprite(0, 0)
 	sprite.SetHeading(-10)
 	sprite.animation().shared.animations[StateTurn] = &animationEntry{
@@ -295,25 +295,25 @@ func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
 	// ten seconds and reaches the target after twenty.
 	itime.Update(10, 30)
 	returned := false
-	thread := co.Create(sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.TurnToDir(-710, nil)
 		returned = true
 	})
-	co.Update()
+	currentScheduler.Update()
 	if got := sprite.Heading(); got != 0 {
 		t.Fatalf("halfway heading = %v, want 0", got)
 	}
 	itime.Update(10, 30)
-	co.Update()
+	currentScheduler.Update()
 	if got := sprite.Heading(); got != 10 {
 		t.Fatalf("final heading = %v, want 10", got)
 	}
 	itime.Update(0, 30)
-	co.Update()
+	currentScheduler.Update()
 	if !returned {
 		t.Fatal("TurnToDir did not return after its final animation frame")
 	}
-	co.Join(thread)
+	currentScheduler.Join(thread)
 }
 
 func TestMotionOptions(t *testing.T) {
@@ -637,11 +637,11 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 			sprite.transform().x, sprite.transform().y, sprite.transform().direction = 30, 40, 60
 			dirtyVersion := sprite.spriteState.dirtyVersion
 			finished := false
-			thread := gco.Create(sprite, func(coroutine.Thread) {
+			thread := scheduler.Create(sprite, func(coroutine.Thread) {
 				action.run(sprite)
 				finished = true
 			})
-			gco.JoinFirstSlice(thread)
+			scheduler.JoinFirstSlice(thread)
 
 			if !finished || sprite.Xpos() != 30 || sprite.Ypos() != 40 || sprite.Heading() != 60 || sprite.spriteState.dirtyVersion != dirtyVersion {
 				t.Fatalf("missing target altered sprite: finished=%v position=(%v,%v) heading=%v dirty=%v", finished, sprite.Xpos(), sprite.Ypos(), sprite.Heading(), sprite.spriteState.dirtyVersion)
@@ -682,15 +682,15 @@ func TestSpriteTurnWithoutAnimationFinishesImmediately(t *testing.T) {
 					// without waiting; only the initial turn publishes a change.
 					for attempt := 0; attempt < 2; attempt++ {
 						finished := false
-						thread := gco.Create(sprite, func(coroutine.Thread) {
+						thread := scheduler.Create(sprite, func(coroutine.Thread) {
 							action.run(sprite)
 							finished = true
 						})
-						gco.JoinFirstSlice(thread)
+						scheduler.JoinFirstSlice(thread)
 						if !finished {
 							t.Fatalf("turn %d yielded without an animation", attempt+1)
 						}
-						gco.Join(thread)
+						scheduler.Join(thread)
 						if sprite.Heading() != -135 || sprite.spriteState.dirtyVersion != wantDirty {
 							t.Fatalf("turn %d: heading=%v dirty=%v, want -135 and %v", attempt+1, sprite.Heading(), sprite.spriteState.dirtyVersion, wantDirty)
 						}
@@ -899,28 +899,28 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 
 func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
 	t.Cleanup(itime.ClearTimers)
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	itime.Start()
 	sprite := newTestTransformSprite(0, 0)
 	animation := &coreproject.AniConfig{StepDuration: 0.001}
 	sprite.animation().shared.animations["walk"] = &animationEntry{name: "walk", config: animation}
 	done := false
-	thread := co.Create(sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.transform().stepToPos(10, 0, 1, "walk")
 		done = true
 	})
-	co.JoinFirstSlice(thread)
+	currentScheduler.JoinFirstSlice(thread)
 	if done {
 		t.Fatal("configured step animation completed before advancing a frame")
 	}
 	for range 2 {
 		itime.Update(1.0/30, 30)
-		co.Update()
+		currentScheduler.Update()
 	}
 	if x, y := sprite.getXY(); !done || x != 10 || y != 0 || sprite.animation().getCurTweenState() != nil {
 		t.Fatalf("step completion = %v, position=(%v,%v), tween=%v", done, x, y, sprite.animation().getCurTweenState())
 	}
-	co.Join(thread)
+	currentScheduler.Join(thread)
 }
 
 func TestTransformComponentDebugVisualOperations(t *testing.T) {
@@ -938,19 +938,19 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	}
 	itime.Start()
 	done := false
-	thread := gco.Create(sprite, func(coroutine.Thread) {
+	thread := scheduler.Create(sprite, func(coroutine.Thread) {
 		transform.glide(5, 7, 0.01)
 		done = true
 	})
-	gco.JoinFirstSlice(thread)
+	scheduler.JoinFirstSlice(thread)
 	for range 2 {
 		itime.Update(1.0/30, 30)
-		gco.Update()
+		scheduler.Update()
 	}
 	if x, y := sprite.getXY(); !done || x != 5 || y != 7 {
 		t.Fatalf("debug glide completed=%v, position=(%v,%v), want (5,7)", done, x, y)
 	}
-	gco.Join(thread)
+	scheduler.Join(thread)
 }
 
 func newTestTransformSprite(x, y float64) *SpriteImpl {

@@ -26,27 +26,27 @@ import (
 )
 
 func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	waits := []struct {
 		name string
 		wait func(Thread)
 	}{
-		{"future time", func(Thread) { co.Wait(1) }},
-		{"loop", co.YieldLoopFor},
-		{"frame", co.WaitNextFrameFor},
-		{"next round", co.YieldToNextRoundFor},
-		{"time", func(Thread) { co.Wait(0.01) }},
+		{"future time", func(Thread) { scheduler.Wait(1) }},
+		{"loop", scheduler.YieldLoopFor},
+		{"frame", scheduler.WaitNextFrameFor},
+		{"next round", scheduler.YieldToNextRoundFor},
+		{"time", func(Thread) { scheduler.Wait(0.01) }},
 	}
 	var queued, resumed []string
 	gates := make([]*Latch, len(waits))
 	for i, wait := range waits {
-		gates[i] = co.NewLatch()
-		thread := co.Create(wait.name, func(me Thread) {
+		gates[i] = scheduler.NewLatch()
+		thread := scheduler.Create(wait.name, func(me Thread) {
 			gates[i].Wait()
 			queued = append(queued, wait.name)
 			if i > 0 {
@@ -55,16 +55,16 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 			for range 3 {
 				wait.wait(me)
 				resumed = append(resumed, wait.name)
-				co.RequestRedraw()
+				scheduler.RequestRedraw()
 			}
 		})
-		co.JoinFirstSlice(thread)
+		scheduler.JoinFirstSlice(thread)
 	}
 
 	// Enqueue in reverse registration order.
 	gates[len(gates)-1].Open()
-	co.RequestRedraw()
-	co.Update()
+	scheduler.RequestRedraw()
+	scheduler.Update()
 	if want := []string{"time", "next round", "frame", "loop", "future time"}; !slices.Equal(queued, want) {
 		t.Fatalf("wait order = %v, want %v", queued, want)
 	}
@@ -74,7 +74,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	for frame := 1; frame <= 3; frame++ {
 		resumed = nil
 		itime.Update(1.0/30, 30)
-		co.Update()
+		scheduler.Update()
 		if want := []string{"loop", "frame", "next round", "time"}; !slices.Equal(resumed, want) {
 			t.Fatalf("frame %d: resume order = %v, want %v", frame, resumed, want)
 		}
@@ -84,37 +84,37 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 func TestFrameResumesOlderScriptBeforeBatchFirstSlices(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	var order []string
-	parent := co.Create("parent", func(Thread) {
-		co.WaitNextFrame()
+	parent := scheduler.Create("parent", func(Thread) {
+		scheduler.WaitNextFrame()
 		order = append(order, "parent")
-		co.StartBatch([]Task{
+		scheduler.StartBatch([]Task{
 			{Run: func(Thread) {
 				order = append(order, "first handler")
-				co.WaitNextFrame()
+				scheduler.WaitNextFrame()
 			}},
 			{Run: func(Thread) {
 				order = append(order, "second handler")
-				co.WaitNextFrame()
+				scheduler.WaitNextFrame()
 			}},
 		}, BatchWaitFirstSlice)
 		order = append(order, "parent continued")
 	})
-	co.JoinFirstSlice(parent)
-	sibling := co.Create("sibling", func(Thread) {
-		co.WaitNextFrame()
+	scheduler.JoinFirstSlice(parent)
+	sibling := scheduler.Create("sibling", func(Thread) {
+		scheduler.WaitNextFrame()
 		order = append(order, "sibling")
 	})
-	co.JoinFirstSlice(sibling)
-	co.Update()
+	scheduler.JoinFirstSlice(sibling)
+	scheduler.Update()
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 
 	// Waiting for the new batch yields to the older sibling already admitted
 	// in this round; the parent still resumes only after both first slices.
@@ -124,8 +124,8 @@ func TestFrameResumesOlderScriptBeforeBatchFirstSlices(t *testing.T) {
 }
 
 func TestScriptOrderAcrossRoundsWithAddedAndCanceledPeers(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	var order []string
 	var peers []Thread
 	var added Thread
@@ -141,23 +141,23 @@ func TestScriptOrderAcrossRoundsWithAddedAndCanceledPeers(t *testing.T) {
 				if turn == 0 {
 					switch name {
 					case "a":
-						added = co.Create("d", run("d"))
+						added = scheduler.Create("d", run("d"))
 					case "c":
-						co.Stop(peers[1])
+						scheduler.Stop(peers[1])
 					}
 				}
 				if turn < 2 {
-					co.Sched(me)
+					scheduler.Sched(me)
 				}
 			}
 		}
 	}
-	caller := co.Create("caller", func(Thread) {
-		peers = co.StartBatch([]Task{
+	caller := scheduler.Create("caller", func(Thread) {
+		peers = scheduler.StartBatch([]Task{
 			{Run: run("a")}, {Run: run("b")}, {Run: run("c")},
 		}, BatchAsync)
-		co.JoinAll(peers)
-		co.Join(added)
+		scheduler.JoinAll(peers)
+		scheduler.Join(added)
 	})
 	waitForThreadSignal(t, caller.done, "script rounds did not complete without Update")
 	if want := []string{"a0", "b0", "c0", "d0", "a1", "c1", "d1", "a2", "c2", "d2"}; !slices.Equal(order, want) {
@@ -177,11 +177,11 @@ func TestPendingRestartsKeepPositionWhileRetiredInvocationsCleanUp(t *testing.T)
 		{name: "separate batches", separateBatches: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			co := New(nil)
-			t.Cleanup(func() { co.RunAfterStop(nil) })
+			scheduler := New(nil)
+			t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 			state := NewHandlerState(RestartExisting)
-			blocked := co.NewLatch()
-			releaseSibling := co.NewLatch()
+			blocked := scheduler.NewLatch()
+			releaseSibling := scheduler.NewLatch()
 			var order []string
 			cleaned := make(map[string]int)
 			task := func(name string) Task {
@@ -201,14 +201,14 @@ func TestPendingRestartsKeepPositionWhileRetiredInvocationsCleanUp(t *testing.T)
 					},
 				}
 			}
-			original := co.StartBatch([]Task{task("original")}, BatchAsync)[0]
-			co.JoinFirstSlice(original)
-			sibling := co.Create("sibling", func(Thread) {
+			original := scheduler.StartBatch([]Task{task("original")}, BatchAsync)[0]
+			scheduler.JoinFirstSlice(original)
+			sibling := scheduler.Create("sibling", func(Thread) {
 				releaseSibling.Wait()
 				order = append(order, "sibling")
 			})
-			co.JoinFirstSlice(sibling)
-			caller := co.Create("caller", func(Thread) {
+			scheduler.JoinFirstSlice(sibling)
+			caller := scheduler.Create("caller", func(Thread) {
 				// Both retired invocations still need cleanup when their shared
 				// script position is handed to the latest invocation.
 				tasks := []Task{task("obsolete"), task("latest")}
@@ -217,13 +217,13 @@ func TestPendingRestartsKeepPositionWhileRetiredInvocationsCleanUp(t *testing.T)
 					// Publish the obsolete invocation before replacing it while
 					// the caller still holds execution, so both remain queued.
 					for _, replacement := range tasks {
-						replacements = append(replacements, co.StartBatch([]Task{replacement}, BatchAsync)...)
+						replacements = append(replacements, scheduler.StartBatch([]Task{replacement}, BatchAsync)...)
 					}
 				} else {
-					replacements = co.StartBatch(tasks, BatchAsync)
+					replacements = scheduler.StartBatch(tasks, BatchAsync)
 				}
 				releaseSibling.Open()
-				co.JoinAll(replacements)
+				scheduler.JoinAll(replacements)
 			})
 			waitForThreadSignal(t, caller.done, "replacement batch did not finish")
 			waitForThreadSignal(t, original.done, "original invocation did not clean up")

@@ -28,6 +28,15 @@ const (
 	DefaultDeleteBufferSize = 16
 )
 
+// SpriteTransform describes the geometry shared by direct and batch updates.
+type SpriteTransform struct {
+	Position     mathf.Vec2
+	Rotation     float64
+	Scale        mathf.Vec2
+	RenderOffset mathf.Vec2
+	Visible      bool
+}
+
 type SpriteSyncData struct {
 	SpriteID      int64
 	X             float32
@@ -44,29 +53,27 @@ type SpriteSyncBuffer struct {
 	data       []SpriteSyncData
 	deleteIDs  []int64
 	serialized []float32
-	positions  []float32
 }
 
-// ValidateSpriteTransform rejects values that cannot remain finite in the
-// float32 transform protocol shared by query and batch submissions.
-func ValidateSpriteTransform(id int64, position mathf.Vec2, rotation float64, scale, renderOffset mathf.Vec2) {
-	for _, field := range [...]struct {
-		name  string
-		value float64
-	}{
-		{"x", position.X},
-		{"y", position.Y},
-		{"rotation", rotation},
-		{"scale x", scale.X},
-		{"scale y", scale.Y},
-		{"offset x", renderOffset.X},
-		{"offset y", renderOffset.Y},
-	} {
-		value := float64(float32(field.value))
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			panic(fmt.Sprintf("sprite %d transform %s=%v must be finite after float32 conversion", id, field.name, field.value))
-		}
+// PositionQueryBuffer owns reusable storage for batched engine position reads.
+// Its zero value is ready to use. Concurrent or reentrant queries need separate buffers.
+type PositionQueryBuffer struct {
+	positions []float32
+}
+
+// Validate rejects transforms that become non-finite in the float32 protocol.
+func (transform SpriteTransform) Validate(id int64) {
+	values := [...]float64{transform.Position.X, transform.Position.Y, transform.Rotation,
+		transform.Scale.X, transform.Scale.Y, transform.RenderOffset.X, transform.RenderOffset.Y}
+	for field, value := range values {
+		validateTransformField(id, field, value)
 	}
+}
+
+// ApplyTransform validates and submits a transform. The caller must be on the engine main thread.
+func (sprite *Sprite) ApplyTransform(transform SpriteTransform) {
+	transform.Validate(sprite.Id)
+	sprite.SetTransform(transform.Position, transform.Rotation, transform.Scale, transform.Visible, transform.RenderOffset)
 }
 
 func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
@@ -78,41 +85,23 @@ func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
 	}
 }
 
-// SyncBatchUpdateSprites sends sprite updates to Godot in one FFI call.
-func SyncBatchUpdateSprites(buffer []float32) {
-	if len(buffer) == 0 {
-		return
-	}
-
-	Managers().SpriteMgr.BatchUpdateTransforms(buffer)
-}
-
-func (b *SpriteSyncBuffer) Add(id int64, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY float64, visible bool) {
-	vis := float32(0.0)
-	if visible {
-		vis = float32(1.0)
-	}
-
+// AddTransform collects an update; Serialize validates it before submission.
+func (b *SpriteSyncBuffer) AddTransform(id int64, transform SpriteTransform) {
 	b.data = append(b.data, SpriteSyncData{
 		SpriteID:      id,
-		X:             float32(x),
-		Y:             float32(y),
-		Rotation:      float32(rotation),
-		ScaleX:        float32(scaleX),
-		ScaleY:        float32(scaleY),
-		RenderOffsetX: float32(renderOffsetX),
-		RenderOffsetY: float32(renderOffsetY),
-		Visible:       vis,
+		X:             float32(transform.Position.X),
+		Y:             float32(transform.Position.Y),
+		Rotation:      float32(transform.Rotation),
+		ScaleX:        float32(transform.Scale.X),
+		ScaleY:        float32(transform.Scale.Y),
+		RenderOffsetX: float32(transform.RenderOffset.X),
+		RenderOffsetY: float32(transform.RenderOffset.Y),
+		Visible:       float32(boolArg(transform.Visible)),
 	})
 }
 
 func (b *SpriteSyncBuffer) AddDelete(id int64) {
 	b.deleteIDs = append(b.deleteIDs, id)
-}
-
-func (b *SpriteSyncBuffer) Clear() {
-	b.data = b.data[:0]
-	b.deleteIDs = b.deleteIDs[:0]
 }
 
 func (b *SpriteSyncBuffer) UpdateCount() int {
@@ -125,6 +114,11 @@ func (b *SpriteSyncBuffer) DeleteCount() int {
 
 func (b *SpriteSyncBuffer) GetDeleteIDs() []int64 {
 	return b.deleteIDs
+}
+
+func (b *SpriteSyncBuffer) Clear() {
+	b.data = b.data[:0]
+	b.deleteIDs = b.deleteIDs[:0]
 }
 
 // Serialize encodes [updateCount, deleteCount, updates..., deleteIDs...] for FFI.
@@ -149,20 +143,11 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 
 	for _, sprite := range b.data {
 		result[idx] = encodeLegacyBatchObjectID(sprite.SpriteID)
-		ValidateSpriteTransform(
-			sprite.SpriteID,
-			mathf.NewVec2(float64(sprite.X), float64(sprite.Y)),
-			float64(sprite.Rotation),
-			mathf.NewVec2(float64(sprite.ScaleX), float64(sprite.ScaleY)),
-			mathf.NewVec2(float64(sprite.RenderOffsetX), float64(sprite.RenderOffsetY)),
-		)
-		result[idx+1] = sprite.X
-		result[idx+2] = sprite.Y
-		result[idx+3] = sprite.Rotation
-		result[idx+4] = sprite.ScaleX
-		result[idx+5] = sprite.ScaleY
-		result[idx+6] = sprite.RenderOffsetX
-		result[idx+7] = sprite.RenderOffsetY
+		values := [...]float32{sprite.X, sprite.Y, sprite.Rotation, sprite.ScaleX, sprite.ScaleY, sprite.RenderOffsetX, sprite.RenderOffsetY}
+		for field, value := range values {
+			validateTransformField(sprite.SpriteID, field, float64(value))
+			result[idx+1+field] = value
+		}
 		result[idx+8] = sprite.Visible
 		idx += SyncFieldsPerSprite
 	}
@@ -177,9 +162,18 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 	return result[:totalSize:totalSize]
 }
 
-// GetPositions retrieves x/y pairs into storage owned by this sync buffer.
-// The result is valid until the next GetPositions call on the same buffer.
-func (b *SpriteSyncBuffer) GetPositions(spriteIDs []int64) []float32 {
+// SyncBatchUpdateSprites sends sprite updates to Godot in one FFI call.
+func SyncBatchUpdateSprites(buffer []float32) {
+	if len(buffer) == 0 {
+		return
+	}
+
+	Managers().SpriteMgr.BatchUpdateTransforms(buffer)
+}
+
+// GetPositions retrieves x/y pairs. The result remains valid until the next query
+// on this buffer. A failed query returns nil without discarding reusable storage.
+func (b *PositionQueryBuffer) GetPositions(spriteIDs []int64) []float32 {
 	if len(spriteIDs) > math.MaxInt32/2 {
 		panic("position batch exceeds the native array length limit")
 	}
@@ -188,4 +182,12 @@ func (b *SpriteSyncBuffer) GetPositions(spriteIDs []int64) []float32 {
 		return nil
 	}
 	return b.positions
+}
+
+func validateTransformField(id int64, field int, value float64) {
+	converted := float64(float32(value))
+	if math.IsNaN(converted) || math.IsInf(converted, 0) {
+		name := [...]string{"x", "y", "rotation", "scale x", "scale y", "offset x", "offset y"}[field]
+		panic(fmt.Sprintf("sprite %d transform %s=%v must be finite after float32 conversion", id, name, value))
+	}
 }

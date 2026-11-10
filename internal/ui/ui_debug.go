@@ -29,7 +29,7 @@ func NewUiDebug() *UiDebug {
 
 // OnStart binds UI nodes in the engine callback context.
 func (p *UiDebug) OnStart() {
-	p.input = engine.BridgeBindUI[UiNode](p.GetId(), "Label")
+	p.input = engine.BindUIForType[UiNode](p.GetId(), "Label")
 }
 
 func (p *UiDebug) Show(msg string) {

@@ -82,16 +82,16 @@ func TestEndSampleReportsCoroutineStats(t *testing.T) {
 		t.Run(fmt.Sprintf("updated=%v", updated), func(t *testing.T) {
 			output := captureProfile(t)
 			if updated {
-				gco.SetPerfDebug(true)
-				thread := gco.Create("profiled", func(me coroutine.Thread) {
-					gco.WaitYield(me)
+				scheduler.SetPerfDebug(true)
+				thread := scheduler.Create("profiled", func(me coroutine.Thread) {
+					scheduler.WaitYield(me)
 					runtime.GC()
 				})
-				gco.JoinFirstSlice(thread)
-				gco.Update()
-				gco.Join(thread)
+				scheduler.JoinFirstSlice(thread)
+				scheduler.Update()
+				scheduler.Join(thread)
 			}
-			stats := gco.UpdateStats()
+			stats := scheduler.UpdateStats()
 			if updated && (stats.JobCount != 1 || stats.GCCount == 0) {
 				t.Fatalf("update did not record its job and GC: %+v", stats)
 			}
@@ -203,7 +203,7 @@ func TestMeasureFunctionTimeRecordsGCAndReturnsIndependentStats(t *testing.T) {
 
 func TestDetailedTimingExplainsPreparationAndGC(t *testing.T) {
 	output := captureProfile(t)
-	SetGco(nil)
+	SetScheduler(nil)
 	if getCoroStatsTotal() != 0 {
 		t.Fatal("missing coroutine stats must have zero total")
 	}
@@ -211,7 +211,7 @@ func TestDetailedTimingExplainsPreparationAndGC(t *testing.T) {
 	if !strings.Contains(output.String(), "Coroutine system not initialized") {
 		t.Fatal("missing coroutine warning absent")
 	}
-	SetGco(coroutine.New(nil))
+	SetScheduler(coroutine.New(nil))
 	BeginSample()
 	timingData["CoroUpdateJobs"] = TimingInfo{PreCall: 2, ActualCall: 30, PostCall: 4, GCCount: 1, GCPauseTime: time.Millisecond}
 	EndSample()
@@ -237,12 +237,12 @@ func TestCalcfpsUpdatesElapsedInterval(t *testing.T) {
 
 func captureProfile(t *testing.T) *bytes.Buffer {
 	t.Helper()
-	previousCo, previousEnabled := gco, Enabled
+	previousScheduler, previousEnabled := scheduler, Enabled
 	previousData, previousStart, previousDuration := timingData, totalStart, lastUpdateDuration
 	previousDebug, previousGC := Debug, gcStats
 	previousFPS, previousFrame, previousTime := fps, debugLastFrame, debugLastTime
 	t.Cleanup(func() {
-		gco, Enabled = previousCo, previousEnabled
+		scheduler, Enabled = previousScheduler, previousEnabled
 		timingData, totalStart, lastUpdateDuration = previousData, previousStart, previousDuration
 		Debug, gcStats = previousDebug, previousGC
 		fps, debugLastFrame, debugLastTime = previousFPS, previousFrame, previousTime
@@ -250,7 +250,7 @@ func captureProfile(t *testing.T) *bytes.Buffer {
 	})
 	output := new(bytes.Buffer)
 	spxlog.SetStdoutOutput(output)
-	gco, Enabled = coroutine.New(nil), true
+	scheduler, Enabled = coroutine.New(nil), true
 	timingData = make(map[string]TimingInfo)
 	return output
 }

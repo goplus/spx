@@ -16,106 +16,108 @@
 
 package engine
 
-//lint:file-ignore ST1001 Bridge code intentionally dot-imports mathf to mirror engine type names.
-
 import (
-	. "github.com/goplus/spbase/mathf"
+	"github.com/goplus/spbase/mathf"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type posTweenInfo struct {
-	value     Vec2
+type positionTween struct {
+	sprite     gdx.ISpriter
+	startValue mathf.Vec2
+	callback   func()
+	step       int
+	elapsed    float64
+	steps      []tweenStep
+}
+
+type tweenStep struct {
+	value     mathf.Vec2
 	duration  float64
 	startTime float64
 }
 
-type tweenCallInfo struct {
-	sprite     gdx.ISpriter
-	startValue Vec2
-	callback   func()
-	curIndex   int
-	timer      float64
-	infos      []posTweenInfo
+func tweenPos(node gdx.ISpriter, pos mathf.Vec2, duration float64, callback func()) {
+	startPositionTween(node, callback, tweenStep{value: pos, duration: duration})
 }
 
-var (
-	tweenInfos     = make([]*tweenCallInfo, 0)
-	tempTweenInfos = make([]*tweenCallInfo, 0)
-)
-
-func (i *posTweenInfo) getEndTime() float64 {
-	return i.startTime + i.duration
-}
-
-func (i *tweenCallInfo) isDone() bool {
-	return i.curIndex >= len(i.infos)
-}
-
-func (i *tweenCallInfo) advance(delta float64) {
-	i.timer += delta
-	for !i.isDone() && i.timer >= i.infos[i.curIndex].getEndTime() {
-		if runtimeSpriteAlive(i.sprite) {
-			i.sprite.SetPosition(i.infos[i.curIndex].value)
-		}
-		i.curIndex++
-		if !i.isDone() && runtimeSpriteAlive(i.sprite) {
-			i.startValue = i.sprite.GetPosition()
-		}
-	}
-	if !i.isDone() && runtimeSpriteAlive(i.sprite) {
-		segment := i.infos[i.curIndex]
-		percent := Clamp01f((i.timer - segment.startTime) / segment.duration)
-		i.sprite.SetPosition(i.startValue.Lerpf(segment.value, percent))
-	}
-}
-
-func updateTweens(delta float64, emit func(gdx.ISpriter, func())) {
-	tweenInfos, tempTweenInfos = tempTweenInfos[:0], tweenInfos
-	for _, curTween := range tempTweenInfos {
-		if !runtimeSpriteAlive(curTween.sprite) {
-			continue
-		}
-		curTween.advance(delta)
-		if !curTween.isDone() {
-			tweenInfos = append(tweenInfos, curTween)
-		}
-	}
-	for _, curTween := range tempTweenInfos {
-		if curTween.isDone() {
-			emit(curTween.sprite, curTween.callback)
-		}
-	}
-	clear(tempTweenInfos)
-	tempTweenInfos = tempTweenInfos[:0]
-}
-
-func tweenPos(node gdx.ISpriter, pos Vec2, duration float64, callback func()) {
-	startPositionTween(node, callback, posTweenInfo{value: pos, duration: duration})
-}
-
-func tweenPos2(node gdx.ISpriter, pos Vec2, duration float64, pos2 Vec2, duration2 float64, callback func()) {
+func tweenPos2(node gdx.ISpriter, pos mathf.Vec2, duration float64, pos2 mathf.Vec2, duration2 float64, callback func()) {
 	startPositionTween(node, callback,
-		posTweenInfo{value: pos, duration: duration},
-		posTweenInfo{value: pos2, duration: duration2},
+		tweenStep{value: pos, duration: duration},
+		tweenStep{value: pos2, duration: duration2},
 	)
 }
 
-func startPositionTween(sprite gdx.ISpriter, callback func(), segments ...posTweenInfo) {
+// Registration runs in the caller's serialized runtime context; advancing and
+// dispatching completion callbacks belongs to the frame dispatcher.
+func startPositionTween(sprite gdx.ISpriter, callback func(), steps ...tweenStep) {
 	sprite = resolveRuntimeSprite(sprite)
 	if sprite == nil {
 		return
 	}
 
-	info := &tweenCallInfo{
+	tween := &positionTween{
 		sprite:   sprite,
 		callback: callback,
-		infos:    segments,
+		steps:    steps,
 	}
 	if runtimeSpriteAlive(sprite) {
-		info.startValue = sprite.GetPosition()
+		tween.startValue = sprite.GetPosition()
 	}
-	for i := 1; i < len(info.infos); i++ {
-		info.infos[i].startTime = info.infos[i-1].getEndTime()
+	for i := 1; i < len(tween.steps); i++ {
+		tween.steps[i].startTime = tween.steps[i-1].endTime()
 	}
-	tweenInfos = append(tweenInfos, info)
+	state.jobs.tweens = append(state.jobs.tweens, tween)
+}
+
+func (p *frameJobs) updateTweens(delta float64, emit func(gdx.ISpriter, func())) {
+	current := p.tweens
+	p.tweens, p.tweenScratch = p.tweenScratch[:0], nil
+	defer func() {
+		clear(current)
+		if cap(current) > cap(p.tweenScratch) {
+			p.tweenScratch = current[:0]
+		}
+	}()
+	ready := 0
+	for _, tween := range current {
+		if !runtimeSpriteAlive(tween.sprite) {
+			continue
+		}
+		tween.advance(delta)
+		if !tween.done() {
+			p.tweens = append(p.tweens, tween)
+		} else {
+			current[ready] = tween
+			ready++
+		}
+	}
+	for _, tween := range current[:ready] {
+		emit(tween.sprite, tween.callback)
+	}
+}
+
+func (t *positionTween) advance(delta float64) {
+	t.elapsed += delta
+	for !t.done() && t.elapsed >= t.steps[t.step].endTime() {
+		if runtimeSpriteAlive(t.sprite) {
+			t.sprite.SetPosition(t.steps[t.step].value)
+		}
+		t.step++
+		if !t.done() && runtimeSpriteAlive(t.sprite) {
+			t.startValue = t.sprite.GetPosition()
+		}
+	}
+	if !t.done() && runtimeSpriteAlive(t.sprite) {
+		step := t.steps[t.step]
+		percent := mathf.Clamp01f((t.elapsed - step.startTime) / step.duration)
+		t.sprite.SetPosition(t.startValue.Lerpf(step.value, percent))
+	}
+}
+
+func (t *positionTween) done() bool {
+	return t.step >= len(t.steps)
+}
+
+func (s *tweenStep) endTime() float64 {
+	return s.startTime + s.duration
 }

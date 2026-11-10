@@ -170,7 +170,7 @@ func TestInputReplaySessionUsesDeterministicRandomByDefault(t *testing.T) {
 }
 
 func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
-	co, game, _ := setupInputSourceTest(t)
+	currentScheduler, game, _ := setupInputSourceTest(t)
 	if _, err := PrepareInputRecording(10); err != nil {
 		t.Fatal(err)
 	}
@@ -255,9 +255,9 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 		}
 		itime.Update(0.1, 10)
 		game.dispatchFrameEvents()
-		co.Update()
+		currentScheduler.Update()
 		game.dispatchFrameEvents()
-		co.Update()
+		currentScheduler.Update()
 		session.endFrame()
 		if !reflect.DeepEqual(replay.Frames[i].MouseEvents, sample.mouse) || !reflect.DeepEqual(replay.Frames[i].KeyEvents, sample.keys) {
 			t.Fatalf("replay frame %d mutated the caller's recording", i)
@@ -312,7 +312,7 @@ func TestReplaySwipeExpiryAcrossFrameBoundaries(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co, game, _ := setupInputSourceTest(t)
+			currentScheduler, game, _ := setupInputSourceTest(t)
 			for i := range test.frames {
 				test.frames[i].Frame = int64(i)
 			}
@@ -329,9 +329,9 @@ func TestReplaySwipeExpiryAcrossFrameBoundaries(t *testing.T) {
 					t.Fatalf("replay frame %d was not prepared", i)
 				}
 				game.dispatchFrameEvents()
-				co.Update()
+				currentScheduler.Update()
 				game.dispatchFrameEvents()
-				co.Update()
+				currentScheduler.Update()
 				session.endFrame()
 				if swipes != want {
 					t.Fatalf("frame %d swipe callbacks = %d, want %d", i, swipes, want)
@@ -348,7 +348,7 @@ func TestReplaySwipeExpiryAcrossFrameBoundaries(t *testing.T) {
 				t.Fatal("completed replay prepared an extra frame")
 			}
 			game.dispatchFrameEvents()
-			co.Update()
+			currentScheduler.Update()
 			if session.status() != before || swipes != test.wantSwipes[len(test.wantSwipes)-1] || clicks != test.wantClicks {
 				t.Fatal("completed replay advanced or repeated input callbacks")
 			}
@@ -1280,7 +1280,7 @@ func TestPrepareInputFrameFreezesMouseUntilNextSample(t *testing.T) {
 }
 
 func TestPrepareInputFrameRejectsCompletedSessionWithoutDispatchingPendingInput(t *testing.T) {
-	co, game, mgr := setupInputSourceTest(t)
+	currentScheduler, game, mgr := setupInputSourceTest(t)
 	setupCaptureTest(t)
 	replay := validRuntimeReplay(InputReplayFrame{
 		Frame: 0,
@@ -1322,7 +1322,7 @@ func TestPrepareInputFrameRejectsCompletedSessionWithoutDispatchingPendingInput(
 		t.Fatal("rejected frame changed input history or mouse position")
 	}
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 	if calls != 0 || engine.HasPendingCaptures() {
 		t.Fatal("rejected frame dispatched old input or screenshot requests")
 	}
@@ -1342,7 +1342,7 @@ func TestPrepareInputFrameReportsInvalidRecordingSample(t *testing.T) {
 		{"invalid delta", mathf.Vec2{X: 40, Y: -30}, math.Inf(1), "live delta must be finite and non-negative"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			co, game, mgr := setupInputSourceTest(t)
+			currentScheduler, game, mgr := setupInputSourceTest(t)
 			setupCaptureTest(t)
 			originalExt, originalPlatform := pkgengine.ExtMgr, pkgengine.PlatformMgr
 			recorder := &inputFrameFailureExtMgr{}
@@ -1386,7 +1386,7 @@ func TestPrepareInputFrameReportsInvalidRecordingSample(t *testing.T) {
 			}
 			session.endFrame()
 			game.dispatchFrameEvents()
-			co.Update()
+			currentScheduler.Update()
 			if calls != 0 || engine.HasPendingCaptures() {
 				t.Fatal("failed frame dispatched old input or screenshot requests")
 			}
@@ -1745,7 +1745,7 @@ func TestInputPreparationRejectsUnrepresentableTimestepAndDuplicates(t *testing.
 func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
 	for _, name := range []string{"Replay-first", "JSON-first"} {
 		t.Run(name, func(t *testing.T) {
-			co, game, _ := setupInputSourceTest(t)
+			currentScheduler, game, _ := setupInputSourceTest(t)
 			setupCaptureFlushSpriteMgr(t)
 			game.camera = &cameraImpl{g: game}
 			game.initShapeMgr()
@@ -1764,7 +1764,7 @@ func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
 			game.OnEngineBeforeUpdate(1.0 / 30)
 			itime.Update(1.0/30, 30)
 			game.OnEngineUpdate(1.0 / 30)
-			co.Update()
+			currentScheduler.Update()
 			game.OnEngineRender(1.0 / 30)
 			game.OnEngineFrameEnd()
 			if handled != 1 || GetInputSessionStatus().FrameCount != 1 {
@@ -1912,13 +1912,13 @@ func validRuntimeReplay(frames ...InputReplayFrame) InputReplay {
 	}
 }
 
-func setupInputSourceTest(t *testing.T) (*coroutine.Coroutines, *Game, *inputSourceTestManager) {
+func setupInputSourceTest(t *testing.T) (*coroutine.Scheduler, *Game, *inputSourceTestManager) {
 	t.Helper()
 	resetInputSessionTest(t)
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	mgr := setupInputSourceManager(t)
 	t.Cleanup(func() { game.abortInputSession("test finished") })
-	return co, game, mgr
+	return currentScheduler, game, mgr
 }
 
 func setupInputSourceManager(t testing.TB) *inputSourceTestManager {

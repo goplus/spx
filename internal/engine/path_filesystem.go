@@ -19,63 +19,21 @@
 
 package engine
 
-import (
-	"path/filepath"
-
-	"github.com/goplus/spx/v4/internal/engine/platform"
-)
+import "github.com/goplus/spx/v4/internal/engine/platform"
 
 func SetAssetDir(dir string) {
-	Managers().ResMgr.SetLoadMode(true)
-	if assetPaths.explicitFSRoots {
-		if assetPaths.legacyCompatibility {
-			assetPaths.extAssetDir = readExtAssetDirFromFilesystem(assetPaths.projectRoot, true)
-		}
-		return
-	}
-	setLegacyFilesystemAssetDir(dir)
-	// Reading the project config uses the Engine resource manager. Keep that
-	// call at the public Engine boundary so path-state tests can configure the
-	// legacy filesystem roots without initializing manager wrappers.
 	prefix := defaultAssetPathPrefix
 	if platform.IsWeb() {
 		prefix = ""
 	}
-	assetPaths.extAssetDir = readExtAssetDirFromProjectConfig(prefix)
+	resolver := assetPaths
+	if !resolver.explicitFSRoots {
+		resolver = newLegacyFilesystemAssetResolver(prefix, dir, !platform.IsWeb())
+	}
+	Managers().ResMgr.SetLoadMode(true)
+	assetPaths = resolver
 }
 
 func ToAssetPath(relPath string) string {
-	return buildFilesystemAssetPath(relPath)
-}
-
-func setLegacyFilesystemAssetDir(dir string) {
-	prefix := defaultAssetPathPrefix
-	if platform.IsWeb() {
-		prefix = ""
-	}
-
-	setAssetRoot(prefix, dir)
-	assetPaths.explicitFSRoots = false
-	assetPaths.legacyCompatibility = true
-	assetPaths.compatibilityRoot = cleanFilesystemPath(filepath.Join(filepath.FromSlash(assetPaths.root), "..", ".."))
-	assetPaths.canonicalCompatibilityRoot = ""
-	assetPaths.extAssetDir = ""
-	assetPaths.enforceCanonical = !platform.IsWeb()
-	assetPaths.canonicalProjectRoot = ""
-	if assetPaths.enforceCanonical {
-		projectRoot, err := filepath.Abs(filepath.FromSlash(assetPaths.projectRoot))
-		if err == nil {
-			projectRoot, err = filepath.EvalSymlinks(projectRoot)
-		}
-		if err == nil {
-			assetPaths.canonicalProjectRoot = cleanFilesystemPath(projectRoot)
-		}
-		compatibilityRootPath, compatErr := filepath.Abs(filepath.FromSlash(assetPaths.compatibilityRoot))
-		if compatErr == nil {
-			compatibilityRootPath, compatErr = filepath.EvalSymlinks(compatibilityRootPath)
-		}
-		if compatErr == nil {
-			assetPaths.canonicalCompatibilityRoot = cleanFilesystemPath(compatibilityRootPath)
-		}
-	}
+	return assetPaths.filesystemPath(relPath)
 }

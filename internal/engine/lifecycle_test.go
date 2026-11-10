@@ -46,19 +46,20 @@ type resetRecordingExt struct {
 type resetBlockingExt struct {
 	gdx.IExtMgr
 	callback func()
+	calls    atomic.Int32
 	entered  chan int64
 	release  chan struct{}
 }
 
 func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
-	co := coroutine.New(nil)
-	recorder := setupWebResetTest(t, co)
+	current := coroutine.New(nil)
+	recorder := setupWebResetTest(t, current)
 
 	started := make(chan struct{})
 	release := make(chan struct{})
 	releaseWorker := sync.OnceFunc(func() { close(release) })
 	workerDone := make(chan struct{})
-	co.Create("blocked", func(coroutine.Thread) {
+	current.Create("blocked", func(coroutine.Thread) {
 		defer close(workerDone)
 		close(started)
 		<-release
@@ -72,7 +73,7 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 		close(returned)
 	}()
 	waitForEngineSignal(t, returned, time.Second, "external reset request waited for coroutine drain")
-	waitForResetAdmissionClose(t, co)
+	waitForResetAdmissionClose(t, current)
 	select {
 	case exitCode := <-recorder.calls:
 		t.Fatalf("engine reset %d was requested before coroutine drain", exitCode)
@@ -81,17 +82,17 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 
 	releaseWorker()
 	waitForEngineSignal(t, workerDone, time.Second, "blocking coroutine did not finish after release")
-	waitForResetAdmissionOpen(t, co)
+	waitForResetAdmissionOpen(t, current)
 }
 
 func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
-	co := coroutine.New(nil)
-	recorder := setupWebResetTest(t, co)
+	current := coroutine.New(nil)
+	recorder := setupWebResetTest(t, current)
 
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
 	var returned atomic.Bool
-	caller := co.Create("caller", func(coroutine.Thread) {
+	caller := current.Create("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		close(entered)
 		resetWebRuntime(9)
@@ -111,63 +112,100 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("engine reset was not requested after managed caller drained")
 	}
-	waitForResetAdmissionOpen(t, co)
+	waitForResetAdmissionOpen(t, current)
 }
 
-func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
+func TestResetWebRuntimeCoalescesConcurrentRequests(t *testing.T) {
 	isolateGameBinding(t)
-	co := coroutine.New(nil)
-	setupWebResetTest(t, co)
-
-	game, owner := new(bindingTestGame), new(struct{})
-	binding, err := bindGame(game, owner)
+	current := coroutine.New(nil)
+	setupWebResetTest(t, current)
+	game := new(bindingTestGame)
+	binding, err := bindGame(game, game)
 	if err != nil {
 		t.Fatal(err)
 	}
 	backend := &resetBlockingExt{
 		callback: onReset,
-		entered:  make(chan int64, 1),
+		entered:  make(chan int64, 64),
 		release:  make(chan struct{}),
 	}
 	gdx.ExtMgr = backend
 	releaseBackend := sync.OnceFunc(func() { close(backend.release) })
 	t.Cleanup(releaseBackend)
+	workerStarted, workerRelease := make(chan struct{}), make(chan struct{})
+	releaseWorker := sync.OnceFunc(func() { close(workerRelease) })
+	t.Cleanup(releaseWorker)
+	current.Create("blocked during drain", func(coroutine.Thread) {
+		close(workerStarted)
+		<-workerRelease
+	})
+	waitForEngineSignal(t, workerStarted, time.Second, "worker did not start")
+	requestDuplicates := func() {
+		var requests sync.WaitGroup
+		for range 32 {
+			requests.Go(func() { resetWebRuntime(22) })
+		}
+		done := make(chan struct{})
+		go func() {
+			requests.Wait()
+			close(done)
+		}()
+		t.Cleanup(func() {
+			releaseWorker()
+			releaseBackend()
+			waitForEngineSignal(t, done, time.Second, "duplicate reset requests did not finish cleanup")
+		})
+		waitForEngineSignal(t, done, time.Second, "duplicate reset requests did not return")
+	}
 
 	resetWebRuntime(11)
+	waitForResetAdmissionClose(t, current)
+	requestDuplicates()
+	if backend.calls.Load() != 0 || game.reset.Load() != 0 {
+		t.Fatal("reset ran before coroutine drain")
+	}
+	if activeGame.Load() != binding {
+		t.Fatal("binding was released before coroutine drain")
+	}
+	releaseWorker()
 	select {
 	case code := <-backend.entered:
 		if code != 11 {
-			t.Fatalf("reset code = %d, want 11", code)
+			t.Fatalf("reset code = %d, want first request's code 11", code)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("backend reset was not requested")
+		t.Fatal("reset did not reach backend")
 	}
-	if game.reset.Load() != 1 {
-		t.Fatalf("reset callbacks = %d, want 1", game.reset.Load())
+	requestDuplicates()
+	if backend.calls.Load() != 1 || game.reset.Load() != 1 {
+		t.Fatalf("reset calls: backend = %d, game = %d; want 1 each", backend.calls.Load(), game.reset.Load())
 	}
-	if got := activeGame.Load(); got != binding {
-		t.Fatalf("binding was released inside the reset barrier: %p", got)
+	if activeGame.Load() != binding {
+		t.Fatal("binding was released before backend reset completed")
 	}
 	if got := binding.loadPhase(); got != gameClosing {
 		t.Fatalf("binding phase during reset = %d, want closing", got)
 	}
-	waitForResetAdmissionClose(t, co)
+	waitForResetAdmissionClose(t, current)
 
 	releaseBackend()
 	deadline := time.Now().Add(time.Second)
-	for GetGame() != nil && time.Now().Before(deadline) {
+	for activeGame.Load() != nil && time.Now().Before(deadline) {
 		runtime.Gosched()
 	}
-	if got := GetGame(); got != nil {
-		t.Fatalf("binding after reset completion = %v, want nil", got)
+	if activeGame.Load() != nil {
+		t.Fatal("completed reset retained the binding")
 	}
-	waitForResetAdmissionOpen(t, co)
+	waitForResetAdmissionOpen(t, current)
+	if backend.calls.Load() != 1 {
+		t.Fatalf("backend reset calls after completion = %d, want 1", backend.calls.Load())
+	}
 }
 
 func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
 	isolateGameBinding(t)
-	co := coroutine.New(nil)
-	recorder := setupWebResetTest(t, co)
+	current := coroutine.New(nil)
+	recorder := setupWebResetTest(t, current)
 
 	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
 	if err != nil {
@@ -199,8 +237,8 @@ func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
 
 func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	isolateGameBinding(t)
-	co := coroutine.New(nil)
-	setupWebResetTest(t, co)
+	current := coroutine.New(nil)
+	setupWebResetTest(t, current)
 	gdx.PlatformMgr = resetMainThreadPlatform{main: gid.Get()}
 	game := new(bindingTestGame)
 	if _, err := bindGame(game, game); err != nil {
@@ -209,8 +247,8 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-	peerLatch := co.NewLatch()
-	co.Create("peer", func(coroutine.Thread) {
+	peerLatch := current.NewLatch()
+	current.Create("peer", func(coroutine.Thread) {
 		defer close(peerDone)
 		close(peerYielding)
 		peerLatch.Wait()
@@ -240,7 +278,7 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	}
 	close(backend.release)
 	gdx.ExtMgr = backend
-	co.Create("caller", func(coroutine.Thread) {
+	current.Create("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		resetWebRuntime(17)
 	})
@@ -250,7 +288,7 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatal("web reset did not finish and release its binding")
 		}
-		co.Update()
+		current.Update()
 		runtime.Gosched()
 	}
 	select {
@@ -270,7 +308,7 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	if got := game.reset.Load(); got != 1 {
 		t.Fatalf("reset callbacks = %d, want 1", got)
 	}
-	waitForResetAdmissionOpen(t, co)
+	waitForResetAdmissionOpen(t, current)
 }
 
 func (p resetMainThreadPlatform) IsMainThread() bool { return gid.Get() == p.main }
@@ -278,6 +316,7 @@ func (p resetMainThreadPlatform) IsMainThread() bool { return gid.Get() == p.mai
 func (resetDirectPlatform) IsMainThread() bool { return true }
 
 func (r *resetBlockingExt) RequestReset(exitCode int64) {
+	r.calls.Add(1)
 	if r.callback != nil {
 		r.callback()
 	}
@@ -289,31 +328,31 @@ func (r *resetRecordingExt) RequestReset(exitCode int64) {
 	r.calls <- exitCode
 }
 
-func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
+func setupWebResetTest(t *testing.T, current *coroutine.Scheduler) *resetRecordingExt {
 	t.Helper()
 
-	original := gco
+	original := scheduler
 	originalPlatform := gdx.PlatformMgr
 	originalExt := gdx.ExtMgr
 	recorder := &resetRecordingExt{calls: make(chan int64, 1)}
-	SetCoroutines(co)
+	SetScheduler(current)
 	gdx.PlatformMgr = resetDirectPlatform{}
 	gdx.ExtMgr = recorder
 	wrap.Init(WaitMainThread)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		SetCoroutines(original)
+		current.RunAfterStop(nil)
+		SetScheduler(original)
 		gdx.PlatformMgr = originalPlatform
 		gdx.ExtMgr = originalExt
 	})
 	return recorder
 }
 
-func waitForResetAdmissionClose(t *testing.T, co *coroutine.Coroutines) {
+func waitForResetAdmissionClose(t *testing.T, current *coroutine.Scheduler) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
-		probe := co.Create("reset-close-probe", func(coroutine.Thread) {})
+		probe := current.Create("reset-close-probe", func(coroutine.Thread) {})
 		if probe.Stopped() {
 			return
 		}
@@ -322,19 +361,91 @@ func waitForResetAdmissionClose(t *testing.T, co *coroutine.Coroutines) {
 	t.Fatal("reset barrier did not close coroutine admission")
 }
 
-func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
+func waitForResetAdmissionOpen(t *testing.T, current *coroutine.Scheduler) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		var ran atomic.Bool
-		probe := co.Create("reset-open-probe", func(coroutine.Thread) {
+		probe := current.Create("reset-open-probe", func(coroutine.Thread) {
 			ran.Store(true)
 		})
-		co.Join(probe)
+		current.Join(probe)
 		if ran.Load() {
 			return
 		}
 		runtime.Gosched()
 	}
 	t.Fatal("reset barrier did not reopen coroutine admission")
+}
+
+func TestDrainAndReleaseGameFinishesCleanupBeforeRelease(t *testing.T) {
+	for _, mode := range []string{"return", "panic", "goexit"} {
+		for _, nilScheduler := range []bool{false, true} {
+			name := mode
+			if nilScheduler {
+				name += "/nil scheduler"
+			}
+			t.Run(name, func(t *testing.T) {
+				isolateGameBinding(t)
+				current := setupExecuteTest(t)
+				binding, err := bindGame(new(bindingTestGame), "old")
+				if err != nil {
+					t.Fatal(err)
+				}
+				beginGameClose(binding)
+				t.Cleanup(func() { current.RunAfterStop(func() { releaseGame(binding) }) })
+				var drainScheduler *coroutine.Scheduler
+				if !nilScheduler {
+					drainScheduler = current
+				}
+				type result struct {
+					panicValue any
+					returned   bool
+				}
+				done := make(chan result, 1)
+				go func() {
+					returned := false
+					defer func() { done <- result{recover(), returned} }()
+					drainAndReleaseGame(drainScheduler, binding, func() {
+						if activeGame.Load() != binding {
+							t.Error("binding released before game cleanup")
+						}
+						if drainScheduler != nil {
+							probe := current.Create("during cleanup", func(coroutine.Thread) { t.Error("cleanup admitted script") })
+							if !probe.Stopped() {
+								t.Error("admission open inside cleanup")
+							}
+						}
+						switch mode {
+						case "panic":
+							panic("cleanup failure")
+						case "goexit":
+							runtime.Goexit()
+						}
+					})
+					returned = true
+				}()
+				select {
+				case got := <-done:
+					if mode == "panic" && got.panicValue != "cleanup failure" || mode != "panic" && got.panicValue != nil {
+						t.Fatalf("cleanup panic=%v", got.panicValue)
+					}
+					if got.returned != (mode == "return") {
+						t.Fatalf("cleanup returned=%v for %s", got.returned, mode)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("cleanup did not finish")
+				}
+				if activeGame.Load() != nil {
+					t.Fatal("completed cleanup retained the game")
+				}
+				ran := false
+				probe := current.Create("after cleanup", func(coroutine.Thread) { ran = true })
+				current.Join(probe)
+				if probe.Stopped() || !ran {
+					t.Fatal("completed cleanup did not reopen admission")
+				}
+			})
+		}
+	}
 }

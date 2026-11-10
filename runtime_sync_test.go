@@ -84,7 +84,7 @@ func TestFlushSyncBufferOnlySubmitsChanges(t *testing.T) {
 		t.Fatalf("empty buffer submitted %d batches, want 0", len(mgr.batches))
 	}
 
-	game.syncBuffer.Add(1, 2, 3, 4, 5, 6, 7, 8, true)
+	game.syncBuffer.AddTransform(1, engine.SpriteTransform{Position: mathf.NewVec2(2, 3), Rotation: 4, Scale: mathf.NewVec2(5, 6), RenderOffset: mathf.NewVec2(7, 8), Visible: true})
 	game.flushSyncBuffer()
 	if len(mgr.batches) != 1 {
 		t.Fatalf("updated buffer submitted %d batches, want 1", len(mgr.batches))
@@ -101,7 +101,7 @@ func TestFlushSyncBufferOnlySubmitsChanges(t *testing.T) {
 func TestFlushSyncBufferDoesNotSubmitSerializationFailure(t *testing.T) {
 	game, mgr := setupSyncBufferCapture(t)
 	invalidID := int64(1<<24 + 1)
-	game.syncBuffer.Add(invalidID, 0, 0, 0, 0, 0, 0, 0, false)
+	game.syncBuffer.AddTransform(invalidID, engine.SpriteTransform{})
 
 	requireSyncPanic(t, game.flushSyncBuffer, "invalid sprite ID", "legacy float32 batch encoding")
 	if len(mgr.batches) != 0 {
@@ -652,7 +652,7 @@ func TestDirectProxyAxisWritesPreserveOtherPendingAxis(t *testing.T) {
 func TestNonFiniteHeadingDoesNotExitFrame(t *testing.T) {
 	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
 		t.Run(fmt.Sprint(value), func(t *testing.T) {
-			co, game, _ := setupFrameSyncGame(t)
+			currentScheduler, game, _ := setupFrameSyncGame(t)
 			sprite := addFrameSyncSprite(game, 1, "heading")
 			sprite.SetHeading(45)
 			previous := pkgengine.ExtMgr
@@ -662,7 +662,7 @@ func TestNonFiniteHeadingDoesNotExitFrame(t *testing.T) {
 			sprite.SetHeading(value)
 			func() {
 				defer engine.CheckPanic()
-				runFrameSyncGame(co, game)
+				runFrameSyncGame(currentScheduler, game)
 			}()
 			if sprite.Heading() != 45 || len(ext.exits) != 0 || len(ext.messages) != 0 {
 				t.Fatalf("invalid heading changed frame: heading=%v exits=%v errors=%v", sprite.Heading(), ext.exits, ext.messages)
@@ -1437,9 +1437,9 @@ func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
 
 func newPhysicsTriggerTestGame(t *testing.T) *Game {
 	t.Helper()
-	previous := gco
-	gco = nil
-	t.Cleanup(func() { gco = previous })
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
 	game := new(Game)
 	game.bindScriptEvents()
 	return game

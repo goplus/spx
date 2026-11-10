@@ -23,18 +23,18 @@ import (
 )
 
 func TestJoinFirstSliceNilIsNoOp(t *testing.T) {
-	co := New(nil)
-	co.JoinFirstSlice(nil)
+	scheduler := New(nil)
+	scheduler.JoinFirstSlice(nil)
 }
 
 func TestJoinRejectsForeignThreads(t *testing.T) {
 	for _, test := range []struct {
 		name string
-		join func(*Coroutines, Thread)
+		join func(*Scheduler, Thread)
 	}{
-		{"done", (*Coroutines).Join},
-		{"first-slice", (*Coroutines).JoinFirstSlice},
-		{"all", func(co *Coroutines, target Thread) { co.JoinAll([]Thread{nil, target}) }},
+		{"done", (*Scheduler).Join},
+		{"first-slice", (*Scheduler).JoinFirstSlice},
+		{"all", func(scheduler *Scheduler, target Thread) { scheduler.JoinAll([]Thread{nil, target}) }},
 	} {
 		for _, completed := range []bool{false, true} {
 			name := test.name + "/live"
@@ -42,13 +42,13 @@ func TestJoinRejectsForeignThreads(t *testing.T) {
 				name = test.name + "/completed"
 			}
 			t.Run(name, func(t *testing.T) {
-				co, other := New(nil), New(nil)
+				scheduler, other := New(nil), New(nil)
 				release := make(chan struct{})
 				var once sync.Once
 				unblock := func() { once.Do(func() { close(release) }) }
 				t.Cleanup(func() {
 					unblock()
-					co.RunAfterStop(nil)
+					scheduler.RunAfterStop(nil)
 					other.RunAfterStop(nil)
 				})
 				target := other.Create("foreign", func(Thread) { <-release })
@@ -58,9 +58,9 @@ func TestJoinRejectsForeignThreads(t *testing.T) {
 				}
 				for _, managed := range []bool{false, true} {
 					result := make(chan any, 1)
-					attempt := func() { result <- catchPanic(func() { test.join(co, target) }) }
+					attempt := func() { result <- catchPanic(func() { test.join(scheduler, target) }) }
 					if managed {
-						co.Create("caller", func(Thread) { attempt() })
+						scheduler.Create("caller", func(Thread) { attempt() })
 					} else {
 						go attempt()
 					}
@@ -74,10 +74,10 @@ func TestJoinRejectsForeignThreads(t *testing.T) {
 					}
 				}
 				unblock()
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 				other.RunAfterStop(nil)
 				// A rejected waiter must never enter the target manager's scheduler.
-				for _, manager := range []*Coroutines{co, other} {
+				for _, manager := range []*Scheduler{scheduler, other} {
 					manager.schedulerMu.Lock()
 					pending := manager.hasPendingExecutionLocked()
 					manager.schedulerMu.Unlock()
@@ -94,15 +94,15 @@ func TestJoinRejectsForeignThreads(t *testing.T) {
 }
 
 func TestJoinAllValidatesBeforeWaiting(t *testing.T) {
-	co, other := New(nil), New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil); other.RunAfterStop(nil) })
-	local := co.Create("local", func(Thread) { co.Wait(1e9) })
-	co.JoinFirstSlice(local)
+	scheduler, other := New(nil), New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil); other.RunAfterStop(nil) })
+	local := scheduler.Create("local", func(Thread) { scheduler.Wait(1e9) })
+	scheduler.JoinFirstSlice(local)
 	foreign := other.Create("foreign", func(Thread) {})
 	other.Join(foreign)
 	result := make(chan any, 1)
-	caller := co.Create("caller", func(Thread) {
-		result <- catchPanic(func() { co.JoinAll([]Thread{nil, local, foreign}) })
+	caller := scheduler.Create("caller", func(Thread) {
+		result <- catchPanic(func() { scheduler.JoinAll([]Thread{nil, local, foreign}) })
 	})
 	select {
 	case got := <-result:
@@ -124,22 +124,22 @@ func TestJoinAllValidatesBeforeWaiting(t *testing.T) {
 func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 	for _, test := range []struct {
 		name    string
-		join    func(*Coroutines, Thread)
+		join    func(*Scheduler, Thread)
 		waiters func(Thread) *waiterSet
 	}{
 		{
 			name:    "done",
-			join:    (*Coroutines).Join,
+			join:    (*Scheduler).Join,
 			waiters: func(th Thread) *waiterSet { return &th.joinWaiters },
 		},
 		{
 			name:    "first-yield-or-done",
-			join:    (*Coroutines).JoinFirstSlice,
+			join:    (*Scheduler).JoinFirstSlice,
 			waiters: func(th Thread) *waiterSet { return &th.firstSliceWaiters },
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			registered := make(chan Thread, 1)
 			release := make(chan struct{})
 			batchDone := make(chan struct{})
@@ -147,7 +147,7 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 			releaseTarget := func() { releaseOnce.Do(func() { close(release) }) }
 			t.Cleanup(func() {
 				releaseTarget()
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 				waitForThreadSignal(t, batchDone, "batch registration did not finish")
 			})
 
@@ -155,7 +155,7 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 			// register even while canceled waiters repeatedly finish.
 			go func() {
 				defer close(batchDone)
-				co.StartBatch([]Task{{
+				scheduler.StartBatch([]Task{{
 					Owner: "target",
 					RegisterInvocation: func(th Thread) func() {
 						registered <- th
@@ -173,18 +173,18 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 			}
 
 			survivorReturned := make(chan struct{})
-			survivor := co.Create("survivor", func(Thread) {
-				test.join(co, target)
+			survivor := scheduler.Create("survivor", func(Thread) {
+				test.join(scheduler, target)
 				close(survivorReturned)
 			})
 			waitForThreadSignal(t, survivor.firstSliceDone, "survivor did not wait")
 
 			for range 16 {
-				waiter := co.Create("canceled-waiter", func(Thread) {
-					test.join(co, target)
+				waiter := scheduler.Create("canceled-waiter", func(Thread) {
+					test.join(scheduler, target)
 				})
 				waitForThreadSignal(t, waiter.firstSliceDone, "waiter did not wait")
-				co.Stop(waiter)
+				scheduler.Stop(waiter)
 				waitForThreadSignal(t, waiter.done, "canceled waiter did not finish")
 
 				waiters := test.waiters(target)
@@ -213,33 +213,33 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 func TestCompletionResumesWaitersInScriptOrder(t *testing.T) {
 	for _, test := range []struct {
 		name           string
-		earlier, later func(*Coroutines, Thread)
+		earlier, later func(*Scheduler, Thread)
 	}{
-		{"join before first slice", (*Coroutines).Join, (*Coroutines).JoinFirstSlice},
-		{"first slice before join", (*Coroutines).JoinFirstSlice, (*Coroutines).Join},
+		{"join before first slice", (*Scheduler).Join, (*Scheduler).JoinFirstSlice},
+		{"first slice before join", (*Scheduler).JoinFirstSlice, (*Scheduler).Join},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
-			t.Cleanup(func() { co.RunAfterStop(nil) })
+			scheduler := New(nil)
+			t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 			// An unpublished target can finish cancellation without a scheduler
 			// permit, making both kinds of waiters eligible at once.
-			target := co.registerTask(co.captureAdmission(), Task{
+			target := scheduler.registerTask(scheduler.captureAdmission(), Task{
 				Run: func(Thread) { t.Error("unpublished canceled target ran") },
 			})
 			order := make(chan string, 2)
-			earlier := co.Create("earlier", func(Thread) {
-				test.earlier(co, target)
+			earlier := scheduler.Create("earlier", func(Thread) {
+				test.earlier(scheduler, target)
 				order <- "earlier"
 			})
 			waitForThreadSignal(t, earlier.firstSliceDone, "earlier waiter did not block")
-			later := co.Create("later", func(Thread) {
-				test.later(co, target)
+			later := scheduler.Create("later", func(Thread) {
+				test.later(scheduler, target)
 				order <- "later"
 			})
 			waitForThreadSignal(t, later.firstSliceDone, "later waiter did not block")
 			// Wait for the last yield to release its scheduler permit.
-			co.runMu.Lock()
-			co.runMu.Unlock()
+			scheduler.runMu.Lock()
+			scheduler.runMu.Unlock()
 			target.Cancel()
 			waitForThreadSignal(t, earlier.done, "earlier waiter did not finish")
 			waitForThreadSignal(t, later.done, "later waiter did not finish")
@@ -251,14 +251,14 @@ func TestCompletionResumesWaitersInScriptOrder(t *testing.T) {
 }
 
 func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	releasePeer := make(chan struct{})
 	peerReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peer := co.Create("peer", func(peer Thread) {
+	peer := scheduler.Create("peer", func(peer Thread) {
 		peerReady <- peer
-		WaitForChan(co, releasePeer)
+		WaitForChan(scheduler, releasePeer)
 	})
 
 	timer := time.NewTimer(time.Second)
@@ -269,8 +269,8 @@ func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
 		t.Fatal("peer coroutine did not start")
 	}
 
-	co.Create("caller", func(me Thread) {
-		co.Join(peer)
+	scheduler.Create("caller", func(me Thread) {
+		scheduler.Join(peer)
 		close(callerDone)
 	})
 
@@ -292,20 +292,20 @@ func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
 }
 
 func TestJoinAllWaitsForEveryPeer(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	releaseA := make(chan struct{})
 	releaseB := make(chan struct{})
 	peerAReady := make(chan Thread, 1)
 	peerBReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peerA := co.Create("peer-a", func(peer Thread) {
+	peerA := scheduler.Create("peer-a", func(peer Thread) {
 		peerAReady <- peer
-		WaitForChan(co, releaseA)
+		WaitForChan(scheduler, releaseA)
 	})
-	peerB := co.Create("peer-b", func(peer Thread) {
+	peerB := scheduler.Create("peer-b", func(peer Thread) {
 		peerBReady <- peer
-		WaitForChan(co, releaseB)
+		WaitForChan(scheduler, releaseB)
 	})
 
 	timer := time.NewTimer(time.Second)
@@ -324,8 +324,8 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 		t.Fatal("peer B coroutine did not start")
 	}
 
-	co.Create("caller", func(me Thread) {
-		co.JoinAll([]Thread{nil, me, peerA, peerB, peerA, nil, me})
+	scheduler.Create("caller", func(me Thread) {
+		scheduler.JoinAll([]Thread{nil, me, peerA, peerB, peerA, nil, me})
 		close(callerDone)
 	})
 
@@ -349,14 +349,14 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 }
 
 func TestJoinFirstSliceResumesCallerAfterPeerFirstYield(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	releasePeer := make(chan struct{})
 	peerReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peer := co.Create("peer", func(peer Thread) {
+	peer := scheduler.Create("peer", func(peer Thread) {
 		peerReady <- peer
-		WaitForChan(co, releasePeer)
+		WaitForChan(scheduler, releasePeer)
 	})
 
 	timer := time.NewTimer(time.Second)
@@ -367,8 +367,8 @@ func TestJoinFirstSliceResumesCallerAfterPeerFirstYield(t *testing.T) {
 		t.Fatal("peer coroutine did not start")
 	}
 
-	co.Create("caller", func(me Thread) {
-		co.JoinFirstSlice(peer)
+	scheduler.Create("caller", func(me Thread) {
+		scheduler.JoinFirstSlice(peer)
 		close(callerDone)
 	})
 
@@ -389,11 +389,11 @@ func TestJoinFirstSliceResumesCallerAfterPeerFirstYield(t *testing.T) {
 }
 
 func TestJoinFirstSliceReturnsWhenPeerExitsWithoutYield(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	peerReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peer := co.Create("peer", func(peer Thread) {
+	peer := scheduler.Create("peer", func(peer Thread) {
 		peerReady <- peer
 	})
 
@@ -405,8 +405,8 @@ func TestJoinFirstSliceReturnsWhenPeerExitsWithoutYield(t *testing.T) {
 		t.Fatal("peer coroutine did not start")
 	}
 
-	co.Create("caller", func(me Thread) {
-		co.JoinFirstSlice(peer)
+	scheduler.Create("caller", func(me Thread) {
+		scheduler.JoinFirstSlice(peer)
 		close(callerDone)
 	})
 
@@ -420,17 +420,17 @@ func TestJoinFirstSliceReturnsWhenPeerExitsWithoutYield(t *testing.T) {
 }
 
 func TestJoinFirstSliceWaitsForChildFromCoroutine(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 
 	peerStarted := make(chan struct{}, 1)
 	observed := make(chan bool, 1)
 	done := make(chan struct{})
 
-	co.Create("caller", func(me Thread) {
-		peer := co.Create("peer", func(peer Thread) {
+	scheduler.Create("caller", func(me Thread) {
+		peer := scheduler.Create("peer", func(peer Thread) {
 			close(peerStarted)
 		})
-		co.JoinFirstSlice(peer)
+		scheduler.JoinFirstSlice(peer)
 
 		select {
 		case <-peerStarted:
@@ -461,7 +461,7 @@ func TestJoinFirstSliceWaitsForChildFromCoroutine(t *testing.T) {
 			t.Fatal("caller did not finish while pumping the scheduler")
 		}
 
-		co.Update()
+		scheduler.Update()
 		time.Sleep(time.Millisecond)
 	}
 }

@@ -234,11 +234,11 @@ func TestShapeManagerLayerSortPreservesAutomaticOrder(t *testing.T) {
 }
 
 func TestShapeManagerCloningDeletedSourceStopsScript(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	manager := shapeManager{}
 	reached := false
-	thread := co.Create(nil, func(coroutine.Thread) { manager.addClonedShape(&SpriteImpl{}, &SpriteImpl{}); reached = true })
-	co.Join(thread)
+	thread := currentScheduler.Create(nil, func(coroutine.Thread) { manager.addClonedShape(&SpriteImpl{}, &SpriteImpl{}); reached = true })
+	currentScheduler.Join(thread)
 	if reached || len(manager.items) != 0 {
 		t.Fatal("cloning removed source continued or inserted a clone")
 	}

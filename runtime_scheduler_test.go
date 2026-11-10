@@ -34,9 +34,9 @@ func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 	stopped := make(chan struct{})
 	cleaned := false
 	t.Run("replacement", func(t *testing.T) {
-		co := coroutine.New(nil)
-		installRuntimeScheduler(t, co, func() {
-			if gco != co {
+		currentScheduler := coroutine.New(nil)
+		installRuntimeScheduler(t, currentScheduler, func() {
+			if scheduler != currentScheduler {
 				t.Error("scheduler restored before resource cleanup")
 			}
 			select {
@@ -47,7 +47,7 @@ func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 			cleaned = true
 		})
 		started := make(chan struct{})
-		co.Create("fixture-drain", func(coroutine.Thread) {
+		currentScheduler.Create("fixture-drain", func(coroutine.Thread) {
 			defer close(stopped)
 			if !engine.IsInCoroutine() {
 				t.Error("engine scheduler binding does not match the test scheduler")
@@ -61,7 +61,7 @@ func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 			t.Fatal("test coroutine did not start")
 		}
 	})
-	if !cleaned || gco != original {
+	if !cleaned || scheduler != original {
 		t.Fatal("scheduler cleanup did not complete and restore its previous binding")
 	}
 	bound := make(chan bool, 1)
@@ -79,16 +79,16 @@ func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 }
 
 func TestNonVisualLoopsShareFrame(t *testing.T) {
-	co, _ := setupRuntimeEventGame(t)
+	currentScheduler, _ := setupRuntimeEventGame(t)
 	itime.Start()
 	counts := [2]int{}
 	for i := range counts {
-		th := co.Create(nil, func(coroutine.Thread) {
+		th := currentScheduler.Create(nil, func(coroutine.Thread) {
 			Repeat(5, func() { counts[i]++ })
 		})
-		co.JoinFirstSlice(th)
+		currentScheduler.JoinFirstSlice(th)
 	}
-	co.Update()
+	currentScheduler.Update()
 	if counts != [2]int{5, 5} {
 		t.Fatalf("same-frame iterations = %v, want [5 5]", counts)
 	}
@@ -97,7 +97,7 @@ func TestNonVisualLoopsShareFrame(t *testing.T) {
 func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 	for _, visible := range []bool{false, true} {
 		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
-			co, _ := setupRuntimeEventGame(t)
+			currentScheduler, _ := setupRuntimeEventGame(t)
 			itime.Start()
 			sprite := new(SpriteImpl)
 			sprite.spriteState.isVisible = visible
@@ -106,7 +106,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 				direction: 45, rotationStyle: Normal,
 			}
 			var frames []int64
-			th := co.Create(sprite, func(coroutine.Thread) {
+			th := currentScheduler.Create(sprite, func(coroutine.Thread) {
 				Repeat(3, func() {
 					if len(frames)%2 == 0 {
 						sprite.SetRotationStyle(None)
@@ -116,9 +116,9 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 					frames = append(frames, itime.Frame())
 				})
 			})
-			co.JoinFirstSlice(th)
+			currentScheduler.JoinFirstSlice(th)
 			for range 3 {
-				co.Update()
+				currentScheduler.Update()
 				itime.Update(1.0/30, 30)
 			}
 			if len(frames) != 3 {
@@ -142,7 +142,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 
 func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 	resetInputSessionTest(t)
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	itime.Start()
 	setupCaptureTest(t)
 	setupImmediateEngineCalls(t)
@@ -196,7 +196,7 @@ func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 		}
 		itime.Update(0.05, 30)
 		game.OnEngineUpdate(0.05)
-		co.Update()
+		currentScheduler.Update()
 		game.OnEngineRender(0.05)
 		if err := engine.FlushCaptures(); err != nil {
 			t.Fatal(err)
@@ -218,43 +218,43 @@ func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 }
 
 func TestRedrawFinishesWholeRound(t *testing.T) {
-	co, _ := setupRuntimeEventGame(t)
+	currentScheduler, _ := setupRuntimeEventGame(t)
 	itime.Start()
 	var visual, nonVisual int
-	th := co.Create(nil, func(coroutine.Thread) {
+	th := currentScheduler.Create(nil, func(coroutine.Thread) {
 		Forever(func() {
 			visual++
 			engine.RequestRedraw()
 		})
 	})
-	co.JoinFirstSlice(th)
-	th = co.Create(nil, func(coroutine.Thread) {
+	currentScheduler.JoinFirstSlice(th)
+	th = currentScheduler.Create(nil, func(coroutine.Thread) {
 		Forever(func() { nonVisual++ })
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	currentScheduler.JoinFirstSlice(th)
+	currentScheduler.Update()
 	for frame := 1; frame <= 4; frame++ {
 		if visual != frame || nonVisual != frame {
 			t.Fatalf("frame %d: visual/nonvisual = %d/%d", frame, visual, nonVisual)
 		}
 		itime.Update(1.0/30, 30)
-		co.Update()
+		currentScheduler.Update()
 	}
 }
 
 func TestExplicitWaitStillCrossesFrame(t *testing.T) {
-	co, _ := setupRuntimeEventGame(t)
+	currentScheduler, _ := setupRuntimeEventGame(t)
 	itime.Start()
 	count := 0
-	th := co.Create(nil, func(coroutine.Thread) {
+	th := currentScheduler.Create(nil, func(coroutine.Thread) {
 		Repeat(3, func() {
 			count++
 			engine.Wait(0)
 		})
 	})
-	co.JoinFirstSlice(th)
+	currentScheduler.JoinFirstSlice(th)
 	for want := 1; want <= 3; want++ {
-		co.Update()
+		currentScheduler.Update()
 		if count != want {
 			t.Fatalf("iterations = %d, want %d", count, want)
 		}
@@ -265,16 +265,16 @@ func TestExplicitWaitStillCrossesFrame(t *testing.T) {
 func TestSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 	for _, visible := range []bool{false, true} {
 		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
-			co, _ := setupRuntimeEventGame(t)
+			currentScheduler, _ := setupRuntimeEventGame(t)
 			itime.Start()
 			sprite := new(SpriteImpl)
 			sprite.spriteState.isVisible = visible
 			count := 0
-			th := co.Create(sprite, func(coroutine.Thread) {
+			th := currentScheduler.Create(sprite, func(coroutine.Thread) {
 				Repeat(5, func() { count++; sprite.markProxyDirty() })
 			})
-			co.JoinFirstSlice(th)
-			co.Update()
+			currentScheduler.JoinFirstSlice(th)
+			currentScheduler.Update()
 			want := 5
 			if visible {
 				want = 1
@@ -298,22 +298,22 @@ func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 		{"invalid", true, SpriteCostumeName("missing"), [3]int64{0, 0, 0}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			co, _ := setupRuntimeEventGame(t)
+			currentScheduler, _ := setupRuntimeEventGame(t)
 			itime.Start()
 			sprite := newTestRenderSprite()
 			sprite.spriteState.isVisible = tt.visible
 			var frames [3]int64
 			count := 0
-			th := co.Create(sprite, func(coroutine.Thread) {
+			th := currentScheduler.Create(sprite, func(coroutine.Thread) {
 				Repeat(len(frames), func() {
 					sprite.setCostume(tt.costume)
 					frames[count] = itime.Frame()
 					count++
 				})
 			})
-			co.JoinFirstSlice(th)
+			currentScheduler.JoinFirstSlice(th)
 			for range frames {
-				co.Update()
+				currentScheduler.Update()
 				itime.Update(1.0/30, 30)
 			}
 			if count != len(frames) || frames != tt.wantFrames {
@@ -342,7 +342,7 @@ func TestSoundControlsRequestRedrawBoundary(t *testing.T) {
 	for _, target := range []string{"game", "sprite"} {
 		for _, control := range controls {
 			t.Run(target+"/"+control.name, func(t *testing.T) {
-				co, _ := setupRuntimeEventGame(t)
+				currentScheduler, _ := setupRuntimeEventGame(t)
 				itime.Start()
 
 				game := new(Game)
@@ -356,16 +356,16 @@ func TestSoundControlsRequestRedrawBoundary(t *testing.T) {
 
 				frames := [3]int64{}
 				count := 0
-				th := co.Create(nil, func(coroutine.Thread) {
+				th := currentScheduler.Create(nil, func(coroutine.Thread) {
 					Repeat(len(frames), func() {
 						control.call(sound)
 						frames[count] = itime.Frame()
 						count++
 					})
 				})
-				co.JoinFirstSlice(th)
+				currentScheduler.JoinFirstSlice(th)
 				for range frames {
-					co.Update()
+					currentScheduler.Update()
 					itime.Update(1.0/30, 30)
 				}
 
@@ -380,7 +380,7 @@ func TestSoundControlsRequestRedrawBoundary(t *testing.T) {
 func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 	for _, redraw := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
-			co, game, _ := setupInputSourceTest(t)
+			currentScheduler, game, _ := setupInputSourceTest(t)
 			game.markGameStarted(game.bootstrapGeneration())
 			itime.Start()
 			var tracked float64
@@ -395,27 +395,27 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 			})
 			game.OnCond(func() bool { return game.Timer() > tracked+0.01 }, func() { fired++ })
 			game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-			co.Update()
+			currentScheduler.Update()
 			// Slow frames must preserve the same sampling order.
 			for _, delta := range []float64{1.0 / 30, 1.0 / 60, 0.25, 1.0 / 30} {
 				game.OnEngineBeforeUpdate(1.0 / 30)
 				itime.Update(delta, 30)
 				withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-				co.Update()
+				currentScheduler.Update()
 			}
 			if fired != 0 {
 				t.Fatalf("tracking hat fired %d times", fired)
 			}
 			// Stopping tracking allows a timer edge to fire.
-			co.StopIf(func(th coroutine.Thread) bool { return th.Owner == game })
+			currentScheduler.StopIf(func(th coroutine.Thread) bool { return th.Owner == game })
 			game.OnEngineBeforeUpdate(1.0 / 30)
 			itime.Update(0.1, 30)
 			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-			co.Update()
+			currentScheduler.Update()
 			game.OnEngineBeforeUpdate(1.0 / 30)
 			itime.Update(0.1, 30)
 			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-			co.Update()
+			currentScheduler.Update()
 			if fired != 1 {
 				t.Fatalf("stopped tracking hat fired %d times, want 1", fired)
 			}
@@ -426,7 +426,7 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
 	for _, startDispatched := range []bool{false, true} {
 		t.Run(fmt.Sprintf("start_dispatched=%t", startDispatched), func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			game.lifecycleState.StartDispatched.Store(startDispatched)
 			started, release := make(chan struct{}), make(chan struct{})
 			var returned chan struct{}
@@ -436,7 +436,7 @@ func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
 					<-returned
 				}
 			})
-			co.Create(game, func(coroutine.Thread) {
+			currentScheduler.Create(game, func(coroutine.Thread) {
 				close(started)
 				<-release
 			})
@@ -465,7 +465,7 @@ func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
 }
 
 func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
-	co, game, _ := setupInputSourceTest(t)
+	currentScheduler, game, _ := setupInputSourceTest(t)
 	game.markGameStarted(game.bootstrapGeneration())
 	itime.Start()
 	game.lifecycleState.StartDispatched.Store(true)
@@ -478,14 +478,14 @@ func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
 	}
 	itime.Update(0.05, 30)
 	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-	co.Update()
+	currentScheduler.Update()
 	if sampled != 0.05 || handled != 0.1 {
 		t.Fatalf("predicate/handler time = %v/%v, want 0.05/0.1", sampled, handled)
 	}
 }
 
 func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
-	co, game, _ := setupInputSourceTest(t)
+	currentScheduler, game, _ := setupInputSourceTest(t)
 	game.markGameStarted(game.bootstrapGeneration())
 	itime.Start()
 	game.lifecycleState.StartDispatched.Store(true)
@@ -502,7 +502,7 @@ func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
 		game.OnEngineBeforeUpdate(1.0 / 30)
 		itime.Update(1.0/30, 30)
 		withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-		co.Update()
+		currentScheduler.Update()
 	}
 	poll()
 	value = false
@@ -634,26 +634,26 @@ func TestLogicFramePreservesEmptyScratch(t *testing.T) {
 	}
 }
 
-func setupRuntimeScheduler(t *testing.T) *coroutine.Coroutines {
+func setupRuntimeScheduler(t *testing.T) *coroutine.Scheduler {
 	t.Helper()
-	co := coroutine.New(nil)
-	installRuntimeScheduler(t, co, nil)
-	return co
+	currentScheduler := coroutine.New(nil)
+	installRuntimeScheduler(t, currentScheduler, nil)
+	return currentScheduler
 }
 
 // beforeRestore runs after the test's coroutines stop, while their scheduler
 // remains bound. Register other resource cleanup before installing the scheduler.
-func installRuntimeScheduler(t testing.TB, co *coroutine.Coroutines, beforeRestore func()) {
+func installRuntimeScheduler(t testing.TB, currentScheduler *coroutine.Scheduler, beforeRestore func()) {
 	t.Helper()
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
+	original := scheduler
+	scheduler = currentScheduler
+	engine.SetScheduler(currentScheduler)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		currentScheduler.RunAfterStop(nil)
 		if beforeRestore != nil {
 			beforeRestore()
 		}
-		gco = original
-		engine.SetCoroutines(original)
+		scheduler = original
+		engine.SetScheduler(original)
 	})
 }

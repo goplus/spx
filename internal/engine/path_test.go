@@ -28,69 +28,11 @@ import (
 
 type pathResourceSpy struct {
 	gdx.IResMgr
-	modes []bool
-	files map[string]string
-}
-
-func TestBuildFilesystemAssetPath(t *testing.T) {
-	original := assetPaths
-	t.Cleanup(func() {
-		assetPaths = original
-	})
-
-	assetPaths = assetPathState{root: "../assets/", projectRoot: ".."}
-
-	tests := []struct {
-		name string
-		path string
-		want string
-	}{
-		{
-			name: "keep asset path inside root",
-			path: "image.png",
-			want: "../assets/image.png",
-		},
-		{
-			name: "clean nested path inside root",
-			path: "sprites/../image.png",
-			want: "../assets/image.png",
-		},
-		{
-			name: "allow resource elsewhere in project",
-			path: "../res/image.png",
-			want: "../res/image.png",
-		},
-		{
-			name: "allow canonical project resource URI",
-			path: "res://res/image.png",
-			want: "../res/image.png",
-		},
-		{
-			name: "reject historical shared asset outside project",
-			path: "../../shared-assets/image.png",
-			want: "",
-		},
-		{
-			name: "reject parent traversal",
-			path: "../../../../etc/passwd",
-			want: "",
-		},
-		{name: "reject empty reference", path: "", want: ""},
-		{name: "reject empty resource URI", path: "res://", want: ""},
-		{name: "reject embedded NUL", path: "image\x00.png", want: ""},
-		{name: "reject file URI", path: "file:///tmp/image.png", want: ""},
-		{name: "reject malformed res URI", path: "res:res/image.png", want: ""},
-		{name: "reject Windows path", path: `C:\outside\image.png`, want: ""},
-		{name: "reject UNC path", path: `\\server\share\image.png`, want: ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := buildFilesystemAssetPath(tt.path); got != tt.want {
-				t.Fatalf("buildFilesystemAssetPath(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
+	modes      []bool
+	checks     int
+	reads      int
+	files      map[string]string
+	beforeRead func(string)
 }
 
 func TestExplicitFilesystemRoots(t *testing.T) {
@@ -186,50 +128,8 @@ func TestExplicitFilesystemRoots(t *testing.T) {
 			if tt.path == "linked/outside.png" && !symlinkDirAvailable {
 				t.Skip("symlink unavailable")
 			}
-			if got := buildFilesystemAssetPath(tt.path); got != normalizeSlashes(filepath.Clean(tt.want)) && !(got == "" && tt.want == "") {
-				t.Fatalf("buildFilesystemAssetPath(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestLegacyFilesystemRootsRetainBoundedExternalAssets(t *testing.T) {
-	original := assetPaths
-	t.Cleanup(func() {
-		assetPaths = original
-	})
-
-	root := t.TempDir()
-	projectDir := filepath.Join(root, "project")
-	assetDir := filepath.Join(projectDir, "assets")
-	for _, dir := range []string{assetDir, filepath.Join(root, "custom_asset"), filepath.Join(root, "shared")} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, ".config"), []byte(`{"extasset":"custom_asset"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"custom_asset/image.png", "shared/image.png"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := SetLegacyFilesystemRoots(projectDir, assetDir); err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		name string
-		path string
-		want string
-	}{
-		{name: "extasset", path: "../../custom_asset/image.png", want: filepath.Join(root, "custom_asset", "image.png")},
-		{name: "shared", path: "../../shared/image.png", want: filepath.Join(root, "shared", "image.png")},
-		{name: "escape", path: "../../../outside/image.png", want: ""},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := buildFilesystemAssetPath(test.path); got != normalizeSlashes(filepath.Clean(test.want)) && !(got == "" && test.want == "") {
-				t.Fatalf("buildFilesystemAssetPath(%q) = %q, want %q", test.path, got, test.want)
+			if got := assetPaths.filesystemPath(tt.path); got != normalizeSlashes(filepath.Clean(tt.want)) && !(got == "" && tt.want == "") {
+				t.Fatalf("filesystemPath(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
 	}
@@ -271,6 +171,48 @@ func TestSetFilesystemRootsRejectsInvalidRootsWithoutChangingState(t *testing.T)
 	}
 }
 
+func TestLegacyFilesystemRootsRetainBoundedExternalAssets(t *testing.T) {
+	original := assetPaths
+	t.Cleanup(func() {
+		assetPaths = original
+	})
+
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "project")
+	assetDir := filepath.Join(projectDir, "assets")
+	for _, dir := range []string{assetDir, filepath.Join(root, "custom_asset"), filepath.Join(root, "shared")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, ".config"), []byte(`{"extasset":"custom_asset"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"custom_asset/image.png", "shared/image.png"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SetLegacyFilesystemRoots(projectDir, assetDir); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "extasset", path: "../../custom_asset/image.png", want: filepath.Join(root, "custom_asset", "image.png")},
+		{name: "shared", path: "../../shared/image.png", want: filepath.Join(root, "shared", "image.png")},
+		{name: "escape", path: "../../../outside/image.png", want: ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := assetPaths.filesystemPath(test.path); got != normalizeSlashes(filepath.Clean(test.want)) && !(got == "" && test.want == "") {
+				t.Fatalf("filesystemPath(%q) = %q, want %q", test.path, got, test.want)
+			}
+		})
+	}
+}
+
 func TestReadFilesystemConfigHandlesMissingUnreadableAndInvalidFiles(t *testing.T) {
 	root := t.TempDir()
 	config := filepath.Join(root, projectConfigFile)
@@ -307,9 +249,157 @@ func TestReadFilesystemConfigHandlesMissingUnreadableAndInvalidFiles(t *testing.
 	}
 }
 
+func TestAssetResolversKeepConfigurationSnapshots(t *testing.T) {
+	original := assetPaths
+	t.Cleanup(func() { assetPaths = original })
+	filesystem := newAssetResolver("project/", "assets")
+	archive := newAssetResolver(packmodeAssetPrefix, "assets")
+	archive.extAssetDir = "shared"
+	assetPaths = assetResolver{root: "other/", projectRoot: "other", extAssetDir: "different"}
+	if got := filesystem.filesystemPath("cat.png"); got != "project/assets/cat.png" {
+		t.Fatalf("filesystem resolver used installed configuration: %q", got)
+	}
+	if got := archive.packmodePath("cat.png"); got != "res://assets/cat.png" {
+		t.Fatalf("archive resolver used installed configuration: %q", got)
+	}
+	if got := archive.packmodePath("../../shared/cat.png"); got != "res://extasset/cat.png" {
+		t.Fatalf("archive resolver lost its external asset configuration: %q", got)
+	}
+}
+
+func TestBuildFilesystemAssetPath(t *testing.T) {
+	resolver := newAssetResolver(defaultAssetPathPrefix, defaultAssetDirName)
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "keep asset path inside root",
+			path: "image.png",
+			want: "../assets/image.png",
+		},
+		{
+			name: "clean nested path inside root",
+			path: "sprites/../image.png",
+			want: "../assets/image.png",
+		},
+		{
+			name: "allow resource elsewhere in project",
+			path: "../res/image.png",
+			want: "../res/image.png",
+		},
+		{
+			name: "allow canonical project resource URI",
+			path: "res://res/image.png",
+			want: "../res/image.png",
+		},
+		{
+			name: "reject historical shared asset outside project",
+			path: "../../shared-assets/image.png",
+			want: "",
+		},
+		{
+			name: "reject parent traversal",
+			path: "../../../../etc/passwd",
+			want: "",
+		},
+		{name: "reject empty reference", path: "", want: ""},
+		{name: "reject empty resource URI", path: "res://", want: ""},
+		{name: "reject embedded NUL", path: "image\x00.png", want: ""},
+		{name: "reject NUL before cleaning", path: "bad\x00/../image.png", want: ""},
+		{name: "reject NUL in project URI", path: "res://bad\x00/../image.png", want: ""},
+		{name: "reject file URI", path: "file:///tmp/image.png", want: ""},
+		{name: "reject malformed res URI", path: "res:res/image.png", want: ""},
+		{name: "reject Windows path", path: `C:\outside\image.png`, want: ""},
+		{name: "reject UNC path", path: `\\server\share\image.png`, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolver.filesystemPath(tt.path); got != tt.want {
+				t.Fatalf("filesystemPath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilesystemPathRejectsUnresolvedRoots(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct {
+		name     string
+		resolver assetResolver
+	}{
+		{"absolute assets without project root", newAssetResolver("", root)},
+		{"missing canonical project", newLegacyFilesystemAssetResolver(filepath.Join(root, "missing")+string(os.PathSeparator), "assets", true)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.resolver.filesystemPath("image.png"); got != "" {
+				t.Fatalf("filesystemPath() = %q, want unresolved root rejected", got)
+			}
+		})
+	}
+}
+
+func TestIsWithinRoot(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct {
+		name, path string
+		want       bool
+	}{
+		{"root itself", root, true},
+		{"child", filepath.Join(root, "assets"), true},
+		{"parent", filepath.Dir(root), false},
+		{"sibling with matching prefix", root + "-other", false},
+		{"relative path against absolute root", "assets", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isWithinRoot(tc.path, root); got != tc.want {
+				t.Fatalf("isWithinRoot(%q, %q) = %v, want %v", tc.path, root, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestToAssetPathRejectsNULBeforeNormalization(t *testing.T) {
+	setupAssetPathTest(t)
+	assetPaths = assetResolver{}
+	SetAssetDir("assets")
+	for _, reference := range []string{
+		"image\x00.png",
+		"bad\x00/../image.png",
+		"res://bad\x00/../image.png",
+		"../../shared/bad\x00/../image.png",
+	} {
+		if got := ToAssetPath(reference); got != "" {
+			t.Errorf("ToAssetPath(%q) = %q, want rejected reference", reference, got)
+		}
+	}
+}
+
+func TestPackmodePathNormalizesCompatibilityPrefix(t *testing.T) {
+	resolver := newAssetResolver(packmodeAssetPrefix, "assets")
+	for _, tc := range []struct{ reference, want string }{
+		{"../../shared/cat.svg", "res://shared/cat.svg"},
+		{"./../../shared//sprites/../cat.svg", "res://shared/cat.svg"},
+		{"sprites/../../../shared/cat.svg", "res://shared/cat.svg"},
+		{"../res/cat.svg", "res://res/cat.svg"},
+		{"../..", ""},
+		{"../../", ""},
+		{"../../shared/..", ""},
+		{"../../../shared/cat.svg", ""},
+		{"res://../../shared/cat.svg", ""},
+	} {
+		t.Run(tc.reference, func(t *testing.T) {
+			if got := resolver.packmodePath(tc.reference); got != tc.want {
+				t.Fatalf("packmodePath(%q) = %q, want %q", tc.reference, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
-	previous := assetPaths
-	t.Cleanup(func() { assetPaths = previous })
 	for _, tc := range []struct {
 		name, directory, path, want string
 		match                       bool
@@ -327,8 +417,8 @@ func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
 		{"normalized suffix", "shared", "../../shared/sprites/../cat.svg", "cat.svg", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			assetPaths.extAssetDir = tc.directory
-			if suffix, ok := extAssetSuffix(tc.path); suffix != tc.want || ok != tc.match {
+			resolver := assetResolver{extAssetDir: tc.directory}
+			if suffix, ok := resolver.extAssetSuffix(tc.path); suffix != tc.want || ok != tc.match {
 				t.Fatalf("external suffix = %q, %v; want %q, %v", suffix, ok, tc.want, tc.match)
 			}
 		})
@@ -337,9 +427,19 @@ func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
 
 func (s *pathResourceSpy) SetLoadMode(filesystem bool) { s.modes = append(s.modes, filesystem) }
 
-func (s *pathResourceSpy) HasFile(path string) bool { _, ok := s.files[path]; return ok }
+func (s *pathResourceSpy) HasFile(path string) bool {
+	s.checks++
+	_, ok := s.files[path]
+	return ok
+}
 
-func (s *pathResourceSpy) ReadAllText(path string) string { return s.files[path] }
+func (s *pathResourceSpy) ReadAllText(path string) string {
+	s.reads++
+	if s.beforeRead != nil {
+		s.beforeRead(path)
+	}
+	return s.files[path]
+}
 
 func setupAssetPathTest(t *testing.T) *pathResourceSpy {
 	t.Helper()

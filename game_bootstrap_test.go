@@ -46,7 +46,7 @@ type bootstrapOnLoadedGame struct {
 func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
 	for _, name := range []string{"empty", "tasks", "stale"} {
 		t.Run(name, func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			previousPlatform := pkgengine.PlatformMgr
 			pkgengine.PlatformMgr = nil
 			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
@@ -74,7 +74,7 @@ func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("bootstrap scheduling waited for an engine-thread call")
 			}
-			co.Update()
+			currentScheduler.Update()
 			if got, want := game.lifecycleState.BootstrapDone.Load(), name != "stale"; got != want {
 				t.Fatalf("bootstrap done = %v, want %v", got, want)
 			}
@@ -226,11 +226,11 @@ func TestPrepareStageBootstrapRunsSpriteMainsInZOrderUntilFirstYield(t *testing.
 	var spriteASeenThreadCount int64
 	var spriteBSeenThreadCount int64
 	spriteA := newCollisionLayerOrderSprite(&game, "SpriteA", func() {
-		spriteASeenThreadCount = gco.LastThreadID()
+		spriteASeenThreadCount = scheduler.LastThreadID()
 		engine.WaitForChan(blocked)
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", func() {
-		spriteBSeenThreadCount = gco.LastThreadID()
+		spriteBSeenThreadCount = scheduler.LastThreadID()
 	})
 	generation := game.bootstrapGeneration()
 	game.prepareStageBootstrap(
@@ -250,7 +250,7 @@ func TestPrepareStageBootstrapRunsSpriteMainsInZOrderUntilFirstYield(t *testing.
 
 func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		co := setupRuntimeScheduler(t)
+		currentScheduler := setupRuntimeScheduler(t)
 		game := &bootstrapOnLoadedGame{}
 		blocked := make(chan struct{})
 		var calls []string
@@ -281,7 +281,7 @@ func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 
 		generation := game.bootstrapGeneration()
 		game.prepareStageBootstrap(sprites, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem(), generation)
-		if len(calls) != 0 || co.LastThreadID() != 0 {
+		if len(calls) != 0 || currentScheduler.LastThreadID() != 0 {
 			t.Fatal("queuing bootstrap callbacks started user code")
 		}
 		for _, sprite := range sprites {
@@ -371,7 +371,7 @@ func TestPrepareStageBootstrapAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	runBootstrapTasksWithScheduler(t, &game, generation)
 	game.completeBootstrap(generation)
 	game.dispatchStartEventIfNeeded()
-	gco.Update()
+	scheduler.Update()
 	select {
 	case <-started:
 	case <-time.After(time.Second):
@@ -488,7 +488,7 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 		if time.Now().After(deadline) {
 			t.Fatal("bootstrap tasks did not finish while pumping scheduler")
 		}
-		gco.Update()
+		scheduler.Update()
 		time.Sleep(time.Millisecond)
 	}
 }
