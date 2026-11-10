@@ -39,7 +39,7 @@ const (
 	physicsColliderPolygon = collision.ColliderPolygon
 )
 
-const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers
+const collisionLayerCount = 32 // Engine limit: max 32 collision layers
 
 type rayCastResult struct {
 	Hited    bool
@@ -49,15 +49,14 @@ type rayCastResult struct {
 }
 
 type spriteCollisionInfo struct {
-	Index int
-	Layer int64
-	Mask  int64
+	layerIndex int
+	Layer      int64
+	Mask       int64
 }
 
 type spriteCollisionData struct {
 	sprite *SpriteImpl
 	info   *spriteCollisionInfo
-	modIdx int
 }
 
 // -----------------------------------------------------------------------------
@@ -174,8 +173,8 @@ func (p *Game) buildSpriteCollisionInfos() map[string]*spriteCollisionInfo {
 	infos := make(map[string]*spriteCollisionInfo, len(p.typs))
 	idx := 0
 	for name := range p.typs {
-		modIdx := idx % maxCollisionLayerIdx
-		infos[name] = &spriteCollisionInfo{Index: idx, Layer: 1 << modIdx}
+		layerIndex := idx % collisionLayerCount
+		infos[name] = &spriteCollisionInfo{layerIndex: layerIndex, Layer: 1 << layerIndex}
 		idx++
 	}
 	return infos
@@ -209,40 +208,39 @@ func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 	return &spriteCollisionInfo{}
 }
 
-func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
-	spriteData := make([]*spriteCollisionData, 0, len(inits))
+func (p *Game) buildSpriteCollisionData(inits []Sprite) []spriteCollisionData {
+	spriteData := make([]spriteCollisionData, 0, len(inits))
 	for _, ini := range inits {
 		spr := spriteOf(ini)
 		if spr == nil {
 			continue
 		}
 		info := p.getSpriteCollisionInfo(spr.name)
-		spriteData = append(spriteData, &spriteCollisionData{
+		spriteData = append(spriteData, spriteCollisionData{
 			sprite: spr,
 			info:   info,
-			modIdx: getCollisionLayerIndex(info),
 		})
 	}
 	return spriteData
 }
 
-func (p *Game) applyCollisionLayers(spriteData []*spriteCollisionData) {
+func (p *Game) applyCollisionLayers(spriteData []spriteCollisionData) {
 	if len(spriteData) == 0 {
 		return
 	}
 
-	maskMap := make([]int64, maxCollisionLayerIdx)
+	var masksByLayer [collisionLayerCount]int64
 
 	for _, data := range spriteData {
 		data.info.Mask = 0
-		for target := range data.sprite.physics().getCollisionTargets() {
+		for target := range data.sprite.physics().collisionTargets {
 			targetInfo := p.getSpriteCollisionInfo(target)
-			maskMap[data.modIdx] |= targetInfo.Layer
+			masksByLayer[data.info.layerIndex] |= targetInfo.Layer
 		}
 	}
 
 	for _, data := range spriteData {
-		data.info.Mask = maskMap[data.modIdx]
+		data.info.Mask = masksByLayer[data.info.layerIndex]
 		spxlog.Debug("Init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
 	}
 
@@ -279,10 +277,6 @@ func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *
 		spxlog.Warn("Raycast warn: %v", err)
 	}
 	return result
-}
-
-func getCollisionLayerIndex(info *spriteCollisionInfo) int {
-	return info.Index % maxCollisionLayerIdx
 }
 
 // tryRaycastResult attempts to parse raycast result from array.

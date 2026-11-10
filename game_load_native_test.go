@@ -709,3 +709,65 @@ func isolatedGameTest(t *testing.T) bool {
 	}
 	return true
 }
+
+func TestCollisionLayerFailurePreservesObservableMaskReset(t *testing.T) {
+	for _, abort := range []bool{false, true} {
+		t.Run(fmt.Sprintf("callback panics=%v", abort), func(t *testing.T) {
+			recorder := setupRuntimeFailureRecorder(t)
+			game := &Game{isAutoSetCollisionLayer: true, sprCollisionInfos: map[string]*spriteCollisionInfo{
+				"A": {layerIndex: 0, Layer: 1, Mask: 8},
+				"B": {layerIndex: 1, Layer: 2, Mask: 16},
+				"C": {layerIndex: 2, Layer: 4, Mask: 32},
+			}}
+			a := newCollisionLayerOrderSprite(game, "A", nil)
+			b := newCollisionLayerOrderSprite(game, "B", nil)
+			c := newCollisionLayerOrderSprite(game, "C", nil)
+			a.physics().collisionTargets["C"] = true
+			b.physics().collisionTargets["missing"] = true
+			var callbacks int
+			pkgengine.ExtMgr = &collisionLayerPanicObserver{IExtMgr: recorder, observe: func(message string) {
+				callbacks++
+				if !strings.Contains(message, "Unknown sprite missing") {
+					t.Fatalf("panic message = %q", message)
+				}
+				if got := []int64{game.sprCollisionInfos["A"].Mask, game.sprCollisionInfos["B"].Mask, game.sprCollisionInfos["C"].Mask}; !slices.Equal(got, []int64{0, 0, 32}) {
+					t.Fatalf("masks during panic = %v, want [0 0 32]", got)
+				}
+				if abort {
+					panic("stop collision refresh")
+				}
+			}}
+			game.setupCollisionData([]Sprite{a, b, c})
+			func() {
+				defer func() {
+					got := recover()
+					if abort && got != "stop collision refresh" || !abort && got != nil {
+						t.Fatalf("refresh panic = %v", got)
+					}
+				}()
+				game.refreshCollisionLayers()
+			}()
+			want := []int64{4, 0, 0}
+			if abort {
+				want = []int64{0, 0, 32}
+			}
+			if got := []int64{game.sprCollisionInfos["A"].Mask, game.sprCollisionInfos["B"].Mask, game.sprCollisionInfos["C"].Mask}; !slices.Equal(got, want) {
+				t.Fatalf("masks after failure = %v, want %v", got, want)
+			}
+			var wantExits []int64
+			if !abort {
+				wantExits = []int64{1}
+			}
+			if callbacks != 1 || !slices.Equal(recorder.exits, wantExits) {
+				t.Fatalf("panic callbacks = %d, exit requests = %v", callbacks, recorder.exits)
+			}
+		})
+	}
+}
+
+type collisionLayerPanicObserver struct {
+	pkgengine.IExtMgr
+	observe func(string)
+}
+
+func (m *collisionLayerPanicObserver) OnRuntimePanic(message string) { m.observe(message) }

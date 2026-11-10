@@ -17,6 +17,9 @@
 package spx
 
 import (
+	"fmt"
+	"math/bits"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -135,9 +138,9 @@ func TestGameDebugDrawLinesValidatesCompleteSegments(t *testing.T) {
 func TestGameResetCollisionLayerStateClearsCollisionLayerState(t *testing.T) {
 	var g Game
 	g.sprCollisionInfos = map[string]*spriteCollisionInfo{
-		"SpriteA": {Index: 0, Layer: 1 << 0, Mask: 1 << 1},
+		"SpriteA": {layerIndex: 0, Layer: 1 << 0, Mask: 1 << 1},
 	}
-	g.sprCollisionData = []*spriteCollisionData{{
+	g.sprCollisionData = []spriteCollisionData{{
 		info: g.sprCollisionInfos["SpriteA"],
 	}}
 
@@ -311,4 +314,131 @@ func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLo
 		}
 	})
 	return game, manager, sprite
+}
+
+func TestCollisionLayersReuseSlotsAndCurrentTargets(t *testing.T) {
+	for _, count := range []int{0, 1, 32, 33, 64, 65} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			setupRuntimeScheduler(t)
+			game := &Game{isAutoSetCollisionLayer: true, typs: make(map[string]reflect.Type)}
+			for i := range count {
+				game.typs[fmt.Sprintf("Sprite%d", i)] = reflect.TypeFor[collisionLayerOrderSprite]()
+			}
+			game.sprCollisionInfos = game.buildSpriteCollisionInfos()
+			groups := make(map[int64][]string)
+			for name, info := range game.sprCollisionInfos {
+				if info.Layer <= 0 || info.Layer > 1<<31 || bits.OnesCount64(uint64(info.Layer)) != 1 {
+					t.Fatalf("%s layer = %d, want one of the 32 engine bits", name, info.Layer)
+				}
+				groups[info.Layer] = append(groups[info.Layer], name)
+			}
+			for slot := range min(count, 32) {
+				want := count / 32
+				if slot < count%32 {
+					want++
+				}
+				if got := len(groups[1<<slot]); got != want {
+					t.Fatalf("slot %d has %d types, want %d", slot, got, want)
+				}
+			}
+			var sprites []Sprite
+			for slot := range min(count, 32) {
+				for instance, name := range groups[1<<slot] {
+					sprite := newCollisionLayerOrderSprite(game, name, nil)
+					target := groups[1<<((slot+instance+1)%min(count, 32))][0]
+					sprite.physics().collisionTargets[target] = true
+					sprites = append(sprites, sprite)
+				}
+			}
+			if count > 0 {
+				// A second instance of the same type contributes to the same shared info.
+				sprite := newCollisionLayerOrderSprite(game, groups[1][0], nil)
+				sprite.physics().collisionTargets[groups[1<<(min(count, 32)-1)][0]] = true
+				sprites = append(sprites, sprite)
+			}
+			game.setupCollisionData(append(sprites, nil))
+			if len(game.sprCollisionData) != len(sprites) {
+				t.Fatalf("collision records = %d, want %d", len(game.sprCollisionData), len(sprites))
+			}
+			for i, data := range game.sprCollisionData {
+				if data.sprite != spriteOf(sprites[i]) || data.info != game.sprCollisionInfos[data.sprite.name] {
+					t.Fatal("collision records lost sprite order or shared info")
+				}
+			}
+			checkMasks := func() {
+				t.Helper()
+				want := make(map[int64]int64)
+				for _, sprite := range sprites {
+					spr := spriteOf(sprite)
+					layer := game.sprCollisionInfos[spr.name].Layer
+					for target := range spr.physics().collisionTargets {
+						want[layer] |= game.sprCollisionInfos[target].Layer
+					}
+				}
+				for name, info := range game.sprCollisionInfos {
+					if info.Mask != want[info.Layer] {
+						t.Fatalf("%s mask = %#x, want %#x", name, info.Mask, want[info.Layer])
+					}
+				}
+			}
+			game.refreshCollisionLayers()
+			checkMasks()
+			if count > 0 {
+				spr := spriteOf(sprites[0])
+				spr.physics().addCollisionTarget(spr.name)
+				checkMasks()
+				clear(spr.physics().collisionTargets)
+				game.refreshCollisionLayers()
+				checkMasks()
+			}
+		})
+	}
+}
+
+func TestCollisionLayersCommitAllMasksBeforeProxyWrites(t *testing.T) {
+	setupRuntimeScheduler(t)
+	setupImmediateEngineCalls(t)
+	game := &Game{isAutoSetCollisionLayer: true, sprCollisionInfos: map[string]*spriteCollisionInfo{
+		"A": {layerIndex: 0, Layer: 1}, "B": {layerIndex: 1, Layer: 2},
+	}}
+	a := newCollisionLayerOrderSprite(game, "A", nil)
+	b := newCollisionLayerOrderSprite(game, "B", nil)
+	a.physics().collisionTargets["B"] = true
+	b.physics().collisionTargets["A"] = true
+	var writes []int64
+	var layerWrites []pkgengine.Object
+	manager := &collisionLayerSpriteMgr{onLayer: func(id pkgengine.Object, _ int64) {
+		if game.sprCollisionInfos["A"].Mask != 2 || game.sprCollisionInfos["B"].Mask != 1 {
+			t.Fatal("proxy write preceded complete mask commit")
+		}
+		layerWrites = append(layerWrites, id)
+	}, onMask: func(_ pkgengine.Object, mask int64) {
+		writes = append(writes, mask)
+	}}
+	previous := pkgengine.SpriteMgr
+	pkgengine.SpriteMgr = manager
+	t.Cleanup(func() { pkgengine.SpriteMgr = previous })
+	for i, sprite := range []*collisionLayerOrderSprite{a, b} {
+		sprite.physics().triggerInfo.Type = physicsColliderNone
+		sprite.runtimeState.syncSprite = &internalengine.Sprite{Sprite: pkgengine.Sprite{Id: int64(i + 1)}}
+	}
+	game.setupCollisionData([]Sprite{a, b})
+	game.refreshCollisionLayers()
+	if !slices.Equal(layerWrites, []pkgengine.Object{1, 2}) || !slices.Equal(writes, []int64{2, 1}) {
+		t.Fatalf("proxy IDs = %v, masks = %v; want [1 2], [2 1]", layerWrites, writes)
+	}
+}
+
+type collisionLayerSpriteMgr struct {
+	spyCloneSpriteMgr
+	onLayer func(pkgengine.Object, int64)
+	onMask  func(pkgengine.Object, int64)
+}
+
+func (m *collisionLayerSpriteMgr) SetTriggerMask(id pkgengine.Object, mask int64) {
+	m.onMask(id, mask)
+}
+
+func (m *collisionLayerSpriteMgr) SetCollisionLayer(id pkgengine.Object, layer int64) {
+	m.onLayer(id, layer)
 }

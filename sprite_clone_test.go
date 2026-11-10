@@ -842,8 +842,8 @@ func TestClonedSpriteCollisionTargetRegistrationDoesNotRefreshCollisionLayers(t 
 	game := &collisionLayerOrderGame{}
 	game.isAutoSetCollisionLayer = true
 	game.sprCollisionInfos = map[string]*spriteCollisionInfo{
-		"SpriteA": {Index: 0, Layer: 1 << 0},
-		"SpriteB": {Index: 1, Layer: 1 << 1},
+		"SpriteA": {layerIndex: 0, Layer: 1 << 0},
+		"SpriteB": {layerIndex: 1, Layer: 1 << 1},
 	}
 
 	spriteA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)

@@ -287,10 +287,6 @@ func (p *physicsComponent) applyPhysicsProxyConfig(syncProxy *engine.Sprite) {
 // Collision Targets
 // ============================================================================
 
-func (p *physicsComponent) getCollisionTargets() map[string]bool {
-	return p.collisionTargets
-}
-
 func (p *physicsComponent) addCollisionTarget(target string) {
 	if p.collisionTargets[target] {
 		return
