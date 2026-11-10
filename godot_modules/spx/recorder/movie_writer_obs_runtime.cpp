@@ -277,7 +277,6 @@ Error ObsStyleMovieWriter::setup_audio_capture() {
 	if (capture_error != OK) {
 		return capture_error;
 	}
-	hybrid_audio_driver->start();
 
 	if (obs_config.enable_debug_output) {
 		print_line("ObsStyleMovieWriter: Capturing the Master bus through an AudioEffect");

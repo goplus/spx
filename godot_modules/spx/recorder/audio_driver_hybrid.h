@@ -20,14 +20,13 @@ class HybridAudioDriver {
 	SafeFlag recording_enabled;
 	SafeFlag initialized;
 	int mix_rate = 44100;
-	int channels = 2;
 
 	Vector<IndependentAudioRecorder *> registered_recorders;
 	mutable Mutex recorders_mutex;
 
 	Ref<AudioEffect> capture_effect;
 	SpxAudioCaptureEffect *capture_effect_owner = nullptr;
-	int capture_bus = -1;
+	static constexpr int MASTER_BUS = 0;
 
 	void _remove_capture_effect();
 
@@ -36,13 +35,11 @@ public:
 	~HybridAudioDriver();
 
 	Error init(int p_mix_rate);
-	void start();
 	void finish();
 
 	void enable_recording(bool p_enable);
 	bool is_recording_enabled() const { return recording_enabled.is_set(); }
 
-	int get_channels() const { return channels; }
 	int get_mix_rate() const { return mix_rate; }
 
 	// Master mix PCM is interleaved stereo and is pushed directly to active recorders.

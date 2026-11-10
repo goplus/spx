@@ -1,14 +1,14 @@
 /** Browser streams, callbacks and chunks belong to one recording session. */
-const GodotAudioRecorder = {
-	$GodotAudioRecorder__deps: ['$GodotAudio'],
-	$GodotAudioRecorder__postset: [
-		'Module["downloadRecordedVideo"] = GodotAudioRecorder.downloadRecordedVideo;',
-		'Module["getRecordedVideoBlob"] = GodotAudioRecorder.getRecordedVideoBlob;',
-		'Module["setRecorderCanvas"] = GodotAudioRecorder.setRecorderCanvas;',
-		'Module["tryStartRecording"] = GodotAudioRecorder.tryStartRecording;',
-		'Module["tryStopRecording"] = GodotAudioRecorder.tryStopRecording;',
+const GodotRecorder = {
+	$GodotRecorder__deps: ['$GodotAudio'],
+	$GodotRecorder__postset: [
+		'Module["downloadRecordedVideo"] = GodotRecorder.downloadRecordedVideo;',
+		'Module["getRecordedVideoBlob"] = GodotRecorder.getRecordedVideoBlob;',
+		'Module["setRecorderCanvas"] = GodotRecorder.setRecorderCanvas;',
+		'Module["tryStartRecording"] = GodotRecorder.tryStartRecording;',
+		'Module["tryStopRecording"] = GodotRecorder.tryStopRecording;',
 	].join(''),
-	$GodotAudioRecorder: {
+	$GodotRecorder: {
 		videoSession: null,
 		targetCanvas: null,
 
@@ -110,18 +110,12 @@ const GodotAudioRecorder = {
 			this.videoSession = this.createSession(fps);
 			return this.videoSession !== null;
 		},
-		startVideoRecording: function() {
-			return this.startSession(this.videoSession);
-		},
-		stopVideoRecording: function() {
-			return this.stopSession(this.videoSession);
-		},
 		cleanupVideoRecorder: function() {
 			this.releaseSession(this.videoSession);
 			this.videoSession = null;
 		},
 		setRecorderCanvas: function(canvas) {
-			GodotAudioRecorder.targetCanvas = canvas;
+			GodotRecorder.targetCanvas = canvas;
 		},
 
 		tryStartRecording: function(filename = 'recording') {
@@ -135,7 +129,7 @@ const GodotAudioRecorder = {
 					GodotRuntime.free(filenamePtr);
 				}
 				if (started) {
-					success = GodotAudioRecorder.initVideoRecorder() && GodotAudioRecorder.startVideoRecording();
+					success = GodotRecorder.initVideoRecorder() && GodotRecorder.startSession(GodotRecorder.videoSession);
 				}
 				return success;
 			} catch (error) {
@@ -143,27 +137,27 @@ const GodotAudioRecorder = {
 				return false;
 			} finally {
 				if (started && !success) {
-					GodotAudioRecorder.cleanupVideoRecorder();
+					GodotRecorder.cleanupVideoRecorder();
 					Module['_godot_web_recording_request_stop']();
 				}
 			}
 		},
 
 		tryStopRecording: function() {
-			const session = GodotAudioRecorder.videoSession;
+			const session = GodotRecorder.videoSession;
 			if (!session?.recorder) return Promise.resolve(null);
 			if (!session.stopPromise) {
 				session.stopPromise = (async () => {
 					try {
-						GodotAudioRecorder.stopSession(session);
+						GodotRecorder.stopSession(session);
 						// MediaRecorder emits its final data before stop, without a fixed delay.
 						await session.completion;
-						return GodotAudioRecorder.sessionBlob(session);
+						return GodotRecorder.sessionBlob(session);
 					} finally {
 						try {
-							if (GodotAudioRecorder.videoSession === session) Module['_godot_web_recording_request_stop']();
+							if (GodotRecorder.videoSession === session) Module['_godot_web_recording_request_stop']();
 						} finally {
-							GodotAudioRecorder.releaseSession(session);
+							GodotRecorder.releaseSession(session);
 						}
 					}
 				})();
@@ -177,13 +171,13 @@ const GodotAudioRecorder = {
 			return session.blob;
 		},
 		getRecordedVideoBlob: function() {
-			return GodotAudioRecorder.sessionBlob(GodotAudioRecorder.videoSession);
+			return GodotRecorder.sessionBlob(GodotRecorder.videoSession);
 		},
 		downloadRecordedVideo: async function(filename) {
-			const session = GodotAudioRecorder.videoSession;
+			const session = GodotRecorder.videoSession;
 			// Native stop/cleanup is synchronous; retain this session until its final data arrives.
 			if (session?.recorder?.state === 'inactive' && !session.finished) await session.completion;
-			const blob = GodotAudioRecorder.sessionBlob(session);
+			const blob = GodotRecorder.sessionBlob(session);
 			if (!blob) return;
 			const url = URL.createObjectURL(blob);
 			try {
@@ -209,7 +203,7 @@ const GodotAudioRecorder = {
 	 * @returns {number} 1 on success, 0 on failure
 	 */
 	godot_video_recorder_init: function(fps) {
-		return GodotAudioRecorder.initVideoRecorder(fps) ? 1 : 0;
+		return GodotRecorder.initVideoRecorder(fps) ? 1 : 0;
 	},
 
 	godot_video_recorder_start__proxy: 'sync',
@@ -219,7 +213,7 @@ const GodotAudioRecorder = {
 	 * @returns {number} 1 on success, 0 on failure
 	 */
 	godot_video_recorder_start: function() {
-		return GodotAudioRecorder.startVideoRecording() ? 1 : 0;
+		return GodotRecorder.startSession(GodotRecorder.videoSession) ? 1 : 0;
 	},
 
 	godot_video_recorder_stop__proxy: 'sync',
@@ -228,7 +222,7 @@ const GodotAudioRecorder = {
 	 * Stop video recording
 	 */
 	godot_video_recorder_stop: function() {
-		GodotAudioRecorder.stopVideoRecording();
+		GodotRecorder.stopSession(GodotRecorder.videoSession);
 	},
 
 	godot_video_recorder_download_data__proxy: 'sync',
@@ -239,7 +233,7 @@ const GodotAudioRecorder = {
 	 */
 	godot_video_recorder_download_data: function(filenamePtr) {
 		const filename = GodotRuntime.parseString(filenamePtr);
-		GodotAudioRecorder.downloadRecordedVideo(filename).catch(error => GodotRuntime.error('Failed to download recording: ' + error.message));
+		GodotRecorder.downloadRecordedVideo(filename).catch(error => GodotRuntime.error('Failed to download recording: ' + error.message));
 	},
 
 	godot_video_recorder_cleanup__proxy: 'sync',
@@ -248,9 +242,9 @@ const GodotAudioRecorder = {
 	 * Clean up video recorder resources
 	 */
 	godot_video_recorder_cleanup: function() {
-		GodotAudioRecorder.cleanupVideoRecorder();
+		GodotRecorder.cleanupVideoRecorder();
 	},
 };
 
-autoAddDeps(GodotAudioRecorder, '$GodotAudioRecorder');
-mergeInto(LibraryManager.library, GodotAudioRecorder);
+autoAddDeps(GodotRecorder, '$GodotRecorder');
+mergeInto(LibraryManager.library, GodotRecorder);

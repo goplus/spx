@@ -331,7 +331,7 @@ TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its wor
 	CHECK(recorder.get_statistics().total_recorded_frames == 0);
 }
 
-TEST_CASE("[SceneTree][SPX] Audio capture forwards PCM, preserves the master mix and detaches its effect") {
+TEST_CASE("[SceneTree][SPX] Audio capture saturates PCM, preserves the master mix and detaches its effect") {
 	TestSpx::TempDirectory files("spx_audio_capture");
 	TestSpx::EngineScene scene;
 	auto *server = AudioServer::get_singleton();
@@ -340,13 +340,13 @@ TEST_CASE("[SceneTree][SPX] Audio capture forwards PCM, preserves the master mix
 	REQUIRE(driver.init(100) == OK);
 	CHECK(server->get_bus_effect_count(0) == before + 1);
 	CHECK(driver.get_mix_rate() == 100);
-	CHECK(driver.get_channels() == 2);
 	ERR_PRINT_OFF;
 	CHECK(driver.init(100) == ERR_ALREADY_IN_USE);
 	driver.register_audio_recorder(nullptr);
 	ERR_PRINT_ON;
 	IndependentAudioRecorder first, second, absent;
 	driver.register_audio_recorder(&first);
+	driver.register_audio_recorder(&first); // Duplicate registration must not duplicate PCM.
 	driver.register_audio_recorder(&second);
 	driver.unregister_audio_recorder(&absent);
 	driver.unregister_audio_recorder(nullptr);
@@ -355,39 +355,38 @@ TEST_CASE("[SceneTree][SPX] Audio capture forwards PCM, preserves the master mix
 	CHECK(driver.get_registered_recorder_count() == 1);
 	IndependentAudioRecorder::AudioConfig config;
 	config.sample_rate = 100;
-	config.chunk_size = 2;
+	config.chunk_size = 4;
 	config.buffer_size_seconds = 1;
 	REQUIRE(first.initialize(&driver, files.file("audio.avi"), config) == OK);
 	REQUIRE(first.start_recording() == OK);
-	driver.start();
 	Ref<AudioEffectInstance> effect = server->get_bus_effect(0, before)->instantiate();
 	REQUIRE(effect.is_valid());
 	CHECK_FALSE(effect->process_silence());
-	AudioFrame input[2] = { AudioFrame(0.25, -0.5), AudioFrame(-0.25, 0.5) };
-	AudioFrame silence[2] = {};
-	AudioFrame output[2];
-	effect->process(silence, output, 2); // Disabled capture must not enqueue these frames.
+	AudioFrame input[4] = { AudioFrame(0.25, -0.5), AudioFrame(-0.25, 0.5), AudioFrame(1, -1), AudioFrame(2, -2) };
+	AudioFrame silence[4] = {};
+	AudioFrame output[4];
+	effect->process(silence, output, 4); // Disabled capture must not enqueue these frames.
 	CHECK_FALSE(driver.is_recording_enabled());
 	driver.enable_recording(true);
-	effect->process(input, output, 2);
-	CHECK(output[0].left == input[0].left);
-	CHECK(output[0].right == input[0].right);
-	CHECK(output[1].left == input[1].left);
-	CHECK(output[1].right == input[1].right);
+	effect->process(input, output, 4);
+	for (int i = 0; i < 4; ++i) {
+		CHECK(output[i].left == input[i].left);
+		CHECK(output[i].right == input[i].right);
+	}
 	REQUIRE(wait_for([&] { return first.get_statistics().total_chunks_recorded >= 1; }));
 	driver.enable_recording(false);
-	effect->process(silence, output, 2);
+	effect->process(silence, output, 4);
 	driver.enable_recording(true);
 	driver.capture_audio_data(nullptr, 1);
 	int32_t unused[2] = {};
 	driver.capture_audio_data(unused, 0);
-	effect->process(input, output, 2);
+	effect->process(input, output, 4);
 	REQUIRE(wait_for([&] { return first.get_statistics().total_chunks_recorded >= 2; }));
 	driver.finish();
 	CHECK(server->get_bus_effect_count(0) == before);
 	CHECK(driver.get_registered_recorder_count() == 0);
 	CHECK_FALSE(driver.is_recording_enabled());
-	effect->process(input, output, 2); // Detached instances must remain safe passthroughs.
+	effect->process(input, output, 4); // Detached instances must remain safe passthroughs.
 	CHECK(output[0].right == input[0].right);
 	driver.finish();
 	first.stop_recording();
@@ -396,14 +395,18 @@ TEST_CASE("[SceneTree][SPX] Audio capture forwards PCM, preserves the master mix
 	int chunk = find_tag(bytes, "00wb");
 	REQUIRE(chunk >= 0);
 	for (int i = 0; i < 2; i++) {
-		REQUIRE(chunk + 24 <= bytes.size());
+		REQUIRE(chunk + 40 <= bytes.size());
 		CHECK(memcmp(bytes.ptr() + chunk, "00wb", 4) == 0);
-		CHECK(decode_uint32(bytes.ptr() + chunk + 4) == 16);
+		CHECK(decode_uint32(bytes.ptr() + chunk + 4) == 32);
 		CHECK(decode_uint32(bytes.ptr() + chunk + 8) == uint32_t(536870912));
 		CHECK(decode_uint32(bytes.ptr() + chunk + 12) == uint32_t(-1073741824));
 		CHECK(decode_uint32(bytes.ptr() + chunk + 16) == uint32_t(-536870912));
 		CHECK(decode_uint32(bytes.ptr() + chunk + 20) == uint32_t(1073741824));
-		chunk += 24;
+		CHECK(decode_uint32(bytes.ptr() + chunk + 24) == uint32_t(INT32_MAX));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 28) == uint32_t(INT32_MIN));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 32) == uint32_t(INT32_MAX));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 36) == uint32_t(INT32_MIN));
+		chunk += 40;
 	}
 }
 

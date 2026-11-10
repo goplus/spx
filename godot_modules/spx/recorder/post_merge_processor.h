@@ -39,7 +39,7 @@ private:
 	MergeConfig config;
 
 	// AVI merge implementation
-	Error custom_avi_merge(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result);
+	Error merge_avi(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result);
 
 	// Timestamped chunk for interleaving
 	struct TimestampedChunk {
@@ -82,7 +82,6 @@ private:
 		Vector<StreamInfo> streams_info;
 
 		// File offsets
-		uint64_t movi_list_offset;
 		uint64_t movi_data_offset;
 		uint64_t movi_data_size;
 
@@ -102,7 +101,6 @@ private:
 			streams = 0;
 			width = 0;
 			height = 0;
-			movi_list_offset = 0;
 			movi_data_offset = 0;
 			movi_data_size = 0;
 		}

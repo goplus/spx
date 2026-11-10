@@ -44,7 +44,7 @@ void SpxSprite::set_material_shader(GdString p_path) {
 		return;
 	}
 
-	Ref<ShaderMaterial> material = _get_shader_material("set_material_shader", true);
+	Ref<ShaderMaterial> material = _get_shader_material(__func__, true);
 	if (material.is_null()) {
 		return;
 	}
@@ -94,7 +94,7 @@ GdColor SpxSprite::get_color() {
 }
 
 void SpxSprite::set_material_params(GdString p_effect, GdFloat p_amount) {
-	Ref<ShaderMaterial> material = _get_shader_material("set_material_params");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return;
 	}
@@ -103,7 +103,7 @@ void SpxSprite::set_material_params(GdString p_effect, GdFloat p_amount) {
 }
 
 GdFloat SpxSprite::get_material_params(GdString p_effect) {
-	Ref<ShaderMaterial> material = _get_shader_material("get_material_params");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return 0;
 	}
@@ -112,7 +112,7 @@ GdFloat SpxSprite::get_material_params(GdString p_effect) {
 }
 
 void SpxSprite::set_material_params_vec4(GdString p_effect, GdVec4 p_vec4) {
-	Ref<ShaderMaterial> material = _get_shader_material("set_material_params_vec4");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return;
 	}
@@ -121,7 +121,7 @@ void SpxSprite::set_material_params_vec4(GdString p_effect, GdVec4 p_vec4) {
 }
 
 void SpxSprite::set_uv_remap(const GdVec4 &p_uv_remap) {
-	Ref<ShaderMaterial> material = _get_shader_material("set_uv_remap");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return;
 	}
@@ -130,7 +130,7 @@ void SpxSprite::set_uv_remap(const GdVec4 &p_uv_remap) {
 }
 
 GdVec4 SpxSprite::get_material_params_vec4(GdString p_effect) {
-	Ref<ShaderMaterial> material = _get_shader_material("get_material_params_vec4");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return GdVec4();
 	}
@@ -139,7 +139,7 @@ GdVec4 SpxSprite::get_material_params_vec4(GdString p_effect) {
 }
 
 void SpxSprite::set_material_params_color(GdString p_effect, GdColor p_color) {
-	Ref<ShaderMaterial> material = _get_shader_material("set_material_params_color");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return;
 	}
@@ -148,7 +148,7 @@ void SpxSprite::set_material_params_color(GdString p_effect, GdColor p_color) {
 }
 
 GdColor SpxSprite::get_material_params_color(GdString p_effect) {
-	Ref<ShaderMaterial> material = _get_shader_material("get_material_params_color");
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
 	if (material.is_null()) {
 		return GdColor();
 	}

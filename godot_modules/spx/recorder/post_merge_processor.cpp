@@ -34,7 +34,7 @@ PostMergeProcessor::MergeResult PostMergeProcessor::merge_files(const String &vi
 		return result;
 	}
 
-	result.error_code = custom_avi_merge(video_path, audio_path, output_path, result);
+	result.error_code = merge_avi(video_path, audio_path, output_path, result);
 
 	// Calculate merge duration
 	uint64_t end_time = OS::get_singleton()->get_ticks_usec();
@@ -71,9 +71,7 @@ PostMergeProcessor::MergeResult PostMergeProcessor::merge_files(const String &vi
 	return result;
 }
 
-Error PostMergeProcessor::custom_avi_merge(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result) {
-	uint64_t merge_start_time = OS::get_singleton()->get_ticks_usec();
-
+Error PostMergeProcessor::merge_avi(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result) {
 	// Parse input AVI files
 	AviFileInfo video_info, audio_info;
 
@@ -123,15 +121,9 @@ Error PostMergeProcessor::custom_avi_merge(const String &video_path, const Strin
 
 	output_file->close();
 
-	// Calculate merge duration
-	uint64_t merge_end_time = OS::get_singleton()->get_ticks_usec();
-	result.merge_duration_seconds = (merge_end_time - merge_start_time) / 1000000.0f;
-	result.output_file_path = output_path;
-
 	if (config.enable_debug_output && OS::get_singleton()->is_stdout_verbose()) {
-		print_line("PostMergeProcessor: Custom AVI merge completed successfully");
+		print_line("PostMergeProcessor: AVI merge completed successfully");
 		print_line("  Output size: " + String::num_int64(get_file_size(output_path)) + " bytes");
-		print_line("  Merge time: " + String::num_real(result.merge_duration_seconds) + " seconds");
 	}
 
 	return OK;
@@ -143,38 +135,18 @@ bool PostMergeProcessor::file_exists(const String &path) {
 }
 
 Error PostMergeProcessor::cleanup_intermediate_files(const String &video_path, const String &audio_path) {
-	Error video_error = OK;
-	Error audio_error = OK;
-
-	if (file_exists(video_path)) {
-		String video_dir = video_path.get_base_dir();
-		Ref<DirAccess> dir = DirAccess::open(video_dir);
-		if (dir.is_valid()) {
-			video_error = dir->remove(video_path.get_file());
-		} else {
-			video_error = ERR_FILE_CANT_OPEN;
+	Error result = OK;
+	for (const String &path : { video_path, audio_path }) {
+		if (!file_exists(path)) {
+			continue;
+		}
+		Ref<DirAccess> dir = DirAccess::open(path.get_base_dir());
+		const Error error = dir.is_valid() ? dir->remove(path.get_file()) : ERR_FILE_CANT_OPEN;
+		if (result == OK) {
+			result = error;
 		}
 	}
-
-	if (file_exists(audio_path)) {
-		String audio_dir = audio_path.get_base_dir();
-		Ref<DirAccess> dir = DirAccess::open(audio_dir);
-		if (dir.is_valid()) {
-			audio_error = dir->remove(audio_path.get_file());
-		} else {
-			audio_error = ERR_FILE_CANT_OPEN;
-		}
-	}
-
-	// Return error if either cleanup failed
-	if (video_error != OK) {
-		return video_error;
-	}
-	if (audio_error != OK) {
-		return audio_error;
-	}
-
-	return OK;
+	return result;
 }
 
 uint64_t PostMergeProcessor::get_file_size(const String &path) {
@@ -236,7 +208,6 @@ Error PostMergeProcessor::parse_avi_file(const String &file_path, AviFileInfo &a
 				found_hdrl = true;
 			} else if (memcmp(list_type, "movi", 4) == 0) {
 				ERR_FAIL_COND_V(!found_hdrl || found_movi, ERR_FILE_CORRUPT);
-				avi_info.movi_list_offset = pos;
 				avi_info.movi_data_offset = pos + 12;
 				avi_info.movi_data_size = chunk_size - 4;
 				found_movi = true;

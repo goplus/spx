@@ -67,10 +67,11 @@ void SpxAudioCaptureEffectInstance::process(const AudioFrame *p_src_frames, Audi
 		return;
 	}
 
+	// Clamp in double precision: float rounds INT32_MAX up past the signed range.
 	conversion_buffer.resize(p_frame_count * 2);
 	for (int i = 0; i < p_frame_count; i++) {
-		conversion_buffer.write[i * 2] = int32_t(CLAMP(p_src_frames[i].left, -1.0f, 1.0f) * 2147483647.0f);
-		conversion_buffer.write[i * 2 + 1] = int32_t(CLAMP(p_src_frames[i].right, -1.0f, 1.0f) * 2147483647.0f);
+		conversion_buffer.write[i * 2] = int32_t(CLAMP(double(p_src_frames[i].left) * 2147483648.0, -2147483648.0, 2147483647.0));
+		conversion_buffer.write[i * 2 + 1] = int32_t(CLAMP(double(p_src_frames[i].right) * 2147483648.0, -2147483648.0, 2147483647.0));
 	}
 	base->owner->capture_audio_data(conversion_buffer.ptr(), p_frame_count);
 }
@@ -84,24 +85,18 @@ Error HybridAudioDriver::init(int p_mix_rate) {
 	ERR_FAIL_NULL_V(AudioServer::get_singleton(), ERR_UNCONFIGURED);
 
 	mix_rate = p_mix_rate;
-	channels = 2;
 
 	Ref<SpxAudioCaptureEffect> effect;
 	effect.instantiate(this);
 	capture_effect_owner = effect.ptr();
 	capture_effect = effect;
-	capture_bus = 0; // Master is always bus zero.
-	AudioServer::get_singleton()->add_bus_effect(capture_bus, capture_effect);
+	AudioServer::get_singleton()->add_bus_effect(MASTER_BUS, capture_effect);
 	initialized.set();
 
 	if (OS::get_singleton()->is_stdout_verbose()) {
-		print_line(vformat("SPX recorder audio capture initialized: %d Hz, %d channels", mix_rate, channels));
+		print_line(vformat("SPX recorder audio capture initialized: %d Hz, %d channels", mix_rate, 2));
 	}
 	return OK;
-}
-
-void HybridAudioDriver::start() {
-	// The AudioEffect becomes active as soon as it is inserted into Master.
 }
 
 void HybridAudioDriver::_remove_capture_effect() {
@@ -113,17 +108,16 @@ void HybridAudioDriver::_remove_capture_effect() {
 		capture_effect_owner->detach();
 	}
 	AudioServer *audio_server = AudioServer::get_singleton();
-	if (audio_server != nullptr && capture_bus >= 0 && capture_bus < audio_server->get_bus_count()) {
-		for (int i = audio_server->get_bus_effect_count(capture_bus) - 1; i >= 0; i--) {
-			if (audio_server->get_bus_effect(capture_bus, i) == capture_effect) {
-				audio_server->remove_bus_effect(capture_bus, i);
+	if (audio_server != nullptr && audio_server->get_bus_count() > MASTER_BUS) {
+		for (int i = audio_server->get_bus_effect_count(MASTER_BUS) - 1; i >= 0; i--) {
+			if (audio_server->get_bus_effect(MASTER_BUS, i) == capture_effect) {
+				audio_server->remove_bus_effect(MASTER_BUS, i);
 				break;
 			}
 		}
 	}
 	capture_effect.unref();
 	capture_effect_owner = nullptr;
-	capture_bus = -1;
 }
 
 void HybridAudioDriver::finish() {
@@ -164,25 +158,14 @@ void HybridAudioDriver::capture_audio_data(const int32_t *p_buffer, int p_frames
 void HybridAudioDriver::register_audio_recorder(IndependentAudioRecorder *p_recorder) {
 	ERR_FAIL_NULL(p_recorder);
 	MutexLock lock(recorders_mutex);
-	for (IndependentAudioRecorder *recorder : registered_recorders) {
-		if (recorder == p_recorder) {
-			return;
-		}
+	if (!registered_recorders.has(p_recorder)) {
+		registered_recorders.push_back(p_recorder);
 	}
-	registered_recorders.push_back(p_recorder);
 }
 
 void HybridAudioDriver::unregister_audio_recorder(IndependentAudioRecorder *p_recorder) {
-	if (p_recorder == nullptr) {
-		return;
-	}
 	MutexLock lock(recorders_mutex);
-	for (int i = 0; i < registered_recorders.size(); i++) {
-		if (registered_recorders[i] == p_recorder) {
-			registered_recorders.remove_at(i);
-			return;
-		}
-	}
+	registered_recorders.erase(p_recorder);
 }
 
 int HybridAudioDriver::get_registered_recorder_count() const {

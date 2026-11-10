@@ -69,19 +69,19 @@ function recorderBridge(failAt = '') {
         },
         URL: { createObjectURL: blob => { downloadedBlobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} },
         document: {
-            createElement: () => ({ click() { downloads.push(this.download); }, remove() {} }),
+            createElement: () => ({ click() { fail('download'); downloads.push(this.download); }, remove() {} }),
             body: { appendChild() {} },
         },
     });
     // Emscripten binds this name to the $ object when emitting runtime glue.
     // Rebind it here as well, while executing the actual source with its filename.
-    vm.runInContext(source.replace('const GodotAudioRecorder =', 'var GodotAudioRecorder ='), b, { filename: sourcePath });
+    vm.runInContext(source.replace('const GodotRecorder =', 'var GodotRecorder ='), b, { filename: sourcePath });
     const library = b.LibraryManager.library;
-    b.GodotAudioRecorder = library.$GodotAudioRecorder;
+    b.GodotRecorder = library.$GodotRecorder;
     for (const [name, value] of Object.entries(library)) {
         if (typeof value === 'function') b[name] = value;
     }
-    vm.runInContext(library.$GodotAudioRecorder__postset, b);
+    vm.runInContext(library.$GodotRecorder__postset, b);
     b.Module.setRecorderCanvas({ captureStream: () => {
         fail('capture');
         return new MediaStream([track('video')]);
@@ -261,4 +261,23 @@ test('failed native MediaRecorder start leaves no pending completion', async () 
     assert.equal(b.godot_video_recorder_start(), 0);
     assert.equal(await b.Module.tryStopRecording(), null);
     assert.ok(tracks.every(track => track.readyState === 'ended'));
+});
+
+test('recorder and download failures are reported without losing recorded data', async () => {
+    const env = recorderBridge();
+    const { b, recordings, errors } = env;
+    assert.equal(b.godot_video_recorder_init(30), 1);
+    assert.equal(b.godot_video_recorder_start(), 1);
+    recordings[0].emit('saved');
+    recordings[0].onerror({ error: 'encoder failure' });
+    env.failAt('download');
+    b.godot_video_recorder_download_data('failed.webm');
+    await Promise.resolve();
+    assert.match(errors[0], /MediaRecorder error: encoder failure/);
+    assert.match(errors[1], /Failed to download recording: download/);
+    assert.equal(await b.Module.getRecordedVideoBlob().text(), 'saved');
+    b.godot_video_recorder_stop();
+    assert.equal(b.godot_video_recorder_start(), 0); // Final data is still pending.
+    recordings[0].finish();
+    b.godot_video_recorder_cleanup();
 });
