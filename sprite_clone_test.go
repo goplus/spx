@@ -300,7 +300,7 @@ func TestCloneDeletedDuringFirstSliceIsNeverPublished(t *testing.T) {
 }
 
 func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	var game Game
 	game.initShapeMgr()
 	originalGame := engine.GetGame()
@@ -313,14 +313,14 @@ func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
 
 	creatorDone := make(chan struct{})
 	var clone *SpriteImpl
-	co.Create(source, func(coroutine.Thread) {
+	currentScheduler.Create(source, func(coroutine.Thread) {
 		defer close(creatorDone)
 		doClone(source, nil, func(sprite *SpriteImpl) {
 			clone = sprite
 		})
 
 	})
-	updateRuntimeEventSchedulerUntil(t, co, func() bool {
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, func() bool {
 		select {
 		case <-creatorDone:
 			return true
@@ -945,7 +945,7 @@ func TestCloneLimitBoundsRecursiveCloneHandlers(t *testing.T) {
 		}
 	}
 	source.Clone__0()
-	updateRuntimeEventSchedulerUntil(t, gco, func() bool {
+	updateRuntimeEventSchedulerUntil(t, scheduler, func() bool {
 		select {
 		case <-done:
 			return true

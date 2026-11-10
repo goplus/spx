@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	gco *coroutine.Coroutines
-	fps float64 = 0
+	scheduler *coroutine.Scheduler
+	fps       float64 = 0
 
 	debugLastTime  float64 = 0
 	debugLastFrame int64   = 0
@@ -68,8 +68,8 @@ func Calcfps() float64 {
 	return fps
 }
 
-func SetGco(co *coroutine.Coroutines) {
-	gco = co
+func SetScheduler(next *coroutine.Scheduler) {
+	scheduler = next
 }
 
 func BeginSample() {
@@ -99,7 +99,7 @@ func EndSample() {
 	// If the coroutine update time exceeds the threshold, or the pre/post processing time is too long, print detailed information
 	if timingData["CoroUpdateJobs"].ActualCall > 20 ||
 		(timingData["CoroUpdateJobs"].PreCall+timingData["CoroUpdateJobs"].PostCall) > 5 ||
-		(gco != nil && timingData["CoroUpdateJobs"].ActualCall > 10 &&
+		(scheduler != nil && timingData["CoroUpdateJobs"].ActualCall > 10 &&
 			timingData["CoroUpdateJobs"].ActualCall > 2*getCoroStatsTotal()) {
 		printTimingInfo()
 	}
@@ -163,11 +163,11 @@ func MeasureFunctionTime(name string, fn func()) {
 
 // getCoroStatsTotal returns the total time of internal coroutine statistics
 func getCoroStatsTotal() float64 {
-	if gco == nil {
+	if scheduler == nil {
 		return 0
 	}
 
-	stats := gco.UpdateStats()
+	stats := scheduler.UpdateStats()
 	return stats.InitTime + stats.LoopTime + stats.MoveTime
 }
 
@@ -196,14 +196,14 @@ func printTimingInfo() {
 
 // printCoroStats prints detailed statistics of the coroutine module
 func printCoroStats(coroInfo TimingInfo) {
-	// If gco is nil, return
-	if gco == nil {
+	// If scheduler is nil, return
+	if scheduler == nil {
 		spxlog.Warn("Coroutine system not initialized")
 		return
 	}
 
 	// Import coroutine module statistics
-	stats := gco.UpdateStats()
+	stats := scheduler.UpdateStats()
 
 	// Calculate the engine's measured total time
 	engineMeasuredTotal := coroInfo.PreCall + coroInfo.ActualCall + coroInfo.PostCall

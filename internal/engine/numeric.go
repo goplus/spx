@@ -19,7 +19,52 @@ package engine
 import (
 	"fmt"
 	"math"
+
+	"github.com/goplus/spbase/mathf"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
+
+func ConvertToFloat64(value int64) float64 {
+	return float64(value) / Float2IntFactor
+}
+
+func ConvertToInt64(value float64) int64 {
+	return int64(value * Float2IntFactor)
+}
+
+func DegToRad(degree float64) float64 {
+	return gdx.DegToRad(degree)
+}
+
+func Sincos(rad float64) mathf.Vec2 {
+	return mathf.NewVec2(math.Sincos(rad))
+}
+
+func UniformVec2(v float64) mathf.Vec2 {
+	return mathf.NewVec2(v, v)
+}
+
+func F64Tof32(slice []float64) []float32 {
+	if slice == nil {
+		return nil
+	}
+	out := make([]float32, len(slice))
+	for i, v := range slice {
+		out[i] = float32(v)
+	}
+	return out
+}
+
+func F32Tof64(slice []float32) []float64 {
+	if slice == nil {
+		return nil
+	}
+	out := make([]float64, len(slice))
+	for i, v := range slice {
+		out[i] = float64(v)
+	}
+	return out
+}
 
 func boolArg(value bool) float64 {
 	if value {

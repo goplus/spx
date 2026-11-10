@@ -19,7 +19,7 @@ package coroutine
 // Join waits until target has finished. It yields when called from a coroutine
 // managed by this manager and blocks the calling goroutine otherwise.
 // A non-nil target must belong to this manager, even if already finished.
-func (p *Coroutines) Join(target Thread) {
+func (p *Scheduler) Join(target Thread) {
 	if target == nil {
 		return
 	}
@@ -28,7 +28,7 @@ func (p *Coroutines) Join(target Thread) {
 }
 
 // JoinAll validates all targets before waiting for each to finish.
-func (p *Coroutines) JoinAll(targets []Thread) {
+func (p *Scheduler) JoinAll(targets []Thread) {
 	for _, target := range targets {
 		p.requireOwnThread(target)
 	}
@@ -38,7 +38,7 @@ func (p *Coroutines) JoinAll(targets []Thread) {
 }
 
 // JoinFirstSlice waits until target first yields or finishes in this manager.
-func (p *Coroutines) JoinFirstSlice(target Thread) {
+func (p *Scheduler) JoinFirstSlice(target Thread) {
 	if target == nil {
 		return
 	}
@@ -46,7 +46,7 @@ func (p *Coroutines) JoinFirstSlice(target Thread) {
 	p.join(target, target.firstSliceDone, &target.firstSliceWaiters)
 }
 
-func (p *Coroutines) join(target Thread, done <-chan struct{}, waiters *waiterSet) {
+func (p *Scheduler) join(target Thread, done <-chan struct{}, waiters *waiterSet) {
 	p.requireOwnThread(target)
 	me := p.Caller()
 	if me == target {
@@ -55,7 +55,7 @@ func (p *Coroutines) join(target Thread, done <-chan struct{}, waiters *waiterSe
 	p.waitOn(me, done, waiters)
 }
 
-func (p *Coroutines) requireOwnThread(target Thread) {
+func (p *Scheduler) requireOwnThread(target Thread) {
 	if target != nil && target.manager != p {
 		panic(ErrForeignThread)
 	}

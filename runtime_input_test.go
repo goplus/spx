@@ -34,11 +34,11 @@ import (
 func TestOnEngineBeforeUpdateSamplesInputBeforeConditions(t *testing.T) {
 	for _, mode := range []string{"scheduler", "direct"} {
 		t.Run(mode, func(t *testing.T) {
-			co, game, input := setupInputSourceTest(t)
+			currentScheduler, game, input := setupInputSourceTest(t)
 			if mode == "direct" {
-				previous := gco
-				gco = nil
-				t.Cleanup(func() { gco = previous })
+				previous := scheduler
+				scheduler = nil
+				t.Cleanup(func() { scheduler = previous })
 			}
 			game.lifecycleState.IsRunned.Store(true)
 			game.lifecycleState.StartDispatched.Store(true)
@@ -58,7 +58,7 @@ func TestOnEngineBeforeUpdateSamplesInputBeforeConditions(t *testing.T) {
 			}
 			itime.Update(1.0/30, 30)
 			game.dispatchFrameEvents()
-			co.Update()
+			currentScheduler.Update()
 			if handlers != 1 {
 				t.Fatalf("condition handlers = %d, want 1", handlers)
 			}
@@ -77,7 +77,7 @@ func TestOnEngineUpdateKeepsInputPendingBeforeStart(t *testing.T) {
 }
 
 func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
-	co, game, _ := setupInputSourceTest(t)
+	currentScheduler, game, _ := setupInputSourceTest(t)
 	game.lifecycleState.IsRunned.Store(true)
 	game.lifecycleState.StartDispatched.Store(true)
 	game.camera = &cameraImpl{g: game}
@@ -97,7 +97,7 @@ func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
 	itime.Update(0.1, 30)
 	for update := range 2 {
 		game.OnEngineUpdate(0.1)
-		co.Update()
+		currentScheduler.Update()
 		if samples != 1 || conditions != 1 || timers != 1 {
 			t.Fatalf("update %d: samples/conditions/timers = %d/%d/%d, want 1/1/1", update+1, samples, conditions, timers)
 		}
@@ -108,7 +108,7 @@ func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
 }
 
 func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
-	co, game, _ := setupInputSourceTest(t)
+	currentScheduler, game, _ := setupInputSourceTest(t)
 	if _, err := PrepareInputReplay(validRuntimeReplay(InputReplayFrame{
 		Frame:     0,
 		State:     InputReplayState{KeysDown: []int64{int64(KeyA)}},
@@ -125,7 +125,7 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 	game.OnEngineBeforeUpdate(1.0 / 30)
 	itime.Update(1.0/30, 30)
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 	session.endFrame()
 	if completed, err := session.completeReplayFrame(nil); err != nil || !completed {
 		t.Fatalf("replay completion = %v, %v", completed, err)
@@ -134,7 +134,7 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 	game.OnEngineBeforeUpdate(1.0 / 30)
 	itime.Update(1.0/30, 30)
 	game.OnEngineUpdate(1.0 / 30)
-	co.Update()
+	currentScheduler.Update()
 	if samples != 1 || conditions != 1 || keys != 1 {
 		t.Fatalf("samples/conditions/keys=%d/%d/%d, want 1/1/1", samples, conditions, keys)
 	}
@@ -144,7 +144,7 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 }
 
 func TestDispatchFrameEventsRegistersLargeInputBatchBeforeReturn(t *testing.T) {
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	const count = 26 // More than the former 16-event channel capacity.
 	calls := make(chan Key, count*2)
 	var routed, want []Key
@@ -167,7 +167,7 @@ func TestDispatchFrameEventsRegistersLargeInputBatchBeforeReturn(t *testing.T) {
 	if game.inputMgr.frame.pending != nil {
 		t.Fatal("dispatch retained its consumed input batch")
 	}
-	co.Update()
+	currentScheduler.Update()
 	seen := make(map[Key]bool, count)
 	for range count {
 		select {
@@ -181,7 +181,7 @@ func TestDispatchFrameEventsRegistersLargeInputBatchBeforeReturn(t *testing.T) {
 		}
 	}
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 	if !slices.Equal(routed, want) {
 		t.Fatalf("consumed input batch routed again: %v", routed)
 	}
@@ -193,7 +193,7 @@ func TestDispatchFrameEventsRegistersLargeInputBatchBeforeReturn(t *testing.T) {
 }
 
 func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	started, finished := make(chan struct{}), make(chan struct{})
 	game.OnKey__0(KeySpace, func() {
 		close(started)
@@ -215,7 +215,7 @@ func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
 	if itime.Frame() != frame {
 		t.Fatal("input dispatch advanced the frame clock")
 	}
-	co.Update()
+	currentScheduler.Update()
 	select {
 	case <-started:
 	default:
@@ -227,7 +227,7 @@ func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
 	default:
 	}
 	itime.Update(1.0/30, 30)
-	co.Update()
+	currentScheduler.Update()
 	select {
 	case <-finished:
 	default:
@@ -295,7 +295,7 @@ func TestInputFrameExpiresStationarySwipeAfterClockAdvances(t *testing.T) {
 }
 
 func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	backend := &animationAudioBackend{}
 	game.soundMgr.Init(backend)
 	game.sounds = map[string]sound{"step": &coreproject.SoundConfig{Path: "step.wav"}}
@@ -311,11 +311,11 @@ func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 		anim.curAnimState.OnPlayAudioPlaybackID = id
 	}
 	backend.onStop = func(int64) { phases.add("animation-complete") }
-	logic := co.Create("logicLoop", func(coroutine.Thread) {
+	logic := currentScheduler.Create("logicLoop", func(coroutine.Thread) {
 		engine.WaitNextFrame()
 		game.processLogicFrame(nil, nil)
 	})
-	co.JoinFirstSlice(logic)
+	currentScheduler.JoinFirstSlice(logic)
 	game.scriptEvents.manager.Add(coreevent.BucketTimer, coreevent.NewSink(game, nil, func(any) bool {
 		phases.add("timer-route")
 		return false
@@ -337,8 +337,8 @@ func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 		t.Fatal("timer handler waited for the pending logic frame")
 	}
 	requireEventOrder(t, &phases, []string{"timer-route", "timer-handler"})
-	co.Update()
-	co.Join(logic)
+	currentScheduler.Update()
+	currentScheduler.Join(logic)
 	requireEventOrder(t, &phases, []string{"timer-route", "timer-handler", "audio", "animation-complete"})
 	if itime.Frame() != frame || anim.curAnimState != nil || len(anim.doneAnimations) != 0 {
 		t.Fatal("pending logic did not finish its animation in the timer's frame")
@@ -346,7 +346,7 @@ func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 }
 
 func TestZeroTimerRoutesBeforeStartRegistration(t *testing.T) {
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	game.lifecycleState.IsRunned.Store(true)
 	game.completeBootstrap(game.bootstrapGeneration())
 	game.camera = &cameraImpl{g: game}
@@ -370,7 +370,7 @@ func TestZeroTimerRoutesBeforeStartRegistration(t *testing.T) {
 	game.inputMgr.frame.pending = &inputFrame{}
 	itime.Update(1.0/30, 30)
 	game.OnEngineUpdate(1.0 / 30)
-	co.Update()
+	currentScheduler.Update()
 	// Both handlers run; their order relative to each other is not the contract.
 	if routed != 1 || timers != 1 || starts != 1 || !game.lifecycleState.StartDispatched.Load() {
 		t.Fatalf("timer routes/handlers/start handlers = %d/%d/%d, start dispatched = %v",
@@ -405,11 +405,11 @@ func TestDispatchFrameEventsFreezesTimersBeforeRouting(t *testing.T) {
 }
 
 func TestDispatchFrameEventsSurvivesStopOtherScripts(t *testing.T) {
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	started, unblock := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(unblock) })
 	t.Cleanup(release)
-	blocker := co.Create(game, func(coroutine.Thread) {
+	blocker := currentScheduler.Create(game, func(coroutine.Thread) {
 		close(started)
 		<-unblock
 	})
@@ -435,7 +435,7 @@ func TestDispatchFrameEventsSurvivesStopOtherScripts(t *testing.T) {
 	var dispatcher coroutine.Thread
 	deadline := time.Now().Add(time.Second)
 	for dispatcher == nil {
-		co.StopIf(func(thread coroutine.Thread) bool {
+		currentScheduler.StopIf(func(thread coroutine.Thread) bool {
 			if thread.ID() > blocker.ID() {
 				dispatcher = thread
 			}
@@ -466,9 +466,9 @@ func TestDispatchFrameEventsSurvivesStopOtherScripts(t *testing.T) {
 
 func TestDispatchFrameEventsFreezesTimersBeforeConditions(t *testing.T) {
 	_, game := setupInputFrameGame(t)
-	previous := gco
-	gco = nil
-	t.Cleanup(func() { gco = previous })
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
 	// Run callbacks inline so a condition handler deterministically mutates the
 	// timer state during dispatch, rather than depending on scheduler timing.
 	conditions := 0
@@ -549,9 +549,9 @@ func TestInputFrameSwipePreservesReplayClockRollback(t *testing.T) {
 }
 
 func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
-	previous := gco
-	gco = nil
-	t.Cleanup(func() { gco = previous })
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
 	for _, tt := range []struct {
 		name        string
 		spriteFirst bool
@@ -601,9 +601,9 @@ func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
 }
 
 func TestSwipeRoutingIgnoresFailedAndExpiredGestures(t *testing.T) {
-	previous := gco
-	gco = nil
-	t.Cleanup(func() { gco = previous })
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
 	for _, tt := range []struct {
 		name     string
 		elapsed  time.Duration
@@ -658,12 +658,12 @@ func TestKeyFromStringSpecialAndUnknownNames(t *testing.T) {
 	}
 }
 
-func setupInputFrameGame(t *testing.T) (*coroutine.Coroutines, *Game) {
+func setupInputFrameGame(t *testing.T) (*coroutine.Scheduler, *Game) {
 	t.Helper()
 	itime.ClearTimers()
 	itime.Start()
 	t.Cleanup(itime.ClearTimers)
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	game.inputMgr.init(game)
-	return co, game
+	return currentScheduler, game
 }

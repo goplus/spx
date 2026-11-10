@@ -50,7 +50,7 @@ func (p *waiterSet) close(done chan struct{}) map[Thread]struct{} {
 
 // Completed waits return immediately. Other callers block; managed callers
 // publish blocking and registration under schedulerMu, then waiterSet.mu.
-func (p *Coroutines) waitOn(me Thread, done <-chan struct{}, waiters *waiterSet) {
+func (p *Scheduler) waitOn(me Thread, done <-chan struct{}, waiters *waiterSet) {
 	select {
 	case <-done:
 		return
@@ -76,7 +76,7 @@ func (p *Coroutines) waitOn(me Thread, done <-chan struct{}, waiters *waiterSet)
 	}
 }
 
-func (p *Coroutines) wakeWaiters(waiters map[Thread]struct{}) {
+func (p *Scheduler) wakeWaiters(waiters map[Thread]struct{}) {
 	p.schedulerMu.Lock()
 	p.wakeWaitersLocked(waiters)
 	p.schedulerCond.Signal()

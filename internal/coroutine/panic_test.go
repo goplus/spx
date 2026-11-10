@@ -16,12 +16,12 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 	for _, value := range []any{"sentinel", errorValue, []string{"uncomparable", "value"}} {
 		t.Run(reflect.TypeOf(value).String(), func(t *testing.T) {
 			reports := make(chan PanicReport, 1)
-			co := New(func(report PanicReport) { reports <- report })
-			worker := co.Create("panic-worker", func(Thread) {
+			scheduler := New(func(report PanicReport) { reports <- report })
+			worker := scheduler.Create("panic-worker", func(Thread) {
 				panicWithValue(value)
 			})
 			waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 			select {
 			case report := <-reports:
 				if !reflect.DeepEqual(report.Value, value) {
@@ -45,12 +45,12 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 
 func TestPanicReportPreservesRuntimePanicAndFaultStack(t *testing.T) {
 	reports := make(chan PanicReport, 1)
-	co := New(func(report PanicReport) { reports <- report })
-	worker := co.Create("runtime-panic-worker", func(Thread) {
+	scheduler := New(func(report PanicReport) { reports <- report })
+	worker := scheduler.Create("runtime-panic-worker", func(Thread) {
 		panicWithNilDereference(nil)
 	})
 	waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 	select {
 	case report := <-reports:
 		if _, ok := report.Value.(runtime.Error); !ok {
@@ -67,14 +67,14 @@ func TestPanicReportPreservesRuntimePanicAndFaultStack(t *testing.T) {
 func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 	for _, value := range []any{nil, ErrAbortThread, ErrStopThisScript} {
 		reports := make(chan PanicReport, 1)
-		co := New(func(report PanicReport) { reports <- report })
-		worker := co.Create("stopped-worker", func(Thread) {
+		scheduler := New(func(report PanicReport) { reports <- report })
+		worker := scheduler.Create("stopped-worker", func(Thread) {
 			if value != nil {
 				panic(value)
 			}
 		})
 		waitForThreadSignal(t, worker.done, "coroutine did not finish")
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		select {
 		case report := <-reports:
 			t.Errorf("normal termination %v reported as panic: %+v", value, report)
@@ -84,20 +84,20 @@ func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 }
 
 func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
-	co := New(func(PanicReport) {
+	scheduler := New(func(PanicReport) {
 		panic("panic handler failure")
 	})
-	worker := co.newThread("panicking-worker")
-	co.registerThread(worker)
+	worker := scheduler.newThread("panicking-worker")
+	scheduler.registerThread(worker)
 
 	recovered := make(chan any, 1)
 	go func() {
 		goroutineID := gid.Get()
-		co.goroutineThreads.Store(goroutineID, worker)
-		co.runMu.Lock()
-		co.current.Store(worker)
+		scheduler.goroutineThreads.Store(goroutineID, worker)
+		scheduler.runMu.Lock()
+		scheduler.current.Store(worker)
 		defer func() { recovered <- recover() }()
-		co.finishThread(worker, goroutineID, "worker failure")
+		scheduler.finishThread(worker, goroutineID, "worker failure")
 	}()
 
 	select {
@@ -108,18 +108,18 @@ func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("panicking handler did not return control")
 	}
-	if co.hasPendingWork() {
+	if scheduler.hasPendingWork() {
 		t.Fatal("thread remained registered after panic handler panicked")
 	}
 	finalizing := 0
-	co.callbacks.Range(func(any, any) bool {
+	scheduler.callbacks.Range(func(any, any) bool {
 		finalizing++
 		return true
 	})
 	if finalizing != 0 {
 		t.Fatalf("finalizing goroutine markers = %d, want 0", finalizing)
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func panicWithValue(value any) { panic(value) }

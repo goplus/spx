@@ -16,7 +16,7 @@ type callbackResult struct {
 }
 
 // invokeCallback invokes fn under scope and captures panics.
-func (p *Coroutines) invokeCallback(scope callbackScope, fn func()) (result callbackResult) {
+func (p *Scheduler) invokeCallback(scope callbackScope, fn func()) (result callbackResult) {
 	id, previous := p.enterCallback(scope)
 	defer p.leaveCallback(id, previous)
 	// Distinguish panic(nil) from a normal return.
@@ -30,7 +30,7 @@ func (p *Coroutines) invokeCallback(scope callbackScope, fn func()) (result call
 }
 
 // Nested callbacks retain their caller's waiting restrictions.
-func (p *Coroutines) enterCallback(scope callbackScope) (id uint64, previous callbackScope) {
+func (p *Scheduler) enterCallback(scope callbackScope) (id uint64, previous callbackScope) {
 	id = gid.Get()
 	if value, ok := p.callbacks.Load(id); ok {
 		previous = value.(callbackScope)
@@ -39,7 +39,7 @@ func (p *Coroutines) enterCallback(scope callbackScope) (id uint64, previous cal
 	return
 }
 
-func (p *Coroutines) leaveCallback(id uint64, previous callbackScope) {
+func (p *Scheduler) leaveCallback(id uint64, previous callbackScope) {
 	if previous == 0 {
 		p.callbacks.Delete(id)
 	} else {
@@ -47,21 +47,21 @@ func (p *Coroutines) leaveCallback(id uint64, previous callbackScope) {
 	}
 }
 
-func (p *Coroutines) callbackScope() callbackScope {
+func (p *Scheduler) callbackScope() callbackScope {
 	if value, ok := p.callbacks.Load(gid.Get()); ok {
 		return value.(callbackScope)
 	}
 	return 0
 }
 
-func (p *Coroutines) requireDrainCaller() {
+func (p *Scheduler) requireDrainCaller() {
 	if p.Caller() != nil || p.callbackScope() != 0 {
 		panic(ErrReentrantWait)
 	}
 }
 
 // Check before publishing a wait or admitting work that requires another slice.
-func (p *Coroutines) requireCanWait() {
+func (p *Scheduler) requireCanWait() {
 	if p.callbackScope()&callbackExclusive != 0 {
 		panic(ErrReentrantWait)
 	}

@@ -283,7 +283,7 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 	idx := s.findShapeIndex(src)
 	if idx < 0 {
 		spxlog.Debug("AddClonedShape: cloning a deleted sprite")
-		gco.StopCurrent()
+		scheduler.StopCurrent()
 		return
 	}
 

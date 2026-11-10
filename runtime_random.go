@@ -142,23 +142,23 @@ func newRandomStream(seed int64) *rand.Rand {
 }
 
 func currentCoroutineID() int64 {
-	if gco == nil {
+	if scheduler == nil {
 		return 0
 	}
-	if !gco.IsInCoroutine() {
+	if !scheduler.IsInCoroutine() {
 		return 0
 	}
-	if th := gco.Current(); th != nil {
+	if th := scheduler.Current(); th != nil {
 		return th.ID()
 	}
 	return 0
 }
 
 func lastAllocatedCoroutineID() int64 {
-	if gco == nil {
+	if scheduler == nil {
 		return 0
 	}
-	return gco.LastThreadID()
+	return scheduler.LastThreadID()
 }
 
 func mixRandomSeed(baseSeed, streamID int64) int64 {

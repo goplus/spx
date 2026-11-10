@@ -5,7 +5,7 @@ import "github.com/goplus/spx/v4/internal/engine/platform"
 // RunSync executes call in a managed coroutine and waits for completion.
 // Managed callers run inline; engine callers service main-thread jobs while
 // waiting. External calls are skipped while shutdown has closed admission.
-func (p *Coroutines) RunSync(owner any, call func(Thread)) {
+func (p *Scheduler) RunSync(owner any, call func(Thread)) {
 	if caller := p.Caller(); caller != nil {
 		p.requireCanWait()
 		call(caller)

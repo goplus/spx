@@ -41,6 +41,7 @@ type cloneProxyPublication struct {
 type physicsPullBuffer struct {
 	ids     []int64
 	sprites []*SpriteImpl
+	query   engine.PositionQueryBuffer
 	busy    atomic.Bool
 }
 
@@ -58,10 +59,8 @@ type proxyBatch struct {
 }
 
 type proxySnapshot struct {
-	proxyVisual
-	change   proxyChange
-	position mathf.Vec2
-	visible  bool
+	transform engine.SpriteTransform
+	change    proxyChange
 }
 
 type proxyVisual struct {
@@ -282,15 +281,7 @@ func (p *SpriteImpl) submitProxyForQueryOnMainThread() {
 		p.mergeEnginePosition(position.X, position.Y)
 	}
 	snapshot := p.snapshotProxy()
-	proxy := snapshot.change.proxy
-	engine.ValidateSpriteTransform(proxy.Id, snapshot.position, snapshot.rotation, snapshot.scale, snapshot.renderOffset)
-	proxy.SetTransform(
-		snapshot.position,
-		snapshot.rotation,
-		snapshot.scale,
-		snapshot.visible,
-		snapshot.renderOffset,
-	)
+	snapshot.change.proxy.ApplyTransform(snapshot.transform)
 	commitProxyChange(snapshot.change)
 }
 
@@ -356,14 +347,7 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) proxyCh
 	}
 
 	snapshot := p.snapshotProxy()
-	buffer.Add(
-		snapshot.change.proxy.Id,
-		snapshot.position.X, snapshot.position.Y,
-		snapshot.rotation,
-		snapshot.scale.X, snapshot.scale.Y,
-		snapshot.renderOffset.X, snapshot.renderOffset.Y,
-		snapshot.visible,
-	)
+	buffer.AddTransform(snapshot.change.proxy.Id, snapshot.transform)
 	return snapshot.change
 }
 
@@ -398,13 +382,17 @@ func (p *SpriteImpl) snapshotProxy() proxySnapshot {
 		dirtyVersion = p.spriteState.dirtyVersion
 	}
 	return proxySnapshot{
-		proxyVisual: visual.proxyVisual,
+		transform: engine.SpriteTransform{
+			Position:     mathf.NewVec2(p.getXY()),
+			Rotation:     visual.rotation,
+			Scale:        visual.scale,
+			RenderOffset: visual.renderOffset,
+			Visible:      p.effectiveProxyVisibility(),
+		},
 		change: proxyChange{
 			sprite: p, proxy: visual.proxy,
 			dirtyVersion: dirtyVersion, positionVersions: p.transform().pendingPosition,
 		},
-		position: mathf.NewVec2(p.getXY()),
-		visible:  p.effectiveProxyVisibility(),
 	}
 }
 
@@ -444,11 +432,9 @@ func (p *Game) flushSyncBuffer() {
 
 func (p *Game) pullPhysicsPositions() {
 	pull := &p.physicsPull
-	buffer := p.syncBuffer
 	reuse := pull.busy.CompareAndSwap(false, true)
 	if !reuse {
 		pull = &physicsPullBuffer{}
-		buffer = &engine.SpriteSyncBuffer{}
 	}
 	pull.ids = pull.ids[:0]
 	defer func() {
@@ -468,7 +454,7 @@ func (p *Game) pullPhysicsPositions() {
 	if len(pull.ids) == 0 {
 		return
 	}
-	applyPhysicsPositions(pull.sprites, buffer.GetPositions(pull.ids))
+	applyPhysicsPositions(pull.sprites, pull.query.GetPositions(pull.ids))
 }
 
 func (p *Game) processPhysicsTriggers() {

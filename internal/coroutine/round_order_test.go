@@ -27,35 +27,35 @@ import (
 )
 
 func TestFrameWaitBatchResetsScriptCursor(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	var order []string
-	first := co.Create("A", func(Thread) {
-		co.WaitNextFrame()
+	first := scheduler.Create("A", func(Thread) {
+		scheduler.WaitNextFrame()
 		order = append(order, "A1")
-		co.WaitNextFrame()
+		scheduler.WaitNextFrame()
 		order = append(order, "A2")
 	})
-	co.JoinFirstSlice(first)
-	second := co.Create("B", func(Thread) {
-		co.Wait(0.5)
+	scheduler.JoinFirstSlice(first)
+	second := scheduler.Create("B", func(Thread) {
+		scheduler.Wait(0.5)
 		order = append(order, "B")
 	})
-	co.JoinFirstSlice(second)
-	co.Update()
+	scheduler.JoinFirstSlice(second)
+	scheduler.Update()
 
 	// Only A resumes in this frame, while B keeps waiting for its deadline.
 	itime.Update(0.25, 30)
-	co.Update()
+	scheduler.Update()
 	if want := []string{"A1"}; !slices.Equal(order, want) {
 		t.Fatalf("first frame order = %v, want %v", order, want)
 	}
 
 	// Both waits are now eligible. The new frame starts at A, before B.
 	itime.Update(0.25, 30)
-	co.Update()
+	scheduler.Update()
 	if want := []string{"A1", "A2", "B"}; !slices.Equal(order, want) {
 		t.Fatalf("second frame order = %v, want %v", order, want)
 	}
@@ -65,9 +65,9 @@ func TestWaitMainThreadKeepsAdmittedRoundOrder(t *testing.T) {
 	previousPlatform := gdx.PlatformMgr
 	gdx.PlatformMgr = nil
 	t.Cleanup(func() { gdx.PlatformMgr = previousPlatform })
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	var mu sync.Mutex
 	var order []string
@@ -77,36 +77,36 @@ func TestWaitMainThreadKeepsAdmittedRoundOrder(t *testing.T) {
 		mu.Unlock()
 	}
 	var second Thread
-	first := co.Create("A", func(Thread) {
-		co.WaitNextFrame()
+	first := scheduler.Create("A", func(Thread) {
+		scheduler.WaitNextFrame()
 		record("A-before")
-		co.WaitMainThread(func() {
+		scheduler.WaitMainThread(func() {
 			record("main")
-			co.schedulerMu.Lock()
-			_, pending := co.pendingExecution[second]
+			scheduler.schedulerMu.Lock()
+			_, pending := scheduler.pendingExecution[second]
 			queued := second.readyHeap != nil
-			co.schedulerMu.Unlock()
+			scheduler.schedulerMu.Unlock()
 			if !pending || !queued {
 				t.Error("B was not admitted to the same round before A's engine call")
 			}
-			if co.runMu.TryLock() {
-				co.runMu.Unlock()
+			if scheduler.runMu.TryLock() {
+				scheduler.runMu.Unlock()
 				t.Error("engine call released A's script slice")
 			}
 			runtime.Gosched()
 		})
 		record("A-after")
 	})
-	co.JoinFirstSlice(first)
-	second = co.Create("B", func(Thread) {
-		co.WaitNextFrame()
+	scheduler.JoinFirstSlice(first)
+	second = scheduler.Create("B", func(Thread) {
+		scheduler.WaitNextFrame()
 		record("B")
 	})
-	co.JoinFirstSlice(second)
-	co.Update()
+	scheduler.JoinFirstSlice(second)
+	scheduler.Update()
 
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	mu.Lock()
 	got := slices.Clone(order)
 	mu.Unlock()

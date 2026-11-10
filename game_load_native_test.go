@@ -124,7 +124,7 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	if len(base.pendingBootstrap) == 0 || base.lifecycleState.BootstrapDone.Load() {
 		t.Fatal("load must queue bootstrap hooks without running them")
 	}
-	if got := gco.LastThreadID(); got != 1 {
+	if got := scheduler.LastThreadID(); got != 1 {
 		t.Fatalf("game loops = %d, want 1", got)
 	}
 }
@@ -187,7 +187,7 @@ func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
 	if resource.closeCalls != 1 {
 		t.Fatalf("resource close calls = %d, want 1", resource.closeCalls)
 	}
-	if game.inputMgr.frame.pending != pending || gco.LastThreadID() != 0 {
+	if game.inputMgr.frame.pending != pending || scheduler.LastThreadID() != 0 {
 		t.Fatal("font failure changed pending input or the game loops")
 	}
 }
@@ -296,7 +296,7 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 			if base.fs != previousFS || previousFS.closeCalls != 0 {
 				t.Fatal("failed load did not preserve the previous resource directory")
 			}
-			if base.tilemapMgr.g != nil || len(base.pendingBootstrap) != 0 || gco.LastThreadID() != 0 {
+			if base.tilemapMgr.g != nil || len(base.pendingBootstrap) != 0 || scheduler.LastThreadID() != 0 {
 				t.Fatal("sprite load failure continued into tilemap, bootstrap, or script initialization")
 			}
 			if platform.title != "unchanged" {
@@ -348,7 +348,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 			if game.fs != previousFS || previousFS.closeCalls != 0 || game.tilemapMgr != previousTilemap {
 				t.Fatal("failed stage load did not restore resource ownership")
 			}
-			if len(game.pendingBootstrap) != 0 || gco.LastThreadID() != 0 || platform.title != "unchanged" {
+			if len(game.pendingBootstrap) != 0 || scheduler.LastThreadID() != 0 || platform.title != "unchanged" {
 				t.Fatal("stage failure continued into bootstrap, scripts, or window title update")
 			}
 			if len(panicMgr.messages) != 0 || len(panicMgr.exits) != 0 {
@@ -372,10 +372,10 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 			pkgengine.ExtMgr = originalExt
 			spxlog.SetStdoutOutput(os.Stdout)
 		})
-		co := setupRuntimeScheduler(t)
+		currentScheduler := setupRuntimeScheduler(t)
 		timedOut := make(chan struct{})
 		returned := false
-		thread := co.Create("loop", func(coroutine.Thread) {
+		thread := currentScheduler.Create("loop", func(coroutine.Thread) {
 			// Start the frame's timeout clock, then expire it without advancing a frame.
 			if got := Sched(); got != 0 {
 				t.Errorf("initial Sched() = %d, want 0", got)
@@ -392,7 +392,7 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 			t.Fatalf("timeout warning = %q, want loop timeout warning", got)
 		}
 		// Processing the current frame must leave the timeout suspended.
-		co.Update()
+		currentScheduler.Update()
 		synctest.Wait()
 		if returned || len(recorder.messages) != 0 || len(recorder.exits) != 0 || thread.Stopped() {
 			t.Fatalf("timeout reported before the next frame: returned=%v, messages=%v, exits=%v, stopped=%v",
@@ -400,7 +400,7 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 		}
 
 		itime.Update(0, 0)
-		co.Update()
+		currentScheduler.Update()
 		synctest.Wait()
 		if want := []string{coreruntime.LoopExecutionTimedOutMsg}; !slices.Equal(recorder.messages, want) {
 			t.Errorf("runtime panic messages = %v, want %v", recorder.messages, want)
@@ -470,9 +470,9 @@ func TestGameCommandLineVerboseAndErrors(t *testing.T) {
 	for _, arg := range []string{"-v", "-unknown"} {
 		t.Run(arg, func(t *testing.T) {
 			recorder := setupRuntimeFailureRecorder(t)
-			co := gco
-			engine.SetCoroutines(nil)
-			t.Cleanup(func() { engine.SetCoroutines(co) })
+			currentScheduler := scheduler
+			engine.SetScheduler(nil)
+			t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
 			originalFlags := defaultDebugFlags.Load()
 			t.Cleanup(func() { defaultDebugFlags.Store(originalFlags); spxlog.SetLevel(spxlog.LevelInfo) })
 			setupLoadGameFlags(t, arg)
@@ -490,9 +490,9 @@ func TestGameCommandLineVerboseAndErrors(t *testing.T) {
 
 func TestGameInitializationReportsClaimedInput(t *testing.T) {
 	recorder := setupRuntimeFailureRecorder(t)
-	co := gco
-	engine.SetCoroutines(nil)
-	t.Cleanup(func() { engine.SetCoroutines(co) })
+	currentScheduler := scheduler
+	engine.SetScheduler(nil)
+	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
 	game := &Game{inputClaimed: true}
 	game.initGame(nil)
 	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], ErrInputSessionActive.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
@@ -502,9 +502,9 @@ func TestGameInitializationReportsClaimedInput(t *testing.T) {
 
 func TestUnknownSpriteCollisionReportsRuntimeFailure(t *testing.T) {
 	recorder := setupRuntimeFailureRecorder(t)
-	co := gco
-	engine.SetCoroutines(nil)
-	t.Cleanup(func() { engine.SetCoroutines(co) })
+	currentScheduler := scheduler
+	engine.SetScheduler(nil)
+	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
 	info := new(Game).getSpriteCollisionInfo("missing")
 	if *info != (spriteCollisionInfo{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
 		t.Fatalf("unknown collision=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
@@ -553,7 +553,7 @@ func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
 			if base.fs != beforeFS || base.tilemapMgr != beforeTilemap || resource.closeCalls != 1 {
 				t.Fatal("preparation changed resource ownership")
 			}
-			if len(base.pendingBootstrap) != 0 || gco.LastThreadID() != 0 {
+			if len(base.pendingBootstrap) != 0 || scheduler.LastThreadID() != 0 {
 				t.Fatal("preparation started scripts")
 			}
 		})

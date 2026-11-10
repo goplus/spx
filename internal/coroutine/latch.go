@@ -19,14 +19,14 @@ package coroutine
 // Latch is a scheduler-aware, idempotent one-shot signal.
 // Wait atomically publishes blocking and waiter registration.
 type Latch struct {
-	manager *Coroutines
+	manager *Scheduler
 
 	done    chan struct{}
 	waiters waiterSet
 }
 
 // NewLatch creates a closed latch associated with this coroutine manager.
-func (p *Coroutines) NewLatch() *Latch {
+func (p *Scheduler) NewLatch() *Latch {
 	return &Latch{
 		manager: p,
 		done:    make(chan struct{}),

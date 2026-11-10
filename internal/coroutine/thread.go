@@ -38,7 +38,7 @@ const (
 type threadImpl struct {
 	Owner any // Strings and Name() provide the diagnostic name.
 
-	manager *Coroutines // Immutable scheduler ownership, including after completion.
+	manager *Scheduler // Immutable scheduler ownership, including after completion.
 	id      int64
 	name    string
 
@@ -74,7 +74,7 @@ type threadImpl struct {
 // Thread represents a coroutine.
 type Thread = *threadImpl
 
-func (p *Coroutines) newThread(owner any) Thread {
+func (p *Scheduler) newThread(owner any) Thread {
 	th := &threadImpl{
 		Owner:          owner,
 		manager:        p,

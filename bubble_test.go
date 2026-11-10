@@ -173,25 +173,25 @@ func TestBubbleRemovalUnlocksBeforeDestroy(t *testing.T) {
 
 func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 	installAskTestUiMgr(t)
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	itime.Start()
 	_, sprite, component := newBubbleTestSprite()
 
 	done := false
-	thread := co.Create(sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.Say__1("say", 0.01)
 		sprite.Think__1("think", 0.01)
 		sprite.Quote__3("quote", "description", 0.01)
 		done = true
 	})
-	co.JoinFirstSlice(thread)
-	co.Update()
+	currentScheduler.JoinFirstSlice(thread)
+	currentScheduler.Update()
 	if done {
 		t.Fatal("timed bubble calls completed in their issuing frame")
 	}
 	for range 3 {
 		itime.Update(1.0/30, 30)
-		co.Update()
+		currentScheduler.Update()
 	}
 	if !done {
 		t.Fatal("timed bubble calls did not complete after their deadlines")
@@ -639,23 +639,23 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	pkgengine.InputMgr = askDelayedInputMgr{}
 	t.Cleanup(func() { pkgengine.InputMgr = originalInput })
 	t.Cleanup(itime.ClearTimers)
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	itime.Start()
 	game := &Game{}
 	game.shapeMgr.init()
 	answered := false
-	thread := co.Create(game, func(coroutine.Thread) { game.Ask("later?"); answered = true })
-	co.JoinFirstSlice(thread)
+	thread := currentScheduler.Create(game, func(coroutine.Thread) { game.Ask("later?"); answered = true })
+	currentScheduler.JoinFirstSlice(thread)
 	if answered || game.dialogState.AskPanel == nil || !mgr.visible[mgr.askRoot] {
 		t.Fatal("Ask did not suspend while displaying its question")
 	}
 	game.dialogState.AskPanel.OnCheck("later answer")
 	itime.Update(1.0/30, 30)
-	co.Update()
+	currentScheduler.Update()
 	if !answered || game.Answer() != "later answer" {
 		t.Fatalf("Ask resumed=%v, answer=%q", answered, game.Answer())
 	}
-	co.Join(thread)
+	currentScheduler.Join(thread)
 }
 
 func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {

@@ -9,29 +9,29 @@ import (
 )
 
 func TestWaitToDoRejectsCanceledCaller(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	called, continued := false, false
-	caller := co.Create("caller", func(me Thread) {
+	caller := scheduler.Create("caller", func(me Thread) {
 		me.Cancel()
-		co.WaitToDo(func() { called = true })
+		scheduler.WaitToDo(func() { called = true })
 		continued = true
 	})
-	co.drain()
+	scheduler.drain()
 	if !caller.Stopped() || called || continued {
 		t.Fatalf("stopped=%v, worker ran=%v, caller continued=%v", caller.Stopped(), called, continued)
 	}
 }
 
 func TestWaitToDoGoexitStopsCaller(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	var continued atomic.Bool
 	cleaned := make(chan struct{})
-	thread := co.Create("caller", func(Thread) {
+	thread := scheduler.Create("caller", func(Thread) {
 		defer close(cleaned)
-		co.WaitToDo(runtime.Goexit)
+		scheduler.WaitToDo(runtime.Goexit)
 		continued.Store(true)
 	})
 	waitForThreadSignal(t, thread.done, "worker Goexit left its caller suspended")
@@ -39,20 +39,20 @@ func TestWaitToDoGoexitStopsCaller(t *testing.T) {
 	if !thread.Stopped() || continued.Load() {
 		t.Fatal("caller continued after its worker exited without a result")
 	}
-	co.drain()
-	co.callbacks.Range(func(any, any) bool {
+	scheduler.drain()
+	scheduler.callbacks.Range(func(any, any) bool {
 		t.Error("worker Goexit retained callback scope")
 		return false
 	})
 }
 
 func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	guarded := make(chan any, 1)
-	thread := co.Create("caller", func(Thread) {
-		co.WaitToDo(func() {
+	thread := scheduler.Create("caller", func(Thread) {
+		scheduler.WaitToDo(func() {
 			defer func() { guarded <- recover() }()
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 		})
 	})
 	waitForThreadSignal(t, thread.done, "caller did not finish")
@@ -62,15 +62,15 @@ func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
 	if thread.Stopped() {
 		t.Fatal("rejected drain canceled its own caller")
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 	panicReported := make(chan any, 1)
-	co := New(func(report PanicReport) { panicReported <- report.Value })
+	scheduler := New(func(report PanicReport) { panicReported <- report.Value })
 
-	co.Create("caller", func(me Thread) {
-		co.WaitToDo(func() { panic("worker failure") })
+	scheduler.Create("caller", func(me Thread) {
+		scheduler.WaitToDo(func() { panic("worker failure") })
 	})
 
 	select {
@@ -81,15 +81,15 @@ func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("worker panic did not complete the waiting coroutine")
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
-	co := New(func(PanicReport) {})
+	scheduler := New(func(PanicReport) {})
 	continued := make(chan struct{}, 1)
-	thread := co.Create("caller", func(Thread) {
-		co.WaitToDo(func() { panicWithValue(nil) })
+	thread := scheduler.Create("caller", func(Thread) {
+		scheduler.WaitToDo(func() { panicWithValue(nil) })
 		continued <- struct{}{}
 	})
 
@@ -106,27 +106,27 @@ func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 }
 
 func TestRunAfterStopWaitsForWaitToDoWorker(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	started, releaseWorker := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(releaseWorker) })
-	caller := co.Create("worker-owner", func(Thread) {
-		co.WaitToDo(func() {
+	caller := scheduler.Create("worker-owner", func(Thread) {
+		scheduler.WaitToDo(func() {
 			close(started)
 			<-releaseWorker
 		})
 	})
 	t.Cleanup(func() {
 		release()
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	waitForThreadSignal(t, started, "worker did not start")
 	callback, drained := make(chan struct{}), make(chan struct{})
 	go func() {
-		co.RunAfterStop(func() { close(callback) })
+		scheduler.RunAfterStop(func() { close(callback) })
 		close(drained)
 	}()
 	waitForThreadSignal(t, caller.done, "shutdown did not stop the worker's caller")
-	assertShutdownRejectsCreation(t, co)
+	assertShutdownRejectsCreation(t, scheduler)
 	select {
 	case <-callback:
 		t.Fatal("shutdown callback ran before the worker exited")
@@ -137,9 +137,9 @@ func TestRunAfterStopWaitsForWaitToDoWorker(t *testing.T) {
 	release()
 	waitForThreadSignal(t, drained, "shutdown did not finish after the worker exited")
 	waitForThreadSignal(t, callback, "shutdown did not run its callback")
-	fresh := co.Create("after-drain", func(Thread) {})
+	fresh := scheduler.Create("after-drain", func(Thread) {})
 	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
-	if fresh.Stopped() || co.admissionClosed() {
+	if fresh.Stopped() || scheduler.admissionClosed() {
 		t.Fatal("shutdown did not reopen admission after the worker exited")
 	}
 }
@@ -153,7 +153,7 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 		{name: "goexit", exit: runtime.Goexit},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			started := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
 			unblock := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
 			finished := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
@@ -165,13 +165,13 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 				for _, releaseWorker := range release {
 					releaseWorker()
 				}
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
 
 			var callers [2]Thread
 			for i := range callers {
-				callers[i] = co.Create("caller", func(Thread) {
-					co.WaitToDo(func() {
+				callers[i] = scheduler.Create("caller", func(Thread) {
+					scheduler.WaitToDo(func() {
 						defer close(finished[i])
 						close(started[i])
 						<-unblock[i]
@@ -185,7 +185,7 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 				waitForThreadSignal(t, signal, "native worker did not start")
 			}
 			for _, caller := range callers {
-				co.Stop(caller)
+				scheduler.Stop(caller)
 			}
 			for _, caller := range callers {
 				waitForThreadSignal(t, caller.done, "canceled caller did not finish")
@@ -194,7 +194,7 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 			reset := make(chan struct{})
 			drained := make(chan struct{})
 			go func() {
-				co.RunAfterStop(func() { close(reset) })
+				scheduler.RunAfterStop(func() { close(reset) })
 				close(drained)
 			}()
 			release[0]()
@@ -220,21 +220,21 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 }
 
 func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	input := make(chan int)
 	value := 0
-	thread := co.Create("receiver", func(Thread) {
-		value = WaitForChan(co, input)
+	thread := scheduler.Create("receiver", func(Thread) {
+		value = WaitForChan(scheduler, input)
 	})
 	waitForThreadSignal(t, thread.firstSliceDone, "receiver did not wait")
 
 	// Another script slice owns execution while the receive completes.
-	co.runMu.Lock()
+	scheduler.runMu.Lock()
 	func() {
-		defer co.runMu.Unlock()
+		defer scheduler.runMu.Unlock()
 		select {
 		case input <- 7:
 		case <-time.After(time.Second):
@@ -242,14 +242,14 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 		}
 		deadline := time.Now().Add(time.Second)
 		for {
-			co.schedulerMu.Lock()
-			_, pending := co.pendingExecution[thread]
-			co.schedulerMu.Unlock()
+			scheduler.schedulerMu.Lock()
+			_, pending := scheduler.pendingExecution[thread]
+			scheduler.schedulerMu.Unlock()
 			if pending {
 				break
 			}
 			if time.Now().After(deadline) {
-				co.Stop(thread)
+				scheduler.Stop(thread)
 				t.Fatal("receive did not wake its caller")
 			}
 			runtime.Gosched()
@@ -257,7 +257,7 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 		if value != 0 {
 			t.Errorf("result committed without script execution: %d", value)
 		}
-		co.Stop(thread)
+		scheduler.Stop(thread)
 	}()
 	waitForThreadSignal(t, thread.done, "canceled receiver did not finish")
 	if value != 0 {
@@ -266,22 +266,22 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 }
 
 func TestWaitForChanTracksPendingReceive(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	value := 7
-	thread := co.Create("receiver", func(Thread) {
-		value = WaitForChan[int](co, nil)
+	thread := scheduler.Create("receiver", func(Thread) {
+		value = WaitForChan[int](scheduler, nil)
 	})
-	co.JoinFirstSlice(thread)
-	co.threadsMu.Lock()
-	pending := co.workerCount
-	co.threadsMu.Unlock()
+	scheduler.JoinFirstSlice(thread)
+	scheduler.threadsMu.Lock()
+	pending := scheduler.workerCount
+	scheduler.threadsMu.Unlock()
 	if pending != 1 {
 		t.Errorf("tracked receivers = %d, want 1", pending)
 	}
-	co.RunAfterStop(func() {
-		co.threadsMu.Lock()
-		defer co.threadsMu.Unlock()
-		if co.workerCount != 0 {
+	scheduler.RunAfterStop(func() {
+		scheduler.threadsMu.Lock()
+		defer scheduler.threadsMu.Unlock()
+		if scheduler.workerCount != 0 {
 			t.Error("reset ran before the receiver drained")
 		}
 	})

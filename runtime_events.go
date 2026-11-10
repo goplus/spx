@@ -292,13 +292,13 @@ func (p *scriptEventBindings) doWhenStart(generation uint64) {
 		})
 		registry.game.markStartDispatched(generation)
 	}
-	if gco == nil {
+	if scheduler == nil {
 		runStartPhase(nil)
 		return
 	}
-	dispatcher := gco.Create(startEventDispatcher{}, runStartPhase)
-	if gco.IsInCoroutine() {
-		gco.Join(dispatcher)
+	dispatcher := scheduler.Create(startEventDispatcher{}, runStartPhase)
+	if scheduler.IsInCoroutine() {
+		scheduler.Join(dispatcher)
 	}
 }
 
@@ -437,10 +437,10 @@ func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEvent
 	})
 }
 
-// The start dispatcher already runs in a managed coroutine when gco is non-nil.
+// The start dispatcher already runs in a managed coroutine when scheduler is non-nil.
 func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event scriptEventDispatch) {
 	matched := matchingEventSinks(sinks, event.matchData)
-	if len(matched) == 0 || gco == nil {
+	if len(matched) == 0 || scheduler == nil {
 		dispatchMatchedScriptEventBatch(matched, event)
 		return
 	}
@@ -458,14 +458,14 @@ func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event s
 			Run: func(thread coroutine.Thread) {
 				p.pendingStartThreads.Delete(thread)
 				if p.stopAllEpoch.Load() != baseline {
-					gco.StopAtNextYield(thread)
+					scheduler.StopAtNextYield(thread)
 				}
 				event.run(thread, &sink)
 			},
 		}
 	}
 
-	gco.StartBatch(tasks, event.mode)
+	scheduler.StartBatch(tasks, event.mode)
 }
 
 func (p *scriptEventRegistry) isPendingStartThread(thread coroutine.Thread) bool {
@@ -480,7 +480,7 @@ func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
 
 // Shared Event State
 func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchContext {
-	thread := currentScriptThread()
+	thread := coroutine.Caller(scheduler)
 	if thread == nil {
 		return new(messageDispatchContext)
 	}
@@ -513,12 +513,12 @@ func (p *scriptEventRegistry) dispatchConditions() {
 
 func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *scriptEventHandler) {
 	for !p.claimTurn(receiver) {
-		gco.YieldToNextRoundFor(thread)
+		scheduler.YieldToNextRoundFor(thread)
 	}
 }
 
 func (p *messageDispatchContext) claimTurn(receiver *scriptEventHandler) bool {
-	frame, round := itime.Frame(), gco.ScriptRound()
+	frame, round := itime.Frame(), scheduler.ScriptRound()
 	if p.frame != frame || p.round != round {
 		p.frame, p.round = frame, round
 		clear(p.receivers)
@@ -547,11 +547,11 @@ func (e scriptEventDispatch) task(sink eventSink) coroutine.Task {
 
 // Register all handlers before returning; keep engine calls live while waiting.
 func withEventRegistrationBarrier(owner any, dispatch func()) {
-	if gco == nil {
+	if scheduler == nil {
 		dispatch()
 		return
 	}
-	gco.RunSync(owner, func(coroutine.Thread) {
+	scheduler.RunSync(owner, func(coroutine.Thread) {
 		dispatch()
 	})
 }
@@ -560,7 +560,7 @@ func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispa
 	if len(matched) == 0 {
 		return
 	}
-	if gco == nil {
+	if scheduler == nil {
 		for i := range matched {
 			event.run(nil, &matched[i])
 		}
@@ -571,7 +571,7 @@ func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispa
 	for i, sink := range matched {
 		tasks[i] = event.task(sink)
 	}
-	gco.StartBatch(tasks, event.mode)
+	scheduler.StartBatch(tasks, event.mode)
 }
 
 func eventBatchMode(wait bool) coroutine.BatchMode {

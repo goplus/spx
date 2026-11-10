@@ -24,43 +24,43 @@ import (
 )
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	iterations := 0
-	th := co.Create(nil, func(me Thread) {
+	th := scheduler.Create(nil, func(me Thread) {
 		for {
 			iterations++
-			co.YieldLoopFor(me)
+			scheduler.YieldLoopFor(me)
 		}
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 	if iterations <= 1 || th.Stopped() {
 		t.Fatalf("iterations = %d, stopped = %v", iterations, th.Stopped())
 	}
 	previous := iterations
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	if iterations <= previous || th.Stopped() {
 		t.Fatalf("script did not continue after budget: %d -> %d", previous, iterations)
 	}
 }
 
 func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	var rounds []uint64
-	th := co.Create(nil, func(me Thread) {
+	th := scheduler.Create(nil, func(me Thread) {
 		for range 3 {
-			rounds = append(rounds, co.ScriptRound())
-			co.YieldLoopFor(me)
+			rounds = append(rounds, scheduler.ScriptRound())
+			scheduler.YieldLoopFor(me)
 		}
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 
 	if len(rounds) != 3 || rounds[1] <= rounds[0] || rounds[2] <= rounds[1] {
 		t.Fatalf("script rounds = %v, want three increasing same-frame rounds", rounds)
@@ -68,58 +68,58 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 }
 
 func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	resumed := false
-	th := co.Create(nil, func(me Thread) {
-		co.YieldToNextRoundFor(me)
+	th := scheduler.Create(nil, func(me Thread) {
+		scheduler.YieldToNextRoundFor(me)
 		resumed = true
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 	if resumed {
 		t.Fatal("passive round wait admitted its own round")
 	}
 
 	itime.Update(0, 30)
-	co.Update()
+	scheduler.Update()
 	if !resumed {
 		t.Fatal("passive round wait did not resume in the next frame")
 	}
 }
 
 func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	passiveResumed := false
-	passive := co.Create(nil, func(me Thread) {
-		co.YieldToNextRoundFor(me)
+	passive := scheduler.Create(nil, func(me Thread) {
+		scheduler.YieldToNextRoundFor(me)
 		passiveResumed = true
 	})
 	loopResumed := false
-	loop := co.Create(nil, func(me Thread) {
-		co.YieldLoopFor(me)
+	loop := scheduler.Create(nil, func(me Thread) {
+		scheduler.YieldLoopFor(me)
 		loopResumed = true
 	})
-	joinFirstSliceAll(co, []Thread{passive, loop})
-	co.Update()
+	joinFirstSliceAll(scheduler, []Thread{passive, loop})
+	scheduler.Update()
 	if !passiveResumed || !loopResumed {
 		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)
 	}
 }
 
 func TestRunBetweenScriptsSkipsCanceledMainThreadCall(t *testing.T) {
-	co := New(nil)
-	canceled := co.newThread("canceled")
+	scheduler := New(nil)
+	canceled := scheduler.newThread("canceled")
 	canceled.stopped.Store(true)
 	var called atomic.Bool
-	co.queueMainThreadCallForTest(canceled, func() { called.Store(true) })
+	scheduler.queueMainThreadCallForTest(canceled, func() { called.Store(true) })
 
-	co.pumpMainThread()
+	scheduler.pumpMainThread()
 	if called.Load() {
 		t.Fatal("canceled coroutine's main-thread callback ran")
 	}

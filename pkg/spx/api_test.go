@@ -36,11 +36,11 @@ func TestGoWithActiveGame(t *testing.T) {
 		{name: "default owner", want: "game"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			co := newAPICoroutines(t, "game")
+			scheduler := newAPIScheduler(t, "game")
 
 			started := make(chan apiInvocation, 1)
 			Go(tc.owner, func(ctx context.Context, owner any) {
-				invocation := captureAPIInvocation(co, ctx, owner)
+				invocation := captureAPIInvocation(scheduler, ctx, owner)
 				started <- invocation
 				if invocation.thread != nil {
 					WaitNextFrame()
@@ -58,9 +58,9 @@ func TestGoWithActiveGame(t *testing.T) {
 				t.Fatal("Go callback did not receive its live coroutine context")
 			}
 
-			joinAPIThread(t, co, got.thread, true)
-			co.Stop(got.thread)
-			joinAPIThread(t, co, got.thread, false)
+			joinAPIThread(t, scheduler, got.thread, true)
+			scheduler.Stop(got.thread)
+			joinAPIThread(t, scheduler, got.thread, false)
 			if got.ctx.Err() != context.Canceled {
 				t.Fatalf("callback context error after stop = %v, want context.Canceled", got.ctx.Err())
 			}
@@ -100,7 +100,7 @@ func TestExecuteWaitsForCallback(t *testing.T) {
 		{name: "active default owner", game: "game", want: "game"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := newAPICoroutines(t, test.game)
+			scheduler := newAPIScheduler(t, test.game)
 			started := make(chan apiInvocation, 1)
 			returned := make(chan struct{})
 			release := apiReleaseGate(t, returned)
@@ -110,7 +110,7 @@ func TestExecuteWaitsForCallback(t *testing.T) {
 					if test.game == nil && gid.Get() == caller {
 						t.Error("native Execute did not start a separate goroutine")
 					}
-					started <- captureAPIInvocation(co, ctx, owner)
+					started <- captureAPIInvocation(scheduler, ctx, owner)
 					<-release.channel
 				})
 				close(returned)
@@ -138,16 +138,16 @@ func TestExecuteWaitsForCallback(t *testing.T) {
 }
 
 func TestExecuteKeepsCurrentCoroutine(t *testing.T) {
-	co := newAPICoroutines(t, "game")
+	scheduler := newAPIScheduler(t, "game")
 	results := make(chan apiInvocation, 2)
-	thread := co.Create("parent", func(coroutine.Thread) {
+	thread := scheduler.Create("parent", func(coroutine.Thread) {
 		for _, owner := range []any{nil, "override"} {
 			Execute(owner, func(ctx context.Context, owner any) {
-				results <- captureAPIInvocation(co, ctx, owner)
+				results <- captureAPIInvocation(scheduler, ctx, owner)
 			})
 		}
 	})
-	joinAPIThread(t, co, thread, false)
+	joinAPIThread(t, scheduler, thread, false)
 	for _, want := range []any{nil, "override"} {
 		got := awaitAPI(t, results)
 		if got.owner != want || got.thread != thread || got.ctx != thread.Context() || thread.Owner != "parent" {
@@ -159,14 +159,14 @@ func TestExecuteKeepsCurrentCoroutine(t *testing.T) {
 func TestGoWithoutActiveGame(t *testing.T) {
 	for _, owner := range []any{nil, "sprite"} {
 		t.Run(fmt.Sprint(owner), func(t *testing.T) {
-			co := newAPICoroutines(t, nil)
+			scheduler := newAPIScheduler(t, nil)
 			started := make(chan apiInvocation, 1)
 			returned, finished := make(chan struct{}), make(chan struct{})
 			release := apiReleaseGate(t, returned, finished)
 			go func() {
 				Go(owner, func(ctx context.Context, owner any) {
 					defer close(finished)
-					started <- captureAPIInvocation(co, ctx, owner)
+					started <- captureAPIInvocation(scheduler, ctx, owner)
 					<-release.channel
 				})
 				close(returned)
@@ -197,11 +197,11 @@ func TestGoResolvesNestedOwner(t *testing.T) {
 		{name: "inherit nil"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := newAPICoroutines(t, "game")
+			scheduler := newAPIScheduler(t, "game")
 			started := make(chan apiInvocation, 1)
-			parent := co.Create(test.parent, func(coroutine.Thread) {
+			parent := scheduler.Create(test.parent, func(coroutine.Thread) {
 				Go(test.owner, func(ctx context.Context, owner any) {
-					started <- captureAPIInvocation(co, ctx, owner)
+					started <- captureAPIInvocation(scheduler, ctx, owner)
 					WaitNextFrame()
 				})
 			})
@@ -209,16 +209,16 @@ func TestGoResolvesNestedOwner(t *testing.T) {
 			if got.thread == nil || got.thread == parent || got.owner != test.want || got.thread.Owner != test.want || got.ctx != got.thread.Context() {
 				t.Fatalf("nested Go invocation = %#v, want a new coroutine owned by %v", got, test.want)
 			}
-			joinAPIThread(t, co, parent, false)
-			joinAPIThread(t, co, got.thread, true)
-			co.Stop(got.thread)
-			joinAPIThread(t, co, got.thread, false)
+			joinAPIThread(t, scheduler, parent, false)
+			joinAPIThread(t, scheduler, got.thread, true)
+			scheduler.Stop(got.thread)
+			joinAPIThread(t, scheduler, got.thread, false)
 		})
 	}
 }
 
 func TestExecuteNativeOutsideCoroutine(t *testing.T) {
-	newAPICoroutines(t, nil)
+	newAPIScheduler(t, nil)
 	caller := gid.Get()
 	called := false
 	ExecuteNative(func(ctx context.Context, owner any) {
@@ -235,15 +235,15 @@ func TestExecuteNativeOutsideCoroutine(t *testing.T) {
 func TestExecuteNativeFromCoroutine(t *testing.T) {
 	for _, cancel := range []bool{false, true} {
 		t.Run(map[bool]string{false: "completion", true: "cancellation"}[cancel], func(t *testing.T) {
-			co := newAPICoroutines(t, "game")
+			scheduler := newAPIScheduler(t, "game")
 			started := make(chan apiInvocation, 1)
 			finished := make(chan struct{})
 			release := apiReleaseGate(t, finished)
 			resumed := make(chan bool, 1)
-			thread := co.Create("sprite", func(coroutine.Thread) {
+			thread := scheduler.Create("sprite", func(coroutine.Thread) {
 				ExecuteNative(func(ctx context.Context, owner any) {
 					defer close(finished)
-					started <- captureAPIInvocation(co, ctx, owner)
+					started <- captureAPIInvocation(scheduler, ctx, owner)
 					select {
 					case <-release.channel:
 					case <-ctx.Done():
@@ -255,23 +255,23 @@ func TestExecuteNativeFromCoroutine(t *testing.T) {
 			if got.ctx != thread.Context() || got.owner != "sprite" || got.thread != nil || got.ctx.Err() != nil {
 				t.Fatalf("native worker invocation = %#v, want caller context/owner outside coroutine", got)
 			}
-			joinAPIThread(t, co, thread, true)
+			joinAPIThread(t, scheduler, thread, true)
 			progress := make(chan struct{})
-			other := co.Create("other", func(coroutine.Thread) { close(progress) })
+			other := scheduler.Create("other", func(coroutine.Thread) { close(progress) })
 			awaitAPI(t, progress)
-			joinAPIThread(t, co, other, false)
+			joinAPIThread(t, scheduler, other, false)
 			select {
 			case <-resumed:
 				t.Fatal("ExecuteNative resumed before native work completed")
 			default:
 			}
 			if cancel {
-				co.Stop(thread)
+				scheduler.Stop(thread)
 			} else {
 				release.open()
 			}
 			awaitAPI(t, finished)
-			joinAPIThread(t, co, thread, false)
+			joinAPIThread(t, scheduler, thread, false)
 			if cancel {
 				if got.ctx.Err() != context.Canceled {
 					t.Fatalf("worker context error = %v, want cancellation", got.ctx.Err())
@@ -312,16 +312,16 @@ func TestWaitOutsideCoroutine(t *testing.T) {
 func TestWaitUsesLogicalFrames(t *testing.T) {
 	itime.Start()
 	t.Cleanup(func() { itime.Start() })
-	co := newAPICoroutines(t, "game")
+	scheduler := newAPIScheduler(t, "game")
 	results := make(chan float64, 2)
-	thread := co.Create("waiter", func(coroutine.Thread) {
+	thread := scheduler.Create("waiter", func(coroutine.Thread) {
 		results <- Wait(0.25)
 		results <- WaitNextFrame()
 	})
-	joinAPIThread(t, co, thread, true)
+	joinAPIThread(t, scheduler, thread, true)
 	for range 2 {
 		itime.Update(0.125, 8)
-		co.Update()
+		scheduler.Update()
 		if itime.Frame() == 1 {
 			select {
 			case <-results:
@@ -339,35 +339,35 @@ func TestWaitUsesLogicalFrames(t *testing.T) {
 	default:
 	}
 	itime.Update(0.0625, 16)
-	co.Update()
+	scheduler.Update()
 	if got := awaitAPI(t, results); got != 0.0625 {
 		t.Fatalf("WaitNextFrame returned %v, want logical delta 0.0625", got)
 	}
-	joinAPIThread(t, co, thread, false)
+	joinAPIThread(t, scheduler, thread, false)
 }
 
-func captureAPIInvocation(co *coroutine.Coroutines, ctx context.Context, owner any) apiInvocation {
+func captureAPIInvocation(scheduler *coroutine.Scheduler, ctx context.Context, owner any) apiInvocation {
 	var thread coroutine.Thread
 	if IsInCoroutine() {
-		thread = co.Current()
+		thread = scheduler.Current()
 	}
 	return apiInvocation{ctx, owner, thread}
 }
 
-func newAPICoroutines(t *testing.T, game any) *coroutine.Coroutines {
+func newAPIScheduler(t *testing.T, game any) *coroutine.Scheduler {
 	t.Helper()
-	co := coroutine.New(func(report coroutine.PanicReport) {
+	scheduler := coroutine.New(func(report coroutine.PanicReport) {
 		t.Errorf("unexpected coroutine panic: %v", report.Value)
 	})
 	previousGame := engine.GetGame()
 	engine.SetGame(game)
-	engine.SetCoroutines(co)
+	engine.SetScheduler(scheduler)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		engine.SetCoroutines(nil)
+		scheduler.RunAfterStop(nil)
+		engine.SetScheduler(nil)
 		engine.SetGame(previousGame)
 	})
-	return co
+	return scheduler
 }
 
 func apiReleaseGate(t *testing.T, finished ...<-chan struct{}) apiGate {
@@ -395,14 +395,14 @@ func awaitAPI[T any](t *testing.T, ch <-chan T) T {
 	}
 }
 
-func joinAPIThread(t *testing.T, co *coroutine.Coroutines, thread coroutine.Thread, firstSlice bool) {
+func joinAPIThread(t *testing.T, scheduler *coroutine.Scheduler, thread coroutine.Thread, firstSlice bool) {
 	t.Helper()
 	done := make(chan struct{})
 	go func() {
 		if firstSlice {
-			co.JoinFirstSlice(thread)
+			scheduler.JoinFirstSlice(thread)
 		} else {
-			co.Join(thread)
+			scheduler.Join(thread)
 		}
 		close(done)
 	}()

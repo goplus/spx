@@ -61,16 +61,16 @@ func TestProcedurePropagatesOtherPanics(t *testing.T) {
 }
 
 func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 
 	done := make(chan string, 1)
-	co.Create("stop-this-script", func(coroutine.Thread) {
+	currentScheduler.Create("stop-this-script", func(coroutine.Thread) {
 		trace := "outer-before;"
 		Procedure(func() {
 			trace += "inner-before;"
 			Repeat(1, func() {
 				// Match a stop nested in a converted repeat callback.
-				co.StopThisScript()
+				currentScheduler.StopThisScript()
 				trace += "inner-bad;"
 			})
 			trace += "inner-bad2;"
@@ -90,7 +90,7 @@ func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 }
 
 func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 
 	type result struct {
 		repeatCalls int
@@ -100,7 +100,7 @@ func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 	}
 
 	done := make(chan result, 1)
-	co.Create("run-without-screen-refresh", func(me coroutine.Thread) {
+	currentScheduler.Create("run-without-screen-refresh", func(me coroutine.Thread) {
 		flagDuring := false
 		repeatCalls := 0
 		condCalls := 0
@@ -140,7 +140,7 @@ func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 }
 
 func TestWarpRestoresPreviousState(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 
 	type result struct {
 		prev        bool
@@ -151,7 +151,7 @@ func TestWarpRestoresPreviousState(t *testing.T) {
 	}
 
 	done := make(chan result, 1)
-	co.Create("run-without-screen-refresh-state", func(me coroutine.Thread) {
+	currentScheduler.Create("run-without-screen-refresh-state", func(me coroutine.Thread) {
 		prev := SetRunWithoutScreenRefresh(true)
 		outerDuring := IsRunWithoutScreenRefresh()
 
@@ -189,14 +189,14 @@ func TestWarpRestoresPreviousState(t *testing.T) {
 
 func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 	panicReported := make(chan struct{}, 1)
-	co := coroutine.New(func(coroutine.PanicReport) {
+	currentScheduler := coroutine.New(func(coroutine.PanicReport) {
 		panicReported <- struct{}{}
 	})
-	installRuntimeScheduler(t, co, nil)
+	installRuntimeScheduler(t, currentScheduler, nil)
 
 	var script scriptEventBindings
 	script.bind(&scriptEventRegistry{}, "owner")
-	thread := co.Create("event-stop-this-script", func(coroutine.Thread) {
+	thread := currentScheduler.Create("event-stop-this-script", func(coroutine.Thread) {
 		script.Stop(ThisScript)
 		panic("stop-this-script should not continue")
 	})
@@ -227,24 +227,24 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 			doClone(source, nil, func(s *SpriteImpl) { clone = s })
 			clone.sound().soundObj = 17
 			playback := game.soundMgr.Play(17, "long.wav", false, false, 0, 0, 0)
-			gate := gco.NewLatch()
+			gate := scheduler.NewLatch()
 			peerFinished := false
-			peer := gco.Create(&source.SpriteImpl, func(coroutine.Thread) {
+			peer := scheduler.Create(&source.SpriteImpl, func(coroutine.Thread) {
 				gate.Wait()
 				peerFinished = true
 			})
-			gco.JoinFirstSlice(peer)
+			scheduler.JoinFirstSlice(peer)
 			caller, stopScripts := any(game), game.Stop
 			if target == "clone" {
 				caller, stopScripts = clone, clone.Stop
 			}
 			afterStop := false
-			stop := gco.Create(caller, func(coroutine.Thread) {
+			stop := scheduler.Create(caller, func(coroutine.Thread) {
 				stopScripts(AllStop)
 				afterStop = true
 			})
-			gco.Join(stop)
-			gco.Join(peer)
+			scheduler.Join(stop)
+			scheduler.Join(peer)
 			if afterStop || peerFinished {
 				t.Fatal("stopped script continued")
 			}
@@ -264,8 +264,8 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 				t.Fatal("stop all reset or removed original")
 			}
 			// Repeated stops must not release resources twice.
-			again := gco.Create(game, func(coroutine.Thread) { game.Stop(AllStop) })
-			gco.Join(again)
+			again := scheduler.Create(game, func(coroutine.Thread) { game.Stop(AllStop) })
+			scheduler.Join(again)
 			if game.shapeMgr.cloneCount != 0 || len(backend.destroyed) != 1 {
 				t.Fatal("repeated stop duplicated cleanup")
 			}
@@ -276,18 +276,18 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 func TestStopAllCancelsWaitingCloneHandler(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	source := newCloneLimitSprite(game, "source")
-	gate := gco.NewLatch()
+	gate := scheduler.NewLatch()
 	source.onClone = func(*cloneLimitSprite) {
 		gate.Wait()
 		t.Error("clone handler continued after stop all")
 	}
 	var clone *SpriteImpl
-	parent := gco.Create(&source.SpriteImpl, func(coroutine.Thread) {
+	parent := scheduler.Create(&source.SpriteImpl, func(coroutine.Thread) {
 		doClone(source, nil, func(s *SpriteImpl) { clone = s })
 		source.Stop(AllStop)
 	})
-	gco.Join(parent)
-	gco.Update()
+	scheduler.Join(parent)
+	scheduler.Update()
 	if !clone.isDestroyed() || game.shapeMgr.cloneCount != 0 {
 		t.Fatal("pending clone survived stop all")
 	}
@@ -300,7 +300,7 @@ func TestStopAllCancelsWaitingCloneHandler(t *testing.T) {
 func TestStopAllClearsExistingSoundEffectsWithoutAllocating(t *testing.T) {
 	for _, target := range []string{"stage", "sprite"} {
 		t.Run(target, func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			backend := &fakeAudioBackend{pan: 0.5, pitch: 2}
 			game.soundMgr.Init(backend)
 			source := newCloneLimitSprite(game, "source")
@@ -310,8 +310,8 @@ func TestStopAllClearsExistingSoundEffectsWithoutAllocating(t *testing.T) {
 			} else {
 				source.sound().soundObj = 9
 			}
-			stop := co.Create(game, func(coroutine.Thread) { game.Stop(AllStop) })
-			co.Join(stop)
+			stop := currentScheduler.Create(game, func(coroutine.Thread) { game.Stop(AllStop) })
+			currentScheduler.Join(stop)
 			if backend.pan != 0 || backend.pitch != 1 || backend.createCalls != 0 {
 				t.Fatalf("audio after stop: %+v", backend)
 			}
@@ -338,8 +338,8 @@ func TestStopAllRemovesEveryCloneFromMixedShapes(t *testing.T) {
 		}
 	}
 	for range 2 {
-		stop := gco.Create(&left.SpriteImpl, func(coroutine.Thread) { left.Stop(AllStop) })
-		gco.Join(stop)
+		stop := scheduler.Create(&left.SpriteImpl, func(coroutine.Thread) { left.Stop(AllStop) })
+		scheduler.Join(stop)
 		if !slices.Equal(game.getAllShapes(), originals) || game.shapeMgr.cloneCount != 0 {
 			t.Fatal("stop retained clones or changed original shape order")
 		}

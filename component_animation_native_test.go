@@ -42,9 +42,9 @@ func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 				name += "/shutdown"
 			}
 			t.Run(name, func(t *testing.T) {
-				co, anim, sprites, audio := setupAnimationLifecycle(t)
+				currentScheduler, anim, sprites, audio := setupAnimationLifecycle(t)
 				continued := false
-				thread := co.Create(anim.sprite, func(coroutine.Thread) {
+				thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
 					if blocking {
 						anim.sprite.AnimateAndWait("walk")
 					} else {
@@ -54,7 +54,7 @@ func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 					}
 					continued = true
 				})
-				co.Update()
+				currentScheduler.Update()
 				state := anim.curAnimState
 				if !blocking {
 					state = anim.getCurTweenState()
@@ -65,17 +65,17 @@ func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 				id := state.OnPlayAudioPlaybackID
 				state.OnPlayAudioRestartPending = true
 				if shutdown {
-					co.RunAfterStop(func() {
+					currentScheduler.RunAfterStop(func() {
 						if audio.playing[id] || sprites.velocity != (mathf.Vec2{}) {
 							t.Error("shutdown callback ran before resource cleanup")
 						}
 					})
 				} else {
-					stopper := co.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.Stop(OtherScriptsInSprite) })
-					co.Update()
-					co.Join(stopper)
+					stopper := currentScheduler.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.Stop(OtherScriptsInSprite) })
+					currentScheduler.Update()
+					currentScheduler.Join(stopper)
 				}
-				joinAnimationThread(t, co, thread)
+				joinAnimationThread(t, currentScheduler, thread)
 				if continued || !state.IsCanceled || state.OnPlayAudioRestartPending || state.OnPlayAudioPlaybackID != 0 {
 					t.Fatalf("canceled playback continued=%v, state=%+v", continued, state)
 				}
@@ -94,16 +94,16 @@ func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 }
 
 func TestAnimationInitializationFailureReleasesAudio(t *testing.T) {
-	co, anim, sprites, audio := setupAnimationLifecycle(t)
+	currentScheduler, anim, sprites, audio := setupAnimationLifecycle(t)
 	failure := &struct{ message string }{"playback initialization failed"}
 	sprites.play = func() { panic(failure) }
 	var recovered any
-	thread := co.Create(anim.sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
 		defer func() { recovered = recover() }()
 		anim.sprite.AnimateAndWait("walk")
 	})
-	co.Update()
-	joinAnimationThread(t, co, thread)
+	currentScheduler.Update()
+	joinAnimationThread(t, currentScheduler, thread)
 	if recovered != failure {
 		t.Fatalf("panic = %v, want original failure", recovered)
 	}
@@ -113,38 +113,38 @@ func TestAnimationInitializationFailureReleasesAudio(t *testing.T) {
 }
 
 func TestCanceledTweenDoesNotStopReplacementVelocity(t *testing.T) {
-	co, anim, sprites, _ := setupAnimationLifecycle(t)
+	currentScheduler, anim, sprites, _ := setupAnimationLifecycle(t)
 	start := func(distance float64) coroutine.Thread {
-		thread := co.Create(anim.sprite, func(coroutine.Thread) {
+		thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
 			anim.doTween("missing", nil, tweenParams{aniType: coreproject.AniTypeMove, duration: 10, moveTo: mathf.NewVec2(distance, 0)})
 		})
-		co.Update()
+		currentScheduler.Update()
 		return thread
 	}
 	first := start(100)
 	second := start(200)
-	co.Stop(first)
-	co.Update()
-	joinAnimationThread(t, co, first)
+	currentScheduler.Stop(first)
+	currentScheduler.Update()
+	joinAnimationThread(t, currentScheduler, first)
 	if sprites.velocity.X != 20 || len(anim.activeTweenStates) != 1 {
 		t.Fatalf("old tween changed replacement velocity: %v", sprites.velocity)
 	}
-	co.Stop(second)
-	co.Update()
-	joinAnimationThread(t, co, second)
+	currentScheduler.Stop(second)
+	currentScheduler.Update()
+	joinAnimationThread(t, currentScheduler, second)
 	if sprites.velocity != (mathf.Vec2{}) {
 		t.Fatalf("final velocity = %v", sprites.velocity)
 	}
 }
 
 func TestAnimationCleanupSkipsDestroyedProxy(t *testing.T) {
-	co, anim, sprites, audio := setupAnimationLifecycle(t)
-	thread := co.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateAndWait("walk") })
-	co.Update()
+	currentScheduler, anim, sprites, audio := setupAnimationLifecycle(t)
+	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateAndWait("walk") })
+	currentScheduler.Update()
 	state := anim.curAnimState
 	anim.sprite.markDestroyed()
-	co.Stop(thread)
-	joinAnimationThread(t, co, thread)
+	currentScheduler.Stop(thread)
+	joinAnimationThread(t, currentScheduler, thread)
 	if sprites.pauses != 0 {
 		t.Fatal("cleanup called the destroyed proxy")
 	}
@@ -154,31 +154,31 @@ func TestAnimationCleanupSkipsDestroyedProxy(t *testing.T) {
 }
 
 func TestBlockingAnimationCancellationPreservesReplacement(t *testing.T) {
-	co, anim, sprites, _ := setupAnimationLifecycle(t)
-	first := co.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateAndWait("walk") })
-	co.Update()
-	second := co.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateAndWait("walk") })
-	co.Update()
+	currentScheduler, anim, sprites, _ := setupAnimationLifecycle(t)
+	first := currentScheduler.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateAndWait("walk") })
+	currentScheduler.Update()
+	second := currentScheduler.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateAndWait("walk") })
+	currentScheduler.Update()
 	replacement := anim.curAnimState
-	co.Stop(first)
-	joinAnimationThread(t, co, first)
+	currentScheduler.Stop(first)
+	joinAnimationThread(t, currentScheduler, first)
 	if anim.curAnimState != replacement || replacement.IsCanceled || !anim.sprite.runtimeState.isAnimating || !sprites.playing {
 		t.Fatal("old waiter changed replacement playback")
 	}
-	co.Stop(second)
-	joinAnimationThread(t, co, second)
+	currentScheduler.Stop(second)
+	joinAnimationThread(t, currentScheduler, second)
 }
 
 func TestAnimationCancellationDuringInitializationReleasesCapturedAudio(t *testing.T) {
-	co, anim, sprites, audio := setupAnimationLifecycle(t)
+	currentScheduler, anim, sprites, audio := setupAnimationLifecycle(t)
 	continued := false
-	thread := co.Create(anim.sprite, func(me coroutine.Thread) {
+	thread := currentScheduler.Create(anim.sprite, func(me coroutine.Thread) {
 		// Cancel while the engine call is running, after it acquired audio.
-		sprites.play = func() { co.Stop(me) }
+		sprites.play = func() { currentScheduler.Stop(me) }
 		anim.sprite.AnimateAndWait("walk")
 		continued = true
 	})
-	joinAnimationThread(t, co, thread)
+	joinAnimationThread(t, currentScheduler, thread)
 	if continued || anim.curAnimState != nil || len(audio.stops) != 1 || audio.playing[1] || sprites.playing {
 		t.Fatalf("canceled initialization continued=%v, state=%v, stops=%v", continued, anim.curAnimState, audio.stops)
 	}
@@ -187,25 +187,25 @@ func TestAnimationCancellationDuringInitializationReleasesCapturedAudio(t *testi
 // TestAnimationConditionReplacementSurvivesQueuedCompletion exercises the native
 // scheduling phases rather than assigning curAnimState directly.
 func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
-	co, anim, _, audio := setupAnimationLifecycle(t)
+	currentScheduler, anim, _, audio := setupAnimationLifecycle(t)
 	itime.ClearTimers()
 	itime.Start()
 	t.Cleanup(itime.ClearTimers)
 	game := anim.sprite.g
 	game.bindScriptEvents()
 	game.shapeMgr.items = []Shape{anim.sprite}
-	co.RunSync(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateWith("walk", false) })
+	currentScheduler.RunSync(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateWith("walk", false) })
 	old := anim.curAnimState
 	if old == nil {
 		t.Fatal("original public playback did not start")
 	}
 
 	// This is the existing logic loop's WaitNextFrame -> processLogicFrame order.
-	logic := co.Create(game, func(coroutine.Thread) {
+	logic := currentScheduler.Create(game, func(coroutine.Thread) {
 		engine.WaitNextFrame()
 		game.processLogicFrame(nil, nil)
 	})
-	co.JoinFirstSlice(logic)
+	currentScheduler.JoinFirstSlice(logic)
 	anim.sprite.handleAnimationFinished()
 
 	var replacement *animState
@@ -219,11 +219,11 @@ func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	})
 	// Actual engine phase order: sample, advance clock, dispatch condition,
 	// then update coroutine jobs including the waiting logic loop.
-	co.RunBetweenScripts(game.scriptEvents.sampleConditions)
+	currentScheduler.RunBetweenScripts(game.scriptEvents.sampleConditions)
 	itime.Update(1.0/60.0, 60)
 	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-	co.Update()
-	co.Join(logic)
+	currentScheduler.Update()
+	currentScheduler.Join(logic)
 	if replacement == nil || replacement == old {
 		t.Fatalf("condition did not retain a distinct playback: old=%p replacement=%p current=%p", old, replacement, anim.curAnimState)
 	}
@@ -324,7 +324,7 @@ func TestStopAnimationOnlyStopsMatchingLivePlayback(t *testing.T) {
 }
 
 func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
-	co, anim, sprites, _ := setupAnimationLifecycle(t)
+	currentScheduler, anim, sprites, _ := setupAnimationLifecycle(t)
 	anim.sprite.spriteState.isVisible = true
 	anim.shared.defaultAnimation = "walk"
 	anim.playDefaultAnim()
@@ -334,12 +334,12 @@ func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
 	anim.sprite.spriteState.isVisible = false
 	sprites.play = func() { anim.cancelAnimState(anim.curAnimState) }
 	finished := false
-	thread := co.Create(anim.sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
 		anim.playAnimation("walk", false, true)
 		finished = true
 	})
-	co.Update()
-	joinAnimationThread(t, co, thread)
+	currentScheduler.Update()
+	joinAnimationThread(t, currentScheduler, thread)
 	if !finished || anim.curAnimState == nil || !anim.curAnimState.IsCanceled || anim.sprite.runtimeState.isAnimating {
 		t.Fatal("cancellation during start did not release the blocking animation")
 	}
@@ -369,7 +369,7 @@ func (m *animationRegistrationResMgr) CreateAnimation(string, string, string, in
 	<-m.release
 }
 
-func setupAnimationLifecycle(t *testing.T) (*coroutine.Coroutines, *animationComponent, *animationLifecycleSpriteMgr, *animationAudioBackend) {
+func setupAnimationLifecycle(t *testing.T) (*coroutine.Scheduler, *animationComponent, *animationLifecycleSpriteMgr, *animationAudioBackend) {
 	t.Helper()
 	platform := &eventDispatchPlatform{}
 	platform.useCurrentAsMainThread()
@@ -377,7 +377,7 @@ func setupAnimationLifecycle(t *testing.T) (*coroutine.Coroutines, *animationCom
 	sprites := &animationLifecycleSpriteMgr{}
 	pkgengine.PlatformMgr, pkgengine.SpriteMgr = platform, sprites
 	t.Cleanup(func() { pkgengine.PlatformMgr, pkgengine.SpriteMgr = originalPlatform, originalSprites })
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	wrap.Init(engine.WaitMainThread)
 	anim := newTestAnimationComponent()
 	anim.sprite.scriptEventBindings.bind(&scriptEventRegistry{}, anim.sprite)
@@ -390,13 +390,13 @@ func setupAnimationLifecycle(t *testing.T) (*coroutine.Coroutines, *animationCom
 	entry := &animationEntry{name: "walk", config: &coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "walk"}}}
 	entry.loadOnce.Do(func() {})
 	anim.shared.animations[entry.name] = entry
-	return co, anim, sprites, audio
+	return currentScheduler, anim, sprites, audio
 }
 
-func joinAnimationThread(t *testing.T, co *coroutine.Coroutines, thread coroutine.Thread) {
+func joinAnimationThread(t *testing.T, currentScheduler *coroutine.Scheduler, thread coroutine.Thread) {
 	t.Helper()
 	done := make(chan struct{})
-	go func() { co.Join(thread); close(done) }()
+	go func() { currentScheduler.Join(thread); close(done) }()
 	deadline := time.Now().Add(time.Second)
 	for {
 		select {
@@ -407,6 +407,6 @@ func joinAnimationThread(t *testing.T, co *coroutine.Coroutines, thread coroutin
 		if time.Now().After(deadline) {
 			t.Fatal("animation thread did not finish")
 		}
-		co.Update()
+		currentScheduler.Update()
 	}
 }

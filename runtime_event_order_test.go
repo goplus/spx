@@ -38,8 +38,8 @@ type eventOrderLog struct {
 func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
 	for _, handlers := range []int{1, 3, 10} {
 		b.Run(fmt.Sprintf("300-targets/%d-handlers", handlers), func(b *testing.B) {
-			co := coroutine.New(nil)
-			installRuntimeScheduler(b, co, nil)
+			currentScheduler := coroutine.New(nil)
+			installRuntimeScheduler(b, currentScheduler, nil)
 			game := new(Game)
 			game.bindScriptEvents()
 			game.initShapeMgr()
@@ -61,7 +61,7 @@ func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
 }
 
 func TestGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	// Registration follows SPX bootstrap order: stage first, then sprites from
@@ -82,7 +82,7 @@ func TestGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
 	})
 
 	game.Broadcast__0("ordered")
-	waitForEventOrderEntries(t, co, &log, 4)
+	waitForEventOrderEntries(t, currentScheduler, &log, 4)
 	requireEventOrder(t, &log, []string{
 		"front-1-before-yield",
 		"front-2",
@@ -90,7 +90,7 @@ func TestGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
 		"stage",
 	})
 
-	advanceEventFrame(t, co, &log, 5)
+	advanceEventFrame(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{
 		"front-1-before-yield",
 		"front-2",
@@ -101,7 +101,7 @@ func TestGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
 }
 
 func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	front.OnStart(func() {
@@ -130,8 +130,8 @@ func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 	})
 
 	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
-	waitForEventOrderEntries(t, co, &log, 5)
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycleState.StartDispatched.Load)
+	waitForEventOrderEntries(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{
 		"front-before-yield",
 		"front-stop",
@@ -140,7 +140,7 @@ func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 		"message-before-yield",
 	})
 
-	advanceEventFrame(t, co, &log, 6)
+	advanceEventFrame(t, currentScheduler, &log, 6)
 	requireEventOrder(t, &log, []string{
 		"front-before-yield",
 		"front-stop",
@@ -152,7 +152,7 @@ func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 }
 
 func TestGlobalBroadcastTracksDynamicLayerOrder(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	game.OnMsg__1("layer-order", func() { log.add("stage") })
@@ -160,18 +160,18 @@ func TestGlobalBroadcastTracksDynamicLayerOrder(t *testing.T) {
 	front.OnMsg__1("layer-order", func() { log.add("front") })
 
 	game.Broadcast__0("layer-order")
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{"front", "back", "stage"})
 
 	log.reset()
 	back.SetLayerTo(Front)
 	game.Broadcast__0("layer-order")
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{"back", "front", "stage"})
 }
 
 func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
-	co, game, back, source := setupEventOrderGame(t)
+	currentScheduler, game, back, source := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	front := newEventOrderSprite(game, "front")
@@ -195,12 +195,12 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	}
 
 	game.Broadcast__0("clone-order")
-	waitForEventOrderEntries(t, co, &log, 5)
+	waitForEventOrderEntries(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{"front", "source", "clone", "back", "stage"})
 }
 
 func TestKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
@@ -214,7 +214,7 @@ func TestKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
 	register(&front.scriptEventBindings, "front")
 
 	game.handleEvent(&eventKeyDown{Key: KeySpace})
-	waitForEventOrderEntries(t, co, &log, 6)
+	waitForEventOrderEntries(t, currentScheduler, &log, 6)
 	requireEventOrder(t, &log, []string{
 		"front-specific",
 		"back-specific",
@@ -226,12 +226,12 @@ func TestKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
 
 	log.reset()
 	game.handleEvent(&eventKeyDown{Key: KeyA})
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{"front-any", "back-any", "stage-any"})
 }
 
 func TestKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	var log eventOrderLog
 
 	game.OnKey__1([]Key{KeyAny, KeySpace, KeyAny}, func(key Key) {
@@ -250,12 +250,12 @@ func TestKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
 	game.OnKey__2([]Key{}, func() { log.add("empty") })
 
 	game.handleEvent(&eventKeyDown{Key: KeySpace})
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{"specific", "with-key-space", "without-key"})
 
 	log.reset()
 	game.handleEvent(&eventKeyDown{Key: KeyA})
-	waitForEventOrderEntries(t, co, &log, 2)
+	waitForEventOrderEntries(t, currentScheduler, &log, 2)
 	requireEventOrder(t, &log, []string{"with-key-a", "without-key"})
 }
 
@@ -270,7 +270,7 @@ func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
 		{"repeated key", []Key{KeyA}, []Key{KeyA, KeyA}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			co, game := setupInputFrameGame(t)
+			currentScheduler, game := setupInputFrameGame(t)
 			var got []Key
 			handler := func(key Key) { got = append(got, key) }
 			if tt.keys == nil {
@@ -288,7 +288,7 @@ func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
 				}
 				game.inputMgr.frame.pending = batch
 				game.dispatchFrameEvents()
-				co.Update()
+				currentScheduler.Update()
 				want = append(want, edges[0])
 				if !slices.Equal(got, want) {
 					t.Fatalf("handler keys = %v, want %v", got, want)
@@ -299,7 +299,7 @@ func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
 }
 
 func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t *testing.T) {
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	var got []Key
 	finished := false
 	game.OnAnyKey(func(key Key) {
@@ -314,7 +314,7 @@ func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t
 		itime.Update(1.0/30, 30)
 		game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: key}}}
 		game.dispatchFrameEvents()
-		co.Update()
+		currentScheduler.Update()
 		if !slices.Equal(got, want[frame]) || finished != (frame > 0) {
 			t.Fatalf("frame %d: handler keys = %v, first finished = %v, want %v and %v",
 				frame, got, finished, want[frame], frame > 0)
@@ -323,7 +323,7 @@ func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t
 }
 
 func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
@@ -336,13 +336,13 @@ func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
 	register(&back.scriptEventBindings, "back")
 	register(&front.scriptEventBindings, "front")
 
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		log.add("caller-before")
 		game.Broadcast__0("async-order")
 		log.add("caller-after")
 	})
 
-	waitForEventOrderEntries(t, co, &log, 5)
+	waitForEventOrderEntries(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{
 		"caller-before",
 		"caller-after",
@@ -354,46 +354,46 @@ func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
 	// Let the receiver first segments return instead of leaving their frame
 	// waits for test cleanup to abort.
 	itime.Update(0, 0)
-	co.Update()
+	currentScheduler.Update()
 }
 
 func TestAsyncBroadcastReceiversFollowEarlierScriptsInRound(t *testing.T) {
 	for _, test := range []struct {
 		name    string
-		wait    func(*coroutine.Coroutines, coroutine.Thread)
+		wait    func(*coroutine.Scheduler, coroutine.Thread)
 		advance float64
 		redraw  bool
 	}{
 		{
 			name:    "next frame",
-			wait:    (*coroutine.Coroutines).WaitNextFrameFor,
+			wait:    (*coroutine.Scheduler).WaitNextFrameFor,
 			advance: 1.0 / 30,
 		},
 		{
 			name: "same-frame loop round",
-			wait: (*coroutine.Coroutines).YieldLoopFor,
+			wait: (*coroutine.Scheduler).YieldLoopFor,
 		},
 		{
 			name:   "same-frame loop round with redraw",
-			wait:   (*coroutine.Coroutines).YieldLoopFor,
+			wait:   (*coroutine.Scheduler).YieldLoopFor,
 			redraw: true,
 		},
 		{
 			name: "elapsed wait",
-			wait: func(co *coroutine.Coroutines, _ coroutine.Thread) {
-				co.Wait(1)
+			wait: func(currentScheduler *coroutine.Scheduler, _ coroutine.Thread) {
+				currentScheduler.Wait(1)
 			},
 			advance: 1,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			itime.Start()
 			var log eventOrderLog
 			game.OnMsg__1("new-receiver", func() { log.add("C") })
 
-			a := co.Create(game, func(me coroutine.Thread) {
-				test.wait(co, me)
+			a := currentScheduler.Create(game, func(me coroutine.Thread) {
+				test.wait(currentScheduler, me)
 				log.add("A-before")
 				if test.redraw {
 					engine.RequestRedraw()
@@ -401,54 +401,54 @@ func TestAsyncBroadcastReceiversFollowEarlierScriptsInRound(t *testing.T) {
 				game.Broadcast__0("new-receiver")
 				log.add("A-after")
 			})
-			co.JoinFirstSlice(a)
-			b := co.Create(game, func(me coroutine.Thread) {
-				test.wait(co, me)
+			currentScheduler.JoinFirstSlice(a)
+			b := currentScheduler.Create(game, func(me coroutine.Thread) {
+				test.wait(currentScheduler, me)
 				log.add("B")
 			})
-			co.JoinFirstSlice(b)
+			currentScheduler.JoinFirstSlice(b)
 
 			// Both old scripts are eligible together. A's broadcast must not
 			// let its new receiver overtake B's continuation.
 			if test.advance > 0 {
 				itime.Update(test.advance, 30)
 			}
-			co.Update()
+			currentScheduler.Update()
 			requireEventOrder(t, &log, []string{"A-before", "A-after", "B", "C"})
 		})
 	}
 }
 
 func TestAsyncBroadcastDoesNotWaitForUnexpiredEarlierScript(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	itime.Start()
 	var log eventOrderLog
 	game.OnMsg__1("new-receiver", func() { log.add("C") })
 
-	a := co.Create(game, func(coroutine.Thread) {
+	a := currentScheduler.Create(game, func(coroutine.Thread) {
 		engine.WaitNextFrame()
 		log.add("A-before")
 		game.Broadcast__0("new-receiver")
 		log.add("A-after")
 	})
-	co.JoinFirstSlice(a)
-	b := co.Create(game, func(coroutine.Thread) {
+	currentScheduler.JoinFirstSlice(a)
+	b := currentScheduler.Create(game, func(coroutine.Thread) {
 		engine.Wait(1)
 		log.add("B")
 	})
-	co.JoinFirstSlice(b)
+	currentScheduler.JoinFirstSlice(b)
 
 	itime.Update(0.5, 30)
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "A-after", "C"})
 
 	itime.Update(0.5, 30)
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "A-after", "C", "B"})
 }
 
 func TestBroadcastAndWaitResumesOlderScriptBeforeNewReceiver(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	itime.Start()
 	var log eventOrderLog
 	game.OnMsg__1("new-receiver", func() {
@@ -457,30 +457,30 @@ func TestBroadcastAndWaitResumesOlderScriptBeforeNewReceiver(t *testing.T) {
 		log.add("C-after")
 	})
 
-	a := co.Create(game, func(coroutine.Thread) {
+	a := currentScheduler.Create(game, func(coroutine.Thread) {
 		engine.WaitNextFrame()
 		log.add("A-before")
 		game.BroadcastAndWait__0("new-receiver")
 		log.add("A-after")
 	})
-	co.JoinFirstSlice(a)
-	b := co.Create(game, func(coroutine.Thread) {
+	currentScheduler.JoinFirstSlice(a)
+	b := currentScheduler.Create(game, func(coroutine.Thread) {
 		engine.WaitNextFrame()
 		log.add("B")
 	})
-	co.JoinFirstSlice(b)
+	currentScheduler.JoinFirstSlice(b)
 
 	itime.Update(1.0/30, 30)
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "B", "C-before"})
 
 	itime.Update(1.0/30, 30)
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "B", "C-before", "C-after", "A-after"})
 }
 
 func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	setupCaptureTest(t)
 
 	var log eventOrderLog
@@ -495,12 +495,12 @@ func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	register("second")
 
 	game.Broadcast__0("restart")
-	waitForEventOrderEntries(t, co, &log, 2)
+	waitForEventOrderEntries(t, currentScheduler, &log, 2)
 	requireEventOrder(t, &log, []string{"first-start", "second-start"})
 
 	// Scratch restarts a receiver instead of overlapping it.
 	game.Broadcast__0("restart")
-	waitForEventOrderEntries(t, co, &log, 4)
+	waitForEventOrderEntries(t, currentScheduler, &log, 4)
 	requireEventOrder(t, &log, []string{
 		"first-start",
 		"second-start",
@@ -508,7 +508,7 @@ func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 		"second-start",
 	})
 
-	advanceEventFrame(t, co, &log, 6)
+	advanceEventFrame(t, currentScheduler, &log, 6)
 	got := log.snapshot()
 	if len(got) != 6 {
 		t.Fatalf("event order = %v, want four starts and two finishes", got)
@@ -529,20 +529,20 @@ func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 }
 
 func TestSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	var log eventOrderLog
 
 	game.OnMsg__1("restart-pending", func() {
 		log.add("receiver")
 	})
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		log.add("caller-before")
 		game.Broadcast__0("restart-pending")
 		game.Broadcast__0("restart-pending")
 		log.add("caller-after")
 	})
 
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{
 		"caller-before",
 		"caller-after",
@@ -551,7 +551,7 @@ func TestSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
 }
 
 func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	setupCaptureTest(t)
 
 	var log eventOrderLog
@@ -562,21 +562,21 @@ func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	})
 
 	game.Broadcast__0("restart-and-wait")
-	waitForEventOrderEntries(t, co, &log, 1)
+	waitForEventOrderEntries(t, currentScheduler, &log, 1)
 
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		log.add("waiter-before")
 		game.BroadcastAndWait__0("restart-and-wait")
 		log.add("waiter-after")
 	})
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{
 		"receiver-start",
 		"waiter-before",
 		"receiver-start",
 	})
 
-	advanceEventFrame(t, co, &log, 5)
+	advanceEventFrame(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{
 		"receiver-start",
 		"waiter-before",
@@ -589,8 +589,8 @@ func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 func TestBroadcastAndWaitResumesBeforeRestartedEarlierReceiver(t *testing.T) {
 	for _, stopOthers := range []bool{false, true} {
 		t.Run(fmt.Sprintf("stop-others=%t", stopOthers), func(t *testing.T) {
-			co, game, actor, _ := setupEventOrderGame(t)
-			blocked := co.NewLatch()
+			currentScheduler, game, actor, _ := setupEventOrderGame(t)
+			blocked := currentScheduler.NewLatch()
 			var log eventOrderLog
 			childRuns := 0
 			actor.OnMsg__1("child", func() {
@@ -606,19 +606,19 @@ func TestBroadcastAndWaitResumesBeforeRestartedEarlierReceiver(t *testing.T) {
 				game.Broadcast__0("child")
 				log.add("outer-returned")
 			})
-			co.Create(actor, func(coroutine.Thread) {
+			currentScheduler.Create(actor, func(coroutine.Thread) {
 				game.Broadcast__0("child")
 				engine.WaitNextFrame()
 				game.BroadcastAndWait__0("outer")
 				log.add("caller-resumed")
 			})
-			co.Update()
+			currentScheduler.Update()
 			requireEventOrder(t, &log, []string{"child-started"})
 
 			// Restarting preserves child's earlier thread slot, which this
 			// round already visited. The caller resumes before child runs again.
 			itime.Update(0, 0)
-			co.Update()
+			currentScheduler.Update()
 			want := []string{"child-started", "outer-returned", "caller-resumed", "child-started"}
 			if stopOthers {
 				want = append(want, "child-stopped-others")
@@ -629,7 +629,7 @@ func TestBroadcastAndWaitResumesBeforeRestartedEarlierReceiver(t *testing.T) {
 }
 
 func TestBroadcastAndWaitResumesSiblingReceiversInThreadOrder(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	var log eventOrderLog
 	for _, name := range []string{"A", "B"} {
 		game.OnMsg__1("fan-out", func() {
@@ -639,11 +639,11 @@ func TestBroadcastAndWaitResumesSiblingReceiversInThreadOrder(t *testing.T) {
 		})
 		game.OnMsg__1("inner-"+name, func() { log.add("inner-" + name) })
 	}
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		game.BroadcastAndWait__0("fan-out")
 		log.add("caller-resumed")
 	})
-	co.Update()
+	currentScheduler.Update()
 
 	// Both inner receivers finish in one round. Their callers retain A/B
 	// thread order when the next round visits their waiting broadcasts.
@@ -654,7 +654,7 @@ func TestBroadcastAndWaitResumesSiblingReceiversInThreadOrder(t *testing.T) {
 }
 
 func TestBroadcastAndWaitPreservesQueuedCleanupOrder(t *testing.T) {
-	co, game, panel, transition := setupEventOrderGame(t)
+	currentScheduler, game, panel, transition := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	transition.OnMsg__1("prepare-level", func() {
@@ -667,12 +667,12 @@ func TestBroadcastAndWaitPreservesQueuedCleanupOrder(t *testing.T) {
 	})
 	panel.OnMsg__1("open-level", func() { log.add("level-opened") })
 
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		game.BroadcastAndWait__0("prepare-level")
 		log.add("caller-resumed")
 		game.Broadcast__0("open-level")
 	})
-	co.Update()
+	currentScheduler.Update()
 
 	// Cleanup already queued by the completed receiver must get its turn
 	// before the caller can register the panel's next script for cancellation.
@@ -682,7 +682,7 @@ func TestBroadcastAndWaitPreservesQueuedCleanupOrder(t *testing.T) {
 }
 
 func TestBroadcastAndWaitKeepsAsyncSenderAtomic(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	var log eventOrderLog
 	value := 0
 	game.OnMsg__1("publish", func() {
@@ -692,15 +692,15 @@ func TestBroadcastAndWaitKeepsAsyncSenderAtomic(t *testing.T) {
 	})
 	game.OnMsg__1("observe", func() { log.add(fmt.Sprintf("observed-%d", value)) })
 
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		game.BroadcastAndWait__0("publish")
 	})
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"sender-updated", "observed-1"})
 }
 
 func TestBroadcastAndWaitDoesNotExposeSenderToEarlyStop(t *testing.T) {
-	co, game, actor, _ := setupEventOrderGame(t)
+	currentScheduler, game, actor, _ := setupEventOrderGame(t)
 	var log eventOrderLog
 	actor.OnMsg__1("work", func() {
 		game.Broadcast__0("cancel-actor-work")
@@ -711,16 +711,16 @@ func TestBroadcastAndWaitDoesNotExposeSenderToEarlyStop(t *testing.T) {
 		actor.Stop(OtherScriptsInSprite)
 	})
 
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		game.BroadcastAndWait__0("work")
 	})
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"sender-returned", "other-scripts-stopped"})
 }
 
 func TestBroadcastSiblingWaitDoesNotYieldAsyncSender(t *testing.T) {
-	co, game, publisher, waiter := setupEventOrderGame(t)
-	release := co.NewLatch()
+	currentScheduler, game, publisher, waiter := setupEventOrderGame(t)
+	release := currentScheduler.NewLatch()
 	var log eventOrderLog
 	value := 0
 
@@ -738,19 +738,19 @@ func TestBroadcastSiblingWaitDoesNotYieldAsyncSender(t *testing.T) {
 	game.OnMsg__1("observe-sibling", func() { log.add(fmt.Sprintf("observed-%d", value)) })
 
 	game.Broadcast__0("fan-out")
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"waiter-entered", "publisher-updated", "observed-1"})
 
 	release.Open()
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{
 		"waiter-entered", "publisher-updated", "observed-1", "waiter-returned",
 	})
 }
 
 func TestBroadcastAndWaitRunsQueuedDescendantsWithoutJoiningThem(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
-	release := co.NewLatch()
+	currentScheduler, game := setupRuntimeEventGame(t)
+	release := currentScheduler.NewLatch()
 	var log eventOrderLog
 	game.OnMsg__1("parent", func() {
 		game.Broadcast__0("child")
@@ -767,11 +767,11 @@ func TestBroadcastAndWaitRunsQueuedDescendantsWithoutJoiningThem(t *testing.T) {
 		log.add("grandchild-returned")
 	})
 	game.OnMsg__1("notify-complete", func() { log.add("notification-ran") })
-	co.Create(game, func(coroutine.Thread) {
+	currentScheduler.Create(game, func(coroutine.Thread) {
 		game.BroadcastAndWait__0("parent")
 		log.add("caller-resumed")
 	})
-	co.Update()
+	currentScheduler.Update()
 
 	// Every newly queued script gets its first turn, but the wait belongs
 	// only to the direct receiver and must not join its blocked descendants.
@@ -780,15 +780,15 @@ func TestBroadcastAndWaitRunsQueuedDescendantsWithoutJoiningThem(t *testing.T) {
 		"parent-returned", "child-returned", "grandchild-started", "caller-resumed",
 	})
 	release.Open()
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{
 		"parent-returned", "child-returned", "grandchild-started", "caller-resumed", "grandchild-returned", "notification-ran",
 	})
 }
 
 func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
-	release := co.NewLatch()
+	currentScheduler, game := setupRuntimeEventGame(t)
+	release := currentScheduler.NewLatch()
 	entered := make(chan struct{})
 	returned := make(chan struct{})
 	var log eventOrderLog
@@ -803,7 +803,7 @@ func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
 		game.BroadcastAndWait__0("external-request")
 		close(returned)
 	}()
-	updateRuntimeEventSchedulerUntil(t, co, func() bool {
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, func() bool {
 		select {
 		case <-entered:
 			return true
@@ -811,7 +811,7 @@ func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
 			return false
 		}
 	})
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"child-ran"})
 	select {
 	case <-returned:
@@ -820,7 +820,7 @@ func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
 	}
 
 	release.Open()
-	co.Update()
+	currentScheduler.Update()
 	select {
 	case <-returned:
 	case <-time.After(time.Second):
@@ -830,14 +830,14 @@ func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
 }
 
 func TestExternalBroadcastOrdersSnapshotBetweenScriptSlices(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 	back.OnMsg__1("ordered", func() { log.add("back") })
 	front.OnMsg__1("ordered", func() { log.add("front") })
 	entered, changeLayers := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(changeLayers) })
 	t.Cleanup(release)
-	worker := co.Create(back, func(coroutine.Thread) {
+	worker := currentScheduler.Create(back, func(coroutine.Thread) {
 		close(entered)
 		<-changeLayers
 		back.SetLayerTo(Front)
@@ -848,7 +848,7 @@ func TestExternalBroadcastOrdersSnapshotBetweenScriptSlices(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("layer-changing script did not start")
 	}
-	lastID := co.LastThreadID()
+	lastID := currentScheduler.LastThreadID()
 	returned := make(chan struct{})
 	go func() {
 		game.BroadcastAndWait__0("ordered")
@@ -857,7 +857,7 @@ func TestExternalBroadcastOrdersSnapshotBetweenScriptSlices(t *testing.T) {
 	// The dispatcher can be created only after capturing the receiver snapshot.
 	// Keep the running script's slice until that dispatcher is waiting for it.
 	deadline := time.Now().Add(time.Second)
-	for co.LastThreadID() == lastID {
+	for currentScheduler.LastThreadID() == lastID {
 		if time.Now().After(deadline) {
 			t.Fatal("external broadcast did not create its dispatcher")
 		}
@@ -869,21 +869,21 @@ func TestExternalBroadcastOrdersSnapshotBetweenScriptSlices(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("external broadcast did not complete")
 	}
-	co.Join(worker)
+	currentScheduler.Join(worker)
 	// Ordering observes the completed script slice; membership remains the
 	// original snapshot, so the newly registered handler is not included.
 	requireEventOrder(t, &log, []string{"back", "front"})
 }
 
 func TestExternalBroadcastConcurrentLayerChanges(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 	back.OnMsg__1("ordered", func() { log.add("back") })
 	front.OnMsg__1("ordered", func() { log.add("front") })
 	entered, start := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(start) })
 	t.Cleanup(release)
-	worker := co.Create(back, func(coroutine.Thread) {
+	worker := currentScheduler.Create(back, func(coroutine.Thread) {
 		close(entered)
 		<-start
 		for range 1000 {
@@ -900,12 +900,12 @@ func TestExternalBroadcastConcurrentLayerChanges(t *testing.T) {
 	// dispatcher's script slice must protect both the slice header and elements.
 	release()
 	game.BroadcastAndWait__0("ordered")
-	co.Join(worker)
+	currentScheduler.Join(worker)
 	requireEventOrder(t, &log, []string{"front", "back"})
 }
 
 func TestBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	game.OnMsg__1("stop-all", func() { log.add("stage") })
@@ -916,12 +916,12 @@ func TestBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
 	})
 
 	game.Broadcast__0("stop-all")
-	co.Update()
+	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"front"})
 }
 
 func TestCanceledReceiverDoesNotBreakOrderedBatch(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	front.OnMsg__1("cancel-middle", func() {
@@ -933,12 +933,12 @@ func TestCanceledReceiverDoesNotBreakOrderedBatch(t *testing.T) {
 	game.OnMsg__1("cancel-middle", func() { log.add("stage") })
 
 	game.Broadcast__0("cancel-middle")
-	waitForEventOrderEntries(t, co, &log, 3)
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{"front-first", "back", "stage"})
 }
 
 func TestConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
@@ -954,7 +954,7 @@ func TestConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
 	register(&front.scriptEventBindings, "front")
 
 	pollRuntimeConditions(&game.scriptEvents)
-	waitForEventOrderEntries(t, co, &log, 6)
+	waitForEventOrderEntries(t, currentScheduler, &log, 6)
 	requireEventOrder(t, &log, []string{
 		"check-front",
 		"check-back",
@@ -969,7 +969,7 @@ func TestDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
-	co, game, back, front := setupEventOrderGame(t)
+	currentScheduler, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog
 
 	game.OnMsg__1("inner-order", func() { log.add("inner-stage") })
@@ -983,7 +983,7 @@ func TestDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
 	})
 
 	game.Broadcast__0("outer-order")
-	waitForEventOrderEntries(t, co, &log, 5)
+	waitForEventOrderEntries(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{
 		"outer-before",
 		"outer-after",
@@ -1023,10 +1023,10 @@ func newEventOrderSprite(game *Game, name string) *SpriteImpl {
 	return sprite
 }
 
-func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl, *SpriteImpl) {
+func setupEventOrderGame(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl, *SpriteImpl) {
 	t.Helper()
 
-	co, game := setupRuntimeEventGame(t)
+	currentScheduler, game := setupRuntimeEventGame(t)
 	game.initShapeMgr()
 	setupCaptureTest(t)
 
@@ -1035,23 +1035,23 @@ func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImp
 	game.shapeMgr.add(back)
 	game.shapeMgr.add(front)
 	game.shapeMgr.updateRenderLayers()
-	return co, game, back, front
+	return currentScheduler, game, back, front
 }
 
-func waitForEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
+func waitForEventOrderEntries(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
 	t.Helper()
 	// Drain once before observing the log; a handler may write its final entry
 	// while its coroutine is still tearing down.
-	co.Update()
-	updateRuntimeEventSchedulerUntil(t, co, func() bool {
+	currentScheduler.Update()
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, func() bool {
 		return log.len() >= count
 	})
 }
 
-func advanceEventFrame(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
+func advanceEventFrame(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
 	t.Helper()
 	itime.Update(0, 0)
-	waitForEventOrderEntries(t, co, log, count)
+	waitForEventOrderEntries(t, currentScheduler, log, count)
 }
 
 func requireEventOrder(t *testing.T, log *eventOrderLog, want []string) {

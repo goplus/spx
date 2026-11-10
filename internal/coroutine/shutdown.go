@@ -17,18 +17,18 @@
 package coroutine
 
 // StopCurrent exits the current coroutine with ErrAbortThread.
-func (p *Coroutines) StopCurrent() {
+func (p *Scheduler) StopCurrent() {
 	panic(ErrAbortThread)
 }
 
 // StopThisScript unwinds to the nearest procedure or event boundary.
 // A procedure boundary returns to its caller; an event boundary ends the coroutine.
-func (p *Coroutines) StopThisScript() {
+func (p *Scheduler) StopThisScript() {
 	panic(ErrStopThisScript)
 }
 
 // Stop cancels thread; nil and repeated calls are safe.
-func (p *Coroutines) Stop(thread Thread) {
+func (p *Scheduler) Stop(thread Thread) {
 	if thread != nil {
 		thread.Cancel()
 	}
@@ -36,7 +36,7 @@ func (p *Coroutines) Stop(thread Thread) {
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are
 // evaluated without holding the thread registry lock.
-func (p *Coroutines) StopIf(filter func(th Thread) bool) {
+func (p *Scheduler) StopIf(filter func(th Thread) bool) {
 	allThreads := p.snapshotThreads()
 	threads := allThreads[:0]
 	for _, th := range allThreads {
@@ -50,7 +50,7 @@ func (p *Coroutines) StopIf(filter func(th Thread) bool) {
 }
 
 // StopAll requests cancellation of every registered coroutine.
-func (p *Coroutines) StopAll() {
+func (p *Scheduler) StopAll() {
 	p.admissionMu.Lock()
 	p.closeAdmissionLocked()
 	p.cancelAllLocked()
@@ -64,7 +64,7 @@ func (p *Coroutines) StopAll() {
 // It then runs call if non-nil.
 // Call outside scripts and callbacks. An interrupted drain keeps admission closed;
 // a completed drain restores admission even if call panics or exits its goroutine.
-func (p *Coroutines) RunAfterStop(call func()) {
+func (p *Scheduler) RunAfterStop(call func()) {
 	p.requireDrainCaller()
 	p.waitForSignal(p.shutdownGate)
 	defer func() { p.shutdownGate <- struct{}{} }()
@@ -89,7 +89,7 @@ func (p *Coroutines) RunAfterStop(call func()) {
 	}
 }
 
-func (p *Coroutines) cancelAllLocked() {
+func (p *Scheduler) cancelAllLocked() {
 	for _, th := range p.snapshotThreads() {
 		th.Cancel()
 	}
@@ -97,7 +97,7 @@ func (p *Coroutines) cancelAllLocked() {
 
 // drain waits for registered work to exit; it does not cancel it.
 // Callers must prevent new admissions while waiting.
-func (p *Coroutines) drain() {
+func (p *Scheduler) drain() {
 	p.threadsMu.Lock()
 	if !p.hasPendingWorkLocked() {
 		p.threadsMu.Unlock()
@@ -113,6 +113,6 @@ func (p *Coroutines) drain() {
 	p.waitForSignal(done)
 }
 
-func (p *Coroutines) hasPendingWorkLocked() bool {
+func (p *Scheduler) hasPendingWorkLocked() bool {
 	return len(p.allThreads) != 0 || p.workerCount != 0
 }

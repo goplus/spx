@@ -176,7 +176,7 @@ func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed
 		if !completed && current {
 			a.curAnimState = nil
 		}
-		gco.CleanupMainThread(func() {
+		scheduler.CleanupMainThread(func() {
 			a.stopAnimationAudio(audioID)
 			if !completed && playbackStarted && current && a.syncSpriteForPlayback() != nil {
 				syncSprite.PauseAnim()
@@ -442,7 +442,7 @@ func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, base *
 	if registered {
 		restoreDefault = info.Name != a.shared.defaultAnimation && (base == nil || !base.IsKeepOnStop)
 	}
-	gco.CleanupMainThread(func() {
+	scheduler.CleanupMainThread(func() {
 		a.stopAnimationAudio(audioID)
 		syncSprite := a.syncSpriteForPlayback()
 		if syncSprite == nil {

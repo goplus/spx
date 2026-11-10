@@ -24,35 +24,35 @@ import (
 )
 
 func TestWaitResumesAtLogicalDeadline(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	resumedFrame := int64(-1)
-	th := co.Create(nil, func(Thread) {
-		co.Wait(1)
+	th := scheduler.Create(nil, func(Thread) {
+		scheduler.Wait(1)
 		resumedFrame = itime.Frame()
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 	itime.Update(1, 30)
-	co.Update()
+	scheduler.Update()
 	if resumedFrame != 1 {
 		t.Fatalf("wait resumed at frame %d, want 1", resumedFrame)
 	}
 }
 
 func TestWaitWholeSecondAtFixedFPSDoesNotDriftOneFrame(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	resumedFrame := int64(-1)
-	th := co.Create(nil, func(Thread) {
-		co.Wait(1)
+	th := scheduler.Create(nil, func(Thread) {
+		scheduler.Wait(1)
 		resumedFrame = itime.Frame()
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 	for frame := 1; frame <= 31; frame++ {
 		itime.Update(1.0/30, 30)
-		co.Update()
+		scheduler.Update()
 		if resumedFrame >= 0 {
 			break
 		}
@@ -63,20 +63,20 @@ func TestWaitWholeSecondAtFixedFPSDoesNotDriftOneFrame(t *testing.T) {
 }
 
 func TestConsecutiveWholeSecondWaitsDoNotAccumulateFrameDrift(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	var resumedFrames []int64
-	th := co.Create(nil, func(Thread) {
+	th := scheduler.Create(nil, func(Thread) {
 		for range 3 {
-			co.Wait(1)
+			scheduler.Wait(1)
 			resumedFrames = append(resumedFrames, itime.Frame())
 		}
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 	for range 90 {
 		itime.Update(1.0/30, 30)
-		co.Update()
+		scheduler.Update()
 	}
 	for i, want := range []int64{30, 60, 90} {
 		if len(resumedFrames) <= i || resumedFrames[i] != want {
@@ -86,49 +86,49 @@ func TestConsecutiveWholeSecondWaitsDoNotAccumulateFrameDrift(t *testing.T) {
 }
 
 func TestLongFixedStepWaitDoesNotDrift(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	resumedFrame := int64(-1)
-	th := co.Create(nil, func(Thread) {
-		co.Wait(2400)
+	th := scheduler.Create(nil, func(Thread) {
+		scheduler.Wait(2400)
 		resumedFrame = itime.Frame()
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 	for range 71_999 {
 		itime.Update(1.0/30, 30)
 	}
-	co.Update()
+	scheduler.Update()
 	if resumedFrame >= 0 {
 		t.Fatalf("wait resumed early at frame %d", resumedFrame)
 	}
 
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	if resumedFrame != 72_000 {
 		t.Fatalf("wait resumed at frame %d, want 72000", resumedFrame)
 	}
 }
 
 func TestWaitDoesNotResumeBeforeDeadline(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	resumed := false
-	th := co.Create(nil, func(Thread) {
-		co.Wait(1)
+	th := scheduler.Create(nil, func(Thread) {
+		scheduler.Wait(1)
 		resumed = true
 	})
-	co.JoinFirstSlice(th)
-	co.Update()
+	scheduler.JoinFirstSlice(th)
+	scheduler.Update()
 
 	itime.Update(1-5e-10, 30)
-	co.Update()
+	scheduler.Update()
 	if resumed {
 		t.Fatal("wait resumed before its deadline")
 	}
 
 	itime.Update(5e-10, 30)
-	co.Update()
+	scheduler.Update()
 	if !resumed {
 		t.Fatal("wait did not resume at its deadline")
 	}
@@ -137,21 +137,21 @@ func TestWaitDoesNotResumeBeforeDeadline(t *testing.T) {
 func TestWaitAlwaysCrossesTheIssuingFrame(t *testing.T) {
 	for _, duration := range []float64{-1, 0, 1e-12, 1e-9} {
 		t.Run(fmt.Sprint(duration), func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			itime.Start()
 			resumed := false
-			th := co.Create(nil, func(Thread) {
-				co.Wait(duration)
+			th := scheduler.Create(nil, func(Thread) {
+				scheduler.Wait(duration)
 				resumed = true
 			})
-			co.JoinFirstSlice(th)
-			co.Update()
+			scheduler.JoinFirstSlice(th)
+			scheduler.Update()
 			if resumed {
 				t.Fatal("wait resumed in its issuing frame")
 			}
 
 			itime.Update(0, 30)
-			co.Update()
+			scheduler.Update()
 			if want := duration <= 0; resumed != want {
 				t.Fatalf("resumed after zero delta = %v, want %v", resumed, want)
 			}
@@ -160,7 +160,7 @@ func TestWaitAlwaysCrossesTheIssuingFrame(t *testing.T) {
 			}
 
 			itime.Update(duration, 30)
-			co.Update()
+			scheduler.Update()
 			if !resumed {
 				t.Fatal("positive wait did not resume at its deadline")
 			}

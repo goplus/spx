@@ -193,10 +193,10 @@ func (p *SpriteImpl) destroy() {
 }
 
 func (p *SpriteImpl) stopIfCurrentCoroutine() {
-	if gco.IsInCoroutine() {
-		current := gco.Current()
+	if scheduler.IsInCoroutine() {
+		current := scheduler.Current()
 		if current != nil && p == current.Owner {
-			gco.StopCurrent()
+			scheduler.StopCurrent()
 		}
 	}
 }

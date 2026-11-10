@@ -83,17 +83,17 @@ func TestSpriteDragModeLoadsAndClones(t *testing.T) {
 }
 
 func TestSpriteDragFramesPreserveOffsetAndRelease(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	other := newDragTestSprite(game, "foreground", 2)
 	game.shapeMgr.add(other)
 	other.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
 	start := mathf.NewVec2(12, 24)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	assertSpriteDragPosition(t, sprite, 10, 20)
 	if game.inputMgr.drag.active {
 		t.Fatal("stationary press started a drag")
 	}
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(42, 64))
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(42, 64))
 	assertSpriteDragPosition(t, sprite, 40, 60)
 	if !game.inputMgr.drag.active {
 		t.Fatal("pointer movement did not start dragging")
@@ -103,12 +103,12 @@ func TestSpriteDragFramesPreserveOffsetAndRelease(t *testing.T) {
 		t.Fatal("dragged sprite was not brought to the front")
 	}
 	end := mathf.NewVec2(52, 74)
-	dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+	dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 	assertSpriteDragPosition(t, sprite, 50, 70)
 	if game.inputMgr.drag.target != nil || game.inputMgr.drag.active {
 		t.Fatal("release retained the drag")
 	}
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(80, 90))
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(80, 90))
 	assertSpriteDragPosition(t, sprite, 50, 70)
 }
 
@@ -119,22 +119,22 @@ func TestSpriteDragClickAndSwipeRouting(t *testing.T) {
 			name = "drag"
 		}
 		t.Run(name, func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			clicks, swipes := 0, 0
 			sprite.OnClick(func() { clicks++ })
 			sprite.OnSwipe__0(90, func() { swipes++ })
 			game.OnClick(func() { t.Error("sprite gesture fell through to stage click") })
 			game.OnSwipe__0(90, func() { t.Error("sprite drag fell through to stage swipe") })
 			point := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, point, &eventLeftButtonDown{Pos: point})
+			dispatchSpriteDragFrame(currentScheduler, game, point, &eventLeftButtonDown{Pos: point})
 			if clicks != 0 {
 				t.Fatal("draggable sprite clicked on mouse down")
 			}
 			if moved {
 				point.X += 100
-				dispatchSpriteDragFrame(co, game, point)
+				dispatchSpriteDragFrame(currentScheduler, game, point)
 			}
-			dispatchSpriteDragFrame(co, game, point, &eventLeftButtonUp{Pos: point})
+			dispatchSpriteDragFrame(currentScheduler, game, point, &eventLeftButtonUp{Pos: point})
 			wantClicks := 1
 			if moved {
 				wantClicks = 0
@@ -147,14 +147,14 @@ func TestSpriteDragClickAndSwipeRouting(t *testing.T) {
 }
 
 func TestSpriteDragNonDraggableForegroundDoesNotBlockDrag(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	top := newDragTestSprite(game, "top", 2)
 	game.shapeMgr.add(top)
 	clicks := 0
 	top.OnClick(func() { clicks++ })
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 	assertSpriteDragPosition(t, sprite, 30, 40)
 	assertSpriteDragPosition(t, top, 10, 20)
 	if clicks != 1 || game.inputMgr.drag.target != sprite || !game.inputMgr.drag.active {
@@ -165,7 +165,7 @@ func TestSpriteDragNonDraggableForegroundDoesNotBlockDrag(t *testing.T) {
 func TestSpriteDragCandidateDoesNotSuppressForegroundSwipe(t *testing.T) {
 	for _, change := range []string{"hide", "disable", "viewport jitter"} {
 		t.Run(change, func(t *testing.T) {
-			co, game, candidate := setupSpriteDragTest(t)
+			currentScheduler, game, candidate := setupSpriteDragTest(t)
 			clock := &inputSession{}
 			game.inputSession = clock
 			foreground := newDragTestSprite(game, "foreground", 2)
@@ -180,7 +180,7 @@ func TestSpriteDragCandidateDoesNotSuppressForegroundSwipe(t *testing.T) {
 				camera.world.Size = camera.viewport.Size.Divf(.02)
 			}
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			switch change {
 			case "hide":
 				candidate.Hide()
@@ -190,7 +190,7 @@ func TestSpriteDragCandidateDoesNotSuppressForegroundSwipe(t *testing.T) {
 			// This swipe spans only two viewport pixels at .02 zoom.
 			clock.currentTime = .1
 			end := start.Add(mathf.NewVec2(100, 0))
-			dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+			dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 			if clicks != 1 || swipes != 1 {
 				t.Fatalf("foreground clicks/swipes = %d/%d, want 1/1", clicks, swipes)
 			}
@@ -203,7 +203,7 @@ func TestSpriteDragCandidateDoesNotSuppressForegroundSwipe(t *testing.T) {
 func TestSpriteDragCandidateCancellationPreservesForegroundClick(t *testing.T) {
 	for _, action := range []string{"hide", "disable"} {
 		t.Run(action, func(t *testing.T) {
-			co, game, candidate := setupSpriteDragTest(t)
+			currentScheduler, game, candidate := setupSpriteDragTest(t)
 			clock := &inputSession{}
 			game.inputSession = clock
 			foreground := newDragTestSprite(game, "foreground", 2)
@@ -211,7 +211,7 @@ func TestSpriteDragCandidateCancellationPreservesForegroundClick(t *testing.T) {
 			clicks := 0
 			foreground.OnClick(func() { clicks++ })
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			if clicks != 1 {
 				t.Fatalf("mouse-down clicks = %d, want 1", clicks)
 			}
@@ -223,7 +223,7 @@ func TestSpriteDragCandidateCancellationPreservesForegroundClick(t *testing.T) {
 			foreground.SetDragMode(Draggable)
 			clock.currentTime = .1
 			end := start.Add(mathf.NewVec2(1, 0))
-			dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+			dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 			if clicks != 2 {
 				t.Fatalf("mouse-down and mouse-up clicks = %d, want 2", clicks)
 			}
@@ -243,7 +243,7 @@ func TestSpriteDragCancellation(t *testing.T) {
 	} {
 		for _, active := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/active=%v", test.name, active), func(t *testing.T) {
-				co, game, sprite := setupSpriteDragTest(t)
+				currentScheduler, game, sprite := setupSpriteDragTest(t)
 				clock := &inputSession{}
 				game.inputSession = clock
 				other := newDragTestSprite(game, "other", 2)
@@ -254,11 +254,11 @@ func TestSpriteDragCancellation(t *testing.T) {
 				sprite.OnClick(func() { clicks++ })
 				other.OnClick(func() { clicks++ })
 				start := mathf.NewVec2(10, 20)
-				dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+				dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 				want := start
 				if active {
 					want = mathf.NewVec2(30, 40)
-					dispatchSpriteDragFrame(co, game, want)
+					dispatchSpriteDragFrame(currentScheduler, game, want)
 				}
 				test.cancel(game, sprite)
 				if game.inputMgr.drag != (spriteDragState{}) {
@@ -267,18 +267,18 @@ func TestSpriteDragCancellation(t *testing.T) {
 				other.SetLayerTo(Front)
 				clock.currentTime = 1
 				end := mathf.NewVec2(50, 60)
-				dispatchSpriteDragFrame(co, game, end)
+				dispatchSpriteDragFrame(currentScheduler, game, end)
 				if game.inputMgr.drag != (spriteDragState{}) {
 					t.Fatal("cancelled drag resumed or transferred")
 				}
-				dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+				dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 				assertSpriteDragPosition(t, sprite, want.X, want.Y)
 				assertSpriteDragPosition(t, other, 10, 20)
 				if clicks != 0 {
 					t.Fatal("cancelled drag generated a click")
 				}
-				dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
-				dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+				dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
+				dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 				if game.inputMgr.drag.target != other || !game.inputMgr.drag.active {
 					t.Fatal("fresh press did not capture the new foreground")
 				}
@@ -290,20 +290,20 @@ func TestSpriteDragCancellation(t *testing.T) {
 func TestSpriteDragMovementThresholdUsesViewportPixels(t *testing.T) {
 	for _, scale := range []float64{0.5, 1, 2} {
 		t.Run(fmt.Sprint(scale), func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			game.inputSession = &inputSession{}
 			camera := pkgengine.CameraMgr.(*dragCameraMgr)
 			camera.world.Size = camera.viewport.Size.Divf(scale)
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			for _, dx := range []float64{1, -2, 3} {
-				dispatchSpriteDragFrame(co, game, start.Add(mathf.NewVec2(dx/scale, 0)))
+				dispatchSpriteDragFrame(currentScheduler, game, start.Add(mathf.NewVec2(dx/scale, 0)))
 				if game.inputMgr.drag.active {
 					t.Fatalf("%v viewport pixels started a drag", dx)
 				}
 				assertSpriteDragPosition(t, sprite, 10, 20)
 			}
-			dispatchSpriteDragFrame(co, game, start.Add(mathf.NewVec2(3.1/scale, 0)))
+			dispatchSpriteDragFrame(currentScheduler, game, start.Add(mathf.NewVec2(3.1/scale, 0)))
 			if !game.inputMgr.drag.active {
 				t.Fatal("movement beyond 3 viewport pixels did not start a drag")
 			}
@@ -312,15 +312,15 @@ func TestSpriteDragMovementThresholdUsesViewportPixels(t *testing.T) {
 }
 
 func TestSpriteDragJitterStillClicks(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	game.inputSession = &inputSession{}
 	clicks := 0
 	sprite.OnClick(func() { clicks++ })
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	end := mathf.NewVec2(12, 22)
-	dispatchSpriteDragFrame(co, game, end)
-	dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+	dispatchSpriteDragFrame(currentScheduler, game, end)
+	dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 	assertSpriteDragPosition(t, sprite, 10, 20)
 	if clicks != 1 {
 		t.Fatalf("jitter produced %d clicks, want 1", clicks)
@@ -328,21 +328,21 @@ func TestSpriteDragJitterStillClicks(t *testing.T) {
 }
 
 func TestSpriteDragLongPressUsesInputClock(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	clock := &inputSession{currentTime: 1}
 	game.inputSession = clock
 	clicks := 0
 	sprite.OnClick(func() { clicks++ })
 	point := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, point, &eventLeftButtonDown{Pos: point})
+	dispatchSpriteDragFrame(currentScheduler, game, point, &eventLeftButtonDown{Pos: point})
 	for _, elapsed := range []float64{-0.1, 0.399, 0.399998, 0.4} {
 		clock.currentTime = 1 + elapsed
-		dispatchSpriteDragFrame(co, game, point)
+		dispatchSpriteDragFrame(currentScheduler, game, point)
 		if got, want := game.inputMgr.drag.active, elapsed >= 0.4; got != want {
 			t.Fatalf("active after %v seconds = %v, want %v", elapsed, got, want)
 		}
 	}
-	dispatchSpriteDragFrame(co, game, point, &eventLeftButtonUp{Pos: point})
+	dispatchSpriteDragFrame(currentScheduler, game, point, &eventLeftButtonUp{Pos: point})
 	if clicks != 0 {
 		t.Fatal("stationary long press generated a click")
 	}
@@ -352,7 +352,7 @@ func TestSpriteDragLongPressAfterExtendedRecording(t *testing.T) {
 	for _, tc := range []struct{ fps, start int }{{30, 16174}, {60, 32656}, {30, 21675}, {60, 21663}} {
 		for _, releaseAtBoundary := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%dfps/start=%d/release=%v", tc.fps, tc.start, releaseAtBoundary), func(t *testing.T) {
-				co, game, sprite := setupSpriteDragTest(t)
+				currentScheduler, game, sprite := setupSpriteDragTest(t)
 				clock := &inputSession{}
 				game.inputSession = clock
 				clicks := 0
@@ -365,13 +365,13 @@ func TestSpriteDragLongPressAfterExtendedRecording(t *testing.T) {
 						clock.currentTime += 1 / float64(tc.fps)
 					}
 					if i == tc.start {
-						dispatchSpriteDragFrame(co, game, point, &eventLeftButtonDown{Pos: point})
+						dispatchSpriteDragFrame(currentScheduler, game, point, &eventLeftButtonDown{Pos: point})
 					} else if i > tc.start {
 						var events []event
 						if releaseAtBoundary && i == boundary {
 							events = append(events, &eventLeftButtonUp{Pos: point})
 						}
-						dispatchSpriteDragFrame(co, game, point, events...)
+						dispatchSpriteDragFrame(currentScheduler, game, point, events...)
 						if got, want := game.inputMgr.drag.active, i == boundary && !releaseAtBoundary; got != want {
 							t.Fatalf("long press after frame %d: active=%v, want %v", i, got, want)
 						}
@@ -388,10 +388,10 @@ func TestSpriteDragLongPressAfterExtendedRecording(t *testing.T) {
 func TestSpriteDragActivationKeepsPressedTarget(t *testing.T) {
 	for _, change := range []string{"move", "new draggable foreground", "new non-draggable foreground"} {
 		t.Run(change, func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			game.inputSession = &inputSession{}
 			start := mathf.NewVec2(12, 24)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			if game.inputMgr.drag.target != sprite {
 				t.Fatal("press did not capture the draggable sprite")
 			}
@@ -408,7 +408,7 @@ func TestSpriteDragActivationKeepsPressedTarget(t *testing.T) {
 				t.Error("activation repeated hit testing after the press")
 				return false
 			}
-			dispatchSpriteDragFrame(co, game, mathf.NewVec2(32, 44))
+			dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(32, 44))
 			if game.inputMgr.drag.target != sprite || !game.inputMgr.drag.active {
 				t.Fatal("activation changed or lost the pressed target")
 			}
@@ -426,13 +426,13 @@ func TestSpriteDragActivationKeepsPressedTarget(t *testing.T) {
 }
 
 func TestSpriteDragActivationAfterSpriteLeavesPressPoint(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	game.inputSession = &inputSession{}
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	sprite.SetXYpos(200, 100)
 	pkgengine.SpriteMgr.(*dragSpriteMgr).hits[1] = false
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 	if !game.inputMgr.drag.active || game.inputMgr.drag.target != sprite {
 		t.Fatal("activation lost the captured target after it moved")
 	}
@@ -440,19 +440,19 @@ func TestSpriteDragActivationAfterSpriteLeavesPressPoint(t *testing.T) {
 }
 
 func TestSpriteDragActivationAfterLayerChange(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	game.inputSession = &inputSession{}
 	other := newDragTestSprite(game, "other", 2)
 	other.SetDragMode(Draggable)
 	game.shapeMgr.add(other)
 	other.SetLayerTo(Back)
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	if game.inputMgr.drag.target != sprite {
 		t.Fatal("press did not pick the original foreground")
 	}
 	other.SetLayerTo(Front)
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 	if game.inputMgr.drag.target != sprite || !game.inputMgr.drag.active {
 		t.Fatal("layer change transferred the captured gesture")
 	}
@@ -463,12 +463,12 @@ func TestSpriteDragActivationAfterLayerChange(t *testing.T) {
 func TestSpriteDragReleaseRepicksTarget(t *testing.T) {
 	for _, kind := range []string{"draggable", "not draggable", "miss"} {
 		t.Run(kind, func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			game.inputSession = &inputSession{}
 			originalClicks, topClicks := 0, 0
 			sprite.OnClick(func() { originalClicks++ })
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			top := newDragTestSprite(game, "release target", 2)
 			top.OnClick(func() { topClicks++ })
 			game.shapeMgr.add(top)
@@ -482,7 +482,7 @@ func TestSpriteDragReleaseRepicksTarget(t *testing.T) {
 				}
 				return kind != "miss"
 			}
-			dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+			dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 			wantTop := 0
 			if kind == "draggable" {
 				wantTop = 1
@@ -497,7 +497,7 @@ func TestSpriteDragReleaseRepicksTarget(t *testing.T) {
 func TestSpriteDragCrossTargetRelease(t *testing.T) {
 	for _, origin := range []string{"sprite", "stage"} {
 		t.Run(origin, func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			clock := &inputSession{}
 			game.inputSession = clock
 			sprite.SetDragMode(NotDraggable)
@@ -508,7 +508,7 @@ func TestSpriteDragCrossTargetRelease(t *testing.T) {
 			sprite.OnClick(func() { downClicks++ })
 			game.OnClick(func() { downClicks++ })
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			if downClicks != 1 {
 				t.Fatalf("mousedown clicks = %d, want 1", downClicks)
 			}
@@ -518,9 +518,9 @@ func TestSpriteDragCrossTargetRelease(t *testing.T) {
 			game.shapeMgr.add(top)
 			clock.currentTime = 0.1
 			end := mathf.NewVec2(11, 20)
-			dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+			dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 			clock.currentTime = 0.2
-			dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+			dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 			if releaseClicks != 1 {
 				t.Fatalf("cross-target release clicks = %d, want 1", releaseClicks)
 			}
@@ -531,7 +531,7 @@ func TestSpriteDragCrossTargetRelease(t *testing.T) {
 func TestSpriteDragEmptyPressNeverCapturesLaterTarget(t *testing.T) {
 	for _, change := range []string{"appears", "enabled"} {
 		t.Run(change, func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			clock := &inputSession{}
 			game.inputSession = clock
 			if change == "appears" {
@@ -540,26 +540,26 @@ func TestSpriteDragEmptyPressNeverCapturesLaterTarget(t *testing.T) {
 				sprite.SetDragMode(NotDraggable)
 			}
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			if game.inputMgr.drag.target != nil {
 				t.Fatal("press captured an unavailable target")
 			}
 			clock.currentTime = .1
-			dispatchSpriteDragFrame(co, game, start.Add(mathf.NewVec2(4, 0)))
+			dispatchSpriteDragFrame(currentScheduler, game, start.Add(mathf.NewVec2(4, 0)))
 			sprite.Show()
 			sprite.SetDragMode(Draggable)
 			for i, point := range []mathf.Vec2{start, start.Add(mathf.NewVec2(4, 0)), start.Add(mathf.NewVec2(5, 0))} {
 				clock.currentTime = float64(i+1) * .4
-				dispatchSpriteDragFrame(co, game, point)
+				dispatchSpriteDragFrame(currentScheduler, game, point)
 				if game.inputMgr.drag.target != nil || game.inputMgr.drag.active {
 					t.Fatalf("empty press captured a later target at step %d", i)
 				}
 			}
 			assertSpriteDragPosition(t, sprite, 10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonUp{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonUp{Pos: start})
 			clock.currentTime = 2
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
-			dispatchSpriteDragFrame(co, game, start.Add(mathf.NewVec2(10, 0)))
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start.Add(mathf.NewVec2(10, 0)))
 			if game.inputMgr.drag.target != sprite || !game.inputMgr.drag.active {
 				t.Fatal("a fresh press could not capture the available target")
 			}
@@ -569,14 +569,14 @@ func TestSpriteDragEmptyPressNeverCapturesLaterTarget(t *testing.T) {
 }
 
 func TestSpriteDragCameraMotionDoesNotActivate(t *testing.T) {
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	game.inputSession = &inputSession{}
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	camera := pkgengine.CameraMgr.(*dragCameraMgr)
 	camera.world.Position.X += 100
 	// Keep the pointer stationary in the viewport.
-	dispatchSpriteDragFrame(co, game, start.Add(mathf.NewVec2(100, 0)))
+	dispatchSpriteDragFrame(currentScheduler, game, start.Add(mathf.NewVec2(100, 0)))
 	if game.inputMgr.drag.active {
 		t.Fatal("camera movement activated a stationary pointer")
 	}
@@ -588,7 +588,7 @@ func TestSpriteDragRecordingJSONRoundTrip(t *testing.T) {
 		for _, gesture := range []string{"jitter", "movement", "long press", "same tick click", "camera motion", "foreground", "layer change", "cancelled candidate", "empty press", "camera long press", "camera old target"} {
 			t.Run(fmt.Sprintf("%s/%dfps", gesture, fps), func(t *testing.T) {
 				resetInputSessionTest(t)
-				co, game, sprite := setupSpriteDragTest(t)
+				currentScheduler, game, sprite := setupSpriteDragTest(t)
 				live := setupInputSourceManager(t)
 				camera := pkgengine.CameraMgr.(*dragCameraMgr)
 				camera.world.Size = camera.world.Size.Divf(2)
@@ -699,7 +699,7 @@ func TestSpriteDragRecordingJSONRoundTrip(t *testing.T) {
 						Point: point, LeftButtonPressed: state.Buttons != 0,
 						MouseEvents: tick.frame.MouseEvents,
 					}, batch.eventHooks(0))
-					dispatchSpriteDragFrame(co, game, point, batch.events...)
+					dispatchSpriteDragFrame(currentScheduler, game, point, batch.events...)
 					recorded = append(recorded, observe())
 					wantActive := false
 					switch gesture {
@@ -779,7 +779,7 @@ func TestSpriteDragRecordingJSONRoundTrip(t *testing.T) {
 						t.Fatalf("replay tick %d missing", i)
 					}
 					game.dispatchFrameEvents()
-					co.Update()
+					currentScheduler.Update()
 					session.endFrame()
 					if got := observe(); got != recorded[i] {
 						t.Fatalf("replay tick %d = %+v, recorded %+v", i, got, recorded[i])
@@ -798,7 +798,7 @@ func TestSpriteDragReplayUsesRecordedPointerAndButtonState(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			resetInputSessionTest(t)
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			live := setupInputSourceManager(t)
 			live.point = mathf.NewVec2(-200, -100)
 			points := []mathf.Vec2{{X: 12, Y: 24}, {X: 42, Y: 64}, {X: 52, Y: 74}, {X: 80, Y: 90}}
@@ -828,7 +828,7 @@ func TestSpriteDragReplayUsesRecordedPointerAndButtonState(t *testing.T) {
 					t.Fatalf("replay frame %d was not prepared", i)
 				}
 				game.dispatchFrameEvents()
-				co.Update()
+				currentScheduler.Update()
 				session.endFrame()
 				assertSpriteDragPosition(t, sprite, want[i].X, want[i].Y)
 			}
@@ -841,11 +841,11 @@ func TestSpriteDragReplayUsesRecordedPointerAndButtonState(t *testing.T) {
 
 func TestSpriteDragResetsAcrossReplayTransitions(t *testing.T) {
 	resetInputSessionTest(t)
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	live := setupInputSourceManager(t)
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 	initial := InputReplayState{Mouse: InputReplayMouse{X: 80, Y: 90}, Buttons: 1}
 	replay := validRuntimeReplay(InputReplayFrame{Frame: 0, State: initial})
 	replay.Initial = initial
@@ -858,7 +858,7 @@ func TestSpriteDragResetsAcrossReplayTransitions(t *testing.T) {
 		t.Fatal("first replay frame was not prepared")
 	}
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 	session.endFrame()
 	if game.inputMgr.drag.target != nil {
 		t.Fatal("first replay tick retained a drag from live input")
@@ -873,7 +873,7 @@ func TestSpriteDragResetsAcrossReplayTransitions(t *testing.T) {
 		t.Fatal("live handoff frame was not prepared")
 	}
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 	if game.inputMgr.drag.target != nil {
 		t.Fatal("live handoff retained a drag from replay input")
 	}
@@ -916,13 +916,13 @@ func TestSpriteDragTouchingIsDirectionalUntilRelease(t *testing.T) {
 
 func TestSpriteDragBlocksScriptMotionWithoutDrawingPen(t *testing.T) {
 	spy := setupSpyPenMgr(t)
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	sprite.PenDown()
 	initialPenMoves := spy.moveCalls
 	initialPenDowns, initialPenUps := spy.penDownCalls, spy.penUpCalls
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
-	dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 	for _, move := range []func(){
 		func() { sprite.SetXYpos(90, 100) },
 		func() { sprite.SetXpos(90) },
@@ -939,7 +939,7 @@ func TestSpriteDragBlocksScriptMotionWithoutDrawingPen(t *testing.T) {
 		t.Fatalf("drag produced %d pen movements, want none", spy.moveCalls-initialPenMoves)
 	}
 	end := mathf.NewVec2(50, 60)
-	dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+	dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 	if spy.moveCalls != initialPenMoves {
 		t.Fatal("drag release drew a pen stroke")
 	}
@@ -965,13 +965,13 @@ func TestSpriteDragBlocksScriptMotionWithoutDrawingPen(t *testing.T) {
 
 func TestSpriteDragExplicitPenDownStillDrawsPoint(t *testing.T) {
 	spy := setupSpyPenMgr(t)
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	sprite.PenDown()
 	initialDowns, initialUps := spy.penDownCalls, spy.penUpCalls
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	end := mathf.NewVec2(50, 60)
-	dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+	dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 	initialEvents := len(spy.events)
 	sprite.PenDown()
 	if got, want := spy.events[initialEvents:], []string{"restore", "down"}; !slices.Equal(got, want) {
@@ -995,7 +995,7 @@ func TestSpriteDragExplicitPenDownStillDrawsPoint(t *testing.T) {
 
 func TestSpriteDragLazyClonePenRestoresDropOriginWithoutDrawingPoint(t *testing.T) {
 	spy := setupSpyPenMgr(t)
-	co, game, clone := setupSpriteDragTest(t)
+	currentScheduler, game, clone := setupSpriteDragTest(t)
 	original := newPenTestSprite()
 	original.PenDown()
 	clone.components.pen = original.pen().cloneFor(clone)
@@ -1005,9 +1005,9 @@ func TestSpriteDragLazyClonePenRestoresDropOriginWithoutDrawingPoint(t *testing.
 	}
 	initialDowns, initialCreates, initialMoves := spy.penDownCalls, spy.createCalls, spy.moveCalls
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	end := mathf.NewVec2(50, 60)
-	dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+	dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 	if spy.createCalls != initialCreates || spy.moveCalls != initialMoves || spy.penDownCalls != initialDowns || spy.restoreCalls != 0 {
 		t.Fatal("dragging a lazy clone allocated or drew its pen")
 	}
@@ -1036,14 +1036,14 @@ func TestSpriteDragLazyClonePenRestoresDropOriginWithoutDrawingPoint(t *testing.
 
 func TestSpriteDragPenUpBeforeResumeKeepsDrawingStopped(t *testing.T) {
 	spy := setupSpyPenMgr(t)
-	co, game, sprite := setupSpriteDragTest(t)
+	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	sprite.PenDown()
 	initialDowns, initialUps := spy.penDownCalls, spy.penUpCalls
 	initialMoves := spy.moveCalls
 	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 	end := mathf.NewVec2(50, 60)
-	dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
+	dispatchSpriteDragFrame(currentScheduler, game, end, &eventLeftButtonUp{Pos: end})
 	initialEvents := len(spy.events)
 	sprite.PenUp()
 	sprite.SetXYpos(70, 80)
@@ -1065,11 +1065,11 @@ func TestSpriteDragPenUpBeforeResumeKeepsDrawingStopped(t *testing.T) {
 func TestSpriteDragCameraLongPressKeepsCandidateWithoutJump(t *testing.T) {
 	for _, moveSprite := range []bool{false, true} {
 		t.Run(fmt.Sprintf("move sprite=%v", moveSprite), func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			clock := &inputSession{}
 			game.inputSession = clock
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			camera := pkgengine.CameraMgr.(*dragCameraMgr)
 			camera.world.Position.X += 100
 			wantX := 10.0
@@ -1079,7 +1079,7 @@ func TestSpriteDragCameraLongPressKeepsCandidateWithoutJump(t *testing.T) {
 			}
 			pkgengine.SpriteMgr.(*dragSpriteMgr).hits[1] = false
 			clock.currentTime = .4
-			dispatchSpriteDragFrame(co, game, mathf.NewVec2(110, 20))
+			dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(110, 20))
 			if !game.inputMgr.drag.active || game.inputMgr.drag.target != sprite {
 				t.Fatal("camera motion lost the pressed candidate")
 			}
@@ -1089,7 +1089,7 @@ func TestSpriteDragCameraLongPressKeepsCandidateWithoutJump(t *testing.T) {
 }
 
 func TestSpriteDragFloat32CameraNeverCapturesAfterEmptyPress(t *testing.T) {
-	co, g, sprite := setupSpriteDragTest(t)
+	currentScheduler, g, sprite := setupSpriteDragTest(t)
 	clock := &inputSession{}
 	g.inputSession = clock
 	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
@@ -1108,18 +1108,18 @@ func TestSpriteDragFloat32CameraNeverCapturesAfterEmptyPress(t *testing.T) {
 	}
 	stationary := mathf.NewVec2(250.3, 160.7)
 	start := pointAtView(stationary)
-	dispatchSpriteDragFrame(co, g, start, &eventLeftButtonDown{Pos: start})
+	dispatchSpriteDragFrame(currentScheduler, g, start, &eventLeftButtonDown{Pos: start})
 	mgr.hits[1] = true
 	for i := 1; i <= 20; i++ {
 		camera.world.Position = camera.world.Position.Add(mathf.NewVec2(.13, -.27))
 		camera.world.Size = camera.world.Size.Mulf(1.001)
 		clock.currentTime = float64(i) / 10
-		dispatchSpriteDragFrame(co, g, pointAtView(stationary))
+		dispatchSpriteDragFrame(currentScheduler, g, pointAtView(stationary))
 		if g.inputMgr.drag.target != nil || g.inputMgr.drag.active {
 			t.Fatalf("float32 camera captured a late sprite at frame %d", i)
 		}
 	}
-	dispatchSpriteDragFrame(co, g, pointAtView(stationary.Add(mathf.NewVec2(4, 0))))
+	dispatchSpriteDragFrame(currentScheduler, g, pointAtView(stationary.Add(mathf.NewVec2(4, 0))))
 	if g.inputMgr.drag.target != nil || g.inputMgr.drag.active {
 		t.Fatal("later pointer movement captured a sprite after an empty press")
 	}
@@ -1131,7 +1131,7 @@ func TestSpriteDragSamplingAndDispatch(t *testing.T) {
 	for _, gesture := range []string{"first down", "same tick click", "held", "activate"} {
 		t.Run(gesture, func(t *testing.T) {
 			resetInputSessionTest(t)
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			setupInputSourceManager(t)
 			frames := []InputReplayFrame{{Frame: 0, Time: 0, State: InputReplayState{Mouse: InputReplayMouse{X: 10, Y: 20}, Buttons: 1}, MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}}}}
 			if gesture == "same tick click" {
@@ -1170,7 +1170,7 @@ func TestSpriteDragSamplingAndDispatch(t *testing.T) {
 					}
 				}
 				game.dispatchFrameEvents()
-				co.Update()
+				currentScheduler.Update()
 				session.endFrame()
 			}
 			drag := game.inputMgr.drag
@@ -1203,7 +1203,7 @@ func TestSpriteDragActiveSamplingAndDispatch(t *testing.T) {
 		for _, change := range []string{"pan", "zoom", "viewport", "missing sample", "missing dispatch"} {
 			t.Run(fmt.Sprintf("%s/release=%v", change, release), func(t *testing.T) {
 				resetInputSessionTest(t)
-				co, game, sprite := setupSpriteDragTest(t)
+				currentScheduler, game, sprite := setupSpriteDragTest(t)
 				setupInputSourceManager(t)
 				frames := []InputReplayFrame{
 					{Frame: 0, Time: 0, State: InputReplayState{Mouse: InputReplayMouse{X: 12, Y: 18}, Buttons: 1}, MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}}},
@@ -1248,7 +1248,7 @@ func TestSpriteDragActiveSamplingAndDispatch(t *testing.T) {
 						}
 					}
 					game.dispatchFrameEvents()
-					co.Update()
+					currentScheduler.Update()
 					session.endFrame()
 				}
 				// Preserve the world-space grab offset (-2, 2).
@@ -1298,9 +1298,9 @@ func TestSpriteDragRejectsStaleTarget(t *testing.T) {
 	// Bypass public cancellation to exercise the stale-target guard.
 	for _, invalid := range []string{"disabled", "hidden", "destroyed"} {
 		t.Run(invalid, func(t *testing.T) {
-			co, game, sprite := setupSpriteDragTest(t)
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
 			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
 			switch invalid {
 			case "disabled":
 				sprite.spriteState.isDraggable = false
@@ -1309,7 +1309,7 @@ func TestSpriteDragRejectsStaleTarget(t *testing.T) {
 			case "destroyed":
 				sprite.markDestroyed()
 			}
-			dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+			dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(30, 40))
 			if game.inputMgr.drag != (spriteDragState{}) {
 				t.Fatal("invalid target retained drag state")
 			}
@@ -1318,9 +1318,9 @@ func TestSpriteDragRejectsStaleTarget(t *testing.T) {
 	}
 }
 
-func setupSpriteDragTest(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl) {
+func setupSpriteDragTest(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl) {
 	t.Helper()
-	co, game := setupInputFrameGame(t)
+	currentScheduler, game := setupInputFrameGame(t)
 	game.initShapeMgr()
 	game.camera = &cameraImpl{g: game}
 	previousCamera := pkgengine.CameraMgr
@@ -1334,7 +1334,7 @@ func setupSpriteDragTest(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImp
 	sprite := newDragTestSprite(game, "dragged", 1)
 	sprite.SetDragMode(Draggable)
 	game.shapeMgr.add(sprite)
-	return co, game, sprite
+	return currentScheduler, game, sprite
 }
 
 type dragSpriteMgr struct {
@@ -1370,12 +1370,12 @@ func newDragTestSprite(game *Game, name string, id pkgengine.Object) *SpriteImpl
 	return sprite
 }
 
-func dispatchSpriteDragFrame(co *coroutine.Coroutines, game *Game, point mathf.Vec2, events ...event) {
+func dispatchSpriteDragFrame(currentScheduler *coroutine.Scheduler, game *Game, point mathf.Vec2, events ...event) {
 	game.inputMgr.frame.dragProjection = game.inputMgr.sampleDragProjection()
 	game.inputMgr.mousePos = point
 	game.inputMgr.frame.pending = &inputFrame{events: events}
 	game.dispatchFrameEvents()
-	co.Update()
+	currentScheduler.Update()
 }
 
 func assertSpriteDragPosition(t *testing.T, sprite *SpriteImpl, x, y float64) {

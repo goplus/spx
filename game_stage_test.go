@@ -629,24 +629,24 @@ func TestGameGraphicEffectsAndClock(t *testing.T) {
 }
 
 func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	itime.Start()
 	t.Cleanup(func() { itime.Start() })
 	var game Game
 	count := 0
 	finished := false
-	thread := co.Create(nil, func(coroutine.Thread) {
+	thread := currentScheduler.Create(nil, func(coroutine.Thread) {
 		game.WaitNextFrame()
 		RepeatUntil(func() bool { return count == 3 }, func() { count++ })
 		finished = true
 	})
-	co.JoinFirstSlice(thread)
+	currentScheduler.JoinFirstSlice(thread)
 	if finished {
 		t.Fatal("WaitNextFrame completed before a frame update")
 	}
 	for range 5 {
 		itime.Update(1.0/30, 30)
-		co.Update()
+		currentScheduler.Update()
 	}
 	if !finished || count != 3 {
 		t.Fatalf("loop completed=%v, count=%d", finished, count)

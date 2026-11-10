@@ -9,39 +9,39 @@ import (
 )
 
 func TestInterruptedMixedWaitsPreserveClockAndExecutionOrder(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	const count = waitScanChunkSize * 2
 	resumed := make(chan int, count)
 	for i := range count {
-		th := co.Create(nil, func(me Thread) {
+		th := scheduler.Create(nil, func(me Thread) {
 			if i%2 == 0 {
-				co.Wait(10)
+				scheduler.Wait(10)
 			} else {
-				co.YieldToNextRoundFor(me)
+				scheduler.YieldToNextRoundFor(me)
 			}
 			resumed <- i
 		})
-		co.JoinFirstSlice(th)
+		scheduler.JoinFirstSlice(th)
 	}
 	// Deferred and next-round waits may be scanned in a different order from
 	// registration. Execution order must still be determined by the ready queue.
-	co.Update()
+	scheduler.Update()
 	itime.Update(1, 30)
-	expireUpdateAtFirstCheckpoint(co)
-	co.Update()
+	expireUpdateAtFirstCheckpoint(scheduler)
+	scheduler.Update()
 	if got := len(resumed); got != 0 {
 		t.Fatalf("partial batch resumed %d scripts", got)
 	}
-	if batch := &co.waitBatch; !batch.active || batch.remaining != count-waitScanChunkSize {
+	if batch := &scheduler.waitBatch; !batch.active || batch.remaining != count-waitScanChunkSize {
 		t.Fatalf("batch active/remaining = %v/%d, want true/%d", batch.active, batch.remaining, count-waitScanChunkSize)
 	}
 
 	// Crossing the time deadline cannot change the interrupted batch's clock.
 	itime.Update(20, 30)
-	co.updateWatchdogNow = time.Now
-	co.Update()
+	scheduler.updateWatchdogNow = time.Now
+	scheduler.Update()
 	checkOrder := func(first int) {
 		t.Helper()
 		var got, want []int
@@ -57,6 +57,6 @@ func TestInterruptedMixedWaitsPreserveClockAndExecutionOrder(t *testing.T) {
 	}
 	checkOrder(1)
 	itime.Update(1, 30)
-	co.Update()
+	scheduler.Update()
 	checkOrder(0)
 }

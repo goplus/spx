@@ -81,6 +81,10 @@ If engine-thread cleanup exits the waiting goroutine before drain completes,
 admission remains closed. A later successful barrier can finish cleanup and
 restore admission. The callback runs only after all registered work has exited.
 
+Startup failure and reset keep the game binding until the barrier reopens
+admission. Game cleanup runs inside the barrier, and interrupted drains retain
+the binding so a new game cannot start while old work is still active.
+
 ### Callbacks and synchronous waits
 
 `RegisterInvocation` runs synchronously on the creator after the thread is
@@ -167,7 +171,7 @@ rounds; starting another round does not advance the frame number or timer.
    events, register matched conditions, route input and Timer events, then
    register cached collision handlers before dispatching startup handlers.
    Registration order does not impose execution order across separate batches.
-4. Call `gco.Update` once to process runnable coroutines and eligible loop rounds,
+4. Call `scheduler.Update` once to process runnable coroutines and eligible loop rounds,
    including the registered collision handlers. A yield can defer continuation
    to a future frame; frame completion does not require every coroutine to exit.
 5. Exclude script execution while submitting pending Go sprite changes, bubble
@@ -286,7 +290,7 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Frame waits, loop rounds, redraw budget | `internal/coroutine/frame.go` |
 | Synchronous script entry and shared Join / Latch waits | `internal/coroutine/execute.go`, `waiters.go` |
 | Wait-job processing and scheduler statistics | `internal/coroutine/update.go`, `stats.go` |
-| Control-flow integration | `internal/engine/coro.go` |
+| Control-flow integration | `internal/engine/coroutine.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
 | Engine-facing update callbacks and runtime timers/tweens | `internal/gdengine/callbacks.go`, `internal/engine/runtime_bridge.go` |
 | Physical position reads and final sprite submission | `runtime_sync.go`, `component_transform.go`, `shape_manager.go` |
@@ -396,14 +400,14 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 Core regression coverage is in `runtime_scheduler_test.go`,
 `runtime_events_test.go`, `runtime_event_order_test.go`,
 `runtime_engine_test.go`, `runtime_replay_test.go`,
-`runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/runtime_delta_test.go`,
-`internal/engine/execute_native_test.go`,
+`runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/frame_test.go`,
+`internal/engine/coroutine_native_test.go`,
 `sprite_clone_test.go`, `internal/coroutine/loop_test.go`,
 `internal/coroutine/order_test.go`, `internal/coroutine/wait_order_test.go`, and
 `internal/coroutine/ready_test.go`.
 Cancellation and restart coverage is in `internal/coroutine/thread_test.go`,
 `internal/coroutine/worker_test.go`, `internal/coroutine/join_test.go`,
-`internal/coroutine/handler_test.go`, and `internal/engine/execute_test.go`.
+`internal/coroutine/handler_test.go`, and `internal/engine/coroutine_test.go`.
 WASM compilation does not replace browser runtime verification.
 
 ## Reference implementation

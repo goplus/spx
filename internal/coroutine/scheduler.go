@@ -17,10 +17,93 @@
 package coroutine
 
 import (
+	"errors"
 	"runtime"
+	sdebug "runtime/debug"
+	"sync"
+	"sync/atomic"
+	stime "time"
 
 	"github.com/visualfc/gid"
 )
+
+var (
+	// ErrNotCurrent signals a yield without execution ownership.
+	ErrNotCurrent = errors.New("can not yield a non-running thread")
+
+	// ErrForeignThread rejects waiting on a thread owned by another scheduler.
+	ErrForeignThread = errors.New("coroutine: thread belongs to another manager")
+
+	// ErrAbortThread is the panic value used to stop the current coroutine.
+	ErrAbortThread = errors.New("abort thread")
+
+	// ErrStopThisScript signals Scratch-style termination to a procedure boundary.
+	ErrStopThisScript = errors.New("stop this script")
+
+	// ErrReentrantWait rejects a synchronous wait that would depend on its caller.
+	ErrReentrantWait = errors.New("coroutine: caller cannot synchronously wait for itself")
+)
+
+// PanicReport preserves an unhandled coroutine panic and its diagnostic context.
+type PanicReport struct {
+	Value any
+	Name  string
+	Stack string // Stack at the panic site, captured during recovery.
+}
+
+// Scheduler coordinates thread lifecycle and cooperative scheduling.
+type Scheduler struct {
+	onPanic func(PanicReport)
+
+	// runMu serializes script slices; current identifies its owner.
+	runMu   sync.Mutex
+	current atomic.Pointer[threadImpl]
+
+	// shutdownGate serializes external drains; admissionMu guards admission and registration.
+	// Lock order: shutdownGate, runMu, admissionMu.
+	shutdownGate chan struct{}
+	admissionMu  sync.RWMutex
+	stopping     bool // Implies closed admission when observed under admissionMu.RLock.
+
+	// threadsMu protects lifecycle registration and the drain notification.
+	threadsMu   sync.Mutex
+	allThreads  map[Thread]struct{}
+	workerCount int
+	drainDone   chan struct{} // Created lazily by drains; closed when all work exits.
+
+	// schedulerMu guards script selection, pendingExecution, readyQueue, currentJobs, and mainCalls.
+	// A single Update call owns roundJobs and deferredJobs.
+	schedulerMu    sync.Mutex
+	schedulerCond  *sync.Cond
+	*runnableState                   // Published scripts and cancellation cleanup.
+	waitBatch      waitBatch         // Unpublished batch; guarded by schedulerMu.
+	selectedThread Thread            // Scheduler permit owner; may still be waiting for runMu.
+	mainCalls      []*mainThreadCall // Engine calls, served in reverse arrival order.
+	currentJobs    *queue[*waitJob]
+	deferredJobs   *queue[*waitJob]
+	roundJobs      *queue[*waitJob]
+	redrawFrame    atomic.Int64
+	scriptRound    atomic.Uint64
+
+	nextThreadID atomic.Int64
+
+	// admissionEpoch is even while admission is open and odd while closed.
+	admissionEpoch atomic.Uint64
+	// Concurrent admission readers register setups; unfinished setups delay reopening.
+	pendingSetups atomic.Int64
+
+	perfDebug         atomic.Bool
+	readGCStats       func(*sdebug.GCStats)
+	updateWatchdogNow func() stime.Time
+	statsMu           sync.RWMutex
+	lastUpdateStats   UpdateStats
+
+	// Caller identity is independent of the script owning runMu.
+	goroutineThreads sync.Map // map[uint64]Thread
+
+	// Callbacks cannot drain themselves; exclusive callbacks also retain runMu.
+	callbacks sync.Map // map[uint64]callbackScope
+}
 
 // A runnableState keeps queue membership and pending cleanup together. It must
 // not be copied because threads retain pointers into its ready heaps.
@@ -29,28 +112,44 @@ type runnableState struct {
 	pendingExecution map[Thread]struct{}
 }
 
-func newRunnableState() *runnableState {
-	return &runnableState{pendingExecution: make(map[Thread]struct{})}
+// New creates a coroutine scheduler. onPanic is called when a coroutine exits
+// with an unhandled panic other than ErrAbortThread or ErrStopThisScript.
+func New(onPanic func(PanicReport)) *Scheduler {
+	// Nodes move between these queues, so they share a recycling pool.
+	jobs := newQueue[*waitJob]()
+	p := &Scheduler{
+		onPanic:       onPanic,
+		shutdownGate:  make(chan struct{}, 1),
+		allThreads:    make(map[Thread]struct{}),
+		runnableState: newRunnableState(),
+		waitBatch: waitBatch{
+			runnable:     newRunnableState(),
+			deferredJobs: &queue[*waitJob]{pool: jobs.pool},
+			roundJobs:    &queue[*waitJob]{pool: jobs.pool},
+		},
+		currentJobs:       jobs,
+		deferredJobs:      &queue[*waitJob]{pool: jobs.pool},
+		roundJobs:         &queue[*waitJob]{pool: jobs.pool},
+		readGCStats:       sdebug.ReadGCStats,
+		updateWatchdogNow: stime.Now,
+	}
+	p.shutdownGate <- struct{}{}
+	p.schedulerCond = sync.NewCond(&p.schedulerMu)
+	p.redrawFrame.Store(-1)
+	return p
 }
 
-// Mark published work pending, queuing live scripts and retaining cancellation cleanup.
-func (p *runnableState) markPendingLocked(th Thread) {
-	if _, pending := p.pendingExecution[th]; pending || !th.published {
-		return
+// Caller returns the calling thread in scheduler, or nil if scheduler is nil
+// or the calling goroutine is not managed by it.
+func Caller(scheduler *Scheduler) Thread {
+	if scheduler == nil {
+		return nil
 	}
-	select {
-	case <-th.done:
-		return
-	default:
-	}
-	p.pendingExecution[th] = struct{}{}
-	if !th.canceled() {
-		p.readyQueue.add(th)
-	}
+	return scheduler.Caller()
 }
 
 // Sched yields the current coroutine and resumes it without an Update pass.
-func (p *Coroutines) Sched(me Thread) {
+func (p *Scheduler) Sched(me Thread) {
 	p.requireCurrent(me)
 	p.requireCanWait()
 	// Requeue this script before advancing to the next runnable position.
@@ -64,24 +163,24 @@ func (p *Coroutines) Sched(me Thread) {
 
 // StopAtNextYield cancels me when it next yields to the scheduler.
 // It must be called by the currently running managed coroutine.
-func (p *Coroutines) StopAtNextYield(me Thread) {
+func (p *Scheduler) StopAtNextYield(me Thread) {
 	p.requireCurrent(me)
 	me.stopAtNextYield.Store(true)
 }
 
-// IsInCoroutine reports whether the caller is running in this manager.
-func (p *Coroutines) IsInCoroutine() bool {
+// IsInCoroutine reports whether the caller is running in this scheduler.
+func (p *Scheduler) IsInCoroutine() bool {
 	return p.Caller() != nil
 }
 
 // Current returns the coroutine that currently owns runMu, or nil.
-func (p *Coroutines) Current() Thread {
+func (p *Scheduler) Current() Thread {
 	return p.current.Load()
 }
 
-// Caller returns this manager's thread running on the calling goroutine, or nil.
+// Caller returns this scheduler's thread running on the calling goroutine, or nil.
 // Unlike Current, it never borrows another goroutine's script ownership.
-func (p *Coroutines) Caller() Thread {
+func (p *Scheduler) Caller() Thread {
 	value, ok := p.goroutineThreads.Load(gid.Get())
 	if !ok {
 		return nil
@@ -90,7 +189,7 @@ func (p *Coroutines) Caller() Thread {
 }
 
 // yield releases the current slice after its blocking state has been published.
-func (p *Coroutines) yield(me Thread) {
+func (p *Scheduler) yield(me Thread) {
 	p.requireCurrent(me)
 	p.schedulerMu.Lock()
 	p.releaseLocked(me)
@@ -112,7 +211,7 @@ func (p *Coroutines) yield(me Thread) {
 
 // acquire consumes the scheduler's permit, then takes exclusive script access.
 // Cancellation also wakes a thread so its defers can unwind under runMu.
-func (p *Coroutines) acquire(me Thread) {
+func (p *Scheduler) acquire(me Thread) {
 	me.suspendMu.Lock()
 	if me.suspendState == suspendSignaled {
 		me.suspendState = suspendRunning
@@ -133,21 +232,21 @@ func (p *Coroutines) acquire(me Thread) {
 	p.current.Store(me)
 }
 
-func (p *Coroutines) trackCleanup(th Thread) {
+func (p *Scheduler) trackCleanup(th Thread) {
 	p.schedulerMu.Lock()
 	p.pendingExecution[th] = struct{}{}
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) requireCurrent(me Thread) {
+func (p *Scheduler) requireCurrent(me Thread) {
 	if me == nil || p.Caller() != me || p.Current() != me {
 		panic(ErrNotCurrent)
 	}
 }
 
 // wakeThread marks th pending and schedules the next ready script.
-func (p *Coroutines) wakeThread(th Thread) {
+func (p *Scheduler) wakeThread(th Thread) {
 	p.schedulerMu.Lock()
 	p.markPendingLocked(th)
 	p.scheduleLocked()
@@ -155,7 +254,7 @@ func (p *Coroutines) wakeThread(th Thread) {
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) blockThread(th Thread) {
+func (p *Scheduler) blockThread(th Thread) {
 	p.schedulerMu.Lock()
 	p.blockThreadLocked(th)
 	p.schedulerCond.Signal()
@@ -163,7 +262,7 @@ func (p *Coroutines) blockThread(th Thread) {
 }
 
 // Publish first-slice continuations together with the blocked script.
-func (p *Coroutines) blockThreadLocked(th Thread) {
+func (p *Scheduler) blockThreadLocked(th Thread) {
 	if th.stopAtNextYield.Swap(false) {
 		th.Cancel()
 	}
@@ -175,7 +274,7 @@ func (p *Coroutines) blockThreadLocked(th Thread) {
 }
 
 // Canceled threads can unwind under runMu without owning a scheduler permit.
-func (p *Coroutines) releaseLocked(th Thread) {
+func (p *Scheduler) releaseLocked(th Thread) {
 	if p.selectedThread == th {
 		p.selectedThread = nil
 	}
@@ -184,7 +283,7 @@ func (p *Coroutines) releaseLocked(th Thread) {
 
 // Visit runnable scripts in their original order, wrapping after each round.
 // New scripts append to the round; restarted handlers retain their old position.
-func (p *Coroutines) scheduleLocked() {
+func (p *Scheduler) scheduleLocked() {
 	if p.selectedThread != nil {
 		return
 	}
@@ -194,7 +293,7 @@ func (p *Coroutines) scheduleLocked() {
 	}
 }
 
-func (p *Coroutines) wakeWaitersLocked(waiters map[Thread]struct{}) {
+func (p *Scheduler) wakeWaitersLocked(waiters map[Thread]struct{}) {
 	for waiter := range waiters {
 		p.markPendingLocked(waiter)
 	}
@@ -202,7 +301,27 @@ func (p *Coroutines) wakeWaitersLocked(waiters map[Thread]struct{}) {
 }
 
 // Caller must hold schedulerMu.
-func (p *Coroutines) hasPendingExecutionLocked() bool {
+func (p *Scheduler) hasPendingExecutionLocked() bool {
 	// Canceled scripts remain pending until their executable cleanup finishes.
 	return p.selectedThread != nil || len(p.pendingExecution) != 0
+}
+
+func newRunnableState() *runnableState {
+	return &runnableState{pendingExecution: make(map[Thread]struct{})}
+}
+
+// Mark published work pending, queuing live scripts and retaining cancellation cleanup.
+func (p *runnableState) markPendingLocked(th Thread) {
+	if _, pending := p.pendingExecution[th]; pending || !th.published {
+		return
+	}
+	select {
+	case <-th.done:
+		return
+	default:
+	}
+	p.pendingExecution[th] = struct{}{}
+	if !th.canceled() {
+		p.readyQueue.add(th)
+	}
 }

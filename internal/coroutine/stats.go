@@ -41,19 +41,19 @@ type UpdateStats struct {
 }
 
 // SetPerfDebug enables or disables GC statistics collection during Update.
-func (p *Coroutines) SetPerfDebug(enabled bool) {
+func (p *Scheduler) SetPerfDebug(enabled bool) {
 	p.perfDebug.Store(enabled)
 }
 
 // UpdateStats returns this manager's most recent update statistics.
-func (p *Coroutines) UpdateStats() UpdateStats {
+func (p *Scheduler) UpdateStats() UpdateStats {
 	p.statsMu.RLock()
 	stats := p.lastUpdateStats
 	p.statsMu.RUnlock()
 	return stats
 }
 
-func (p *Coroutines) captureGCStats() *sdebug.GCStats {
+func (p *Scheduler) captureGCStats() *sdebug.GCStats {
 	if !p.perfDebug.Load() {
 		return nil
 	}
@@ -62,7 +62,7 @@ func (p *Coroutines) captureGCStats() *sdebug.GCStats {
 	return stats
 }
 
-func (p *Coroutines) finishStats(stats *UpdateStats, start stime.Time, before *sdebug.GCStats) {
+func (p *Scheduler) finishStats(stats *UpdateStats, start stime.Time, before *sdebug.GCStats) {
 	if before != nil {
 		var after sdebug.GCStats
 		p.readGCStats(&after)

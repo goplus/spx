@@ -22,10 +22,10 @@ package coroutine
 import "testing"
 
 func TestWaitMainThreadDirectPlatform(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	called := false
 
-	co.WaitMainThread(func() { called = true })
+	scheduler.WaitMainThread(func() { called = true })
 
 	if !called {
 		t.Fatal("WaitMainThread should execute immediately without a native bridge")

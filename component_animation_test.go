@@ -53,22 +53,22 @@ type animationLoopCall struct {
 }
 
 func TestTweenCancellationUnregistersState(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	anim := newTestAnimationComponent()
 	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 0, 0)
 	continued := false
-	thread := co.Create(anim.sprite, func(coroutine.Thread) {
+	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
 		anim.doTween(StateGlide, nil, tweenParams{aniType: coreproject.AniTypeGlide, duration: 10})
 		continued = true
 	})
-	co.JoinFirstSlice(thread)
+	currentScheduler.JoinFirstSlice(thread)
 	state := anim.getCurTweenState()
 	if state == nil {
 		t.Fatal("tween did not reach its first wait")
 	}
-	co.Stop(thread)
-	co.Join(thread)
+	currentScheduler.Stop(thread)
+	currentScheduler.Join(thread)
 	if continued || !state.IsCanceled || len(anim.activeTweenStates) != 0 {
 		t.Fatalf("canceled tween continued=%v, canceled=%v, active=%d", continued, state.IsCanceled, len(anim.activeTweenStates))
 	}
@@ -310,12 +310,12 @@ func TestTweenStateRegistrationAndUnregistrationOrder(t *testing.T) {
 	anim := newTestAnimationComponent()
 	params := tweenParams{aniType: coreproject.AniTypeGlide, duration: 1, speed: 2}
 	base := &coreproject.AniConfig{Speed: 7}
-	co := setupRuntimeScheduler(t)
+	currentScheduler := setupRuntimeScheduler(t)
 	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 0, 0)
 	start := func(name string) *animState {
-		thread := co.Create(anim.sprite, func(coroutine.Thread) { anim.doTween(name, base, params) })
-		co.JoinFirstSlice(thread)
+		thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) { anim.doTween(name, base, params) })
+		currentScheduler.JoinFirstSlice(thread)
 		return anim.getCurTweenState()
 	}
 	first := start(StateGlide)

@@ -29,32 +29,32 @@ import (
 )
 
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 
-	originalReadGCStats := co.readGCStats
+	originalReadGCStats := scheduler.readGCStats
 	t.Cleanup(func() {
-		co.readGCStats = originalReadGCStats
+		scheduler.readGCStats = originalReadGCStats
 	})
 
 	var calls int
-	co.readGCStats = func(*sdebug.GCStats) {
+	scheduler.readGCStats = func(*sdebug.GCStats) {
 		calls++
 	}
 
-	co.Update()
+	scheduler.Update()
 	if calls != 0 {
 		t.Fatalf("expected GC stats collection to be disabled by default, got %d calls", calls)
 	}
-	if co.UpdateStats().GCStatsEnabled {
+	if scheduler.UpdateStats().GCStatsEnabled {
 		t.Fatal("expected GC stats to be marked disabled by default")
 	}
 
-	co.SetPerfDebug(true)
-	co.Update()
+	scheduler.SetPerfDebug(true)
+	scheduler.Update()
 	if calls != 2 {
 		t.Fatalf("expected GC stats to be read twice when perf debug is enabled, got %d calls", calls)
 	}
-	if !co.UpdateStats().GCStatsEnabled {
+	if !scheduler.UpdateStats().GCStatsEnabled {
 		t.Fatal("expected GC stats to be marked enabled when perf debug is on")
 	}
 }
@@ -72,13 +72,13 @@ func TestUpdateStatsAreScopedToManager(t *testing.T) {
 }
 
 func TestWaitForChanReceivesValue(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	ch := make(chan int)
 	done := make(chan struct{})
 
-	th := co.Create(nil, func(me Thread) {
+	th := scheduler.Create(nil, func(me Thread) {
 		defer close(done)
-		value := WaitForChan(co, ch)
+		value := WaitForChan(scheduler, ch)
 		if value != 7 {
 			t.Fatalf("expected received value 7, got %d", value)
 		}
@@ -102,30 +102,30 @@ func TestWaitForChanReceivesValue(t *testing.T) {
 }
 
 func TestExternalWaitPathsDoNotEnterScheduler(t *testing.T) {
-	co := New(nil)
-	co.Wait(1)
+	scheduler := New(nil)
+	scheduler.Wait(1)
 
 	ch := make(chan int, 1)
 	ch <- 7
-	if got := WaitForChan(co, ch); got != 7 {
+	if got := WaitForChan(scheduler, ch); got != 7 {
 		t.Fatalf("external WaitForChan = %d, want 7", got)
 	}
-	co.schedulerMu.Lock()
-	queued := co.currentJobs.len() + co.deferredJobs.len() + co.roundJobs.len()
-	co.schedulerMu.Unlock()
+	scheduler.schedulerMu.Lock()
+	queued := scheduler.currentJobs.len() + scheduler.deferredJobs.len() + scheduler.roundJobs.len()
+	scheduler.schedulerMu.Unlock()
 	if queued != 0 {
 		t.Fatalf("external waits queued %d scheduler jobs", queued)
 	}
 }
 
 func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	ch := make(chan int)
 	done := make(chan struct{})
 
-	th := co.Create(nil, func(me Thread) {
+	th := scheduler.Create(nil, func(me Thread) {
 		defer close(done)
-		WaitForChan(co, ch)
+		WaitForChan(scheduler, ch)
 	})
 
 	deadline := time.Now().Add(time.Second)
@@ -136,7 +136,7 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 		runtime.Gosched()
 	}
 
-	co.StopIf(func(candidate Thread) bool {
+	scheduler.StopIf(func(candidate Thread) bool {
 		return candidate == th
 	})
 
@@ -160,15 +160,15 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 }
 
 func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	started := make(chan struct{})
 	done := make(chan struct{})
 
-	th := co.Create("worker", func(me Thread) {
-		co.blockThread(me)
+	th := scheduler.Create("worker", func(me Thread) {
+		scheduler.blockThread(me)
 		close(started)
-		co.yield(me)
+		scheduler.yield(me)
 		close(done)
 	})
 
@@ -180,11 +180,11 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 		}
 		runtime.Gosched()
 	}
-	if current := co.Current(); current != nil {
+	if current := scheduler.Current(); current != nil {
 		t.Fatalf("Current while every coroutine is suspended = %v, want nil", current)
 	}
 
-	co.wakeThread(th)
+	scheduler.wakeThread(th)
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -193,12 +193,12 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 }
 
 func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	var resumed atomic.Bool
 	var publishedBeforeCancellation atomic.Bool
 
-	thread := co.createThread(co.captureAdmission(), Task{
+	thread := scheduler.createThread(scheduler.captureAdmission(), Task{
 		Owner: "worker",
 		RegisterInvocation: func(th Thread) func() {
 			cancel := th.cancelFunc
@@ -217,13 +217,13 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 			return nil
 		},
 		Run: func(me Thread) {
-			co.StopAtNextYield(me)
-			co.WaitYield(me)
+			scheduler.StopAtNextYield(me)
+			scheduler.WaitYield(me)
 			resumed.Store(true)
 		},
 	})
 
-	co.JoinFirstSlice(thread)
+	scheduler.JoinFirstSlice(thread)
 	if !thread.Stopped() {
 		t.Fatal("yield boundary was published before the coroutine was stopped")
 	}
@@ -235,39 +235,39 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 	if publishedBeforeCancellation.Load() {
 		t.Fatal("first slice was published before stop-at-yield cancellation")
 	}
-	co.Update()
+	scheduler.Update()
 	if resumed.Load() {
 		t.Fatal("coroutine resumed after its stop-at-yield boundary")
 	}
 
-	completed := co.Create("no-yield", func(me Thread) {
-		co.StopAtNextYield(me)
+	completed := scheduler.Create("no-yield", func(me Thread) {
+		scheduler.StopAtNextYield(me)
 	})
-	co.Join(completed)
+	scheduler.Join(completed)
 	if completed.Stopped() {
 		t.Fatal("coroutine was stopped without reaching a yield boundary")
 	}
 }
 
 func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	started := make(chan struct{})
 	proceed := make(chan struct{})
 	done := make(chan struct{})
 
-	th := co.Create("worker", func(me Thread) {
-		co.blockThread(me)
+	th := scheduler.Create("worker", func(me Thread) {
+		scheduler.blockThread(me)
 		close(started)
 		<-proceed
-		co.yield(me)
+		scheduler.yield(me)
 		close(done)
 	})
 	<-started
 
 	resumeDone := make(chan struct{})
 	go func() {
-		co.wakeThread(th)
+		scheduler.wakeThread(th)
 		close(resumeDone)
 	}()
 	select {
@@ -286,26 +286,26 @@ func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 }
 
 func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
-	caller := co.Create("caller", func(Thread) {
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+	caller := scheduler.Create("caller", func(Thread) {
 		// Publish both peers before the caller yields to either one. A's
 		// wait for B publishes A's first slice, allowing B's join to return.
 		var peers []Thread
-		peers = co.StartBatch([]Task{
-			{Owner: "a", Run: func(Thread) { co.JoinFirstSlice(peers[1]) }},
-			{Owner: "b", Run: func(Thread) { co.JoinFirstSlice(peers[0]) }},
+		peers = scheduler.StartBatch([]Task{
+			{Owner: "a", Run: func(Thread) { scheduler.JoinFirstSlice(peers[1]) }},
+			{Owner: "b", Run: func(Thread) { scheduler.JoinFirstSlice(peers[0]) }},
 		}, BatchAsync)
-		co.JoinAll(peers)
+		scheduler.JoinAll(peers)
 	})
 	waitForThreadSignal(t, caller.done, "mutual first-slice waiters deadlocked")
 }
 
 func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	done := make(chan struct{})
-	co.Create("worker", func(me Thread) {
-		co.Sched(me)
+	scheduler.Create("worker", func(me Thread) {
+		scheduler.Sched(me)
 		close(done)
 	})
 
@@ -317,15 +317,15 @@ func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
 }
 
 func TestSchedSelfSelectionLetsWorkerProgress(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	polling := make(chan struct{})
 	var workerDone atomic.Bool
 	observed := make(chan bool, 1)
 
-	co.StartBatch([]Task{
+	scheduler.StartBatch([]Task{
 		{Run: func(Thread) {
-			co.WaitToDo(func() {
+			scheduler.WaitToDo(func() {
 				<-polling
 				workerDone.Store(true)
 			})
@@ -338,7 +338,7 @@ func TestSchedSelfSelectionLetsWorkerProgress(t *testing.T) {
 				if workerDone.Load() {
 					break
 				}
-				co.Sched(me)
+				scheduler.Sched(me)
 			}
 			observed <- workerDone.Load()
 		}},
@@ -355,11 +355,11 @@ func TestUpdateDrainsRepeatedWaitYieldWithoutLosingRunnableState(t *testing.T) {
 		yields = 100
 	)
 	for run := 0; run < runs; run++ {
-		co := New(nil)
+		scheduler := New(nil)
 		done := make(chan struct{})
-		th := co.Create("worker", func(me Thread) {
+		th := scheduler.Create("worker", func(me Thread) {
 			for range yields {
-				co.WaitYield(me)
+				scheduler.WaitYield(me)
 			}
 			close(done)
 		})
@@ -371,7 +371,7 @@ func TestUpdateDrainsRepeatedWaitYieldWithoutLosingRunnableState(t *testing.T) {
 			}
 			runtime.Gosched()
 		}
-		co.Update()
+		scheduler.Update()
 		select {
 		case <-done:
 		default:
@@ -386,16 +386,16 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 
 	const runs = 100
 	for run := 0; run < runs; run++ {
-		co := New(nil)
+		scheduler := New(nil)
 		var ran atomic.Bool
 
-		co.queueMainThreadCallForTest(nil, func() {
-			co.Create("spawned", func(me Thread) {
+		scheduler.queueMainThreadCallForTest(nil, func() {
+			scheduler.Create("spawned", func(me Thread) {
 				ran.Store(true)
 			})
 		})
 
-		co.Update()
+		scheduler.Update()
 		if !ran.Load() {
 			t.Fatalf("run %d: Update returned before the spawned coroutine ran", run)
 		}
@@ -407,29 +407,29 @@ func TestUpdateReturnsForStartupOutcomes(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			var completed atomic.Bool
 			panicReported := make(chan PanicReport, 1)
-			co := New(func(report PanicReport) { panicReported <- report })
+			scheduler := New(func(report PanicReport) { panicReported <- report })
 			t.Cleanup(func() {
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
 
 			if outcome != "idle" {
-				co.Create("startup", func(me Thread) {
+				scheduler.Create("startup", func(me Thread) {
 					// Finish only after Update has entered and resumed startup.
-					co.WaitYield(me)
+					scheduler.WaitYield(me)
 					switch outcome {
 					case "success":
 						completed.Store(true)
 					case "failure":
 						panic("startup failed")
 					case "canceled":
-						co.StopCurrent()
+						scheduler.StopCurrent()
 					}
 				})
 			}
 
 			updated := make(chan struct{})
 			go func() {
-				co.Update()
+				scheduler.Update()
 				close(updated)
 			}()
 			waitForThreadSignal(t, updated, "Update waited for startup to succeed")
@@ -452,19 +452,19 @@ func TestUpdateReturnsForStartupOutcomes(t *testing.T) {
 
 func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 	var completed atomic.Bool
-	co := New(nil)
+	scheduler := New(nil)
 	resume := make(chan struct{})
-	thread := co.Create("startup", func(me Thread) {
-		WaitForChan(co, resume)
+	thread := scheduler.Create("startup", func(me Thread) {
+		WaitForChan(scheduler, resume)
 		completed.Store(true)
 	})
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	updated := make(chan struct{})
 	go func() {
-		co.Update()
+		scheduler.Update()
 		close(updated)
 	}()
 	waitForThreadSignal(t, updated, "Update waited for startup's asynchronous work")
@@ -481,18 +481,18 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 func TestStartupCanWaitForNextFrame(t *testing.T) {
 	var completed atomic.Bool
 	itime.Start()
-	co := New(nil)
-	co.Create("startup", func(me Thread) {
-		co.WaitNextFrameFor(me)
+	scheduler := New(nil)
+	scheduler.Create("startup", func(me Thread) {
+		scheduler.WaitNextFrameFor(me)
 		completed.Store(true)
 	})
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	for frame := 0; frame < 2; frame++ {
 		updated := make(chan struct{})
 		go func() {
-			co.Update()
+			scheduler.Update()
 			close(updated)
 		}()
 		waitForThreadSignal(t, updated, "startup prevented the frame from returning")
@@ -504,36 +504,36 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 }
 
 func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	deferredResumed := make(chan struct{})
-	deferred := co.Create("next-frame", func(me Thread) {
-		co.WaitNextFrameFor(me)
+	deferred := scheduler.Create("next-frame", func(me Thread) {
+		scheduler.WaitNextFrameFor(me)
 		close(deferredResumed)
 	})
-	co.JoinFirstSlice(deferred)
+	scheduler.JoinFirstSlice(deferred)
 
 	now := time.Now()
-	co.updateWatchdogNow = func() time.Time { return now }
+	scheduler.updateWatchdogNow = func() time.Time { return now }
 
 	resumed := make(chan struct{})
-	thread := co.Create("slow-frame", func(me Thread) {
-		co.WaitYield(me)
+	thread := scheduler.Create("slow-frame", func(me Thread) {
+		scheduler.WaitYield(me)
 		close(resumed)
 	})
 	waitForThreadSignal(t, thread.firstSliceDone, "script did not reach its yield")
 
 	queuedRan := false
-	co.queueMainThreadCallForTest(nil, func() { queuedRan = true })
+	scheduler.queueMainThreadCallForTest(nil, func() { queuedRan = true })
 	// Engine calls run newest first; let the newest call exhaust this Update.
-	co.queueMainThreadCallForTest(nil, func() {
+	scheduler.queueMainThreadCallForTest(nil, func() {
 		now = now.Add(updateWatchdogTimeout)
 	})
-	co.Update()
+	scheduler.Update()
 
 	if thread.Stopped() || deferred.Stopped() {
 		t.Fatal("watchdog canceled a script after a slow frame")
@@ -552,12 +552,12 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 		t.Fatal("Update processed remaining work after the frame budget was exhausted")
 	}
 
-	created := co.Create("after-slow-frame", func(Thread) {})
+	created := scheduler.Create("after-slow-frame", func(Thread) {})
 	if created.Stopped() {
 		t.Fatal("watchdog rejected a new script")
 	}
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	waitForThreadSignal(t, resumed, "script did not resume on the next Update")
 	waitForThreadSignal(t, deferredResumed, "deferred wait was lost after a slow frame")
 	if !queuedRan {
@@ -569,12 +569,12 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
-	co := New(nil)
+	scheduler := New(nil)
 	var keepSpawning atomic.Bool
 	keepSpawning.Store(true)
 	clockStart := time.Now()
 	var clockCalls atomic.Int64
-	co.updateWatchdogNow = func() time.Time {
+	scheduler.updateWatchdogNow = func() time.Time {
 		if clockCalls.Add(1) == 1 {
 			return clockStart
 		}
@@ -585,7 +585,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 
 	t.Cleanup(func() {
 		keepSpawning.Store(false)
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	var spawned atomic.Int64
@@ -593,31 +593,31 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	spawnNext = func(Thread) {
 		spawned.Add(1)
 		if keepSpawning.Load() {
-			co.Create("recursive", spawnNext)
+			scheduler.Create("recursive", spawnNext)
 			runtime.Gosched()
 		}
 	}
-	co.Create("recursive", spawnNext)
+	scheduler.Create("recursive", spawnNext)
 
 	updateDone := make(chan struct{})
 	go func() {
-		co.Update()
+		scheduler.Update()
 		close(updateDone)
 	}()
 	waitForThreadSignal(t, updateDone, "Update did not return after a retry exhausted the frame budget")
 	keepSpawning.Store(false)
-	co.drain()
+	scheduler.drain()
 	if clockCalls.Load() < 2 || spawned.Load() == 0 {
 		t.Fatal("test did not exercise the watchdog on a recursive spawn retry")
 	}
-	if stats := co.UpdateStats(); stats.JobCount != 0 || stats.LoopIterations != 1 {
+	if stats := scheduler.UpdateStats(); stats.JobCount != 0 || stats.LoopIterations != 1 {
 		t.Fatalf("processed %d wait jobs over %d iterations, want one retry", stats.JobCount, stats.LoopIterations)
 	}
 }
 
 func TestResumeIgnoresCanceledThread(t *testing.T) {
-	co := New(nil)
-	thread := co.newThread("canceled")
+	scheduler := New(nil)
+	thread := scheduler.newThread("canceled")
 	thread.Cancel()
 	thread.resume()
 	if thread.suspendState != suspendRunning {
@@ -626,35 +626,35 @@ func TestResumeIgnoresCanceledThread(t *testing.T) {
 }
 
 func TestWakeThreadDoesNotWakeCompletedThread(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 
-	thread := co.Create("completed", func(Thread) {})
-	co.drain()
+	thread := scheduler.Create("completed", func(Thread) {})
+	scheduler.drain()
 
-	co.wakeThread(thread)
-	co.schedulerMu.Lock()
-	_, exists := co.pendingExecution[thread]
-	co.schedulerMu.Unlock()
+	scheduler.wakeThread(thread)
+	scheduler.schedulerMu.Lock()
+	_, exists := scheduler.pendingExecution[thread]
+	scheduler.schedulerMu.Unlock()
 	if exists {
 		t.Fatal("stale resume job restored scheduler state for a completed thread")
 	}
 }
 
 func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	const producerCount, jobsPerProducer = 4, 100
 	var resumed atomic.Int64
 	for range producerCount {
-		thread := co.Create("next-frame", func(me Thread) {
-			co.WaitNextFrameFor(me)
+		thread := scheduler.Create("next-frame", func(me Thread) {
+			scheduler.WaitNextFrameFor(me)
 			resumed.Add(1)
 		})
-		co.JoinFirstSlice(thread)
+		scheduler.JoinFirstSlice(thread)
 	}
 
 	var calls [producerCount * jobsPerProducer]atomic.Int64
@@ -662,7 +662,7 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 	for producer := range producerCount {
 		producers.Go(func() {
 			for index := range jobsPerProducer {
-				co.queueMainThreadCallForTest(nil, func() {
+				scheduler.queueMainThreadCallForTest(nil, func() {
 					calls[producer*jobsPerProducer+index].Add(1)
 				})
 			}
@@ -676,17 +676,17 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 			case <-stopPump:
 				return
 			default:
-				co.pumpMainThread()
+				scheduler.pumpMainThread()
 			}
 		}
 	}()
 	for range jobsPerProducer {
-		co.Update()
+		scheduler.Update()
 	}
 	producers.Wait()
 	close(stopPump)
 	waitForThreadSignal(t, pumpDone, "engine job service did not stop")
-	co.Update()
+	scheduler.Update()
 	for index := range calls {
 		if got := calls[index].Load(); got != 1 {
 			t.Fatalf("engine job %d ran %d times, want once", index, got)
@@ -696,30 +696,30 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 		t.Fatal("deferred waits resumed in their issuing frame")
 	}
 	itime.Update(1.0/30, 30)
-	co.Update()
+	scheduler.Update()
 	if got := resumed.Load(); got != producerCount {
 		t.Fatalf("resumed %d deferred waits, want %d", got, producerCount)
 	}
 }
 
 func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 
 	resumed := false
-	thread := co.Create("waiting", func(Thread) {
-		co.Wait(math.MaxFloat64)
+	thread := scheduler.Create("waiting", func(Thread) {
+		scheduler.Wait(math.MaxFloat64)
 		resumed = true
 	})
-	co.JoinFirstSlice(thread)
+	scheduler.JoinFirstSlice(thread)
 	thread.Cancel()
-	co.drain()
-	co.Update()
+	scheduler.drain()
+	scheduler.Update()
 
 	if resumed {
 		t.Fatal("canceled wait resumed")
 	}
-	if current, deferred := co.currentJobCount(), co.deferredJobs.len(); current != 0 || deferred != 0 {
+	if current, deferred := scheduler.currentJobCount(), scheduler.deferredJobs.len(); current != 0 || deferred != 0 {
 		t.Fatalf("canceled wait job remained queued: current=%d deferred=%d", current, deferred)
 	}
 }
@@ -730,22 +730,22 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 
 	const runs = 100
 	for run := 0; run < runs; run++ {
-		co := New(nil)
+		scheduler := New(nil)
 		var waiterRan atomic.Bool
 
-		co.queueMainThreadCallForTest(nil, func() {
-			co.Create("controller", func(controller Thread) {
+		scheduler.queueMainThreadCallForTest(nil, func() {
+			scheduler.Create("controller", func(controller Thread) {
 				var target Thread
-				co.Create("waiter", func(waiter Thread) {
-					co.Join(target)
+				scheduler.Create("waiter", func(waiter Thread) {
+					scheduler.Join(target)
 					waiterRan.Store(true)
 				})
-				target = co.Create("target", func(target Thread) {
+				target = scheduler.Create("target", func(target Thread) {
 				})
 			})
 		})
 
-		co.Update()
+		scheduler.Update()
 		if !waiterRan.Load() {
 			t.Fatalf("run %d: Update returned before the Join waiter resumed", run)
 		}
@@ -753,14 +753,14 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 }
 
 // enqueueJob injects scheduler work without publishing a blocked thread.
-func (p *Coroutines) enqueueJob(job *waitJob) {
+func (p *Scheduler) enqueueJob(job *waitJob) {
 	p.schedulerMu.Lock()
 	p.currentJobs.pushBack(job)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) currentJobCount() int {
+func (p *Scheduler) currentJobCount() int {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
 	return p.currentJobs.len() + len(p.mainCalls)
@@ -774,8 +774,8 @@ func isSuspended(thread Thread) bool {
 	return thread.suspendState == suspendWaiting
 }
 
-func joinFirstSliceAll(co *Coroutines, threads []Thread) {
+func joinFirstSliceAll(scheduler *Scheduler, threads []Thread) {
 	for _, thread := range threads {
-		co.JoinFirstSlice(thread)
+		scheduler.JoinFirstSlice(thread)
 	}
 }

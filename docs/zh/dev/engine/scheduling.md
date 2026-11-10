@@ -61,6 +61,9 @@ Join 和 Latch 的等待登记在正常返回或取消时都会解除。
 若主线程清理调用在 drain 完成前退出等待的 goroutine，准入保持关闭；后续成功的
 屏障可以完成清理并恢复准入。只有全部已登记工作退出后，才会执行清理回调。
 
+启动失败和重置保留游戏绑定，直到屏障恢复准入。游戏清理在屏障内运行；
+drain 中断时仍保留绑定，避免旧工作尚未退出就启动新游戏。
+
 ### 回调与同步等待
 
 `RegisterInvocation` 在创建方同步执行，此时线程已登记到调度器，但尚未执行任务；
@@ -127,7 +130,7 @@ Web 后台等待让出 Go goroutine；同步 JS 回调若依赖后续事件，�
 3. 准备游戏更新并处理截图快捷键请求；冻结已到期的脚本 Timer，登记已匹配的
    条件处理函数，路由输入和 Timer，再登记缓存的碰撞处理函数，最后派发启动事件。
    登记顺序不保证不同批次处理函数的执行顺序。
-4. 仅调用一次 `gco.Update`，处理可运行的协程和满足条件的后续循环轮次，
+4. 仅调用一次 `scheduler.Update`，处理可运行的协程和满足条件的后续循环轮次，
    包括已登记的碰撞处理函数。让出执行权后，后续工作可以留到未来帧；
    帧收尾不要求每个协程都退出。
 5. 与脚本执行互斥，将待提交的 Go 精灵变化、气泡和画笔命令写入 Godot。
@@ -218,7 +221,7 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 帧等待、循环轮次、重绘预算 | `internal/coroutine/frame.go` |
 | 同步脚本入口、Join / Latch 的共享等待协议 | `internal/coroutine/execute.go`、`waiters.go` |
 | 等待任务处理与调度统计 | `internal/coroutine/update.go`、`stats.go` |
-| 控制流与调度器衔接 | `internal/engine/coro.go` |
+| 控制流与调度器衔接 | `internal/engine/coroutine.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
 | 引擎层更新回调与 runtime 延时、tween | `internal/gdengine/callbacks.go`、`internal/engine/runtime_bridge.go` |
 | 物理位置回读与帧末精灵提交 | `runtime_sync.go`、`component_transform.go`、`shape_manager.go` |
@@ -299,14 +302,14 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 
 核心回归位于 `runtime_scheduler_test.go`、`runtime_events_test.go`、
 `runtime_event_order_test.go`、`runtime_engine_test.go`、`runtime_replay_test.go`、
-`runtime_sync_test.go`、`runtime_engine_native_test.go`、`internal/engine/runtime_delta_test.go`、
-`internal/engine/execute_native_test.go`、
+`runtime_sync_test.go`、`runtime_engine_native_test.go`、`internal/engine/frame_test.go`、
+`internal/engine/coroutine_native_test.go`、
 `sprite_clone_test.go`、`internal/coroutine/loop_test.go`、
 `internal/coroutine/order_test.go`、`internal/coroutine/wait_order_test.go` 和
 `internal/coroutine/ready_test.go`。
 取消与重启覆盖位于 `internal/coroutine/thread_test.go`、
 `internal/coroutine/worker_test.go`、`internal/coroutine/join_test.go`、
-`internal/coroutine/handler_test.go` 和 `internal/engine/execute_test.go`。
+`internal/coroutine/handler_test.go` 和 `internal/engine/coroutine_test.go`。
 WASM 编译检查不替代浏览器运行验证。
 
 ## 参考实现

@@ -54,7 +54,7 @@ func (m *readyModel) pop() Thread {
 func TestReadyQueueMatchesRoundModel(t *testing.T) {
 	for seed := uint64(1); seed <= 5; seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			random := rand.New(rand.NewPCG(seed, seed+1))
 			var q readyQueue
 			var model readyModel
@@ -72,7 +72,7 @@ func TestReadyQueueMatchesRoundModel(t *testing.T) {
 			for step := range 1000 {
 				switch random.IntN(6) {
 				case 0, 1:
-					th := co.newThread(nil)
+					th := scheduler.newThread(nil)
 					// Include equal positions, as with restarted handlers.
 					th.resumeOrder = int64(random.IntN(32) + 1)
 					q.add(th)

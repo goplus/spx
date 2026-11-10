@@ -44,37 +44,37 @@ type observedDoneContext struct {
 }
 
 func TestRunSyncRechecksAdmissionOnEngineThread(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	previous := gdx.PlatformMgr
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	checked := false
 	gdx.PlatformMgr = mainThreadTestPlatform{
 		main: true,
 		onIsMainThread: sync.OnceFunc(func() {
 			// Close admission after RunSync's first check, before its engine call.
-			co.admissionMu.Lock()
-			co.closeAdmissionLocked()
-			co.admissionMu.Unlock()
+			scheduler.admissionMu.Lock()
+			scheduler.closeAdmissionLocked()
+			scheduler.admissionMu.Unlock()
 			checked = true
 		}),
 	}
-	co.RunSync("rejected", func(Thread) { t.Error("shutdown admitted the callback") })
-	if !checked || !co.admissionClosed() {
+	scheduler.RunSync("rejected", func(Thread) { t.Error("shutdown admitted the callback") })
+	if !checked || !scheduler.admissionClosed() {
 		t.Fatal("fixture did not close admission at the engine boundary")
 	}
-	if co.LastThreadID() != 0 || co.hasPendingWork() {
+	if scheduler.LastThreadID() != 0 || scheduler.hasPendingWork() {
 		t.Fatal("RunSync created a task after shutdown closed admission")
 	}
 }
 
 func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 	setMainThreadForTest(t, true)
-	co := New(nil)
+	scheduler := New(nil)
 
 	blockerStarted := make(chan struct{})
 	releaseBlocker := make(chan struct{})
-	blocker := co.Create("blocker", func(Thread) {
+	blocker := scheduler.Create("blocker", func(Thread) {
 		close(blockerStarted)
 		<-releaseBlocker
 	})
@@ -83,7 +83,7 @@ func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 	callbackRan := atomic.Bool{}
 	dispatchDone := make(chan struct{})
 	go func() {
-		co.RunSync("dispatcher", func(Thread) {
+		scheduler.RunSync("dispatcher", func(Thread) {
 			callbackRan.Store(true)
 		})
 		close(dispatchDone)
@@ -91,9 +91,9 @@ func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 
 	deadline := time.Now().Add(time.Second)
 	for {
-		co.threadsMu.Lock()
-		count := len(co.allThreads)
-		co.threadsMu.Unlock()
+		scheduler.threadsMu.Lock()
+		count := len(scheduler.allThreads)
+		scheduler.threadsMu.Unlock()
 		if count >= 2 {
 			break
 		}
@@ -105,7 +105,7 @@ func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 
 	stopDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(stopDone)
 	}()
 	waitForThreadSignal(t, blocker.Context().Done(), "shutdown did not cancel the blocker")
@@ -130,17 +130,17 @@ func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 		t.Fatal("blocking coroutine did not finish")
 	}
 	waitForThreadSignal(t, stopDone, "shutdown did not finish after the blocker exited")
-	if co.hasPendingWork() {
+	if scheduler.hasPendingWork() {
 		t.Fatal("rejected managed dispatcher leaked from thread registry")
 	}
 }
 
 func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	itime.Start()
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	var mu sync.Mutex
@@ -150,14 +150,14 @@ func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 		trace = append(trace, event)
 		mu.Unlock()
 	}
-	first := co.Create("A", func(Thread) {
+	first := scheduler.Create("A", func(Thread) {
 		for range 3 {
-			co.WaitNextFrame()
+			scheduler.WaitNextFrame()
 			record("A-before")
-			co.WaitMainThread(func() {
+			scheduler.WaitMainThread(func() {
 				record("main")
-				if co.runMu.TryLock() {
-					co.runMu.Unlock()
+				if scheduler.runMu.TryLock() {
+					scheduler.runMu.Unlock()
 					t.Error("main-thread call released the current script slice")
 				}
 				runtime.Gosched()
@@ -165,19 +165,19 @@ func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 			record("A-after")
 		}
 	})
-	second := co.Create("B", func(Thread) {
+	second := scheduler.Create("B", func(Thread) {
 		for range 3 {
-			co.WaitNextFrame()
+			scheduler.WaitNextFrame()
 			record("B")
 		}
 	})
-	joinFirstSliceAll(co, []Thread{first, second})
-	co.Update()
+	joinFirstSliceAll(scheduler, []Thread{first, second})
+	scheduler.Update()
 
 	want := []string{"A-before", "main", "A-after", "B"}
 	for frame := range 3 {
 		itime.Update(1.0/30, 30)
-		co.Update()
+		scheduler.Update()
 		mu.Lock()
 		got := append([]string(nil), trace...)
 		trace = nil
@@ -186,11 +186,11 @@ func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 			t.Fatalf("frame %d script order = %v, want %v", frame+1, got, want)
 		}
 	}
-	co.JoinAll([]Thread{first, second})
+	scheduler.JoinAll([]Thread{first, second})
 }
 
 func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	queued := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once
@@ -198,16 +198,16 @@ func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
 	t.Cleanup(unblock)
 	value := 0
 	go func() {
-		co.runMu.Lock()
-		defer co.runMu.Unlock()
-		co.queueMainThreadCallForTest(nil, unblock)
+		scheduler.runMu.Lock()
+		defer scheduler.runMu.Unlock()
+		scheduler.queueMainThreadCallForTest(nil, unblock)
 		close(queued)
 		<-release
 		value = 42
 	}()
 	<-queued
 	result := make(chan int, 1)
-	go co.RunBetweenScripts(func() { result <- value })
+	go scheduler.RunBetweenScripts(func() { result <- value })
 	select {
 	case got := <-result:
 		if got != 42 {
@@ -223,16 +223,16 @@ func TestUpdateServicesMainThreadDuringStartup(t *testing.T) {
 	for _, outcome := range []string{"success", "failure", "canceled"} {
 		t.Run(outcome, func(t *testing.T) {
 			var completed atomic.Bool
-			co := New(func(PanicReport) {})
+			scheduler := New(func(PanicReport) {})
 			t.Cleanup(func() {
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
 			called := false
-			co.Create("startup", func(me Thread) {
-				co.WaitMainThread(func() {
+			scheduler.Create("startup", func(me Thread) {
+				scheduler.WaitMainThread(func() {
 					called = true
 					if outcome == "canceled" {
-						co.Stop(me)
+						scheduler.Stop(me)
 					}
 				})
 				if outcome == "failure" {
@@ -243,7 +243,7 @@ func TestUpdateServicesMainThreadDuringStartup(t *testing.T) {
 
 			updated := make(chan struct{})
 			go func() {
-				co.Update()
+				scheduler.Update()
 				close(updated)
 			}()
 			waitForThreadSignal(t, updated, "startup's main-thread call prevented the frame from returning")
@@ -259,10 +259,10 @@ func TestUpdateServicesMainThreadDuringStartup(t *testing.T) {
 
 func TestWaitMainThreadFastPathOnMainThread(t *testing.T) {
 	setMainThreadForTest(t, true)
-	co := New(nil)
+	scheduler := New(nil)
 	called := false
 
-	co.WaitMainThread(func() {
+	scheduler.WaitMainThread(func() {
 		called = true
 	})
 
@@ -273,11 +273,11 @@ func TestWaitMainThreadFastPathOnMainThread(t *testing.T) {
 
 func TestWaitMainThreadNestedFastPath(t *testing.T) {
 	setMainThreadForTest(t, true)
-	co := New(nil)
+	scheduler := New(nil)
 	called := false
 
-	co.WaitMainThread(func() {
-		co.WaitMainThread(func() { called = true })
+	scheduler.WaitMainThread(func() {
+		scheduler.WaitMainThread(func() { called = true })
 	})
 
 	if !called {
@@ -287,15 +287,15 @@ func TestWaitMainThreadNestedFastPath(t *testing.T) {
 
 func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	returned := make(chan struct{})
 
 	go func() {
-		co.WaitMainThread(func() {})
+		scheduler.WaitMainThread(func() {})
 		close(returned)
 	}()
 
-	waitForQueuedJob(t, co)
+	waitForQueuedJob(t, scheduler)
 
 	select {
 	case <-returned:
@@ -303,7 +303,7 @@ func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 	default:
 	}
 
-	co.Update()
+	scheduler.Update()
 	select {
 	case <-returned:
 	case <-time.After(time.Second):
@@ -313,18 +313,18 @@ func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 
 func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	started, release := make(chan struct{}), make(chan struct{})
 	releaseBlocker := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(releaseBlocker)
-	blocker := co.Create("shutdown-blocker", func(Thread) {
+	blocker := scheduler.Create("shutdown-blocker", func(Thread) {
 		close(started)
 		<-release
 	})
 	waitForThreadSignal(t, started, "blocker did not start")
 	firstDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(firstDone)
 	}()
 	// Cancellation proves the first shutdown acquired the gate.
@@ -332,14 +332,14 @@ func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 	var callbackRan atomic.Bool
 	callDone := make(chan struct{})
 	go func() {
-		co.WaitMainThread(func() { callbackRan.Store(true) })
+		scheduler.WaitMainThread(func() { callbackRan.Store(true) })
 		close(callDone)
 	}()
-	waitForQueuedJob(t, co)
+	waitForQueuedJob(t, scheduler)
 	secondStarted, secondDone := make(chan struct{}), make(chan struct{})
 	go func() {
 		close(secondStarted)
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(secondDone)
 	}()
 	waitForThreadSignal(t, secondStarted, "second shutdown did not start")
@@ -359,7 +359,7 @@ func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 	if callbackRan.Load() {
 		t.Fatal("shutdown ran the engine job without a main-thread caller")
 	}
-	co.Update()
+	scheduler.Update()
 	waitForThreadSignal(t, callDone, "queued main-thread call did not finish after Update")
 	if !callbackRan.Load() {
 		t.Fatal("queued main-thread call did not run on Update")
@@ -368,11 +368,11 @@ func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 
 func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 
 	active := make(chan struct{})
 	releaseActive := make(chan struct{})
-	co.Create("active", func(Thread) {
+	scheduler.Create("active", func(Thread) {
 		close(active)
 		<-releaseActive
 	})
@@ -382,7 +382,7 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 		default:
 			close(releaseActive)
 		}
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	select {
 	case <-active:
@@ -394,14 +394,14 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 	returned := make(chan any, 1)
 	go func() {
 		defer func() { returned <- recover() }()
-		co.WaitMainThread(func() { close(executed) })
+		scheduler.WaitMainThread(func() { close(executed) })
 	}()
 
-	waitForQueuedJob(t, co)
+	waitForQueuedJob(t, scheduler)
 
 	close(releaseActive)
-	co.drain()
-	co.Update()
+	scheduler.drain()
+	scheduler.Update()
 
 	select {
 	case recovered := <-returned:
@@ -420,23 +420,23 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 
 func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	t.Cleanup(func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 
 	var callbackRan atomic.Bool
 	var continued atomic.Bool
-	co.Create("worker", func(Thread) {
-		co.WaitMainThread(func() { callbackRan.Store(true) })
+	scheduler.Create("worker", func(Thread) {
+		scheduler.WaitMainThread(func() { callbackRan.Store(true) })
 		continued.Store(true)
 	})
 
-	waitForQueuedJob(t, co)
+	waitForQueuedJob(t, scheduler)
 
-	co.StopAll()
-	co.Update()
-	co.drain()
+	scheduler.StopAll()
+	scheduler.Update()
+	scheduler.drain()
 	if callbackRan.Load() {
 		t.Fatal("main-thread callback ran after its coroutine was canceled")
 	}
@@ -447,23 +447,23 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 
 func TestCleanupMainThreadRunsAfterQueuedCallCancellation(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	var called, cleaned, continued atomic.Bool
-	thread := co.Create("caller", func(Thread) {
-		defer co.CleanupMainThread(func() {
+	thread := scheduler.Create("caller", func(Thread) {
+		defer scheduler.CleanupMainThread(func() {
 			cleaned.Store(true)
 			defer func() {
 				if got := recover(); got != ErrReentrantWait {
 					t.Errorf("cleanup drain panic = %v, want %v", got, ErrReentrantWait)
 				}
 			}()
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 		})
-		co.WaitMainThread(func() { called.Store(true) })
+		scheduler.WaitMainThread(func() { called.Store(true) })
 		continued.Store(true)
 	})
-	waitForQueuedJob(t, co)
-	co.Stop(thread)
+	waitForQueuedJob(t, scheduler)
+	scheduler.Stop(thread)
 	deadline := time.Now().Add(time.Second)
 	for {
 		select {
@@ -471,39 +471,39 @@ func TestCleanupMainThreadRunsAfterQueuedCallCancellation(t *testing.T) {
 			if called.Load() || continued.Load() || !cleaned.Load() {
 				t.Fatalf("called=%v continued=%v cleaned=%v", called.Load(), continued.Load(), cleaned.Load())
 			}
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 			return
 		default:
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("canceled cleanup did not finish")
 		}
-		co.Update()
+		scheduler.Update()
 	}
 }
 
 func TestMainThreadCallCanceledBeforeDispatch(t *testing.T) {
-	co := New(nil)
-	caller := co.newThread("caller")
+	scheduler := New(nil)
+	caller := scheduler.newThread("caller")
 	pending := &mainThreadCall{caller: caller, done: make(chan callbackResult, 1)}
 	caller.Cancel()
 	if recovered := catchPanic(pending.wait); recovered != ErrAbortThread {
 		t.Fatalf("canceled wait panic = %v, want %v", recovered, ErrAbortThread)
 	}
 	pending.call = func() { t.Error("canceled call ran after its waiter returned") }
-	pending.run(co)
+	pending.run(scheduler)
 	if len(pending.done) != 0 {
 		t.Fatal("canceled call published a result after its waiter returned")
 	}
 }
 
 func TestMainThreadCallCanceledBeforeClaim(t *testing.T) {
-	co := New(nil)
-	caller := co.newThread("caller")
+	scheduler := New(nil)
+	caller := scheduler.newThread("caller")
 	pending := &mainThreadCall{caller: caller, done: make(chan callbackResult, 1)}
 	caller.Cancel()
 	pending.call = func() { t.Error("call ran after its caller was canceled") }
-	pending.run(co)
+	pending.run(scheduler)
 	select {
 	case result := <-pending.done:
 		if result.panicked {
@@ -515,8 +515,8 @@ func TestMainThreadCallCanceledBeforeClaim(t *testing.T) {
 }
 
 func TestMainThreadCallRechecksCancellationAfterResult(t *testing.T) {
-	co := New(nil)
-	caller := co.newThread("caller")
+	scheduler := New(nil)
+	caller := scheduler.newThread("caller")
 	defer caller.Cancel()
 	waiting := make(chan struct{})
 	var resultReady atomic.Bool
@@ -546,31 +546,31 @@ func TestMainThreadCallRechecksCancellationAfterResult(t *testing.T) {
 
 func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	entered, release, updated := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	releaseCall := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(func() {
 		releaseCall()
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		waitForThreadSignal(t, updated, "Update did not return")
 	})
 	var continued atomic.Bool
-	thread := co.Create("caller", func(Thread) {
-		co.WaitMainThread(func() {
+	thread := scheduler.Create("caller", func(Thread) {
+		scheduler.WaitMainThread(func() {
 			close(entered)
 			<-release
 		})
 		continued.Store(true)
 	})
 	go func() {
-		co.Update()
+		scheduler.Update()
 		close(updated)
 	}()
 	waitForThreadSignal(t, entered, "main-thread call did not start")
-	co.Stop(thread)
+	scheduler.Stop(thread)
 	reset, drained := make(chan struct{}), make(chan struct{})
 	go func() {
-		co.RunAfterStop(func() { close(reset) })
+		scheduler.RunAfterStop(func() { close(reset) })
 		close(drained)
 	}()
 	select {
@@ -581,8 +581,8 @@ func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
 	case <-time.After(20 * time.Millisecond):
 	}
 
-	if co.runMu.TryLock() {
-		co.runMu.Unlock()
+	if scheduler.runMu.TryLock() {
+		scheduler.runMu.Unlock()
 		t.Error("cancellation released script execution before the engine call finished")
 	}
 	releaseCall()
@@ -597,17 +597,17 @@ func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
 func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
 	setMainThreadForTest(t, false)
 	var reported atomic.Bool
-	co := New(func(PanicReport) { reported.Store(true) })
-	thread := co.Create("caller", func(me Thread) {
-		co.WaitMainThread(func() {
-			co.Stop(me)
+	scheduler := New(func(PanicReport) { reported.Store(true) })
+	thread := scheduler.Create("caller", func(me Thread) {
+		scheduler.WaitMainThread(func() {
+			scheduler.Stop(me)
 			panic("canceled result")
 		})
 		t.Error("canceled caller continued")
 	})
-	co.Update()
+	scheduler.Update()
 	waitForThreadSignal(t, thread.done, "canceled caller did not finish")
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 	if reported.Load() {
 		t.Fatal("canceled call published its panic result")
 	}
@@ -615,15 +615,15 @@ func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
 
 func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	guarded := make(chan any, 1)
-	thread := co.Create("caller", func(Thread) {
-		co.WaitMainThread(func() {
+	thread := scheduler.Create("caller", func(Thread) {
+		scheduler.WaitMainThread(func() {
 			defer func() { guarded <- recover() }()
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 		})
 	})
-	co.Update()
+	scheduler.Update()
 	waitForThreadSignal(t, thread.done, "caller did not finish")
 	if recovered := <-guarded; recovered != ErrReentrantWait {
 		t.Fatalf("synchronous drain panic = %v", recovered)
@@ -631,20 +631,20 @@ func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
 	if thread.Stopped() {
 		t.Fatal("rejected drain canceled its own caller")
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }
 
 func TestWaitMainThreadPropagatesCallbackPanic(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	returned := make(chan any, 1)
 	go func() {
 		defer func() { returned <- recover() }()
-		co.WaitMainThread(func() { panic("main-thread failure") })
+		scheduler.WaitMainThread(func() { panic("main-thread failure") })
 	}()
 
-	waitForQueuedJob(t, co)
-	co.Update()
+	waitForQueuedJob(t, scheduler)
+	scheduler.Update()
 	select {
 	case recovered := <-returned:
 		if recovered != "main-thread failure" {
@@ -658,7 +658,7 @@ func TestWaitMainThreadPropagatesCallbackPanic(t *testing.T) {
 func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	returned := make(chan bool, 1)
 	go func() {
 		panicked := true
@@ -666,12 +666,12 @@ func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 			_ = recover()
 			returned <- panicked
 		}()
-		co.WaitMainThread(func() { panicWithValue(nil) })
+		scheduler.WaitMainThread(func() { panicWithValue(nil) })
 		panicked = false
 	}()
 
-	waitForQueuedJob(t, co)
-	co.Update()
+	waitForQueuedJob(t, scheduler)
+	scheduler.Update()
 	select {
 	case panicked := <-returned:
 		if !panicked {
@@ -684,7 +684,7 @@ func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 
 func TestWaitMainThreadGoexitReleasesExternalCaller(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	callerDone := make(chan bool, 1)
 	go func() {
 		returned := false
@@ -692,17 +692,17 @@ func TestWaitMainThreadGoexitReleasesExternalCaller(t *testing.T) {
 			_ = recover()
 			callerDone <- returned
 		}()
-		co.WaitMainThread(runtime.Goexit)
+		scheduler.WaitMainThread(runtime.Goexit)
 		returned = true
 	}()
 
-	waitForQueuedJob(t, co)
+	waitForQueuedJob(t, scheduler)
 
 	updateDone := make(chan bool, 1)
 	go func() {
 		returned := false
 		defer func() { updateDone <- returned }()
-		co.Update()
+		scheduler.Update()
 		returned = true
 	}()
 	select {
@@ -733,38 +733,38 @@ func TestShutdownPumpsCleanupWithoutAdvancingFrames(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			setMainThreadForTest(t, false)
-			co := New(nil)
+			scheduler := New(nil)
 			cleaned := false
 			cleanup := func() {
-				if got := catchPanic(func() { co.RunAfterStop(nil) }); got != ErrReentrantWait {
+				if got := catchPanic(func() { scheduler.RunAfterStop(nil) }); got != ErrReentrantWait {
 					t.Errorf("pumped cleanup drain panic = %v, want %v", got, ErrReentrantWait)
 				}
 				cleaned = true
 			}
 			var first <-chan struct{}
 			if !test.holdGate {
-				latch := co.NewLatch()
-				thread := co.Create("cleanup-owner", func(Thread) {
-					defer co.CleanupMainThread(cleanup)
+				latch := scheduler.NewLatch()
+				thread := scheduler.Create("cleanup-owner", func(Thread) {
+					defer scheduler.CleanupMainThread(cleanup)
 					latch.Wait()
 				})
 				waitForThreadSignal(t, thread.firstSliceDone, "cleanup owner did not suspend")
-				co.Stop(thread)
+				scheduler.Stop(thread)
 			} else {
 				result := make(chan struct{})
 				first = result
 				go func() {
-					co.RunAfterStop(func() {
-						co.CleanupMainThread(cleanup)
+					scheduler.RunAfterStop(func() {
+						scheduler.CleanupMainThread(cleanup)
 					})
 					close(result)
 				}()
 			}
-			waitForQueuedJob(t, co)
+			waitForQueuedJob(t, scheduler)
 
 			setMainThreadForTest(t, true)
-			frame, round := itime.Frame(), co.ScriptRound()
-			co.RunAfterStop(func() {
+			frame, round := itime.Frame(), scheduler.ScriptRound()
+			scheduler.RunAfterStop(func() {
 				if !cleaned {
 					t.Error("shutdown callback ran before engine cleanup")
 				}
@@ -772,7 +772,7 @@ func TestShutdownPumpsCleanupWithoutAdvancingFrames(t *testing.T) {
 			if first != nil {
 				waitForThreadSignal(t, first, "first shutdown did not finish")
 			}
-			if itime.Frame() != frame || co.ScriptRound() != round {
+			if itime.Frame() != frame || scheduler.ScriptRound() != round {
 				t.Fatal("shutdown advanced a frame or script round while serving engine cleanup")
 			}
 		})
@@ -784,31 +784,31 @@ func TestShutdownPumpsCleanupWithoutAdvancingFrames(t *testing.T) {
 
 func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 	setMainThreadForTest(t, false)
-	co := New(nil)
+	scheduler := New(nil)
 	workerStarted, releaseWorker := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(releaseWorker) })
 	t.Cleanup(release)
-	worker := co.Create("pending-worker", func(Thread) {
-		co.WaitToDo(func() {
+	worker := scheduler.Create("pending-worker", func(Thread) {
+		scheduler.WaitToDo(func() {
 			close(workerStarted)
 			<-releaseWorker
 		})
 	})
 	waitForThreadSignal(t, workerStarted, "worker did not start")
 	cleanupStarted := make(chan struct{})
-	cleanupOwner := co.Create("cleanup-goexit", func(me Thread) {
-		defer co.CleanupMainThread(runtime.Goexit)
+	cleanupOwner := scheduler.Create("cleanup-goexit", func(me Thread) {
+		defer scheduler.CleanupMainThread(runtime.Goexit)
 		close(cleanupStarted)
 		<-me.Context().Done()
 	})
 	waitForThreadSignal(t, cleanupStarted, "cleanup owner did not start")
-	co.Stop(cleanupOwner)
-	waitForQueuedJob(t, co)
+	scheduler.Stop(cleanupOwner)
+	waitForQueuedJob(t, scheduler)
 	setMainThreadForTest(t, true)
 	exited := make(chan callbackScope, 1)
 	go func() {
-		defer func() { exited <- co.callbackScope() }()
-		co.RunAfterStop(func() { t.Error("shutdown ran cleanup after the engine goroutine exited") })
+		defer func() { exited <- scheduler.callbackScope() }()
+		scheduler.RunAfterStop(func() { t.Error("shutdown ran cleanup after the engine goroutine exited") })
 		t.Error("shutdown returned normally after its pumped call used Goexit")
 	}()
 	select {
@@ -821,33 +821,33 @@ func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 	}
 	waitForThreadSignal(t, cleanupOwner.done, "cleanup owner did not finish")
 	waitForThreadSignal(t, worker.done, "shutdown did not stop the worker's caller")
-	if len(co.shutdownGate) != 1 {
+	if len(scheduler.shutdownGate) != 1 {
 		t.Fatal("interrupted shutdown did not release its gate")
 	}
-	if !co.hasPendingWork() {
+	if !scheduler.hasPendingWork() {
 		t.Fatal("test precondition failed: the native worker must still be running")
 	}
-	assertShutdownRejectsCreation(t, co)
+	assertShutdownRejectsCreation(t, scheduler)
 	// Even StopAll must preserve the interrupted drain's closed admission.
-	co.StopAll()
-	assertShutdownRejectsCreation(t, co)
+	scheduler.StopAll()
+	assertShutdownRejectsCreation(t, scheduler)
 	release()
-	co.drain()
-	assertShutdownRejectsCreation(t, co)
+	scheduler.drain()
+	assertShutdownRejectsCreation(t, scheduler)
 	recovered := make(chan struct{})
 	go func() {
-		co.RunAfterStop(func() {
-			if !co.admissionClosed() {
+		scheduler.RunAfterStop(func() {
+			if !scheduler.admissionClosed() {
 				t.Error("recovery cleanup ran with admission open")
 			}
 		})
 		close(recovered)
 	}()
 	waitForThreadSignal(t, recovered, "later shutdown did not recover the interrupted drain")
-	if co.admissionClosed() || co.hasPendingWork() {
+	if scheduler.admissionClosed() || scheduler.hasPendingWork() {
 		t.Fatal("successful recovery did not reopen admission and empty the registry")
 	}
-	fresh := co.Create("after-recovery", func(Thread) {})
+	fresh := scheduler.Create("after-recovery", func(Thread) {})
 	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
 	if fresh.Stopped() {
 		t.Fatal("successful recovery rejected a fresh script")
@@ -873,10 +873,10 @@ func setMainThreadForTest(t *testing.T, main bool) {
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
 }
 
-func waitForQueuedJob(t *testing.T, co *Coroutines) {
+func waitForQueuedJob(t *testing.T, scheduler *Scheduler) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
-	for co.currentJobCount() == 0 {
+	for scheduler.currentJobCount() == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("main-thread call was not queued")
 		}

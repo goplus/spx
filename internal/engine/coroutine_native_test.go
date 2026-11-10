@@ -48,52 +48,26 @@ func TestExecuteOnEngineThreadServicesMainThreadCalls(t *testing.T) {
 	}
 }
 
-func TestFrameRuntimeCallbacksCanRegisterScriptsAndCallEngine(t *testing.T) {
-	isolateGameBinding(t)
-	co := setupExecuteTest(t)
+func TestExecuteFromNativeWorkerCanCallMainThread(t *testing.T) {
+	setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
 	gdx.PlatformMgr = platform
-	resetInputState()
-	resetTriggerEvents()
-	resetRuntimeDeltaTestState()
-	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		resetRuntimeDeltaTestState()
-		resetInputState()
-		resetTriggerEvents()
-	})
-	isolateCaptureState(t)
-
-	var runtimeManaged, nestedManaged, calledEngine, scriptRan, renderSawScript atomic.Bool
-	game := &frameRecordingGame{step: func(name string) {
-		if name == "render" {
-			renderSawScript.Store(scriptRan.Load())
-		}
-	}}
-	if _, err := bindGame(game, game); err != nil {
-		t.Fatal(err)
-	}
-	delayCall(0, func() {
-		runtimeManaged.Store(IsInCoroutine())
-		Execute(nil, func(context.Context, any) {
-			nestedManaged.Store(IsInCoroutine())
-			WaitMainThread(func() { calledEngine.Store(platform.IsMainThread()) })
-		})
-		// Model the asynchronous batch used by broadcasts.
-		co.StartBatch([]coroutine.Task{{Owner: game, Run: func(coroutine.Thread) {
-			WaitMainThread(func() { scriptRan.Store(platform.IsMainThread()) })
-		}}}, coroutine.BatchAsync)
-	})
-	returned := make(chan struct{})
+	done := make(chan struct{})
+	called := false
 	go func() {
-		defer close(returned)
+		defer close(done)
 		platform.mainGID.Store(gid.Get())
-		onUpdate(0.25)
+		Execute("outer", func(context.Context, any) {
+			ExecuteNative(func(context.Context, any) {
+				Execute("nested", func(context.Context, any) {
+					WaitMainThread(func() { called = platform.IsMainThread() })
+				})
+			})
+		})
 	}()
-	waitForEngineSignal(t, returned, time.Second, "frame callback did not complete its engine calls and registered scripts")
-	if !runtimeManaged.Load() || !nestedManaged.Load() || !calledEngine.Load() || !renderSawScript.Load() {
-		t.Fatalf("runtime managed=%v nested managed=%v engine call=%v render saw script=%v",
-			runtimeManaged.Load(), nestedManaged.Load(), calledEngine.Load(), renderSawScript.Load())
+	waitForEngineSignal(t, done, 2*time.Second, "worker could not reenter Execute and call the engine")
+	if !called {
+		t.Fatal("worker's managed callback did not run its engine call on the main thread")
 	}
 }
 
@@ -122,7 +96,7 @@ func TestExecuteRejectsMainThreadCallbackReentry(t *testing.T) {
 }
 
 func TestExecuteRejectsBetweenScriptsReentry(t *testing.T) {
-	co := setupExecuteTest(t)
+	current := setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
 	gdx.PlatformMgr = platform
 	done := make(chan struct{})
@@ -131,11 +105,11 @@ func TestExecuteRejectsBetweenScriptsReentry(t *testing.T) {
 	go func() {
 		defer close(done)
 		platform.mainGID.Store(gid.Get())
-		co.RunBetweenScripts(func() {
+		current.RunBetweenScripts(func() {
 			defer func() { recovered = recover() }()
 			Execute("nested", func(context.Context, any) { nestedRan = true })
 		})
-		co.RunBetweenScripts(func() { subsequentRan = true })
+		current.RunBetweenScripts(func() { subsequentRan = true })
 	}()
 	waitForEngineSignal(t, done, 2*time.Second, "between-scripts callback deadlocked reentering Execute")
 	if recovered != coroutine.ErrReentrantWait || nestedRan || !subsequentRan {
@@ -143,37 +117,63 @@ func TestExecuteRejectsBetweenScriptsReentry(t *testing.T) {
 	}
 }
 
-func TestExecuteFromNativeWorkerCanCallMainThread(t *testing.T) {
-	setupExecuteTest(t)
+func TestFrameRuntimeCallbacksCanRegisterScriptsAndCallEngine(t *testing.T) {
+	isolateGameBinding(t)
+	current := setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
 	gdx.PlatformMgr = platform
-	done := make(chan struct{})
-	called := false
-	go func() {
-		defer close(done)
-		platform.mainGID.Store(gid.Get())
-		Execute("outer", func(context.Context, any) {
-			ExecuteNative(func(context.Context, any) {
-				Execute("nested", func(context.Context, any) {
-					WaitMainThread(func() { called = platform.IsMainThread() })
-				})
-			})
+	resetInputState()
+	resetTriggerEvents()
+	resetFrameTestState()
+	t.Cleanup(func() {
+		current.RunAfterStop(nil)
+		resetFrameTestState()
+		resetInputState()
+		resetTriggerEvents()
+	})
+	isolateCaptureState(t)
+
+	var runtimeManaged, nestedManaged, calledEngine, scriptRan, renderSawScript atomic.Bool
+	game := &frameRecordingGame{step: func(name string) {
+		if name == "render" {
+			renderSawScript.Store(scriptRan.Load())
+		}
+	}}
+	if _, err := bindGame(game, game); err != nil {
+		t.Fatal(err)
+	}
+	delayCall(0, func() {
+		runtimeManaged.Store(IsInCoroutine())
+		Execute(nil, func(context.Context, any) {
+			nestedManaged.Store(IsInCoroutine())
+			WaitMainThread(func() { calledEngine.Store(platform.IsMainThread()) })
 		})
+		// Model the asynchronous batch used by broadcasts.
+		current.StartBatch([]coroutine.Task{{Owner: game, Run: func(coroutine.Thread) {
+			WaitMainThread(func() { scriptRan.Store(platform.IsMainThread()) })
+		}}}, coroutine.BatchAsync)
+	})
+	returned := make(chan struct{})
+	go func() {
+		defer close(returned)
+		platform.mainGID.Store(gid.Get())
+		onUpdate(0.25)
 	}()
-	waitForEngineSignal(t, done, 2*time.Second, "worker could not reenter Execute and call the engine")
-	if !called {
-		t.Fatal("worker's managed callback did not run its engine call on the main thread")
+	waitForEngineSignal(t, returned, time.Second, "frame callback did not complete its engine calls and registered scripts")
+	if !runtimeManaged.Load() || !nestedManaged.Load() || !calledEngine.Load() || !renderSawScript.Load() {
+		t.Fatalf("runtime managed=%v nested managed=%v engine call=%v render saw script=%v",
+			runtimeManaged.Load(), nestedManaged.Load(), calledEngine.Load(), renderSawScript.Load())
 	}
 }
 
 func TestEngineDrainServicesWorkerMainThreadCleanup(t *testing.T) {
-	co := setupExecuteTest(t)
+	current := setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
 	gdx.PlatformMgr = platform
 	started := make(chan struct{})
 	called := false
-	co.Create("caller", func(thread coroutine.Thread) {
-		co.WaitToDo(func() {
+	current.Create("caller", func(thread coroutine.Thread) {
+		current.WaitToDo(func() {
 			close(started)
 			<-thread.Context().Done()
 			WaitMainThread(func() { called = platform.IsMainThread() })
@@ -183,7 +183,7 @@ func TestEngineDrainServicesWorkerMainThreadCleanup(t *testing.T) {
 	drained := make(chan struct{})
 	go func() {
 		platform.mainGID.Store(gid.Get())
-		co.RunAfterStop(nil)
+		current.RunAfterStop(nil)
 		close(drained)
 	}()
 	waitForEngineSignal(t, drained, 2*time.Second, "engine drain did not return")
@@ -195,31 +195,31 @@ func TestEngineDrainServicesWorkerMainThreadCleanup(t *testing.T) {
 func TestEngineDrainStopsWaitsWithoutUpdate(t *testing.T) {
 	for _, test := range []struct {
 		name string
-		wait func(*coroutine.Coroutines, coroutine.Thread)
+		wait func(*coroutine.Scheduler, coroutine.Thread)
 	}{
-		{"Wait", func(co *coroutine.Coroutines, _ coroutine.Thread) { co.Wait(3600) }},
-		{"WaitNextFrame", func(co *coroutine.Coroutines, _ coroutine.Thread) { co.WaitNextFrame() }},
-		{"WaitYield", (*coroutine.Coroutines).WaitYield},
+		{"Wait", func(current *coroutine.Scheduler, _ coroutine.Thread) { current.Wait(3600) }},
+		{"WaitNextFrame", func(current *coroutine.Scheduler, _ coroutine.Thread) { current.WaitNextFrame() }},
+		{"WaitYield", (*coroutine.Scheduler).WaitYield},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := setupExecuteTest(t)
+			current := setupExecuteTest(t)
 			platform := &executeMainThreadPlatform{}
 			platform.mainGID.Store(gid.Get())
 			gdx.PlatformMgr = platform
 			cleaned, afterCalled := false, false
-			thread := co.Create("suspended-script", func(me coroutine.Thread) {
-				defer co.CleanupMainThread(func() {
+			thread := current.Create("suspended-script", func(me coroutine.Thread) {
+				defer current.CleanupMainThread(func() {
 					if !platform.IsMainThread() {
 						t.Error("cleanup did not run on the engine thread")
 					}
 					cleaned = true
 				})
-				test.wait(co, me)
+				test.wait(current, me)
 				t.Error("canceled script resumed after its wait")
 			})
-			co.JoinFirstSlice(thread)
-			frame, round := itime.Frame(), co.ScriptRound()
-			co.RunAfterStop(func() {
+			current.JoinFirstSlice(thread)
+			frame, round := itime.Frame(), current.ScriptRound()
+			current.RunAfterStop(func() {
 				afterCalled = true
 				if !cleaned {
 					t.Error("shutdown callback ran before script cleanup")
@@ -228,7 +228,7 @@ func TestEngineDrainStopsWaitsWithoutUpdate(t *testing.T) {
 			if !thread.Stopped() || !afterCalled {
 				t.Fatalf("shutdown stopped=%v after=%v", thread.Stopped(), afterCalled)
 			}
-			if itime.Frame() != frame || co.ScriptRound() != round {
+			if itime.Frame() != frame || current.ScriptRound() != round {
 				t.Fatal("shutdown advanced a frame or script round")
 			}
 		})
@@ -236,15 +236,15 @@ func TestEngineDrainStopsWaitsWithoutUpdate(t *testing.T) {
 }
 
 func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
-	co := setupExecuteTest(t)
+	current := setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
 	gdx.PlatformMgr = platform
 	started, canceled, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	unblock := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(unblock)
 	called := false
-	co.Create("caller", func(thread coroutine.Thread) {
-		co.WaitToDo(func() {
+	current.Create("caller", func(thread coroutine.Thread) {
+		current.WaitToDo(func() {
 			close(started)
 			<-thread.Context().Done()
 			close(canceled)
@@ -255,7 +255,7 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 	waitForEngineSignal(t, started, 2*time.Second, "worker did not start")
 	first := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		current.RunAfterStop(nil)
 		close(first)
 	}()
 	// Cancellation proves the first drain owns the shutdown gate before the engine waits.
@@ -265,7 +265,7 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 	go func() {
 		platform.mainGID.Store(gid.Get())
 		close(engineStarted)
-		co.RunAfterStop(nil)
+		current.RunAfterStop(nil)
 		close(second)
 	}()
 	waitForEngineSignal(t, engineStarted, 2*time.Second, "engine drain did not start")
@@ -279,15 +279,15 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 
 func TestLinkedGameResetReleasesBackendForNextGame(t *testing.T) {
 	isolateGameBinding(t)
-	previousCo := gco
-	SetCoroutines(nil)
+	previousScheduler := scheduler
+	SetScheduler(nil)
 	previousAudio, previousCamera, previousDebug := gdx.AudioMgr, gdx.CameraMgr, gdx.DebugMgr
 	previousExt, previousInput, previousNavigation := gdx.ExtMgr, gdx.InputMgr, gdx.NavigationMgr
 	previousPen, previousPhysics, previousPlatform := gdx.PenMgr, gdx.PhysicsMgr, gdx.PlatformMgr
 	previousRes, previousScene, previousSprite := gdx.ResMgr, gdx.SceneMgr, gdx.SpriteMgr
 	previousTilemap, previousTilemapparser, previousUI := gdx.TilemapMgr, gdx.TilemapparserMgr, gdx.UiMgr
 	t.Cleanup(func() {
-		SetCoroutines(previousCo)
+		SetScheduler(previousScheduler)
 		gdx.AudioMgr, gdx.CameraMgr, gdx.DebugMgr = previousAudio, previousCamera, previousDebug
 		gdx.ExtMgr, gdx.InputMgr, gdx.NavigationMgr = previousExt, previousInput, previousNavigation
 		gdx.PenMgr, gdx.PhysicsMgr, gdx.PlatformMgr = previousPen, previousPhysics, previousPlatform

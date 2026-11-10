@@ -36,16 +36,16 @@ func TestWaitMainThreadDirectPreservesFaultStack(t *testing.T) {
 			for _, value := range []any{"sentinel", errorValue, []string{"uncomparable", "value"}} {
 				t.Run(reflect.TypeOf(value).String(), func(t *testing.T) {
 					reports := make(chan PanicReport, 1)
-					co := New(func(report PanicReport) { reports <- report })
-					worker := co.Create("callback-worker", func(Thread) {
-						call := co.WaitMainThread
+					scheduler := New(func(report PanicReport) { reports <- report })
+					worker := scheduler.Create("callback-worker", func(Thread) {
+						call := scheduler.WaitMainThread
 						if cleanup {
-							call = co.CleanupMainThread
+							call = scheduler.CleanupMainThread
 						}
 						call(func() { panicWithValue(value) })
 					})
 					waitForThreadSignal(t, worker.done, "panicking callback did not finish")
-					co.RunAfterStop(nil)
+					scheduler.RunAfterStop(nil)
 					select {
 					case report := <-reports:
 						if !reflect.DeepEqual(report.Value, value) || value == errorValue && report.Value != errorValue {
@@ -60,7 +60,7 @@ func TestWaitMainThreadDirectPreservesFaultStack(t *testing.T) {
 					default:
 						t.Fatal("callback panic was not reported")
 					}
-					co.callbacks.Range(func(_, _ any) bool {
+					scheduler.callbacks.Range(func(_, _ any) bool {
 						t.Error("panicking callback retained its scope")
 						return false
 					})
@@ -82,26 +82,26 @@ func TestWaitMainThreadDirectPreservesCanceledAbnormalExit(t *testing.T) {
 		{"Goexit", runtime.Goexit, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			checked := false
-			worker := co.Create("canceled-callback", func(me Thread) {
+			worker := scheduler.Create("canceled-callback", func(me Thread) {
 				defer func() {
 					if got := recover(); got != test.want {
 						t.Errorf("exit panic = %v, want %v", got, test.want)
 					}
-					if co.callbackScope() != 0 {
+					if scheduler.callbackScope() != 0 {
 						t.Error("abnormal callback retained its scope")
 					}
 					checked = true
 				}()
-				co.WaitMainThread(func() {
+				scheduler.WaitMainThread(func() {
 					me.Cancel()
 					test.call()
 				})
 				t.Error("canceled abnormal callback returned normally")
 			})
 			waitForThreadSignal(t, worker.done, "canceled callback did not finish")
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 			if !checked {
 				t.Fatal("canceled callback never reached its caller's defer")
 			}
@@ -114,13 +114,13 @@ func TestWaitMainThreadDirectCancellation(t *testing.T) {
 	for _, when := range []string{"before", "during", "during panic"} {
 		t.Run(when, func(t *testing.T) {
 			var called, continued, cleaned, reported atomic.Bool
-			co := New(func(PanicReport) { reported.Store(true) })
-			thread := co.Create("caller", func(me Thread) {
-				defer co.CleanupMainThread(func() { cleaned.Store(true) })
+			scheduler := New(func(PanicReport) { reported.Store(true) })
+			thread := scheduler.Create("caller", func(me Thread) {
+				defer scheduler.CleanupMainThread(func() { cleaned.Store(true) })
 				if when == "before" {
 					me.Cancel()
 				}
-				co.WaitMainThread(func() {
+				scheduler.WaitMainThread(func() {
 					called.Store(true)
 					me.Cancel()
 					if when == "during panic" {
@@ -130,7 +130,7 @@ func TestWaitMainThreadDirectCancellation(t *testing.T) {
 				continued.Store(true)
 			})
 			waitForThreadSignal(t, thread.done, "canceled caller did not finish")
-			co.RunAfterStop(nil)
+			scheduler.RunAfterStop(nil)
 			if called.Load() != (when != "before") || continued.Load() || !cleaned.Load() || reported.Load() {
 				t.Fatalf("called=%v continued=%v cleaned=%v reported=%v", called.Load(), continued.Load(), cleaned.Load(), reported.Load())
 			}
@@ -140,14 +140,14 @@ func TestWaitMainThreadDirectCancellation(t *testing.T) {
 
 func TestWaitMainThreadDirectRejectsDrain(t *testing.T) {
 	useDirectMainThread(t)
-	co := New(nil)
+	scheduler := New(nil)
 	got := catchPanic(func() {
-		co.WaitMainThread(func() { co.RunAfterStop(nil) })
+		scheduler.WaitMainThread(func() { scheduler.RunAfterStop(nil) })
 	})
 	if got != ErrReentrantWait {
 		t.Fatalf("callback drain panic = %v, want %v", got, ErrReentrantWait)
 	}
-	if co.admissionClosed() || co.callbackScope() != 0 {
+	if scheduler.admissionClosed() || scheduler.callbackScope() != 0 {
 		t.Fatal("rejected drain left admission closed or callback scope installed")
 	}
 }
@@ -165,7 +165,7 @@ func TestWaitMainThreadDirectPreservesAbnormalExit(t *testing.T) {
 		{"Goexit", runtime.Goexit, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			exited := make(chan struct{})
 			go func() {
 				defer close(exited)
@@ -173,11 +173,11 @@ func TestWaitMainThreadDirectPreservesAbnormalExit(t *testing.T) {
 					if got := recover(); got != test.want {
 						t.Errorf("exit panic = %v, want %v", got, test.want)
 					}
-					if co.callbackScope() != 0 {
+					if scheduler.callbackScope() != 0 {
 						t.Error("abnormal exit retained callback scope")
 					}
 				}()
-				co.WaitMainThread(test.call)
+				scheduler.WaitMainThread(test.call)
 				t.Error("abnormal callback returned normally")
 			}()
 			waitForThreadSignal(t, exited, "abnormal callback did not release the caller")
@@ -195,35 +195,35 @@ func TestManagedMainThreadCallbackRejectsYieldBeforeSideEffects(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			for _, operation := range []string{"schedule", "time", "frame", "worker", "channel", "join", "first slice", "latch", "batch done", "batch first slice", "execute"} {
 				t.Run(operation, func(t *testing.T) {
-					co := New(nil)
-					latch := co.NewLatch()
+					scheduler := New(nil)
+					latch := scheduler.NewLatch()
 					var workRan atomic.Bool
-					thread := co.Create("caller", func(me Thread) {
-						peer := co.Create("peer", func(Thread) {})
-						lastID := co.LastThreadID()
-						call := co.WaitMainThread
+					thread := scheduler.Create("caller", func(me Thread) {
+						peer := scheduler.Create("peer", func(Thread) {})
+						lastID := scheduler.LastThreadID()
+						call := scheduler.WaitMainThread
 						if cleanup {
-							call = co.CleanupMainThread
+							call = scheduler.CleanupMainThread
 						}
 						call(func() {
 							got := catchPanic(func() {
 								switch operation {
 								case "schedule":
-									co.Sched(me)
+									scheduler.Sched(me)
 								case "time":
-									co.Wait(3600)
+									scheduler.Wait(3600)
 								case "frame":
-									co.WaitNextFrame()
+									scheduler.WaitNextFrame()
 								case "worker":
-									co.WaitToDo(func() { workRan.Store(true) })
+									scheduler.WaitToDo(func() { workRan.Store(true) })
 								case "channel":
-									WaitForChan(co, latch.Done())
+									WaitForChan(scheduler, latch.Done())
 								case "execute":
-									co.RunSync(nil, func(Thread) { workRan.Store(true) })
+									scheduler.RunSync(nil, func(Thread) { workRan.Store(true) })
 								case "join":
-									co.Join(peer)
+									scheduler.Join(peer)
 								case "first slice":
-									co.JoinFirstSlice(peer)
+									scheduler.JoinFirstSlice(peer)
 								case "latch":
 									latch.Wait()
 								case "batch done", "batch first slice":
@@ -231,7 +231,7 @@ func TestManagedMainThreadCallbackRejectsYieldBeforeSideEffects(t *testing.T) {
 									if operation == "batch first slice" {
 										mode = BatchWaitFirstSlice
 									}
-									co.StartBatch([]Task{{Run: func(Thread) { workRan.Store(true) }}}, mode)
+									scheduler.StartBatch([]Task{{Run: func(Thread) { workRan.Store(true) }}}, mode)
 								}
 							})
 							if got != ErrReentrantWait {
@@ -242,16 +242,16 @@ func TestManagedMainThreadCallbackRejectsYieldBeforeSideEffects(t *testing.T) {
 								t.Error("rejected operation released the first script slice")
 							default:
 							}
-							if co.LastThreadID() != lastID || co.currentJobCount() != 0 {
+							if scheduler.LastThreadID() != lastID || scheduler.currentJobCount() != 0 {
 								t.Error("rejected operation registered a task or wait job")
 							}
 						})
 					})
 					// A regression that yields must still be able to unwind without a frame.
 					waitForThreadSignal(t, thread.firstSliceDone, "caller neither rejected the wait nor yielded")
-					co.Stop(thread)
+					scheduler.Stop(thread)
 					waitForThreadSignal(t, thread.done, "caller did not finish")
-					co.RunAfterStop(nil)
+					scheduler.RunAfterStop(nil)
 					if workRan.Load() {
 						t.Error("rejected wait launched its worker or batch")
 					}
@@ -263,41 +263,41 @@ func TestManagedMainThreadCallbackRejectsYieldBeforeSideEffects(t *testing.T) {
 
 func TestCleanupMainThreadDirectAllowsNestedEngineCallsAfterCancellation(t *testing.T) {
 	useDirectMainThread(t)
-	co := New(nil)
+	scheduler := New(nil)
 	cleaned := 0
-	thread := co.Create("caller", func(me Thread) {
+	thread := scheduler.Create("caller", func(me Thread) {
 		me.Cancel()
-		co.CleanupMainThread(func() {
-			co.WaitMainThread(func() { cleaned++ })
-			co.CleanupMainThread(func() {
-				co.WaitMainThread(func() { cleaned++ })
+		scheduler.CleanupMainThread(func() {
+			scheduler.WaitMainThread(func() { cleaned++ })
+			scheduler.CleanupMainThread(func() {
+				scheduler.WaitMainThread(func() { cleaned++ })
 			})
 		})
 		got := catchPanic(func() {
-			co.WaitMainThread(func() { t.Error("cleanup cancellation exemption escaped its scope") })
+			scheduler.WaitMainThread(func() { t.Error("cleanup cancellation exemption escaped its scope") })
 		})
 		if got != ErrAbortThread {
 			t.Errorf("ordinary call after cleanup panic = %v, want %v", got, ErrAbortThread)
 		}
 	})
 	waitForThreadSignal(t, thread.done, "nested engine cleanup did not finish")
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 	if cleaned != 2 {
 		t.Fatalf("nested engine cleanup calls = %d, want 2", cleaned)
 	}
 }
 
 func TestExclusiveCallbackChannelWait(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	ready := make(chan int, 1)
 	ready <- 7
 	closed := make(chan int)
 	close(closed)
-	co.RunBetweenScripts(func() {
-		if got := WaitForChan(co, ready); got != 7 {
+	scheduler.RunBetweenScripts(func() {
+		if got := WaitForChan(scheduler, ready); got != 7 {
 			t.Errorf("ready channel value = %d, want 7", got)
 		}
-		if got := WaitForChan(co, closed); got != 0 {
+		if got := WaitForChan(scheduler, closed); got != 0 {
 			t.Errorf("closed channel value = %d, want 0", got)
 		}
 	})
@@ -306,7 +306,7 @@ func TestExclusiveCallbackChannelWait(t *testing.T) {
 	result := make(chan any, 1)
 	go func() {
 		result <- catchPanic(func() {
-			co.RunBetweenScripts(func() { WaitForChan(co, blocked) })
+			scheduler.RunBetweenScripts(func() { WaitForChan(scheduler, blocked) })
 		})
 	}()
 	select {
@@ -328,25 +328,25 @@ func TestExclusiveCallbackChannelWait(t *testing.T) {
 
 func TestManagedMainThreadCallbackAllowsCompletedWaits(t *testing.T) {
 	useDirectMainThread(t)
-	co := New(nil)
-	finished := co.Create("finished", func(Thread) {})
-	co.Join(finished)
-	latch := co.NewLatch()
+	scheduler := New(nil)
+	finished := scheduler.Create("finished", func(Thread) {})
+	scheduler.Join(finished)
+	latch := scheduler.NewLatch()
 	latch.Open()
-	thread := co.Create("caller", func(me Thread) {
-		for _, call := range []func(func()){co.WaitMainThread, co.CleanupMainThread} {
+	thread := scheduler.Create("caller", func(me Thread) {
+		for _, call := range []func(func()){scheduler.WaitMainThread, scheduler.CleanupMainThread} {
 			call(func() {
-				co.Join(nil)
-				co.Join(me)
-				co.Join(finished)
-				co.JoinFirstSlice(finished)
+				scheduler.Join(nil)
+				scheduler.Join(me)
+				scheduler.Join(finished)
+				scheduler.JoinFirstSlice(finished)
 				latch.Wait()
-				co.StartBatch(nil, BatchWaitDone)
-				co.StartBatch(nil, BatchWaitFirstSlice)
-				co.WaitMainThread(func() {})
+				scheduler.StartBatch(nil, BatchWaitDone)
+				scheduler.StartBatch(nil, BatchWaitFirstSlice)
+				scheduler.WaitMainThread(func() {})
 			})
 		}
 	})
 	waitForThreadSignal(t, thread.done, "completed waits blocked the callback")
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 }

@@ -54,8 +54,8 @@ func TestTweenCompletionWritesEndpointBeforeCallback(t *testing.T) {
 			})
 			advanceTweenTest(test.delta)
 			advanceTweenTest(1)
-			if sprite.position != want || calls != 1 || len(tweenInfos) != 0 {
-				t.Fatalf("completion = position %v, callbacks %d, active %d; want %v, 1, 0", sprite.position, calls, len(tweenInfos), want)
+			if sprite.position != want || calls != 1 || len(state.jobs.tweens) != 0 {
+				t.Fatalf("completion = position %v, callbacks %d, active %d; want %v, 1, 0", sprite.position, calls, len(state.jobs.tweens), want)
 			}
 		})
 	}
@@ -112,8 +112,8 @@ func TestTweenCallbacksFollowAllUpdatesAndDeferNewTweens(t *testing.T) {
 		})
 	}
 	advanceTweenTest(1)
-	if !slices.Equal(calls, []Object{1, 2}) || len(tweenInfos) != 1 || first.position.X != 10 {
-		t.Fatalf("callbacks %v, active %d, first %v; want [1 2], 1, (10,0)", calls, len(tweenInfos), first.position)
+	if !slices.Equal(calls, []Object{1, 2}) || len(state.jobs.tweens) != 1 || first.position.X != 10 {
+		t.Fatalf("callbacks %v, active %d, first %v; want [1 2], 1, (10,0)", calls, len(state.jobs.tweens), first.position)
 	}
 	advanceTweenTest(0.5)
 	if first.position.X != 20 {
@@ -132,13 +132,13 @@ func (s *tweenTestSprite) SetPosition(position mathf.Vec2) {
 
 func setupTweenTest(t *testing.T) *tweenTestSprite {
 	t.Helper()
-	resetRuntimeDeltaTestState()
-	t.Cleanup(resetRuntimeDeltaTestState)
+	resetFrameTestState()
+	t.Cleanup(resetFrameTestState)
 	sprite := &tweenTestSprite{id: 1}
 	state.sprites[sprite.id] = sprite
 	return sprite
 }
 
 func advanceTweenTest(delta float64) {
-	updateTweens(delta, invokeRuntimeCallback)
+	state.jobs.updateTweens(delta, invokeRuntimeCallback)
 }

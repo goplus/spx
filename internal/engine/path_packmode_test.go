@@ -18,18 +18,20 @@
 
 package engine
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 	original := assetPaths
 	t.Cleanup(func() {
 		assetPaths = original
 	})
-	assetPaths = assetPathState{
-		root:                joinAssetRoot(packmodeAssetPrefix, "assets"),
-		projectRoot:         packmodeAssetPrefix,
-		extAssetDir:         "custom_asset",
-		legacyCompatibility: true,
+	assetPaths = assetResolver{
+		root:        joinAssetRoot(packmodeAssetPrefix, "assets"),
+		projectRoot: packmodeAssetPrefix,
+		extAssetDir: "custom_asset",
 	}
 
 	for _, test := range []struct {
@@ -49,11 +51,33 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 		{name: "backslash project URI", path: `res:\media\image.png`, want: ""},
 		{name: "UNC path", path: `\\server\share\image.png`, want: ""},
 		{name: "absolute", path: "/tmp/image.png", want: ""},
+		{name: "embedded NUL", path: "image\x00.png", want: ""},
+		{name: "NUL before cleaning", path: "bad\x00/../image.png", want: ""},
+		{name: "project URI NUL", path: "res://bad\x00/../image.png", want: ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := ToAssetPath(test.path); got != test.want {
 				t.Fatalf("ToAssetPath(%q) = %q, want %q", test.path, got, test.want)
 			}
 		})
+	}
+}
+
+func TestSetAssetDirConfiguresPackmodeRoots(t *testing.T) {
+	resources := setupAssetPathTest(t)
+	resources.files["res://.config"] = `{"extasset":"shared"}`
+	for _, dir := range []string{"", "images"} {
+		assetPaths = assetResolver{explicitFSRoots: true}
+		SetAssetDir(dir)
+		wantDir := dir
+		if wantDir == "" {
+			wantDir = "assets"
+		}
+		if assetPaths.root != "res://"+wantDir+"/" || assetPaths.projectRoot != "res://" || assetPaths.extAssetDir != "shared" || assetPaths.explicitFSRoots {
+			t.Fatalf("SetAssetDir(%q) = %+v", dir, assetPaths)
+		}
+	}
+	if !slices.Equal(resources.modes, []bool{false, false}) {
+		t.Fatalf("resource load modes = %v, want archive mode for both calls", resources.modes)
 	}
 }

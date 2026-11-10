@@ -38,14 +38,14 @@ func TestStartBatchRejectsInvalidMode(t *testing.T) {
 		}()
 	}
 
-	co := New(nil)
+	scheduler := New(nil)
 	for _, mode := range []BatchMode{BatchAsync, BatchWaitFirstSlice, BatchWaitDone} {
-		if threads := co.StartBatch(nil, mode); threads != nil {
+		if threads := scheduler.StartBatch(nil, mode); threads != nil {
 			t.Errorf("StartBatch(nil, %d) = %v, want nil", mode, threads)
 		}
 	}
-	if co.LastThreadID() != 0 {
-		t.Fatalf("empty batches created %d threads", co.LastThreadID())
+	if scheduler.LastThreadID() != 0 {
+		t.Fatalf("empty batches created %d threads", scheduler.LastThreadID())
 	}
 }
 
@@ -59,7 +59,7 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			checkDrainReentry(t, func() {
-				co := New(nil)
+				scheduler := New(nil)
 				task := Task{
 					RegisterInvocation: func(Thread) func() {
 						t.Error("rejected batch ran its registration callback")
@@ -67,8 +67,8 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 					},
 					Run: func(Thread) { t.Error("rejected batch ran a script") },
 				}
-				co.RunAfterStop(func() {
-					threads := co.StartBatch([]Task{task, task}, test.mode)
+				scheduler.RunAfterStop(func() {
+					threads := scheduler.StartBatch([]Task{task, task}, test.mode)
 					if len(threads) != 2 {
 						t.Errorf("rejected batch returned %d threads, want 2", len(threads))
 					}
@@ -84,11 +84,11 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 							}
 						}
 					}
-					if co.hasPendingWork() || !co.admissionClosed() {
+					if scheduler.hasPendingWork() || !scheduler.admissionClosed() {
 						t.Error("rejected batch registered work or reopened admission")
 					}
 				})
-				if co.admissionClosed() {
+				if scheduler.admissionClosed() {
 					t.Error("shutdown did not reopen admission")
 				}
 			})
@@ -97,12 +97,12 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 }
 
 func TestStartBatchWaitFirstSliceRequiresManagedCaller(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	var registered, ran atomic.Int32
 	var panicValue any
 	func() {
 		defer func() { panicValue = recover() }()
-		co.StartBatch([]Task{{
+		scheduler.StartBatch([]Task{{
 			RegisterInvocation: func(Thread) func() {
 				registered.Add(1)
 				return nil
@@ -113,10 +113,10 @@ func TestStartBatchWaitFirstSliceRequiresManagedCaller(t *testing.T) {
 	if want := "coroutine: FirstSlice requires a managed caller"; panicValue != want {
 		t.Errorf("host FirstSlice panic = %v, want %q", panicValue, want)
 	}
-	if got := co.LastThreadID(); got != 0 {
+	if got := scheduler.LastThreadID(); got != 0 {
 		t.Errorf("host FirstSlice allocated %d threads before rejection", got)
 	}
-	co.RunAfterStop(nil)
+	scheduler.RunAfterStop(nil)
 	if got := registered.Load(); got != 0 {
 		t.Errorf("host FirstSlice registered %d invocations before rejection", got)
 	}
@@ -126,7 +126,7 @@ func TestStartBatchWaitFirstSliceRequiresManagedCaller(t *testing.T) {
 }
 
 func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	releaseFirst := make(chan struct{})
 	callerDone := make(chan struct{})
 	var (
@@ -138,16 +138,16 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	)
 	setup := func(Thread) func() { created++; return nil }
 
-	caller := co.Create("caller", func(Thread) {
-		threads = co.StartBatch([]Task{
+	caller := scheduler.Create("caller", func(Thread) {
+		threads = scheduler.StartBatch([]Task{
 			{
 				Owner:              "first",
 				RegisterInvocation: setup,
 				Run: func(Thread) {
-					registered = len(co.snapshotThreads())
+					registered = len(scheduler.snapshotThreads())
 					createdBeforeRun = created
 					order = append(order, "first")
-					WaitForChan(co, releaseFirst)
+					WaitForChan(scheduler, releaseFirst)
 				},
 			},
 			{
@@ -178,21 +178,21 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	}
 
 	close(releaseFirst)
-	co.JoinAll(threads)
-	co.Join(caller)
+	scheduler.JoinAll(threads)
+	scheduler.Join(caller)
 }
 
 func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	batchDone := make(chan []Thread, 1)
 	var registered, ran atomic.Int32
 
-	parent := co.Create("parent", func(parent Thread) {
-		batchDone <- co.StartBatch([]Task{
+	parent := scheduler.Create("parent", func(parent Thread) {
+		batchDone <- scheduler.StartBatch([]Task{
 			{
 				RegisterInvocation: func(Thread) func() {
 					registered.Add(1)
-					co.Stop(parent)
+					scheduler.Stop(parent)
 					return nil
 				},
 				Run: func(Thread) { ran.Add(1) },
@@ -213,8 +213,8 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("batch registration did not finish")
 	}
-	co.JoinAll(threads)
-	co.Join(parent)
+	scheduler.JoinAll(threads)
+	scheduler.Join(parent)
 	if got := registered.Load(); got != 2 {
 		t.Fatalf("lifecycle registrations = %d, want 2", got)
 	}
@@ -224,20 +224,20 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 }
 
 func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	callerDone := make(chan struct{})
 	var (
 		order   []string
 		threads []Thread
 	)
 
-	caller := co.Create("caller", func(Thread) {
-		threads = co.StartBatch([]Task{
+	caller := scheduler.Create("caller", func(Thread) {
+		threads = scheduler.StartBatch([]Task{
 			{
 				Owner: "first",
 				Run: func(Thread) {
 					order = append(order, "first")
-					co.StopIf(func(thread Thread) bool { return thread.Owner == "last" })
+					scheduler.StopIf(func(thread Thread) bool { return thread.Owner == "last" })
 				},
 			},
 			{
@@ -260,25 +260,25 @@ func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 		t.Fatalf("batch order after cancellation = %v, want %v", order, want)
 	}
 
-	co.JoinAll(threads)
-	co.Join(caller)
+	scheduler.JoinAll(threads)
+	scheduler.Join(caller)
 }
 
 func TestStartBatchSkipsCanceledPendingTask(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	callerDone := make(chan struct{})
 	var (
 		order   []string
 		threads []Thread
 	)
 
-	caller := co.Create("caller", func(Thread) {
-		threads = co.StartBatch([]Task{
+	caller := scheduler.Create("caller", func(Thread) {
+		threads = scheduler.StartBatch([]Task{
 			{Owner: "first", Run: func(Thread) { order = append(order, "first") }},
 			{Owner: "middle", Run: func(Thread) { order = append(order, "middle") }},
 			{Owner: "last", Run: func(Thread) { order = append(order, "last") }},
 		}, BatchAsync)
-		co.StopIf(func(thread Thread) bool { return thread == threads[1] })
+		scheduler.StopIf(func(thread Thread) bool { return thread == threads[1] })
 		close(callerDone)
 	})
 
@@ -289,7 +289,7 @@ func TestStartBatchSkipsCanceledPendingTask(t *testing.T) {
 	}
 	batchDone := make(chan struct{})
 	go func() {
-		co.JoinAll(threads)
+		scheduler.JoinAll(threads)
 		close(batchDone)
 	}()
 	select {
@@ -300,16 +300,16 @@ func TestStartBatchSkipsCanceledPendingTask(t *testing.T) {
 	if want := []string{"first", "last"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("batch order after early cancellation = %v, want %v", order, want)
 	}
-	co.Join(caller)
+	scheduler.Join(caller)
 }
 
 func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	registered := make(chan Thread, 1)
 	releaseRegistration := make(chan struct{})
 	batchDone := make(chan struct{})
 	go func() {
-		co.StartBatch([]Task{{
+		scheduler.StartBatch([]Task{{
 			Owner: "task",
 			RegisterInvocation: func(thread Thread) func() {
 				registered <- thread
@@ -329,7 +329,7 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 	}
 	stopDone := make(chan struct{})
 	go func() {
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 		close(stopDone)
 	}()
 	deadline := time.Now().Add(time.Second)
@@ -364,16 +364,16 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 }
 
 func TestStartBatchRegistrationCanStopAll(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	finished := make(chan []Thread, 1)
 	var registered, cleaned, ran atomic.Int32
 
 	go func() {
-		finished <- co.StartBatch([]Task{
+		finished <- scheduler.StartBatch([]Task{
 			{
 				RegisterInvocation: func(Thread) func() {
 					registered.Add(1)
-					co.StopAll()
+					scheduler.StopAll()
 					return func() { cleaned.Add(1) }
 				},
 				Run: func(Thread) { ran.Add(1) },
@@ -394,7 +394,7 @@ func TestStartBatchRegistrationCanStopAll(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration deadlocked while stopping scripts")
 	}
-	co.JoinAll(threads)
+	scheduler.JoinAll(threads)
 	for _, thread := range threads {
 		if !thread.Stopped() {
 			t.Fatal("StopAll did not reject the complete batch")
@@ -412,7 +412,7 @@ func TestStartBatchRegistrationCanStopAll(t *testing.T) {
 }
 
 func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	registered := make(chan Thread, 2)
 	releases := []chan struct{}{make(chan struct{}), make(chan struct{})}
 	batchDone := make(chan Thread, 2)
@@ -420,7 +420,7 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 
 	for _, release := range releases {
 		go func() {
-			threads := co.StartBatch([]Task{{
+			threads := scheduler.StartBatch([]Task{{
 				RegisterInvocation: func(thread Thread) func() {
 					registered <- thread
 					<-release
@@ -443,8 +443,8 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 
 	stopDone := make(chan struct{})
 	go func() {
-		co.StopAll()
-		co.StopAll()
+		scheduler.StopAll()
+		scheduler.StopAll()
 		close(stopDone)
 	}()
 	select {
@@ -458,7 +458,7 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 		}
 	}
 
-	rejected := co.Create("during-registration", func(Thread) {
+	rejected := scheduler.Create("during-registration", func(Thread) {
 		lateRan.Add(1)
 	})
 	if !rejected.Stopped() {
@@ -473,7 +473,7 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration did not finish")
 	}
-	stillRejected := co.Create("between-registrations", func(Thread) {
+	stillRejected := scheduler.Create("between-registrations", func(Thread) {
 		lateRan.Add(1)
 	})
 	if !stillRejected.Stopped() {
@@ -487,7 +487,7 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("last registration did not finish")
 	}
-	co.JoinAll(append(threads, rejected, stillRejected))
+	scheduler.JoinAll(append(threads, rejected, stillRejected))
 	if got := cleaned.Load(); got != 2 {
 		t.Fatalf("cleanup calls = %d, want 2", got)
 	}
@@ -495,10 +495,10 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 		t.Fatalf("rejected task ran %d times", got)
 	}
 
-	admitted := co.Create("after-registration", func(Thread) {
+	admitted := scheduler.Create("after-registration", func(Thread) {
 		lateRan.Add(1)
 	})
-	co.Join(admitted)
+	scheduler.Join(admitted)
 	if admitted.Stopped() {
 		t.Fatal("admission stayed closed after registration finished")
 	}
@@ -513,8 +513,8 @@ func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
 			for _, managed := range []bool{false, true} {
 				for failAt := range 3 {
 					t.Run(fmt.Sprintf("%s/stopAll=%v/managed=%v/at=%d", failure, stopAll, managed, failAt), func(t *testing.T) {
-						co := New(nil)
-						t.Cleanup(func() { co.RunAfterStop(nil) })
+						scheduler := New(nil)
+						t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 						var cleaned, ran atomic.Int32
 						var registered []Thread
 						var panicValue any
@@ -529,7 +529,7 @@ func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
 										// Without StopAll, registration must cancel the
 										// failing task itself, before the batch unwinds.
 										if stopAll {
-											co.StopAll()
+											scheduler.StopAll()
 										}
 										switch failure {
 										case "panic":
@@ -548,12 +548,12 @@ func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
 						invoke := func() {
 							defer close(done)
 							defer func() { panicValue = recover() }()
-							co.StartBatch(tasks, BatchAsync)
+							scheduler.StartBatch(tasks, BatchAsync)
 							returned = true
 						}
 						var caller Thread
 						if managed {
-							caller = co.Create("caller", func(Thread) { invoke() })
+							caller = scheduler.Create("caller", func(Thread) { invoke() })
 						} else {
 							go invoke()
 						}
@@ -574,21 +574,21 @@ func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
 						if caller != nil {
 							waitForThreadSignal(t, caller.done, "registration failure left the caller running")
 						}
-						co.drain()
+						scheduler.drain()
 						if got := cleaned.Load(); got != int32(failAt) {
 							t.Fatalf("cleanup calls = %d, want %d", got, failAt)
 						}
-						if ran.Load() != 0 || co.pendingSetups.Load() != 0 || len(co.snapshotThreads()) != 0 {
+						if ran.Load() != 0 || scheduler.pendingSetups.Load() != 0 || len(scheduler.snapshotThreads()) != 0 {
 							t.Fatal("registration failure left running tasks, registration hooks, or registered threads")
 						}
-						co.schedulerMu.Lock()
-						pending := len(co.pendingExecution) + len(co.waitBatch.runnable.pendingExecution)
-						co.schedulerMu.Unlock()
+						scheduler.schedulerMu.Lock()
+						pending := len(scheduler.pendingExecution) + len(scheduler.waitBatch.runnable.pendingExecution)
+						scheduler.schedulerMu.Unlock()
 						if pending != 0 {
 							t.Fatalf("pending cleanup = %d, want 0", pending)
 						}
-						next := co.Create("after-registration-failure", func(Thread) { ran.Add(1) })
-						co.Join(next)
+						next := scheduler.Create("after-registration-failure", func(Thread) { ran.Add(1) })
+						scheduler.Join(next)
 						if next.Stopped() || ran.Load() != 1 {
 							t.Fatal("admission did not recover after registration failure")
 						}
@@ -600,14 +600,14 @@ func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
 }
 
 func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	registered := make(chan struct{})
 	batchReady := make(chan Thread)
 	releaseCaller := make(chan struct{})
 	var cleaned, ran atomic.Int32
 
-	caller := co.Create("caller", func(Thread) {
-		threads := co.StartBatch([]Task{{
+	caller := scheduler.Create("caller", func(Thread) {
+		threads := scheduler.StartBatch([]Task{{
 			RegisterInvocation: func(Thread) func() {
 				close(registered)
 				return func() { cleaned.Add(1) }
@@ -629,10 +629,10 @@ func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("batch did not return its task")
 	}
-	co.StopAll()
+	scheduler.StopAll()
 	close(releaseCaller)
-	co.Join(child)
-	co.Join(caller)
+	scheduler.Join(child)
+	scheduler.Join(caller)
 
 	if got := ran.Load(); got != 0 {
 		t.Fatalf("canceled task ran %d times after registration", got)
@@ -644,8 +644,8 @@ func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 
 func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	reported := make(chan any, 1)
-	co := New(func(report PanicReport) { reported <- report.Value })
-	thread := co.StartBatch([]Task{{
+	scheduler := New(func(report PanicReport) { reported <- report.Value })
+	thread := scheduler.StartBatch([]Task{{
 		RegisterInvocation: func(Thread) func() {
 			return func() { panic("cleanup failure") }
 		},
@@ -667,7 +667,7 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	}
 
 	var ran atomic.Bool
-	next := co.Create("after-cleanup-panic", func(Thread) {
+	next := scheduler.Create("after-cleanup-panic", func(Thread) {
 		ran.Store(true)
 	})
 	select {
@@ -681,17 +681,17 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 }
 
 func TestBatchWaitDoneDrainsNestedAsyncSlicesWithoutUpdate(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	entries := make(chan string, 6)
 	leafRan := make(chan struct{})
 
-	caller := co.Create("caller", func(Thread) {
-		co.StartBatch([]Task{{Run: func(Thread) {
+	caller := scheduler.Create("caller", func(Thread) {
+		scheduler.StartBatch([]Task{{Run: func(Thread) {
 			entries <- "outer-before"
-			co.StartBatch([]Task{{Run: func(Thread) {
+			scheduler.StartBatch([]Task{{Run: func(Thread) {
 				entries <- "inner-before"
-				co.StartBatch([]Task{{Run: func(Thread) {
+				scheduler.StartBatch([]Task{{Run: func(Thread) {
 					entries <- "leaf"
 					close(leafRan)
 				}}}, BatchAsync)
@@ -716,16 +716,16 @@ func TestBatchWaitDoneDrainsNestedAsyncSlicesWithoutUpdate(t *testing.T) {
 }
 
 func TestBatchWaitDoneReturnsAfterAsyncChildYields(t *testing.T) {
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
-	release := co.NewLatch()
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
+	release := scheduler.NewLatch()
 	childDone := make(chan struct{})
 	var childStarted, childFinished atomic.Bool
 	observed := make(chan [2]bool, 1)
 
-	caller := co.Create("caller", func(Thread) {
-		co.StartBatch([]Task{{Run: func(Thread) {
-			co.StartBatch([]Task{{Run: func(Thread) {
+	caller := scheduler.Create("caller", func(Thread) {
+		scheduler.StartBatch([]Task{{Run: func(Thread) {
+			scheduler.StartBatch([]Task{{Run: func(Thread) {
 				childStarted.Store(true)
 				release.Wait()
 				childFinished.Store(true)
@@ -755,8 +755,8 @@ func TestBatchWaitDoneInsideRegistrationWithoutUpdate(t *testing.T) {
 		{"external nested waits", 3, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
-			t.Cleanup(func() { co.RunAfterStop(nil) })
+			scheduler := New(nil)
+			t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 			var order []string
 			var runNested func(int)
 			runNested = func(depth int) {
@@ -764,19 +764,19 @@ func TestBatchWaitDoneInsideRegistrationWithoutUpdate(t *testing.T) {
 					order = append(order, "independent")
 					return
 				}
-				co.StartBatch([]Task{{Run: func(Thread) {
+				scheduler.StartBatch([]Task{{Run: func(Thread) {
 					runNested(depth - 1)
 				}}}, BatchWaitDone)
 			}
 
 			run := func() {
-				co.StartBatch([]Task{
+				scheduler.StartBatch([]Task{
 					{Run: func(Thread) { order = append(order, "first") }},
 					{
 						RegisterInvocation: func(Thread) func() {
 							// Earlier batch entries stay unpublished while this
 							// hook yields to independently registered tasks.
-							co.StartBatch([]Task{{Run: func(Thread) {
+							scheduler.StartBatch([]Task{{Run: func(Thread) {
 								runNested(test.depth)
 							}}}, BatchWaitDone)
 							order = append(order, "registration-finished")
@@ -795,7 +795,7 @@ func TestBatchWaitDoneInsideRegistrationWithoutUpdate(t *testing.T) {
 					run()
 				}()
 			} else {
-				callerDone = co.Create("caller", func(Thread) { run() }).done
+				callerDone = scheduler.Create("caller", func(Thread) { run() }).done
 			}
 
 			waitForThreadSignal(t, callerDone, "registering caller did not finish")
@@ -823,7 +823,7 @@ func TestRegistrationCanJoinIndependentYield(t *testing.T) {
 		{"managed canceled with unpublished sibling", true, true, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			independentReady := make(chan Thread, 1)
 			registrationDone := make(chan struct{})
 			var threads []Thread
@@ -840,20 +840,20 @@ func TestRegistrationCanJoinIndependentYield(t *testing.T) {
 						if test.cancel {
 							outer.Cancel()
 						}
-						independent := co.Create("independent", func(me Thread) {
-							co.WaitYield(me)
+						independent := scheduler.Create("independent", func(me Thread) {
+							scheduler.WaitYield(me)
 							independentRan.Store(true)
 						})
 						independentReady <- independent
-						co.Join(independent)
+						scheduler.Join(independent)
 						return func() { cleaned.Add(1) }
 					},
 					Run: func(Thread) { taskRan.Store(true) },
 				})
-				threads = co.StartBatch(tasks, BatchAsync)
+				threads = scheduler.StartBatch(tasks, BatchAsync)
 			}
 			if test.managed {
-				co.Create("registering caller", func(Thread) { register() })
+				scheduler.Create("registering caller", func(Thread) { register() })
 			} else {
 				go register()
 			}
@@ -868,7 +868,7 @@ func TestRegistrationCanJoinIndependentYield(t *testing.T) {
 				// Break a regression's dependency cycle before draining.
 				independent.Cancel()
 				waitForThreadSignal(t, registrationDone, "registration did not finish after cancellation")
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
 			waitForThreadSignal(t, independent.firstSliceDone, "independent task did not yield")
 			if siblingRan.Load() {
@@ -876,7 +876,7 @@ func TestRegistrationCanJoinIndependentYield(t *testing.T) {
 			}
 			updated := make(chan struct{})
 			go func() {
-				co.Update()
+				scheduler.Update()
 				close(updated)
 			}()
 			waitForThreadSignal(t, updated, "Update blocked on registration waiting for an independent yield")
@@ -899,11 +899,11 @@ func TestBatchCancellationBeforePublicationWaitsForCleanup(t *testing.T) {
 	// its goroutine has acquired execution and published its cleanup work.
 	previous := runtime.GOMAXPROCS(1)
 	defer runtime.GOMAXPROCS(previous)
-	co := New(nil)
-	t.Cleanup(func() { co.RunAfterStop(nil) })
+	scheduler := New(nil)
+	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	var canceled Thread
 	var cleaned atomic.Int32
-	co.StartBatch([]Task{
+	scheduler.StartBatch([]Task{
 		{
 			RegisterInvocation: func(thread Thread) func() {
 				canceled = thread
@@ -919,7 +919,7 @@ func TestBatchCancellationBeforePublicationWaitsForCleanup(t *testing.T) {
 			Run: func(Thread) {},
 		},
 	}, BatchAsync)
-	co.Update()
+	scheduler.Update()
 	if got := cleaned.Load(); got != 1 {
 		t.Fatalf("cleanup calls after Update = %d, want 1", got)
 	}
@@ -932,16 +932,16 @@ func TestUnpublishedCancellationTracksCleanup(t *testing.T) {
 			name = "during setup"
 		}
 		t.Run(name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			cleanupStarted := make(chan struct{})
 			releaseCleanup := make(chan struct{})
 			var releaseOnce sync.Once
 			release := func() { releaseOnce.Do(func() { close(releaseCleanup) }) }
 			t.Cleanup(func() {
 				release()
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
-			thread := co.registerTask(co.captureAdmission(), Task{
+			thread := scheduler.registerTask(scheduler.captureAdmission(), Task{
 				RegisterInvocation: func(thread Thread) func() {
 					if duringSetup {
 						thread.Cancel()
@@ -955,27 +955,27 @@ func TestUnpublishedCancellationTracksCleanup(t *testing.T) {
 			})
 			thread.Cancel()
 			waitForThreadSignal(t, cleanupStarted, "unpublished task did not start cancellation cleanup")
-			co.schedulerMu.Lock()
-			pending := co.hasPendingExecutionLocked()
-			co.schedulerMu.Unlock()
+			scheduler.schedulerMu.Lock()
+			pending := scheduler.hasPendingExecutionLocked()
+			scheduler.schedulerMu.Unlock()
 			if !pending {
 				t.Fatal("Update cannot observe executable cancellation cleanup")
 			}
 			release()
 			updated := make(chan struct{})
 			go func() {
-				co.Update()
+				scheduler.Update()
 				close(updated)
 			}()
 			waitForThreadSignal(t, updated, "Update did not finish after cancellation cleanup")
 			waitForThreadSignal(t, thread.done, "canceled unpublished task did not finish")
 
 			// A batch may publish after a canceled member has already exited.
-			co.publishThreads([]Thread{thread})
+			scheduler.publishThreads([]Thread{thread})
 			thread.Cancel()
-			co.schedulerMu.Lock()
-			pending = co.hasPendingExecutionLocked()
-			co.schedulerMu.Unlock()
+			scheduler.schedulerMu.Lock()
+			pending = scheduler.hasPendingExecutionLocked()
+			scheduler.schedulerMu.Unlock()
 			if pending {
 				t.Fatal("publication resurrected finished cancellation cleanup")
 			}
@@ -984,20 +984,20 @@ func TestUnpublishedCancellationTracksCleanup(t *testing.T) {
 }
 
 func TestBatchCompletionBoundaryCanceledCaller(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	blockerStarted := make(chan struct{})
 	releaseBlocker := make(chan struct{})
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { close(releaseBlocker) }) }
 	t.Cleanup(func() {
 		release()
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 	var continued atomic.Bool
 
-	caller := co.Create("caller", func(Thread) {
-		co.StartBatch([]Task{{Run: func(Thread) {
-			co.Create("blocker", func(Thread) {
+	caller := scheduler.Create("caller", func(Thread) {
+		scheduler.StartBatch([]Task{{Run: func(Thread) {
+			scheduler.Create("blocker", func(Thread) {
 				close(blockerStarted)
 				// The receiver has returned, but this queued slice must
 				// finish before the waiting caller gets its next turn.
@@ -1008,7 +1008,7 @@ func TestBatchCompletionBoundaryCanceledCaller(t *testing.T) {
 	})
 	waitForThreadSignal(t, caller.firstSliceDone, "caller did not wait at the completion boundary")
 	waitForThreadSignal(t, blockerStarted, "pending runnable task did not start")
-	co.Stop(caller)
+	scheduler.Stop(caller)
 	release()
 	waitForThreadSignal(t, caller.done, "canceled boundary caller did not finish")
 	if continued.Load() {
@@ -1016,8 +1016,8 @@ func TestBatchCompletionBoundaryCanceledCaller(t *testing.T) {
 	}
 
 	// Canceling one boundary caller must not strand subsequent batches.
-	next := co.Create("next", func(Thread) {
-		co.StartBatch([]Task{{Run: func(Thread) {}}}, BatchWaitDone)
+	next := scheduler.Create("next", func(Thread) {
+		scheduler.StartBatch([]Task{{Run: func(Thread) {}}}, BatchWaitDone)
 	})
 	waitForThreadSignal(t, next.done, "later batch did not complete after caller cancellation")
 }
@@ -1031,7 +1031,7 @@ func TestBatchWaitDoneWaitsForCleanup(t *testing.T) {
 		{"external cancellation", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
+			scheduler := New(nil)
 			targetReady := make(chan Thread, 1)
 			targetStarted := make(chan struct{})
 			cleanupEntered := make(chan struct{})
@@ -1040,13 +1040,13 @@ func TestBatchWaitDoneWaitsForCleanup(t *testing.T) {
 			release := func() { releaseOnce.Do(func() { close(releaseCleanup) }) }
 			t.Cleanup(func() {
 				release()
-				co.RunAfterStop(nil)
+				scheduler.RunAfterStop(nil)
 			})
-			blocked := co.NewLatch()
+			blocked := scheduler.NewLatch()
 			var continued atomic.Bool
 
-			caller := co.Create("caller", func(Thread) {
-				co.StartBatch([]Task{{
+			caller := scheduler.Create("caller", func(Thread) {
+				scheduler.StartBatch([]Task{{
 					RegisterInvocation: func(target Thread) func() {
 						targetReady <- target
 						return func() {
@@ -1066,7 +1066,7 @@ func TestBatchWaitDoneWaitsForCleanup(t *testing.T) {
 			waitForThreadSignal(t, targetStarted, "batch receiver did not start")
 			target := <-targetReady
 			if test.cancel {
-				co.Stop(target)
+				scheduler.Stop(target)
 			}
 			waitForThreadSignal(t, cleanupEntered, "receiver cleanup did not start")
 			if continued.Load() {

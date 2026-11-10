@@ -76,7 +76,7 @@ const (
 
 // Update processes queued wait jobs and resumes eligible coroutines.
 // The engine must serialize Update calls.
-func (p *Coroutines) Update() {
+func (p *Scheduler) Update() {
 	start := stime.Now()
 	gcStatsBefore := p.captureGCStats()
 
@@ -86,7 +86,7 @@ func (p *Coroutines) Update() {
 	p.finishStats(&stats, start, gcStatsBefore)
 }
 
-func (p *Coroutines) beginUpdate() (UpdateStats, updateState) {
+func (p *Scheduler) beginUpdate() (UpdateStats, updateState) {
 	start := stime.Now()
 	state := updateState{
 		frame:            itime.Frame(),
@@ -97,7 +97,7 @@ func (p *Coroutines) beginUpdate() (UpdateStats, updateState) {
 	return UpdateStats{InitTime: elapsedMillis(start)}, state
 }
 
-func (p *Coroutines) runUpdateLoop(stats *UpdateStats, state *updateState) {
+func (p *Scheduler) runUpdateLoop(stats *UpdateStats, state *updateState) {
 	start := stime.Now()
 	iterations := 0
 
@@ -135,7 +135,7 @@ updateLoop:
 	p.promoteDeferredJobs(stats)
 }
 
-func (p *Coroutines) nextUpdateAction(state *updateState, stats *UpdateStats) (updateAction, *mainThreadCall) {
+func (p *Scheduler) nextUpdateAction(state *updateState, stats *UpdateStats) (updateAction, *mainThreadCall) {
 	start := stime.Now()
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
@@ -170,7 +170,7 @@ func (p *Coroutines) nextUpdateAction(state *updateState, stats *UpdateStats) (u
 
 // Scan a bounded part of the batch without publishing any scripts. Each chunk
 // releases schedulerMu and returns to the watchdog. Caller has no pending work.
-func (p *Coroutines) scanWaitBatchLocked(state *updateState, stats *UpdateStats) {
+func (p *Scheduler) scanWaitBatchLocked(state *updateState, stats *UpdateStats) {
 	start := stime.Now()
 	batch := &p.waitBatch
 	if !batch.active {
@@ -194,7 +194,7 @@ func (p *Coroutines) scanWaitBatchLocked(state *updateState, stats *UpdateStats)
 }
 
 // Classify a wait into the batch's runnable, deferred, or next-round work.
-func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
+func (p *Scheduler) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 	if job.thread.canceled() {
 		return
 	}
@@ -224,7 +224,7 @@ func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 	batch.runnable.markPendingLocked(job.thread)
 }
 
-func (p *Coroutines) promoteDeferredJobs(stats *UpdateStats) {
+func (p *Scheduler) promoteDeferredJobs(stats *UpdateStats) {
 	start := stime.Now()
 	p.deferredJobs.appendFrom(p.roundJobs)
 	// The ready queue orders scripts after the whole wait batch is scanned.

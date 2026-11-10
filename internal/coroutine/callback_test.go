@@ -8,8 +8,8 @@ import (
 
 func TestInvokeCallbackTracksNilPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
-	co := New(nil)
-	result := co.invokeCallback(callbackNoDrain, func() { panicWithValue(nil) })
+	scheduler := New(nil)
+	result := scheduler.invokeCallback(callbackNoDrain, func() { panicWithValue(nil) })
 	if !result.panicked {
 		t.Fatal("invokeCallback treated a nil panic as successful completion")
 	}
@@ -26,14 +26,14 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			checkDrainReentry(t, func() {
-				co := New(nil)
+				scheduler := New(nil)
 				var recovered any
 				var threads []Thread
 				ran := false
 				start := func() {
-					threads = co.StartBatch([]Task{{
+					threads = scheduler.StartBatch([]Task{{
 						RegisterInvocation: func(Thread) func() {
-							recovered = catchPanic(func() { co.RunAfterStop(nil) })
+							recovered = catchPanic(func() { scheduler.RunAfterStop(nil) })
 							return nil
 						},
 						Run: func(Thread) { ran = true },
@@ -41,7 +41,7 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 				}
 				var parent Thread
 				if managed {
-					parent = co.Create("parent", func(Thread) { start() })
+					parent = scheduler.Create("parent", func(Thread) { start() })
 					<-parent.done
 				} else {
 					start()
@@ -53,7 +53,7 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 				if threads[0].Stopped() || parent != nil && parent.Stopped() || !ran {
 					t.Error("rejected setup drain canceled a thread or prevented its run")
 				}
-				if co.admissionClosed() {
+				if scheduler.admissionClosed() {
 					t.Error("rejected setup drain closed admission")
 				}
 			})
@@ -63,12 +63,12 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 
 func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 	checkDrainReentry(t, func() {
-		co := New(nil)
+		scheduler := New(nil)
 		var recovered any
-		threads := co.StartBatch([]Task{{
+		threads := scheduler.StartBatch([]Task{{
 			RegisterInvocation: func(Thread) func() {
 				return func() {
-					recovered = catchPanic(func() { co.RunAfterStop(nil) })
+					recovered = catchPanic(func() { scheduler.RunAfterStop(nil) })
 				}
 			},
 			Run: func(Thread) {},
@@ -77,11 +77,11 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 		if recovered != ErrReentrantWait {
 			t.Errorf("cleanup drain panic = %v, want %v", recovered, ErrReentrantWait)
 		}
-		if threads[0].Stopped() || co.admissionClosed() {
+		if threads[0].Stopped() || scheduler.admissionClosed() {
 			t.Error("rejected cleanup drain canceled the thread or closed admission")
 		}
-		co.RunAfterStop(nil)
-		co.callbacks.Range(func(_, _ any) bool {
+		scheduler.RunAfterStop(nil)
+		scheduler.callbacks.Range(func(_, _ any) bool {
 			t.Error("cleanup left a callback scope registered")
 			return false
 		})
@@ -90,15 +90,15 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 
 func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 	checkDrainReentry(t, func() {
-		co := New(nil)
+		scheduler := New(nil)
 		var threads []Thread
 		setup, ran := false, false
-		co.RunAfterStop(func() {
-			co.StopAll()
-			threads = append(threads, co.Create("rejected", func(Thread) {
+		scheduler.RunAfterStop(func() {
+			scheduler.StopAll()
+			threads = append(threads, scheduler.Create("rejected", func(Thread) {
 				ran = true
 			}))
-			threads = append(threads, co.StartBatch([]Task{{
+			threads = append(threads, scheduler.StartBatch([]Task{{
 				RegisterInvocation: func(Thread) func() { setup = true; return nil },
 				Run:                func(Thread) { ran = true },
 			}}, BatchAsync)...)
@@ -112,21 +112,21 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 		if setup || ran {
 			t.Errorf("shutdown admitted setup=%v, ran=%v", setup, ran)
 		}
-		if co.admissionClosed() {
+		if scheduler.admissionClosed() {
 			t.Error("shutdown callback did not restore admission and caller scope")
 		}
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 }
 
 func TestRunSyncSkipsWhenAdmissionIsClosed(t *testing.T) {
-	co := New(nil)
+	scheduler := New(nil)
 	called := false
-	co.RunAfterStop(func() {
-		if !co.admissionClosed() {
+	scheduler.RunAfterStop(func() {
+		if !scheduler.admissionClosed() {
 			t.Fatal("shutdown callback ran with admission open")
 		}
-		co.RunSync("rejected", func(Thread) { called = true })
+		scheduler.RunSync("rejected", func(Thread) { called = true })
 	})
 	if called {
 		t.Fatal("RunSync ran a callback after admission closed")
@@ -135,21 +135,21 @@ func TestRunSyncSkipsWhenAdmissionIsClosed(t *testing.T) {
 
 func TestShutdownCallbackRejectsNestedDrain(t *testing.T) {
 	checkDrainReentry(t, func() {
-		co := New(nil)
+		scheduler := New(nil)
 		var recovered any
-		co.RunAfterStop(func() {
-			recovered = catchPanic(func() { co.RunAfterStop(nil) })
-			if !co.admissionClosed() {
+		scheduler.RunAfterStop(func() {
+			recovered = catchPanic(func() { scheduler.RunAfterStop(nil) })
+			if !scheduler.admissionClosed() {
 				t.Error("nested drain reopened the outer shutdown barrier")
 			}
 		})
 		if recovered != ErrReentrantWait {
 			t.Errorf("nested drain panic = %v, want %v", recovered, ErrReentrantWait)
 		}
-		if co.admissionClosed() {
+		if scheduler.admissionClosed() {
 			t.Error("shutdown did not restore admission and caller scope after the callback returned")
 		}
-		co.RunAfterStop(nil)
+		scheduler.RunAfterStop(nil)
 	})
 }
 
@@ -164,24 +164,24 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			checkDrainReentry(t, func() {
-				co := New(nil)
+				scheduler := New(nil)
 				// This runs on the same goroutine after the callback's defers,
 				// including when Goexit prevents the shutdown call from returning.
 				defer func() {
 					if recovered := recover(); recovered != test.want {
 						t.Errorf("shutdown panic = %v, want %v", recovered, test.want)
 					}
-					if co.admissionClosed() {
+					if scheduler.admissionClosed() {
 						t.Error("unwinding shutdown did not restore admission and caller scope")
 					}
-					co.RunAfterStop(nil)
-					thread := co.Create("after-unwind", func(Thread) {})
+					scheduler.RunAfterStop(nil)
+					thread := scheduler.Create("after-unwind", func(Thread) {})
 					<-thread.done
 					if thread.Stopped() {
 						t.Error("unwinding shutdown rejected a fresh thread")
 					}
 				}()
-				co.RunAfterStop(test.exit)
+				scheduler.RunAfterStop(test.exit)
 				t.Error("abnormal shutdown callback returned normally")
 			})
 		})
@@ -191,31 +191,31 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 func TestExclusiveCallbackRejectsBlockedWaits(t *testing.T) {
 	for _, test := range []struct {
 		name string
-		wait func(*Coroutines, Thread, *Latch)
+		wait func(*Scheduler, Thread, *Latch)
 	}{
-		{"join", func(co *Coroutines, th Thread, _ *Latch) { co.Join(th) }},
-		{"first yield", func(co *Coroutines, th Thread, _ *Latch) { co.JoinFirstSlice(th) }},
-		{"latch", func(_ *Coroutines, _ Thread, latch *Latch) { latch.Wait() }},
+		{"join", func(scheduler *Scheduler, th Thread, _ *Latch) { scheduler.Join(th) }},
+		{"first yield", func(scheduler *Scheduler, th Thread, _ *Latch) { scheduler.JoinFirstSlice(th) }},
+		{"latch", func(_ *Scheduler, _ Thread, latch *Latch) { latch.Wait() }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
-			latch := co.NewLatch()
+			scheduler := New(nil)
+			latch := scheduler.NewLatch()
 			finished := make(chan struct{})
 			guarded := make(chan any, 1)
 			go func() {
 				defer close(finished)
 				var thread Thread
-				co.RunBetweenScripts(func() {
-					thread = co.Create("child", func(Thread) {})
+				scheduler.RunBetweenScripts(func() {
+					thread = scheduler.Create("child", func(Thread) {})
 					func() {
 						defer func() { guarded <- recover() }()
-						test.wait(co, thread, latch)
+						test.wait(scheduler, thread, latch)
 					}()
 				})
-				co.Join(thread)
+				scheduler.Join(thread)
 				latch.Open()
 				// Completed waits are safe even when the callback owns runMu.
-				co.RunBetweenScripts(func() { test.wait(co, thread, latch) })
+				scheduler.RunBetweenScripts(func() { test.wait(scheduler, thread, latch) })
 			}()
 			select {
 			case recovered := <-guarded:
@@ -232,22 +232,22 @@ func TestExclusiveCallbackRejectsBlockedWaits(t *testing.T) {
 
 func TestRunBetweenScriptsRejectsReentry(t *testing.T) {
 	for _, managed := range []bool{true, false} {
-		co := New(nil)
+		scheduler := New(nil)
 		called := false
 		var recovered any
 		attempt := func() {
-			recovered = catchPanic(func() { co.RunBetweenScripts(func() { called = true }) })
+			recovered = catchPanic(func() { scheduler.RunBetweenScripts(func() { called = true }) })
 		}
 		if managed {
-			caller := co.Create("caller", func(Thread) { attempt() })
+			caller := scheduler.Create("caller", func(Thread) { attempt() })
 			waitForThreadSignal(t, caller.done, "rejected engine entry blocked its caller")
 		} else {
-			co.RunBetweenScripts(attempt)
+			scheduler.RunBetweenScripts(attempt)
 		}
 		if recovered != ErrReentrantWait || called {
 			t.Fatalf("managed=%v: reentry panic=%v, callback ran=%v", managed, recovered, called)
 		}
-		co.RunBetweenScripts(func() { called = true })
+		scheduler.RunBetweenScripts(func() { called = true })
 		if !called {
 			t.Fatal("rejected reentry prevented a subsequent engine call")
 		}

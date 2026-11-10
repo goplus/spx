@@ -23,18 +23,23 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+// runtimeState contains data owned by one game session. Access is serialized
+// with script execution and main-thread callbacks, as with the object registry.
 type runtimeState struct {
 	sprites        map[Object]gdx.ISpriter
 	uiNodes        map[Object]gdx.IUiNode
-	spriteTypes    map[string]reflect.Type
 	timeSinceStart float64
+	layerSortMode  layerSortMode
+	jobs           frameJobs
 }
 
 var state = runtimeState{
-	sprites:     make(map[Object]gdx.ISpriter),
-	uiNodes:     make(map[Object]gdx.IUiNode),
-	spriteTypes: make(map[string]reflect.Type),
+	sprites: make(map[Object]gdx.ISpriter),
+	uiNodes: make(map[Object]gdx.IUiNode),
 }
+
+// Type registrations belong to the process and survive game sessions.
+var spriteTypes = make(map[string]reflect.Type)
 
 func IsNodeExist(id Object) bool {
 	if _, ok := state.uiNodes[id]; ok {
@@ -44,15 +49,12 @@ func IsNodeExist(id Object) bool {
 	return ok
 }
 
-func clearAllSprites() {
-	for id, sprite := range state.sprites {
-		sprite.Destroy()
-		deleteSprite(id)
-	}
-	for id, node := range state.uiNodes {
-		node.Destroy()
-		delete(state.uiNodes, id)
-	}
+func registerSpriteType(t reflect.Type) {
+	spriteTypes[t.Name()] = t
+}
+
+func registerSprite(id Object, sprite gdx.ISpriter) {
+	state.sprites[id] = sprite
 }
 
 func lookupSprite(id Object) gdx.ISpriter {
@@ -62,10 +64,51 @@ func lookupSprite(id Object) gdx.ISpriter {
 func deleteSprite(id Object) {
 	sprite := lookupSprite(id)
 	delete(state.sprites, id)
-	if sprite != nil && gco != nil {
+	if sprite != nil && scheduler != nil {
 		owner := runtimeSpriteOwner(sprite)
-		gco.StopIf(func(thread coroutine.Thread) bool { return thread.Owner == owner })
+		scheduler.StopIf(func(thread coroutine.Thread) bool { return thread.Owner == owner })
 	}
+}
+
+// A separate snapshot lets callbacks mutate the registry or start a nested frame.
+func snapshotSprites() []gdx.ISpriter {
+	sprites := make([]gdx.ISpriter, 0, len(state.sprites))
+	for _, sprite := range state.sprites {
+		sprites = append(sprites, sprite)
+	}
+	return sprites
+}
+
+func registerUINode(id Object, node gdx.IUiNode) {
+	state.uiNodes[id] = node
+}
+
+func lookupUINode(id Object) gdx.IUiNode {
+	return state.uiNodes[id]
+}
+
+func deleteUINode(id Object) {
+	delete(state.uiNodes, id)
+}
+
+func clearAllSprites() {
+	for id, sprite := range state.sprites {
+		sprite.Destroy()
+		deleteSprite(id)
+	}
+	for id, node := range state.uiNodes {
+		node.Destroy()
+		deleteUINode(id)
+	}
+}
+
+// resetRuntimeState releases Go session data after managed work has drained and
+// game cleanup has finished. It makes no backend calls. Clearing the registries
+// in place preserves legacy callers' live map views; type registrations survive.
+func resetRuntimeState() {
+	clear(state.sprites)
+	clear(state.uiNodes)
+	state = runtimeState{sprites: state.sprites, uiNodes: state.uiNodes}
 }
 
 func runtimeSpriteOwner(sprite gdx.ISpriter) any {

@@ -77,7 +77,7 @@ func (a *animationComponent) stopAnimationAudio(id int64) {
 	if id == 0 || a.sprite == nil || a.sprite.g == nil {
 		return
 	}
-	gco.CleanupMainThread(func() {
+	scheduler.CleanupMainThread(func() {
 		if !a.sprite.g.soundMgr.IsPlaying(id) {
 			a.sprite.g.soundMgr.PruneStoppedIDs([]int64{id})
 			return

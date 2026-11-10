@@ -498,7 +498,7 @@ func TestTouchingColorUsesConfiguredThreshold(t *testing.T) {
 func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 	for _, front := range []string{"Player", "Ground"} {
 		t.Run(front+"InFront", func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			currentScheduler, game := setupRuntimeEventGame(t)
 			game.initShapeMgr()
 			game.displayState.WorldWidth, game.displayState.WorldHeight = 480, 360
 			mgr := &cloneCollisionSpriteMgr{
@@ -553,7 +553,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 			game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
 			const frames = 12
 			for range frames {
-				co.Update()
+				currentScheduler.Update()
 				flushCloneProxyUpdates(game)
 				itime.Update(1.0/30, 30)
 			}

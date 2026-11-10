@@ -348,10 +348,10 @@ func setupUILifecycle(t *testing.T) *uiLifecycleMgr {
 	// Public factories cross the engine-thread boundary. The UI package has
 	// no running game; install an idle scheduler for them.
 	previous := gdx.PlatformMgr
-	engine.SetCoroutines(coroutine.New(nil))
+	engine.SetScheduler(coroutine.New(nil))
 	gdx.PlatformMgr = uiLifecyclePlatform{}
 	t.Cleanup(func() {
-		engine.SetCoroutines(nil)
+		engine.SetScheduler(nil)
 		gdx.PlatformMgr = previous
 		for id := range mgr.prefabs {
 			delete(gdx.UiNodes(), id)
