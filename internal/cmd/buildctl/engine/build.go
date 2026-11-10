@@ -110,7 +110,7 @@ func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, 
 		buildArgs = append(buildArgs, "tests=yes")
 	}
 	if plan.EditorUseVSProj {
-		buildArgs = append(buildArgs, "vsproj=yes")
+		buildArgs = append(buildArgs, "vsproj=yes", "vsproj_gen_only=no")
 	}
 	args := module.EditorBuildArgs(buildArgs...)
 	fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(args))

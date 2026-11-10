@@ -116,7 +116,7 @@ func TestBuildEngineDesktopCommands(t *testing.T) {
 					source, destination := plan.EditorSource, plan.EditorDestination
 					wantArgs := []string{"optimize=size", "debug_symbols=true", "target=editor", "dev_build=yes", "compiledb=yes"}
 					if plan.EditorUseVSProj {
-						wantArgs = append(wantArgs, "vsproj=yes")
+						wantArgs = append(wantArgs, "vsproj=yes", "vsproj_gen_only=no")
 					}
 					if target == "template" {
 						source, destination = plan.TemplateSource, plan.TemplateDestination
@@ -126,12 +126,29 @@ func TestBuildEngineDesktopCommands(t *testing.T) {
 					wantArgs = append(wantArgs, "custom_modules="+moduleSource)
 					mustWriteFile(t, source, []byte("stale"))
 					mustWriteFile(t, destination, []byte("old installation"))
+					database := filepath.Join(buildEnv.EngineDir, "compile_commands.json")
+					mustWriteFile(t, database, []byte("[]\n"))
 					scons := filepath.Join(root, "build tools", "scons")
 					writeEngineTestTool(t, scons, `set -eu
 test -s .spx_build_lock/pid
 printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_BUILD_RECORD"
+vsproj=no
+vsproj_gen_only=yes
+compiledb=no
+for arg in "$@"; do
+  case "$arg" in
+    vsproj=*) vsproj=${arg#vsproj=} ;;
+    vsproj_gen_only=*) vsproj_gen_only=${arg#vsproj_gen_only=} ;;
+    compiledb=*) compiledb=${arg#compiledb=} ;;
+  esac
+done
+# Godot exits successfully before building targets in project-only mode.
+if [ "$vsproj" = yes ] && [ "$vsproj_gen_only" = yes ]; then exit 0; fi
 if [ "$SPX_FAILURE" = build ]; then exit 23; fi
 printf built > "$SPX_ARTIFACT"
+if [ "$compiledb" = yes ]; then
+  printf '[{"command":"built editor"}]\n' > compile_commands.json
+fi
 `)
 					env := shared.CurrentEnvMap()
 					env["SPX_MARKER"] = "space ' quote $literal"
@@ -154,6 +171,13 @@ printf built > "$SPX_ARTIFACT"
 							t.Fatalf("build error = %v, want exit 23", err)
 						}
 						wantOutput = "old installation"
+					}
+					wantDatabase := "[]\n"
+					if target == "editor" && failure == "success" {
+						wantDatabase = "[{\"command\":\"built editor\"}]\n"
+					}
+					if data, err := os.ReadFile(database); err != nil || string(data) != wantDatabase {
+						t.Fatalf("compilation database = %q (%v), want %q", data, err, wantDatabase)
 					}
 					wantRecord := append([]string{buildEnv.EngineDir, env["SPX_MARKER"]}, wantArgs...)
 					assertEngineTestCommandRecord(t, env["SPX_BUILD_RECORD"], wantRecord)
@@ -231,7 +255,7 @@ printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_RECORD.build"
 				}
 				wantBuild := []string{buildEnv.EngineDir, env["SPX_MARKER"], "target=editor", "dev_build=yes", "compiledb=yes", "tests=yes"}
 				if plan.EditorUseVSProj {
-					wantBuild = append(wantBuild, "vsproj=yes")
+					wantBuild = append(wantBuild, "vsproj=yes", "vsproj_gen_only=no")
 				}
 				assertEngineTestCommandRecord(t, env["SPX_RECORD"]+".build", append(wantBuild, "custom_modules="+moduleSource))
 				wantTest := []string{buildEnv.EngineDir, env["SPX_MARKER"], "--headless", "--test", "--test-case=*SPX*"}
