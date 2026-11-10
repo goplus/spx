@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v4/internal/cmd/buildctl/tool"
 )
@@ -123,7 +124,7 @@ func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, 
 			}
 		}
 		fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", plan.EditorDestination)
-		return shared.CopyFile(source, plan.EditorDestination)
+		return fileutil.CopyFile(source, plan.EditorDestination)
 	})
 }
 
@@ -153,12 +154,12 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
 			return err
 		}
-		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.TemplateSource), plan.TemplateDestination)
+		return fileutil.CopyFile(filepath.Join(buildEnv.EngineDir, plan.TemplateSource), plan.TemplateDestination)
 	case "ios":
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, "bash", "-lc", templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
-		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "godot_ios.zip"), filepath.Join(buildEnv.TemplateDir, "ios.zip"))
+		return fileutil.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "godot_ios.zip"), filepath.Join(buildEnv.TemplateDir, "ios.zip"))
 	case "android":
 		if err := toolpkg.SetupJDK(); err != nil {
 			return err
@@ -179,7 +180,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if err := copyGlobMatches(filepath.Join(buildEnv.EngineDir, "bin", "android*.apk"), buildEnv.TemplateDir); err != nil {
 			return err
 		}
-		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "android_source.zip"), filepath.Join(buildEnv.TemplateDir, "android_source.zip"))
+		return fileutil.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "android_source.zip"), filepath.Join(buildEnv.TemplateDir, "android_source.zip"))
 	case "web":
 		if err := toolpkg.SetupEMSDK(); err != nil {
 			return err
@@ -203,7 +204,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if err := waitForNonEmptyFile(srcZip, 5*time.Second); err != nil {
 			return err
 		}
-		if err := shared.CopyFile(srcZip, plan.WebCachedTemplateZip); err != nil {
+		if err := fileutil.CopyFile(srcZip, plan.WebCachedTemplateZip); err != nil {
 			return err
 		}
 		return populateWebTemplateCopies(srcZip, buildEnv.TemplateDir)
@@ -262,7 +263,7 @@ func copyGlobMatches(pattern, dstDir string) error {
 		return err
 	}
 	for _, match := range matches {
-		if err := shared.CopyFile(match, filepath.Join(dstDir, filepath.Base(match))); err != nil {
+		if err := fileutil.CopyFile(match, filepath.Join(dstDir, filepath.Base(match))); err != nil {
 			return err
 		}
 	}
@@ -282,7 +283,7 @@ func populateWebTemplateCopies(srcZip, templateDir string) error {
 	}
 
 	for _, name := range webTemplateNames {
-		if err := shared.CopyFile(srcZip, filepath.Join(templateDir, name)); err != nil {
+		if err := fileutil.CopyFile(srcZip, filepath.Join(templateDir, name)); err != nil {
 			return err
 		}
 	}

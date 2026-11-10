@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
@@ -249,7 +250,7 @@ func linkOrCopyFile(src, dst string) error {
 	if err := os.Link(src, dst); err == nil {
 		return nil
 	}
-	return shared.CopyFile(src, dst)
+	return fileutil.CopyFile(src, dst)
 }
 
 func removeIfExists(path string) error {

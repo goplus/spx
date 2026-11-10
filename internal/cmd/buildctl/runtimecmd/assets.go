@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v4/internal/cmd/buildctl/tool"
 )
@@ -45,7 +46,7 @@ func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {
 	if err := os.RemoveAll(dstDir); err != nil {
 		return err
 	}
-	if err := shared.CopyDir(srcDir, dstDir); err != nil {
+	if err := fileutil.CopyDir(srcDir, dstDir); err != nil {
 		return err
 	}
 
@@ -92,5 +93,5 @@ func ExportPreparedWebRuntime(mode string, runner shared.ScriptRunner) error {
 		return err
 	}
 
-	return shared.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, spec.ExportZip))
+	return fileutil.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, spec.ExportZip))
 }

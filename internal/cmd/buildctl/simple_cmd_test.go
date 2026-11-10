@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/workflow"
 	"github.com/goplus/spx/v4/internal/release"
@@ -369,7 +370,7 @@ func TestSetupLocalArtifacts(t *testing.T) {
 						mustWriteFile(t, path, []byte(content))
 						named[name] = path
 					}
-					if err := shared.WriteNamedZip(filepath.Join(assets, archive), named); err != nil {
+					if err := fileutil.WriteNamedZip(filepath.Join(assets, archive), named); err != nil {
 						t.Fatal(err)
 					}
 				}

@@ -30,6 +30,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
 )
@@ -144,7 +145,7 @@ func newWebBundleFixture(t *testing.T) (root, assets string) {
 	binaryPath := filepath.Join(root, binary)
 	mustWriteFile(t, binaryPath, []byte("editor"))
 	archive := filepath.Join(assets, "editor-"+env.Platform+"-"+env.Arch+".zip")
-	if err := shared.WriteNamedZip(archive, map[string]string{binary: binaryPath}); err != nil {
+	if err := fileutil.WriteNamedZip(archive, map[string]string{binary: binaryPath}); err != nil {
 		t.Fatal(err)
 	}
 	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "template", "project", "runtime.gdextension.txt"), []byte("extension"))

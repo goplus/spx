@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 type iosLibraryPaths struct {
@@ -346,7 +347,7 @@ void GDExtensionInit(void *p_interface, const void *p_library, void *r_initializ
 		}
 		headerFile := filepath.Join(paths.goSrcDir, name)
 		destFile := filepath.Join(paths.headersDir, name)
-		if err := util.CopyFile(headerFile, destFile); err != nil {
+		if err := fileutil.CopyFile(headerFile, destFile); err != nil {
 			return fmt.Errorf("failed to copy header file %s: %w", headerFile, err)
 		}
 	}

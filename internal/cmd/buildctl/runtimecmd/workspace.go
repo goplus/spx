@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
 )
@@ -85,7 +86,7 @@ func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (run
 	if includeRuntimeExtension {
 		src := filepath.Join(repoRoot, "cmd", "spx", "template", "project", "runtime.gdextension.txt")
 		dst := filepath.Join(goPath, "bin", "runtime.gdextension")
-		if err := shared.CopyFile(src, dst); err != nil {
+		if err := fileutil.CopyFile(src, dst); err != nil {
 			return runtimeWorkspace{}, nil, err
 		}
 	}
