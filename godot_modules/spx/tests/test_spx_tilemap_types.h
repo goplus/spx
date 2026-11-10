@@ -35,6 +35,7 @@
 
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
+#include "core/io/json.h"
 #include "tests/test_macros.h"
 #include "tests/test_utils.h"
 
@@ -103,7 +104,7 @@ static Dictionary make_tilemap_data() {
 	return result;
 }
 
-TEST_CASE("[SPX] Tile map data round trips every nested field") {
+TEST_CASE("[SPX] Tile map data parses every nested field") {
 	SpxTileMapData data;
 	REQUIRE(data.from_json(make_tilemap_data()));
 	CHECK(data.version == 3);
@@ -135,10 +136,6 @@ TEST_CASE("[SPX] Tile map data round trips every nested field") {
 	CHECK(data.layers[0].offset == Vector2(2.5, -3.5));
 	CHECK_FALSE(data.layers[0].enabled);
 	CHECK(data.layers[0].tile_map_data_base64 == "AQID");
-
-	SpxTileMapData copy;
-	REQUIRE(copy.from_json(data.to_json()));
-	CHECK(copy.to_json() == data.to_json());
 }
 
 TEST_CASE("[SPX] Tile map data applies defaults and ignores short vectors") {
@@ -166,7 +163,6 @@ TEST_CASE("[SPX] Tile map data applies defaults and ignores short vectors") {
 	CHECK(data.tileset.sources[0].tiles[0].size_in_atlas == Vector2i(1, 1));
 	REQUIRE(data.layers.size() == 1);
 	CHECK(data.layers[0].enabled);
-	CHECK(data.to_json().has("layers"));
 }
 
 TEST_CASE("[SPX] Tile map files report invalid input and preserve valid data") {
@@ -177,18 +173,18 @@ TEST_CASE("[SPX] Tile map files report invalid input and preserve valid data") {
 	const String missing_path = TestUtils::get_temp_path("spx_tilemap_missing.json");
 	DirAccess::remove_absolute(missing_path);
 
-	SpxTileMapData original;
-	REQUIRE(original.from_json(make_tilemap_data()));
-	REQUIRE(original.save_to_file(valid_path));
-	SpxTileMapData loaded;
-	REQUIRE(SpxTileMapData::parse_from_file(valid_path, loaded));
-	CHECK(loaded.to_json() == original.to_json());
-
 	auto write = [](const String &p_path, const String &p_text) {
 		Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::WRITE);
 		REQUIRE(file.is_valid());
 		file->store_string(p_text);
 	};
+	write(valid_path, JSON::stringify(make_tilemap_data()));
+	SpxTileMapData loaded;
+	REQUIRE(SpxTileMapData::parse_from_file(valid_path, loaded));
+	CHECK(loaded.name == "level");
+	CHECK(loaded.node_offset == Vector2(12.5, -8.25));
+	REQUIRE(loaded.layers.size() == 1);
+	CHECK(loaded.layers[0].tile_map_data_base64 == "AQID");
 	write(empty_path, "");
 	write(invalid_path, "{");
 	write(object_path, "{}");
@@ -196,7 +192,6 @@ TEST_CASE("[SPX] Tile map files report invalid input and preserve valid data") {
 	CHECK_FALSE(SpxTileMapData::parse_from_file(empty_path, loaded));
 	CHECK_FALSE(SpxTileMapData::parse_from_file(invalid_path, loaded));
 	CHECK_FALSE(SpxTileMapData::parse_from_file(object_path, loaded));
-	CHECK_FALSE(original.save_to_file(missing_path.path_join("child.json")));
 
 	for (const String &path : { valid_path, empty_path, invalid_path, object_path }) {
 		DirAccess::remove_absolute(path);

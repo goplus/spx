@@ -10,15 +10,6 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/os/os.h"
-#include "core/os/time.h"
-#include "movie_utils.h"
-
-PostMergeProcessor::PostMergeProcessor() {
-	// Initialize with default configuration
-}
-
-PostMergeProcessor::~PostMergeProcessor() {
-}
 
 void PostMergeProcessor::set_config(const MergeConfig &p_config) {
 	config = p_config;
@@ -28,12 +19,11 @@ PostMergeProcessor::MergeResult PostMergeProcessor::merge_files(const String &vi
 	MergeResult result;
 	uint64_t start_time = OS::get_singleton()->get_ticks_usec();
 
-	if (config.enable_debug_output && MovieDebugUtils::is_stdout_verbose()) {
+	if (config.enable_debug_output && OS::get_singleton()->is_stdout_verbose()) {
 		print_line("PostMergeProcessor: Starting merge operation");
 		print_line("  Video file: " + video_path);
 		print_line("  Audio file: " + audio_path);
 		print_line("  Output file: " + output_path);
-		print_line("  Method: " + get_method_name(config.method));
 	}
 
 	// Validate merge request
@@ -44,37 +34,18 @@ PostMergeProcessor::MergeResult PostMergeProcessor::merge_files(const String &vi
 		return result;
 	}
 
-	// Execute merge based on selected method
-	switch (config.method) {
-		case METHOD_FFMPEG_SYSTEM:
-			result.error_code = ffmpeg_system_merge(video_path, audio_path, output_path, result);
-			break;
-
-		case METHOD_CUSTOM_AVI:
-			result.error_code = custom_avi_merge(video_path, audio_path, output_path, result);
-			break;
-
-		case METHOD_NONE:
-			result.error_code = OK;
-			result.output_file_path = video_path; // Return video file as primary output
-			break;
-
-		default:
-			result.error_code = ERR_PARAMETER_RANGE_ERROR;
-			result.error_message = "Unknown merge method";
-			break;
-	}
+	result.error_code = custom_avi_merge(video_path, audio_path, output_path, result);
 
 	// Calculate merge duration
 	uint64_t end_time = OS::get_singleton()->get_ticks_usec();
 	result.merge_duration_seconds = (end_time - start_time) / 1000000.0f;
 
 	// Clean up intermediate files if requested and merge was successful
-	if (result.error_code == OK && config.keep_intermediate_files == false && config.method != METHOD_NONE) {
+	if (result.error_code == OK && config.keep_intermediate_files == false) {
 		Error cleanup_error = cleanup_intermediate_files(video_path, audio_path);
 		result.intermediate_files_cleaned = (cleanup_error == OK);
 
-		if (config.enable_debug_output && MovieDebugUtils::is_stdout_verbose()) {
+		if (config.enable_debug_output && OS::get_singleton()->is_stdout_verbose()) {
 			if (result.intermediate_files_cleaned) {
 				print_line("PostMergeProcessor: Intermediate files cleaned up successfully");
 			} else {
@@ -84,12 +55,12 @@ PostMergeProcessor::MergeResult PostMergeProcessor::merge_files(const String &vi
 	}
 
 	// Store output file path
-	if (result.error_code == OK && config.method != METHOD_NONE) {
+	if (result.error_code == OK) {
 		result.output_file_path = output_path;
 	}
 
 	if (config.enable_debug_output) {
-		if (MovieDebugUtils::is_stdout_verbose()) {
+		if (OS::get_singleton()->is_stdout_verbose()) {
 			print_line(String("PostMergeProcessor: Merge completed in ") + String::num(result.merge_duration_seconds, 2) + " seconds");
 		}
 		if (result.error_code != OK) {
@@ -98,51 +69,6 @@ PostMergeProcessor::MergeResult PostMergeProcessor::merge_files(const String &vi
 	}
 
 	return result;
-}
-
-Error PostMergeProcessor::ffmpeg_system_merge(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result) {
-#ifdef WEB_ENABLED
-	// Web platform doesn't support system command execution
-	result.error_message = "FFmpeg system merge not supported on Web platform";
-	return ERR_UNAVAILABLE;
-#else
-	if (!check_ffmpeg_availability()) {
-		result.error_message = "FFmpeg not found in system PATH";
-		return ERR_FILE_NOT_FOUND;
-	}
-
-	// Build FFmpeg command arguments
-	List<String> args;
-	args.push_back("-i");
-	args.push_back(video_path);
-	args.push_back("-i");
-	args.push_back(audio_path);
-	args.push_back("-c");
-	args.push_back("copy"); // Stream copy, no re-encoding
-	args.push_back(output_path);
-	args.push_back("-y"); // Overwrite output file if exists
-
-	// Execute FFmpeg command
-	String stdout_output;
-	int exit_code = -1;
-	Error execute_error = OS::get_singleton()->execute(config.ffmpeg_path, args, &stdout_output, &exit_code);
-
-	if (execute_error != OK || exit_code != 0) {
-		result.error_message = String("FFmpeg failed with exit code ") + String::num_int64(exit_code);
-		if (!stdout_output.is_empty()) {
-			result.error_message += " - " + stdout_output;
-		}
-		return ERR_FILE_CANT_WRITE;
-	}
-
-	// Verify output file was created
-	if (!file_exists(output_path)) {
-		result.error_message = "Output file was not created by FFmpeg";
-		return ERR_FILE_CANT_WRITE;
-	}
-
-	return OK;
-#endif
 }
 
 Error PostMergeProcessor::custom_avi_merge(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result) {
@@ -202,29 +128,13 @@ Error PostMergeProcessor::custom_avi_merge(const String &video_path, const Strin
 	result.merge_duration_seconds = (merge_end_time - merge_start_time) / 1000000.0f;
 	result.output_file_path = output_path;
 
-	if (config.enable_debug_output && MovieDebugUtils::is_stdout_verbose()) {
+	if (config.enable_debug_output && OS::get_singleton()->is_stdout_verbose()) {
 		print_line("PostMergeProcessor: Custom AVI merge completed successfully");
 		print_line("  Output size: " + String::num_int64(get_file_size(output_path)) + " bytes");
 		print_line("  Merge time: " + String::num_real(result.merge_duration_seconds) + " seconds");
 	}
 
 	return OK;
-}
-
-bool PostMergeProcessor::check_ffmpeg_availability() {
-#ifdef WEB_ENABLED
-	return false;
-#else
-	// Try to execute ffmpeg -version to check availability
-	List<String> args;
-	args.push_back("-version");
-
-	String output;
-	int exit_code = -1;
-	Error error = OS::get_singleton()->execute(config.ffmpeg_path, args, &output, &exit_code);
-
-	return error == OK && exit_code == 0 && output.contains("ffmpeg");
-#endif
 }
 
 bool PostMergeProcessor::file_exists(const String &path) {
@@ -502,59 +412,7 @@ Error PostMergeProcessor::parse_idx1_chunk(Ref<FileAccess> file, AviFileInfo &av
 	return OK;
 }
 
-bool PostMergeProcessor::is_method_available(MergeMethod method) {
-	switch (method) {
-		case METHOD_FFMPEG_SYSTEM:
-#ifdef WEB_ENABLED
-			return false;
-#else
-			return check_ffmpeg_availability();
-#endif
-
-		case METHOD_CUSTOM_AVI:
-			// Always available (Phase 2)
-			return true; // Custom AVI merge implementation
-
-		case METHOD_NONE:
-			return true;
-
-		default:
-			return false;
-	}
-}
-
-PostMergeProcessor::MergeMethod PostMergeProcessor::get_recommended_method() {
-#ifdef WEB_ENABLED
-	return METHOD_NONE; // Web platform keeps separate files
-#else
-	return METHOD_CUSTOM_AVI;
-#endif
-}
-
-String PostMergeProcessor::get_method_name(MergeMethod method) {
-	switch (method) {
-		case METHOD_FFMPEG_SYSTEM:
-			return "FFmpeg System Command";
-		case METHOD_CUSTOM_AVI:
-			return "Custom AVI Merge";
-		case METHOD_NONE:
-			return "No Merge";
-		default:
-			return "Unknown";
-	}
-}
-
 Error PostMergeProcessor::validate_merge_request(const String &video_path, const String &audio_path, const String &output_path) {
-	// Check if method is available
-	if (!is_method_available(config.method)) {
-		return ERR_UNAVAILABLE;
-	}
-
-	// For non-merge method, skip file validation
-	if (config.method == METHOD_NONE) {
-		return OK;
-	}
-
 	// Check input files exist
 	if (!file_exists(video_path)) {
 		return ERR_FILE_NOT_FOUND;
@@ -735,12 +593,6 @@ Error PostMergeProcessor::write_audio_stream_header(Ref<FileAccess> output_file,
 }
 
 Error PostMergeProcessor::interleave_avi_data(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info) {
-	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE && config.enable_debug_output) {
-		print_line("PostMergeProcessor: Starting data interleaving");
-		print_line("  Video movi offset: " + String::num_int64(video_info.movi_data_offset) + ", size: " + String::num_int64(video_info.movi_data_size));
-		print_line("  Audio movi offset: " + String::num_int64(audio_info.movi_data_offset) + ", size: " + String::num_int64(audio_info.movi_data_size));
-	}
-
 	// Open input files
 	Ref<FileAccess> video_file = FileAccess::open(video_path, FileAccess::READ);
 	Ref<FileAccess> audio_file = FileAccess::open(audio_path, FileAccess::READ);
@@ -750,11 +602,9 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 	}
 
 	Vector<TimestampedChunk> all_chunks;
-	if (config.interleave_strategy != MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
-		calculate_chunk_timestamps(video_info.index_entries, video_info, true, all_chunks);
-		calculate_chunk_timestamps(audio_info.index_entries, audio_info, false, all_chunks);
-		all_chunks.sort();
-	}
+	calculate_chunk_timestamps(video_info.index_entries, video_info, true, all_chunks);
+	calculate_chunk_timestamps(audio_info.index_entries, audio_info, false, all_chunks);
+	all_chunks.sort();
 
 	// Write movi list header
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
@@ -766,34 +616,11 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 	Vector<AviFileInfo::IndexEntry> merged_index;
 
 	uint32_t chunk_offset = 4; // Relative to movi data start
-	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
-		// Simple interleaving: alternate between video and audio chunks
-		int video_idx = 0, audio_idx = 0;
-
-		while (video_idx < video_info.index_entries.size() || audio_idx < audio_info.index_entries.size()) {
-			for (bool is_video : { true, false }) {
-				int &index = is_video ? video_idx : audio_idx;
-				const AviFileInfo &info = is_video ? video_info : audio_info;
-				if (index >= info.index_entries.size()) {
-					continue;
-				}
-				const AviFileInfo::IndexEntry &entry = info.index_entries[index++];
-				TimestampedChunk chunk{};
-				chunk.file_offset = info.movi_data_offset + entry.chunk_offset;
-				chunk.chunk_size = entry.chunk_size;
-				Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
-				if (error != OK) {
-					return error;
-				}
-			}
-		}
-	} else {
-		for (const TimestampedChunk &chunk : all_chunks) {
-			const bool is_video = chunk.type == TimestampedChunk::VIDEO_CHUNK;
-			Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
-			if (error != OK) {
-				return error;
-			}
+	for (const TimestampedChunk &chunk : all_chunks) {
+		const bool is_video = chunk.type == TimestampedChunk::VIDEO_CHUNK;
+		Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
+		if (error != OK) {
+			return error;
 		}
 	}
 
@@ -810,11 +637,6 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 		return index_error;
 	}
 
-	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
-		print_line("PostMergeProcessor: Data interleaving completed");
-		print_line("  Merged chunks: " + String::num_int64(merged_index.size()));
-		print_line("  Movi size: " + String::num_int64(movi_size) + " bytes");
-	}
 	return OK;
 }
 
@@ -879,7 +701,6 @@ void PostMergeProcessor::calculate_chunk_timestamps(const Vector<AviFileInfo::In
 			tc.timestamp_us = i * frame_duration_us;
 			tc.file_offset = info.movi_data_offset + chunks[i].chunk_offset;
 			tc.chunk_size = chunks[i].chunk_size;
-			tc.index = i;
 			timestamped_chunks.push_back(tc);
 		}
 
@@ -898,7 +719,6 @@ void PostMergeProcessor::calculate_chunk_timestamps(const Vector<AviFileInfo::In
 			tc.timestamp_us = (cumulative_samples * 1000000) / sample_rate;
 			tc.file_offset = info.movi_data_offset + chunks[i].chunk_offset;
 			tc.chunk_size = chunks[i].chunk_size;
-			tc.index = i;
 			timestamped_chunks.push_back(tc);
 
 			// Update cumulative samples

@@ -51,12 +51,8 @@ public:
 	virtual void on_awake() {}
 	virtual void on_start() {}
 	virtual void on_update(float delta) {}
-	virtual void on_fixed_update(float delta) {}
 	virtual void on_destroy() {}
 	virtual void on_reset(int reset_code) {}
-	virtual void on_exit(int exit_code) {}
-	virtual void on_pause() {}
-	virtual void on_resume() {}
 };
 
 #endif // SPX_MANAGER_H

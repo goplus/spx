@@ -36,7 +36,7 @@ Ref<ImageTexture> SpxSvgCache::load_texture(const String &p_path, int p_scale) {
 	Ref<Image> image;
 	image.instantiate();
 	Vector2 logical_size;
-	if (SpxImageLoaderSVG::load_image(p_path, image, ImageFormatLoader::FLAG_NONE, p_scale, &logical_size) != OK) {
+	if (SpxImageLoaderSVG::load_image(p_path, image, p_scale, &logical_size) != OK) {
 		return Ref<ImageTexture>();
 	}
 	Ref<ImageTexture> texture = SpxImageTexture::create_from_image(image, logical_size);
@@ -61,7 +61,7 @@ Ref<ImageTexture> SpxSvgCache::reload_texture(const String &p_path) {
 	}
 	for (auto &entry : prepared) {
 		entry.value.image.instantiate();
-		if (SpxImageLoaderSVG::load_image(p_path, entry.value.image, ImageFormatLoader::FLAG_NONE, entry.key, &entry.value.logical_size) != OK) {
+		if (SpxImageLoaderSVG::load_image(p_path, entry.value.image, entry.key, &entry.value.logical_size) != OK) {
 			const Ref<ImageTexture> *old = scales != nullptr ? scales->getptr(1) : nullptr;
 			return old != nullptr ? *old : Ref<ImageTexture>();
 		}

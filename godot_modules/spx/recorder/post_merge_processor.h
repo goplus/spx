@@ -16,36 +16,14 @@
 /**
  * Post-processing video/audio file merger
  * Implements simplified approach: independent audio/video sampling + post-merge
- * Similar to: ffmpeg -i video.avi -i audio.avi -c copy output.avi -y
+ * Merges AVI streams in timestamp order without re-encoding.
  */
 class PostMergeProcessor {
 public:
-	// Merge methods supported
-	enum MergeMethod {
-		METHOD_FFMPEG_SYSTEM, // Use system FFmpeg command
-		METHOD_CUSTOM_AVI, // Custom AVI container merge (Phase 2)
-		METHOD_NONE // No merge, keep separate files
-	};
-
 	// Merge configuration
 	struct MergeConfig {
-		MergeMethod method = METHOD_FFMPEG_SYSTEM;
 		bool keep_intermediate_files = false; // Keep original video/audio files after merge
 		bool enable_debug_output = false; // Enable debug logging
-		String ffmpeg_path = "ffmpeg"; // FFmpeg executable path
-
-		// Interleaving strategy
-		enum InterleaveStrategy {
-			INTERLEAVE_SIMPLE_ALTERNATE, // Simple alternating (legacy)
-			INTERLEAVE_TIMESTAMP_BASED, // Sort by timestamp
-			INTERLEAVE_BUFFERED_TIMESTAMP // Timestamp with I/O buffering
-		};
-		InterleaveStrategy interleave_strategy = INTERLEAVE_TIMESTAMP_BASED;
-		uint32_t buffer_duration_ms = 500; // Buffer window for buffered strategy
-		bool validate_sync = true; // Enable A/V sync validation
-		uint64_t max_av_drift_us = 40000; // Max allowed A/V drift (40ms)
-
-		MergeConfig() {}
 	};
 
 	// Merge result information
@@ -55,17 +33,12 @@ public:
 		String error_message;
 		float merge_duration_seconds = 0.0f;
 		bool intermediate_files_cleaned = false;
-
-		MergeResult() {}
 	};
 
 private:
 	MergeConfig config;
 
-	// FFmpeg system command implementation
-	Error ffmpeg_system_merge(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result);
-
-	// Custom AVI merge implementation (Phase 2)
+	// AVI merge implementation
 	Error custom_avi_merge(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result);
 
 	// Timestamped chunk for interleaving
@@ -79,7 +52,6 @@ private:
 		uint64_t timestamp_us; // Timestamp in microseconds
 		uint64_t file_offset; // Offset in source file
 		uint32_t chunk_size; // Size of chunk data
-		uint32_t index; // Original index for debugging
 
 		// For sorting by timestamp
 		bool operator<(const TimestampedChunk &other) const {
@@ -152,7 +124,6 @@ private:
 	Error write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file, const TimestampedChunk &chunk, bool is_video, uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index);
 
 	// Utility methods
-	bool check_ffmpeg_availability();
 	bool file_exists(const String &path);
 	Error cleanup_intermediate_files(const String &video_path, const String &audio_path);
 	uint64_t get_file_size(const String &path);
@@ -160,14 +131,10 @@ private:
 	Error scan_movi_chunks(Ref<FileAccess> file, const AviFileInfo &info, Vector<AviFileInfo::IndexEntry> &chunks);
 
 public:
-	PostMergeProcessor();
-	~PostMergeProcessor();
-
 	/**
 	 * Set merge configuration
 	 */
 	void set_config(const MergeConfig &p_config);
-	const MergeConfig &get_config() const { return config; }
 
 	/**
 	 * Main merge interface
@@ -179,21 +146,6 @@ public:
 	 * @return MergeResult with operation result and details
 	 */
 	MergeResult merge_files(const String &video_path, const String &audio_path, const String &output_path);
-
-	/**
-	 * Check if merge method is available on current platform
-	 */
-	bool is_method_available(MergeMethod method);
-
-	/**
-	 * Get recommended merge method for current platform
-	 */
-	MergeMethod get_recommended_method();
-
-	/**
-	 * Get human-readable method name
-	 */
-	String get_method_name(MergeMethod method);
 
 	/**
 	 * Validate file paths and configuration before merge

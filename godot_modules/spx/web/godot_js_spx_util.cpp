@@ -543,13 +543,6 @@ void cfree(void *ptr) {
     free(ptr);
 }
 
-// other functions
-EMSCRIPTEN_KEEPALIVE
-float gdspx_get_value(float* array, int idx) {
-    return array[idx];
-}
-
-
 // bool functions
 EMSCRIPTEN_KEEPALIVE
 GdBool* gdspx_alloc_bool() {
@@ -903,12 +896,6 @@ const char* gdspx_get_string(GdString* ptr) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-void gdspx_free_cstr(const char* str) {
-    // Legacy API; ownership stays with the wrapper.
-    (void)str;
-}
-
-EMSCRIPTEN_KEEPALIVE
 int32_t gdspx_get_string_len(GdString* ptr) {
     if (!gdspx_validate_string_wrapper(ptr)) {
         return 0;
@@ -928,10 +915,7 @@ void gdspx_free_string(GdString* p_gdstr) {
 
     auto snapshot_it = gdspxStringSnapshots.find(p_gdstr);
     if (snapshot_it != gdspxStringSnapshots.end()) {
-        // Detect tampering, then release from the snapshot.
-        const bool live_pointer_matches =
-                string_snapshot_matches_live(p_gdstr, snapshot_it->second);
-        (void)live_pointer_matches;
+        // Release from trusted metadata even if the wrapper was modified.
         GdStringSnapshot snapshot = snapshot_it->second;
         gdspxStringSnapshots.erase(snapshot_it);
         release_string_snapshot(snapshot);

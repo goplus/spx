@@ -347,7 +347,6 @@ TEST_CASE("[SceneTree][SPX] Pen APIs reject missing handles and tolerate detache
 	CHECK_FALSE(canvas->has_pending_commands());
 	SpxPen pen;
 	pen.on_create(42, nullptr);
-	CHECK(pen.get_id() == 42);
 	pen.on_down(false);
 	pen.restore_state(Vector2(5, 5), true);
 	pen.move_to(Vector2(10, 10));

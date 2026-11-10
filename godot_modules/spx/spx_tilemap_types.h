@@ -46,7 +46,6 @@ struct SpxPhysicsLayerData {
 	uint32_t collision_mask = 1;
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 };
 
 // ============================================================================
@@ -57,7 +56,6 @@ struct SpxTilePhysicsData {
 	Vector<Vector<float>> polygons; // Each polygon is a flat array [x1,y1,x2,y2,...]
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 };
 
 // ============================================================================
@@ -69,7 +67,6 @@ struct SpxTileData {
 	Vector<SpxTilePhysicsData> physics;
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 };
 
 // ============================================================================
@@ -85,7 +82,6 @@ struct SpxTileSetSourceData {
 	Vector<SpxTileData> tiles;
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 };
 
 // ============================================================================
@@ -98,7 +94,6 @@ struct SpxTileSetData {
 	Vector<SpxTileSetSourceData> sources;
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 };
 
 // ============================================================================
@@ -112,7 +107,6 @@ struct SpxTileMapLayerData {
 	String tile_map_data_base64; // Base64 encoded binary data
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 };
 
 // ============================================================================
@@ -126,12 +120,9 @@ struct SpxTileMapData {
 	Vector<SpxTileMapLayerData> layers;
 
 	bool from_json(const Dictionary &dict);
-	Dictionary to_json() const;
 
 	// Convenience method: parse from file
 	static bool parse_from_file(const String &json_path, SpxTileMapData &out_data);
-	// Convenience method: save to file
-	bool save_to_file(const String &json_path) const;
 };
 
 #endif // SPX_TILEMAP_TYPES_H

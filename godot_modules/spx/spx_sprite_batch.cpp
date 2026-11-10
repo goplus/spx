@@ -35,9 +35,7 @@
 #include "spx_sprite.h"
 
 #include <climits>
-#include <cstring>
 #include <limits>
-#include <type_traits>
 
 namespace {
 
@@ -59,29 +57,6 @@ enum SpxPhysicsBatchCmd {
 };
 
 static constexpr int SPX_PHYSICS_BATCH_FIELDS = 6;
-
-uint32_t read_u32_lane(float value) {
-	uint32_t bits = 0;
-	std::memcpy(&bits, &value, sizeof(bits));
-	return bits;
-}
-
-template <typename T>
-T gd_obj_from_i64(int64_t value) {
-	if constexpr (std::is_pointer_v<T>) {
-		return reinterpret_cast<T>(static_cast<uintptr_t>(value));
-	}
-	return static_cast<T>(value);
-}
-
-GdObj read_gd_obj_lanes(const float *record) {
-	uint64_t low = read_u32_lane(record[1]);
-	uint64_t high = read_u32_lane(record[2]);
-	uint64_t bits = (high << 32) | low;
-	int64_t value = 0;
-	std::memcpy(&value, &bits, sizeof(value));
-	return gd_obj_from_i64<GdObj>(value);
-}
 
 bool decode_batch_count(float value, int &result, const char *op_name, const char *field_name) {
 	if (SpxBatchValidation::decode_nonnegative_count(value, result)) {
@@ -394,7 +369,7 @@ void SpxSpriteMgr::batch_update_physics(const float *buffer_data, int len) {
 	idx = 1;
 	for (int i = 0; i < count; i++) {
 		const int cmd = static_cast<int>(buffer_data[idx]);
-		GdObj obj = read_gd_obj_lanes(&buffer_data[idx]);
+		GdObj obj = SpxBatchValidation::read_i64_lanes(&buffer_data[idx + 1]);
 		SpxSprite *sprite = get_sprite(obj);
 		if (sprite != nullptr) {
 			float a = buffer_data[idx + 3];
@@ -410,7 +385,7 @@ void SpxSpriteMgr::batch_update_physics(const float *buffer_data, int len) {
 					sprite->set_mass(a);
 					break;
 				case SPX_PHYSICS_CMD_MODE:
-					sprite->set_physics_mode((GdInt)(int32_t)read_u32_lane(a));
+					sprite->set_physics_mode((GdInt)(int32_t)SpxBatchValidation::read_u32_lane(a));
 					break;
 				case SPX_PHYSICS_CMD_USE_GRAVITY:
 					sprite->set_use_gravity(a != 0);
@@ -425,16 +400,16 @@ void SpxSpriteMgr::batch_update_physics(const float *buffer_data, int len) {
 					sprite->set_friction(a);
 					break;
 				case SPX_PHYSICS_CMD_COLLISION_LAYER:
-					sprite->set_collision_layer((GdInt)read_u32_lane(a));
+					sprite->set_collision_layer((GdInt)SpxBatchValidation::read_u32_lane(a));
 					break;
 				case SPX_PHYSICS_CMD_COLLISION_MASK:
-					sprite->set_collision_mask((GdInt)read_u32_lane(a));
+					sprite->set_collision_mask((GdInt)SpxBatchValidation::read_u32_lane(a));
 					break;
 				case SPX_PHYSICS_CMD_TRIGGER_LAYER:
-					sprite->set_trigger_layer((GdInt)read_u32_lane(a));
+					sprite->set_trigger_layer((GdInt)SpxBatchValidation::read_u32_lane(a));
 					break;
 				case SPX_PHYSICS_CMD_TRIGGER_MASK:
-					sprite->set_trigger_mask((GdInt)read_u32_lane(a));
+					sprite->set_trigger_mask((GdInt)SpxBatchValidation::read_u32_lane(a));
 					break;
 				case SPX_PHYSICS_CMD_COLLISION_ENABLED:
 					sprite->set_collision_enabled(a != 0);

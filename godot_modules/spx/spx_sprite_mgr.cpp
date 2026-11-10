@@ -41,6 +41,7 @@
 #include "scene/main/node.h"
 #include "scene/main/window.h"
 #include "scene/resources/2d/circle_shape_2d.h"
+#include "scene/resources/material.h"
 #include "scene/resources/packed_scene.h"
 #include "servers/rendering_server.h"
 
@@ -489,6 +490,17 @@ GdInt SpxSpriteMgr::clone_sprite(GdObj obj) {
 	if (unlikely(!cloned)) {
 		ERR_PRINT("Failed to clone sprite with GID: " + itos(obj));
 		return NULL_OBJECT_ID;
+	}
+	// Node duplication shares resources. Isolate shader parameters before
+	// on_start updates the clone's atlas UVs, while keeping the shader shared.
+	if (AnimatedSprite2D *source_animation = sprite->get_anim2d()) {
+		auto *animation = Object::cast_to<AnimatedSprite2D>(cloned->get_node_or_null(sprite->get_path_to(source_animation)));
+		if (animation) {
+			Ref<ShaderMaterial> material = animation->get_material();
+			if (material.is_valid()) {
+				animation->set_material(material->duplicate());
+			}
+		}
 	}
 	cloned->set_gid(get_unique_id());
 	sprite_root->add_child(cloned);

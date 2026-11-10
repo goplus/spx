@@ -37,7 +37,6 @@
 class Camera2D;
 
 class SpxCameraMgr : public SpxManager {
-
 private:
 	Camera2D *camera = nullptr;
 	bool owns_camera = false;
@@ -48,7 +47,6 @@ public:
 	void on_reset(int reset_code) override;
 	Camera2D *get_camera() { return camera; }
 	Vector2 get_global_mouse_position();
-	void set_stretch_clear_color();
 
 public:
 	SPX_BIND GdVec2 get_camera_position();

@@ -61,14 +61,7 @@ SpxPathFinder::SpxPathFinder() {
 }
 
 SpxPathFinder::~SpxPathFinder() {
-	if (drawer) {
-		drawer->queue_free();
-		drawer = nullptr;
-	}
-}
-
-void SpxPathFinder::setup_spx(GdVec2 grid_size, GdVec2 cell_size, GdBool with_debug) {
-	setup(grid_size, cell_size, with_debug);
+	_destroy_drawer();
 }
 
 void SpxPathFinder::setup(Vector2i grid_size, Vector2i cell_size, bool with_debug) {
@@ -91,8 +84,10 @@ void SpxPathFinder::setup(Vector2i grid_size, Vector2i cell_size, bool with_debu
 
 		add_all_obstacles(root);
 
-		if (with_debug && !drawer) {
+		PathDebugDrawer *drawer = Object::cast_to<PathDebugDrawer>(ObjectDB::get_instance(drawer_id));
+		if (with_debug && (!drawer || drawer->is_queued_for_deletion())) {
 			drawer = memnew(PathDebugDrawer(this));
+			drawer_id = drawer->get_instance_id();
 			root->add_child(drawer);
 		}
 	}
@@ -131,7 +126,17 @@ void SpxPathFinder::add_all_obstacles(Node *root) {
 }
 
 void SpxPathFinder::set_sprite_obstacle(GdObj obj, bool enabled) {
-	_process_sprite_obstacle(obj, enabled);
+	auto sprite = spriteMgr->get_sprite(obj);
+	if (!sprite) {
+		print_error("Try to get property of a null sprite gid = " + itos(obj));
+		return;
+	}
+
+	if (enabled && sprite->get_physics_mode() != SpxSprite::PhysicsMode::STATIC) {
+		print_error("Skip processing non-static obstacles.");
+		return;
+	}
+	_process_static_obstacles(sprite, enabled);
 }
 
 GdArray SpxPathFinder::find_path_spx(GdVec2 p_from, GdVec2 p_to) {
@@ -254,8 +259,10 @@ void SpxPathFinder::_process_rectangle_shape(Node2D *owner, CollisionShape2D *sh
 	// Keep the original corner arithmetic before flooring grid boundaries.
 	const Vector2 half_size = rect->get_size() * 0.5f;
 	const Vector2 corners[] = {
-		Vector2(-half_size.x, -half_size.y), Vector2(half_size.x, -half_size.y),
-		Vector2(half_size.x, half_size.y), Vector2(-half_size.x, half_size.y),
+		Vector2(-half_size.x, -half_size.y),
+		Vector2(half_size.x, -half_size.y),
+		Vector2(half_size.x, half_size.y),
+		Vector2(-half_size.x, half_size.y),
 	};
 	const Transform2D transform = owner->get_global_transform() * shape->get_transform();
 	Vector2 min_p = transform.xform(corners[0]);
@@ -357,20 +364,6 @@ void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer &layer) {
 	_replace_obstacle_cells(layer.get_instance_id(), cells);
 }
 
-void SpxPathFinder::_process_sprite_obstacle(GdObj obj, bool add) {
-	auto sprite = spriteMgr->get_sprite(obj);
-	if (!sprite) {
-		print_error("Try to get property of a null sprite gid = " + itos(obj));
-		return;
-	}
-
-	if (add && sprite->get_physics_mode() != SpxSprite::PhysicsMode::STATIC) {
-		print_error("Skip processing non-static obstacles.");
-		return;
-	}
-	_process_static_obstacles(sprite, add);
-}
-
 Rect2 SpxPathFinder::_get_scene_bounds(Node *node) {
 	if (!SpxEngine::get_singleton()) {
 		return Rect2();
@@ -379,10 +372,10 @@ Rect2 SpxPathFinder::_get_scene_bounds(Node *node) {
 }
 
 void SpxPathFinder::_destroy_drawer() {
-	if (drawer) {
+	if (Node *drawer = Object::cast_to<Node>(ObjectDB::get_instance(drawer_id))) {
 		drawer->queue_free();
-		drawer = nullptr;
 	}
+	drawer_id = ObjectID();
 }
 
 void PathDebugDrawer::_bind_methods() {
@@ -397,10 +390,6 @@ void PathDebugDrawer::_notification(int p_what) {
 
 	if (p_what == NOTIFICATION_DRAW) {
 		_draw();
-	}
-
-	if (p_what == NOTIFICATION_EXIT_TREE) {
-		_exit_tree();
 	}
 }
 
@@ -440,12 +429,6 @@ void PathDebugDrawer::_draw() {
 
 	if (path.size() > 1) {
 		draw_polyline(path, Color(0, 0, 1), 3.0, true);
-	}
-}
-
-void PathDebugDrawer::_exit_tree() {
-	if (path_finder.is_valid()) {
-		path_finder->clear_drawer();
 	}
 }
 

@@ -83,7 +83,6 @@ public:
 	SpxSlider *get_slider();
 
 public:
-	void on_start();
 	void set_type(GdInt etype);
 
 	Control *get_control_item() const;
@@ -108,8 +107,6 @@ public:
 	GdColor get_color();
 	void set_font_size(GdInt size);
 	GdInt get_font_size();
-	void set_font(GdString path);
-	GdString get_font();
 	void set_visible(GdBool visible);
 	GdBool get_visible();
 	void set_texture(GdString path);

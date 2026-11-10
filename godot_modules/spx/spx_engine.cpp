@@ -160,8 +160,6 @@ void SpxEngine::on_fixed_update(float delta) {
 		return;
 	}
 
-	_notify_managers(&SpxManager::on_fixed_update, delta);
-
 	if (callbacks.func_on_engine_fixed_update) {
 		callbacks.func_on_engine_fixed_update(delta);
 	}
@@ -227,8 +225,6 @@ void SpxEngine::on_exit(int exit_code) {
 
 	has_exit = true;
 
-	_notify_managers(&SpxManager::on_exit, exit_code);
-
 	// Stop runtime events now; shutdown still owns both teardown callbacks.
 	const auto on_engine_destroy = callbacks.func_on_engine_destroy;
 	const auto on_engine_destroyed = callbacks.func_on_engine_destroyed;
@@ -272,7 +268,7 @@ void SpxEngine::set_delay_runtime_reset(bool p_delay) {
 }
 
 void SpxEngine::capture_last_frame() {
-	if (is_frozen_frame || !tree) {
+	if (freeze_layer || !tree) {
 		return;
 	}
 
@@ -281,27 +277,17 @@ void SpxEngine::capture_last_frame() {
 		return;
 	}
 
-	freeze_screen = _create_freeze_texture(img);
-	_attach_freeze_node(freeze_screen);
-	is_frozen_frame = true;
+	freeze_layer = memnew(CanvasLayer);
+	freeze_layer->set_layer(1);
+	tree->get_root()->add_child(freeze_layer);
+	freeze_layer->add_child(_create_freeze_texture(img));
 }
 
 void SpxEngine::clear_frozen_frame() {
-	if (!is_frozen_frame) {
-		return;
-	}
-
-	if (freeze_screen) {
-		freeze_screen->queue_free();
-		freeze_screen = nullptr;
-	}
-
 	if (freeze_layer) {
 		freeze_layer->queue_free();
 		freeze_layer = nullptr;
 	}
-
-	is_frozen_frame = false;
 }
 
 void SpxEngine::pause() {
@@ -382,8 +368,6 @@ void SpxEngine::_on_godot_pause_changed(bool is_godot_paused) {
 		is_spx_paused = is_godot_paused;
 		Spx::pending_controls.set_paused(is_spx_paused);
 
-		_notify_managers(is_spx_paused ? &SpxManager::on_pause : &SpxManager::on_resume);
-
 		if (callbacks.func_on_engine_pause) {
 			callbacks.func_on_engine_pause(is_spx_paused);
 		}
@@ -423,21 +407,6 @@ TextureRect *SpxEngine::_create_freeze_texture(const Ref<Image> &img) const {
 	screen->set_anchors_and_offsets_preset(Control::PRESET_FULL_RECT);
 	screen->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
 	return screen;
-}
-
-void SpxEngine::_attach_freeze_node(TextureRect *screen) {
-	Viewport *vp = tree->get_root();
-	if (!vp || !screen) {
-		return;
-	}
-
-	if (!freeze_layer) {
-		freeze_layer = memnew(CanvasLayer);
-		freeze_layer->set_layer(1);
-		vp->add_child(freeze_layer);
-	}
-
-	freeze_layer->add_child(screen);
 }
 
 void SpxEngine::_initialize_managers() {

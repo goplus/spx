@@ -498,10 +498,6 @@ TEST_CASE("[SceneTree][SPX] UI manager exercises each built-in control type") {
 	ui->set_texture(label, texture_utf8.get_data());
 	CHECK(take_string(ui->get_texture(label)).is_empty());
 	ui->set_texture(label, "missing-ui-texture.tres");
-	SpxUi *label_node = ui->get_node(label);
-	REQUIRE(label_node != nullptr);
-	label_node->set_font("");
-	CHECK(take_string(label_node->get_font()).is_empty());
 	CHECK(DirAccess::remove_absolute(texture_path) == OK);
 
 	ListMonitorProbe *monitor = memnew(ListMonitorProbe);
@@ -733,7 +729,6 @@ TEST_CASE("[SceneTree][SPX] Scene physics camera debug navigation and pen manage
 	CHECK(viewport_rect.size.x >= 0);
 	CHECK(global_camera_rect.size.x >= 0);
 	CHECK(Math::is_finite(mouse_position.x));
-	camera->set_stretch_clear_color();
 
 	SpxPhysicsMgr *physics = engine->get_physics();
 	physics->set_collision_system_type(true);
@@ -862,7 +857,6 @@ TEST_CASE("[SceneTree][SPX] Scene physics camera debug navigation and pen manage
 	append_pen_command(pen_commands, 3, pen);
 	pens->batch_update_commands(pen_commands.ptr(), pen_commands.size());
 	REQUIRE(pens->get_object(pen) != nullptr);
-	CHECK(pens->get_object(pen)->get_id() == pen);
 	ERR_PRINT_OFF
 	const float invalid_count[] = { -1.0f };
 	const float invalid_length[] = { 1.0f };

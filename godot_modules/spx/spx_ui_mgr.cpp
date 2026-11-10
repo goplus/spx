@@ -214,7 +214,6 @@ SpxUi *SpxUiMgr::on_create_node(Control *control, GdInt type, bool is_attach) {
 		memdelete(node);
 		return nullptr;
 	}
-	node->on_start();
 	id_objects[node->get_gid()] = node;
 	SPX_CALLBACK->func_on_ui_ready(node->get_gid());
 	return node;

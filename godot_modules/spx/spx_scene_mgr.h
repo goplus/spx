@@ -31,8 +31,9 @@
 #ifndef SPX_SCENE_MGR_H
 #define SPX_SCENE_MGR_H
 
-#include "gdextension_spx_ext.h"
+#include "core/object/object_id.h"
 #include "core/templates/rb_map.h"
+#include "gdextension_spx_ext.h"
 #include "spx_manager.h"
 
 class ISortableSprite;
@@ -40,21 +41,20 @@ class TileMapLayer;
 class SubViewport;
 
 class SpxSceneMgr : public SpxManager {
-
 private:
 	const String DEFAULT_SAVE_PATH = "user://exported_scene.png";
 	double elapsed = 0.0;
 	ObjectID viewport_to_export;
-	Vector2 cached_cell_size{ 16, 16 };
 
 	void _request_export(SubViewport *viewport);
 	void _cancel_export();
 	void _export_vp_png(SubViewport *viewport);
+	void _clear_pure_sprites();
 
 public:
 	// Sprites without the full SPX physics and behavior state.
 	Node *pure_sprite_root = nullptr;
-	RBMap<GdObj, ISortableSprite *> id_pure_sprites;
+	RBMap<GdObj, ObjectID> id_pure_sprites;
 
 	void on_awake() override;
 	void on_update(float delta) override;
@@ -63,16 +63,12 @@ public:
 
 	void collect_sortable_sprites(Vector<ISortableSprite *> &out);
 
-	_FORCE_INLINE_ void set_cached_cell_size(Vector2 cell_size) {
-		cached_cell_size = cell_size;
-	}
 	Rect2 get_scene_bounds(Node *node);
 	Rect2 get_tilemap_bounds(TileMapLayer *layer);
 
 	void export_scene_as_png(Node *root);
 
 public:
-
 	SPX_BIND void change_scene_to_file(GdString path);
 	SPX_BIND void destroy_all_sprites();
 	SPX_BIND GdInt reload_current_scene();

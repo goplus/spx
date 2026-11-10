@@ -4,6 +4,7 @@
 
 #include "audio_driver_hybrid.h"
 
+#include "core/math/audio_frame.h"
 #include "core/os/os.h"
 #include "independent_audio_recorder.h"
 #include "servers/audio/audio_effect.h"
@@ -71,27 +72,19 @@ void SpxAudioCaptureEffectInstance::process(const AudioFrame *p_src_frames, Audi
 		conversion_buffer.write[i * 2] = int32_t(CLAMP(p_src_frames[i].left, -1.0f, 1.0f) * 2147483647.0f);
 		conversion_buffer.write[i * 2 + 1] = int32_t(CLAMP(p_src_frames[i].right, -1.0f, 1.0f) * 2147483647.0f);
 	}
-	base->owner->capture_audio_data(conversion_buffer.ptr(), p_frame_count, 1);
+	base->owner->capture_audio_data(conversion_buffer.ptr(), p_frame_count);
 }
 
 HybridAudioDriver::~HybridAudioDriver() {
 	finish();
 }
 
-Error HybridAudioDriver::init(int p_mix_rate, AudioDriver::SpeakerMode p_speaker_mode) {
+Error HybridAudioDriver::init(int p_mix_rate) {
 	ERR_FAIL_COND_V(initialized.is_set(), ERR_ALREADY_IN_USE);
 	ERR_FAIL_NULL_V(AudioServer::get_singleton(), ERR_UNCONFIGURED);
 
 	mix_rate = p_mix_rate;
-	speaker_mode = p_speaker_mode;
 	channels = 2;
-
-	const int requested_frames = MAX(1, int(mix_rate * buffer_length_seconds));
-	buffer_power = 0;
-	while ((1 << buffer_power) < requested_frames) {
-		buffer_power++;
-	}
-	capture_buffer = RingBuffer<AudioFrame>(buffer_power);
 
 	Ref<SpxAudioCaptureEffect> effect;
 	effect.instantiate(this);
@@ -144,45 +137,20 @@ void HybridAudioDriver::finish() {
 		MutexLock lock(recorders_mutex);
 		registered_recorders.clear();
 	}
-	_clear_capture_buffer();
 	initialized.clear();
 }
 
-void HybridAudioDriver::_clear_capture_buffer() {
-	MutexLock lock(data_mutex);
-	capture_buffer = RingBuffer<AudioFrame>(buffer_power);
-}
-
 void HybridAudioDriver::enable_recording(bool p_enable) {
-	if (recording_enabled.is_set() == p_enable) {
-		return;
-	}
 	if (p_enable) {
-		_clear_capture_buffer();
 		recording_enabled.set();
 	} else {
 		recording_enabled.clear();
 	}
 }
 
-void HybridAudioDriver::capture_audio_data(const int32_t *p_buffer, int p_frames, int p_channel_pairs) {
+void HybridAudioDriver::capture_audio_data(const int32_t *p_buffer, int p_frames) {
 	if (!recording_enabled.is_set() || !initialized.is_set() || p_buffer == nullptr || p_frames <= 0) {
 		return;
-	}
-
-	const int actual_channels = MAX(1, p_channel_pairs * 2);
-	{
-		MutexLock lock(data_mutex);
-		for (int i = 0; i < p_frames; i++) {
-			AudioFrame frame;
-			frame.left = float(p_buffer[i * actual_channels]) / 2147483648.0f;
-			frame.right = actual_channels > 1 ? float(p_buffer[i * actual_channels + 1]) / 2147483648.0f : frame.left;
-			if (capture_buffer.space_left() == 0) {
-				AudioFrame discarded;
-				capture_buffer.read(&discarded, 1);
-			}
-			capture_buffer.write(&frame, 1);
-		}
 	}
 
 	MutexLock recorders_lock(recorders_mutex);
@@ -191,36 +159,6 @@ void HybridAudioDriver::capture_audio_data(const int32_t *p_buffer, int p_frames
 			recorder->on_audio_output(p_buffer, p_frames);
 		}
 	}
-}
-
-int HybridAudioDriver::get_captured_audio_data(int32_t *p_output_buffer, int p_requested_frames) {
-	ERR_FAIL_NULL_V(p_output_buffer, 0);
-	ERR_FAIL_COND_V(p_requested_frames < 0, 0);
-
-	MutexLock lock(data_mutex);
-	const int frames_to_read = MIN(p_requested_frames, capture_buffer.data_left());
-	Vector<AudioFrame> frames;
-	frames.resize(frames_to_read);
-	if (frames_to_read > 0) {
-		capture_buffer.read(frames.ptrw(), frames_to_read);
-	}
-	for (int i = 0; i < frames_to_read; i++) {
-		p_output_buffer[i * 2] = int32_t(CLAMP(frames[i].left, -1.0f, 1.0f) * 2147483647.0f);
-		p_output_buffer[i * 2 + 1] = int32_t(CLAMP(frames[i].right, -1.0f, 1.0f) * 2147483647.0f);
-	}
-	for (int i = frames_to_read * 2; i < p_requested_frames * 2; i++) {
-		p_output_buffer[i] = 0;
-	}
-	return p_requested_frames;
-}
-
-int HybridAudioDriver::get_available_frames() const {
-	MutexLock lock(data_mutex);
-	return capture_buffer.data_left();
-}
-
-bool HybridAudioDriver::has_audio_data() const {
-	return get_available_frames() > 0;
 }
 
 void HybridAudioDriver::register_audio_recorder(IndependentAudioRecorder *p_recorder) {

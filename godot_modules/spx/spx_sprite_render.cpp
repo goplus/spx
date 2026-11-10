@@ -32,6 +32,7 @@
 
 #include "core/math/math_funcs.h"
 #include "scene/2d/animated_sprite_2d.h"
+#include "scene/resources/material.h"
 
 #include "spx_camera_mgr.h"
 #include "spx_engine.h"
@@ -184,9 +185,14 @@ void SpxSprite::_update_frame_transform() {
 }
 
 void SpxSprite::_update_current_frame_shader_uv_rect() {
-	if (anim2d == nullptr || default_material.is_null()) {
+	if (anim2d == nullptr) {
 		return;
 	}
 
-	default_material->set_shader_parameter(SNAME("atlas_uv_rect2"), spx_get_animation_frame_uv_rect(anim2d->get_sprite_frames(), anim2d->get_animation(), anim2d->get_frame()));
+	Ref<ShaderMaterial> material = anim2d->get_material();
+	if (material.is_null()) {
+		return;
+	}
+	const Rect2 uv = spx_get_animation_frame_uv_rect(anim2d->get_sprite_frames(), anim2d->get_animation(), anim2d->get_frame());
+	material->set_shader_parameter(SNAME("atlas_uv_rect2"), Vector4(uv.position.x, uv.position.y, uv.size.x, uv.size.y));
 }

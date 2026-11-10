@@ -15,7 +15,6 @@
 #include "core/os/thread.h"
 #include "independent_audio_recorder.h"
 #include "independent_video_recorder.h"
-#include "post_merge_processor.h"
 #include "servers/movie_writer/movie_writer.h"
 #include "spx_realtime_recorder.h"
 #include "thread_safe_frame_buffer.h"
@@ -47,19 +46,12 @@ public:
 		uint32_t audio_chunk_ms = 10; // Audio chunk duration (milliseconds)
 		uint32_t audio_buffer_seconds = 2; // Audio buffer duration (seconds)
 
-		// Feature switches
-		bool enable_timestamp_chunks = true; // Enable timestamp recording
-		bool enable_repeat_frame_marking = true; // Enable repeat frame marking
-		bool enable_audio_monitoring = false; // Enable audio monitoring
+		// Debug output
 		bool enable_debug_output = false; // Enable debug output
 
 		// Post-merge configuration
 		bool enable_post_merge = true; // Enable post-recording file merge
 		bool keep_intermediate_files = false; // Keep separate video/audio files after merge
-		String ffmpeg_path = "ffmpeg"; // FFmpeg executable path
-
-		// Performance parameters
-		uint32_t max_frame_buffer_size = 4; // Maximum frame buffer size
 	};
 
 	// Recording state
@@ -68,7 +60,6 @@ public:
 		STATE_INITIALIZED, // Initialized
 		STATE_RECORDING, // Recording
 		STATE_STOPPING, // Stopping
-		STATE_ERROR // Error state
 	};
 
 private:
@@ -77,7 +68,6 @@ private:
 	IndependentVideoRecorder *video_recorder = nullptr;
 	IndependentAudioRecorder *audio_recorder = nullptr;
 	HybridAudioDriver *hybrid_audio_driver = nullptr;
-	PostMergeProcessor *post_merge_processor = nullptr;
 
 	// Recording configuration
 	ObsRecordingConfig obs_config;
@@ -85,22 +75,16 @@ private:
 	// Recording state
 	RecordingState current_state = STATE_UNINITIALIZED;
 	String output_file_path;
-	uint32_t game_frame_sequence = 0;
 	uint64_t recording_start_time = 0;
 
-	// Audio driver management
-	AudioDriver *original_audio_driver = nullptr;
-	bool audio_driver_replaced = false;
-
 	// Performance monitoring
-	uint64_t last_add_frame_time = 0;
 	uint32_t frames_added_count = 0;
 
 	// Internal methods
 	Error setup_components();
-	void cleanup_components(IndependentAudioRecorder *temp_audio_recorder = nullptr);
+	void cleanup_components();
 	Error setup_audio_capture();
-	void restore_audio_driver();
+	void stop_components();
 	void update_recording_state(RecordingState new_state);
 
 	// Post-merge processing
@@ -108,7 +92,6 @@ private:
 
 	// Config validation
 	Error validate_config() const;
-	void apply_config_to_components();
 
 protected:
 	// MovieWriter interface implementation
@@ -162,20 +145,6 @@ public:
 	 */
 	String get_comprehensive_debug_info() const;
 	void print_recording_summary() const;
-
-	/**
-	 * Advanced controls
-	 */
-	Error pause_recording();
-	Error resume_recording();
-	bool is_paused() const;
-
-	/**
-	 * Configuration presets
-	 */
-	static ObsRecordingConfig get_high_quality_config();
-	static ObsRecordingConfig get_standard_config();
-	static ObsRecordingConfig get_performance_config();
 
 	/**
 	 * File format support

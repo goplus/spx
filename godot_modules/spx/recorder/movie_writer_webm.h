@@ -45,8 +45,6 @@ class MovieWriterWebM : public MovieWriter, public SpxRealtimeRecorder {
 	GDCLASS(MovieWriterWebM, MovieWriter)
 
 	bool enable_auto_download;
-	String base_path;
-	uint32_t fps = 30;
 
 public:
 	MovieWriterWebM();
@@ -69,20 +67,7 @@ protected:
 #if defined(WEB_ENABLED) && defined(MODULE_SPX_ENABLED)
 
 private:
-	bool web_audio_recorder_initialized = false;
-	bool web_audio_recording_active = false;
-	Vector<uint8_t> web_audio_buffer;
-
-	bool web_video_recorder_initialized = false;
 	bool web_video_recording_active = false;
-
-	void setup_web_audio_recorder();
-	void cleanup_web_audio_recorder();
-	bool process_web_audio_data();
-
-	void setup_web_video_recorder(uint32_t p_fps);
-	void cleanup_web_video_recorder();
-	bool process_web_video_data();
 #endif
 };
 

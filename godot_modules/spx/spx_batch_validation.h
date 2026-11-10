@@ -31,9 +31,28 @@
 #define SPX_BATCH_VALIDATION_H
 
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 
 namespace SpxBatchValidation {
+
+// ID and mask lanes carry raw bits, including valid NaN bit patterns.
+// Keep this decoding separate from numeric header validation below.
+static inline uint32_t read_u32_lane(float p_value) {
+	uint32_t bits = 0;
+	std::memcpy(&bits, &p_value, sizeof(bits));
+	return bits;
+}
+
+static inline int64_t read_i64_lanes(const float *p_lanes) {
+	const uint64_t low = read_u32_lane(p_lanes[0]);
+	const uint64_t high = read_u32_lane(p_lanes[1]);
+	const uint64_t bits = (high << 32) | low;
+	int64_t value = 0;
+	std::memcpy(&value, &bits, sizeof(value));
+	return value;
+}
 
 // Batch headers are transported as float32 values for compatibility with the
 // existing bridge. Validate before converting: converting NaN, infinity, or an

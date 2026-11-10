@@ -31,8 +31,8 @@
 #ifndef TEST_SPX_SPRITE_MGR_H
 #define TEST_SPX_SPRITE_MGR_H
 
-#include "../spx_layer_sorter.h"
 #include "../spx_image_texture.h"
+#include "../spx_layer_sorter.h"
 #include "../spx_physics_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
@@ -41,8 +41,10 @@
 #include "scene/resources/2d/circle_shape_2d.h"
 #include "scene/resources/2d/convex_polygon_shape_2d.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
+#include "scene/resources/atlas_texture.h"
 #include "scene/resources/material.h"
 #include "scene/resources/packed_scene.h"
+#include "scene/resources/shader.h"
 #include "spx_test_fixtures.h"
 
 namespace TestSpxSpriteMgr {
@@ -390,6 +392,165 @@ TEST_CASE("[SceneTree][SPX] Sprite material parameters affect the attached shade
 	manager->set_color(id, Color(1, 0, 0, 1));
 	CHECK(Color(manager->get_color(id)) == Color(1, 0, 0, 1));
 	CHECK(Color(material->get_shader_parameter("color")) == Color(1, 0, 0, 1));
+}
+
+TEST_CASE("[SceneTree][SPX] Sprite material access follows replacement and clearing") {
+	TestSpx::TempDirectory files("spx_material_replacement");
+	files.write("sprite.gdshader", "shader_type canvas_item; uniform vec4 color : source_color; uniform float amount; uniform vec4 bounds; uniform vec4 uv_remap;");
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	auto *sprite = manager->get_sprite(id);
+	auto *animation = sprite->get_anim2d();
+	const CharString path = files.file("sprite.gdshader").utf8();
+	manager->set_material_shader(id, path.get_data());
+	Ref<ShaderMaterial> original = animation->get_material();
+	REQUIRE(original.is_valid());
+	manager->set_material_params(id, "amount", 0.25);
+	manager->set_color(id, Color(1, 0, 0));
+
+	Ref<ShaderMaterial> replacement;
+	replacement.instantiate();
+	replacement->set_shader(original->get_shader());
+	replacement->set_shader_parameter("amount", 0.5);
+	replacement->set_shader_parameter("color", Color(0, 1, 0));
+	animation->set_material(replacement);
+	CHECK(manager->get_material_params(id, "amount") == doctest::Approx(0.5));
+	CHECK(Color(manager->get_color(id)) == Color(0, 1, 0));
+	CHECK(TestSpx::take_string(manager->get_material_shader(id)) == files.file("sprite.gdshader"));
+	manager->set_material_params(id, "amount", 0.75);
+	manager->set_material_params_vec4(id, "bounds", Vector4(1, 2, 3, 4));
+	manager->set_material_params_color(id, "color", Color(0, 0, 1));
+	sprite->set_uv_remap(Vector4(0.1, 0.2, 0.3, 0.4));
+	CHECK(double(replacement->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	CHECK(Vector4(manager->get_material_params_vec4(id, "bounds")) == Vector4(1, 2, 3, 4));
+	CHECK(Color(manager->get_material_params_color(id, "color")) == Color(0, 0, 1));
+	CHECK(Vector4(replacement->get_shader_parameter("uv_remap")) == Vector4(0.1, 0.2, 0.3, 0.4));
+	CHECK(double(original->get_shader_parameter("amount")) == doctest::Approx(0.25));
+	CHECK(Color(original->get_shader_parameter("color")) == Color(1, 0, 0));
+	const ObjectID original_id = original->get_instance_id();
+	original.unref();
+	CHECK(ObjectDB::get_instance(original_id) == nullptr);
+
+	animation->set_material(Ref<Material>());
+	const Color tint(0.2, 0.4, 0.6, 0.8);
+	manager->set_color(id, tint);
+	CHECK(animation->get_self_modulate() == tint);
+	CHECK(Color(manager->get_color(id)) == tint);
+	CHECK(manager->get_material_shader(id) == nullptr);
+	manager->set_material_params(id, "amount", 1);
+	CHECK(manager->get_material_params(id, "amount") == 0);
+	CHECK(double(replacement->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	const ObjectID replacement_id = replacement->get_instance_id();
+	replacement.unref();
+	CHECK(ObjectDB::get_instance(replacement_id) == nullptr);
+
+	Ref<CanvasItemMaterial> canvas_material;
+	canvas_material.instantiate();
+	animation->set_material(canvas_material);
+	manager->set_color(id, Color(1, 1, 0));
+	CHECK(Color(manager->get_color(id)) == Color(1, 1, 0));
+	CHECK(animation->get_material() == canvas_material);
+	CHECK(manager->get_material_shader(id) == nullptr);
+	manager->set_material_shader(id, path.get_data());
+	Ref<ShaderMaterial> created = animation->get_material();
+	REQUIRE(created.is_valid());
+	CHECK(TestSpx::take_string(manager->get_material_shader(id)) == files.file("sprite.gdshader"));
+}
+
+TEST_CASE("[SceneTree][SPX] Authored sprite shaders receive current atlas UVs without material setters") {
+	TestSpx::EngineScene scene;
+	const GdObj id = scene.engine->get_sprite()->create_bare_sprite(Vector2());
+	auto *sprite = scene.engine->get_sprite()->get_sprite(id);
+	auto *animation = sprite->get_anim2d();
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(100, 80));
+	Ref<AtlasTexture> atlas;
+	atlas.instantiate();
+	atlas->set_atlas(texture);
+	atlas->set_region(Rect2(25, 20, 50, 40));
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->add_frame("default", atlas);
+	frames->add_frame("default", texture);
+	animation->set_sprite_frames(frames);
+	Ref<Shader> shader;
+	shader.instantiate();
+	shader->set_code("shader_type canvas_item; uniform vec4 atlas_uv_rect2;");
+	Ref<ShaderMaterial> material;
+	material.instantiate();
+	material->set_shader(shader);
+	animation->set_material(material);
+
+	sprite->on_start();
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0.25, 0.25, 0.5, 0.5));
+	sprite->set_anim_frame(1);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+	Ref<ShaderMaterial> replacement;
+	replacement.instantiate();
+	replacement->set_shader(shader);
+	animation->set_material(replacement);
+	sprite->set_anim_frame(0);
+	CHECK(Vector4(replacement->get_shader_parameter("atlas_uv_rect2")) == Vector4(0.25, 0.25, 0.5, 0.5));
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+}
+
+TEST_CASE("[SceneTree][SPX] Native sprite clones isolate shader parameters and atlas UVs") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	auto *sprite = manager->get_sprite(id);
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(100, 80));
+	Ref<AtlasTexture> atlas;
+	atlas.instantiate();
+	atlas->set_atlas(texture);
+	atlas->set_region(Rect2(25, 20, 50, 40));
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->add_frame("default", atlas);
+	frames->add_frame("default", texture);
+	sprite->get_anim2d()->set_sprite_frames(frames);
+	Ref<Shader> shader;
+	shader.instantiate();
+	shader->set_code("shader_type canvas_item; uniform vec4 atlas_uv_rect2; uniform float amount; uniform sampler2D detail;");
+	Ref<ShaderMaterial> material;
+	material.instantiate();
+	material->set_shader(shader);
+	material->set_shader_parameter("amount", 0.25);
+	material->set_shader_parameter("detail", texture);
+	sprite->get_anim2d()->set_material(material);
+	sprite->set_anim_frame(0);
+	const Vector4 atlas_uv(0.25, 0.25, 0.5, 0.5);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+
+	const GdObj clone_id = manager->clone_sprite(id);
+	REQUIRE(clone_id != NULL_OBJECT_ID);
+	auto *clone = manager->get_sprite(clone_id);
+	REQUIRE(clone);
+	Ref<ShaderMaterial> cloned_material = clone->get_anim2d()->get_material();
+	REQUIRE(cloned_material.is_valid());
+	CHECK(cloned_material != material);
+	CHECK(material->get_shader_parameter("atlas_uv_rect2").get_type() == Variant::VECTOR4);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(sprite->get_anim2d()->get_material() == material);
+	CHECK(cloned_material->get_shader() == shader);
+	CHECK(Ref<Texture2D>(cloned_material->get_shader_parameter("detail")) == texture);
+	CHECK(double(cloned_material->get_shader_parameter("amount")) == doctest::Approx(0.25));
+	CHECK(Vector4(cloned_material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	clone->set_anim_frame(1);
+	clone->set_material_params("amount", 0.75);
+	CHECK(Vector4(cloned_material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+	CHECK(double(cloned_material->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(double(material->get_shader_parameter("amount")) == doctest::Approx(0.25));
+
+	// A caller can still explicitly share a material after cloning.
+	clone->get_anim2d()->set_material(material);
+	clone->set_material_params("amount", 0.5);
+	CHECK(double(material->get_shader_parameter("amount")) == doctest::Approx(0.5));
 }
 
 TEST_CASE("[SceneTree][SPX] Sprite animation controls update playback and frame transforms") {
@@ -774,7 +935,7 @@ TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow autho
 	sprite->on_start();
 	Ref<ShaderMaterial> material = animation->get_material();
 	REQUIRE(material.is_valid());
-	CHECK(Rect2(material->get_shader_parameter("atlas_uv_rect2")) == Rect2(0, 0, 1, 1));
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
 }
 
 TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and tree lifetime") {

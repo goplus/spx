@@ -86,6 +86,7 @@ void SpxUi::detach_control_binding(ObjectID p_destroying_binding) {
 	SpxUiBinding *binding = Object::cast_to<SpxUiBinding>(ObjectDB::get_instance(old_binding_id));
 	if (binding != nullptr) {
 		binding->detach();
+		binding->queue_free();
 	}
 }
 
@@ -119,9 +120,6 @@ SpxInput *SpxUi::get_input() {
 
 SpxSlider *SpxUi::get_slider() {
 	GET_SPX_CONTROL_TYPE(Slider)
-}
-
-void SpxUi::on_start() {
 }
 
 void SpxUi::set_type(GdInt etype) {
@@ -184,13 +182,6 @@ void SpxUi::set_font_size(GdInt size) {
 GdInt SpxUi::get_font_size() {
 	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, 0)
 	return node->get_theme_font_size(UI_DEFAULT_THEME_NAME);
-}
-
-void SpxUi::set_font(GdString path) {
-}
-
-GdString SpxUi::get_font() {
-	return SpxReturnStr("");
 }
 
 void SpxUi::set_visible(GdBool visible) {

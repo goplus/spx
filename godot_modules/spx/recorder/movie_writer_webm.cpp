@@ -30,28 +30,19 @@
 
 #include "movie_writer_webm.h"
 #include "core/config/project_settings.h"
-#include "core/io/file_access.h"
+#include "core/os/os.h"
 #include "core/os/time.h"
 #include "movie_recorder_manager.h"
-#include "movie_utils.h"
 
 #if defined(WEB_ENABLED) && defined(MODULE_SPX_ENABLED)
 #include <emscripten.h>
 
 extern "C" {
-int godot_audio_recorder_init();
-int godot_audio_recorder_start();
-void godot_audio_recorder_stop();
-void godot_audio_recorder_cleanup();
-
 int godot_video_recorder_init(int p_fps);
 int godot_video_recorder_start();
 void godot_video_recorder_stop();
-int godot_video_recorder_get_data_size();
 void godot_video_recorder_download_data(const char *p_filename);
 void godot_video_recorder_cleanup();
-int godot_video_recorder_has_new_data();
-int godot_video_recorder_has_data();
 }
 #endif
 
@@ -113,185 +104,52 @@ void MovieWriterWebM::write_end() {
 
 #else //WEB_ENABLED
 Error MovieWriterWebM::write_begin(const Size2i &p_movie_size, uint32_t p_fps, const String &p_base_path) {
-	base_path = p_base_path.get_basename();
-	if (base_path.is_relative_path()) {
-		base_path = "res://" + base_path;
-	}
-	base_path += ".webm";
-	fps = p_fps;
-
-	if (MovieDebugUtils::is_stdout_verbose()) {
+	if (OS::get_singleton()->is_stdout_verbose()) {
 		print_line("MovieWriterWebM: Starting web realtime recording");
 	}
 
-	if (godot_video_recorder_init(p_fps) == 1) {
-		web_video_recorder_initialized = true;
-		int start_result = godot_video_recorder_start();
-		if (start_result == 1) {
-			web_video_recording_active = true;
-			if (MovieDebugUtils::is_stdout_verbose()) {
-				print_line("MovieWriterWebM: Canvas video + audio recording started");
-				print_line("  Using Canvas.captureStream() for video");
-				print_line("  Using MediaRecorder API for audio+video combined recording");
-				print_line("  Frame rate: " + itos(p_fps) + " FPS");
-			}
-			return OK;
-		} else {
-			ERR_PRINT("MovieWriterWebM: Failed to start Canvas video recording, falling back to audio-only");
-			cleanup_web_video_recorder();
-			setup_web_audio_recorder();
-			if (web_audio_recorder_initialized) {
-				int audio_start_result = godot_audio_recorder_start();
-				if (audio_start_result == 1) {
-					web_audio_recording_active = true;
-					if (MovieDebugUtils::is_stdout_verbose()) {
-						print_line("MovieWriterWebM: Fallback to audio-only recording mode");
-					}
-					return OK;
-				}
-				cleanup_web_audio_recorder();
-			}
-			return ERR_CANT_CREATE;
-		}
-	} else {
-		// Initialization can fail after creating browser-side streams.
+	if (godot_video_recorder_init(p_fps) != 1 || godot_video_recorder_start() != 1) {
+		// Either operation can fail after creating browser-side resources.
 		godot_video_recorder_cleanup();
-		ERR_PRINT("MovieWriterWebM: Canvas video recording not supported, falling back to audio-only");
-		setup_web_audio_recorder();
-		if (web_audio_recorder_initialized) {
-			int start_result = godot_audio_recorder_start();
-			if (start_result == 1) {
-				web_audio_recording_active = true;
-				if (MovieDebugUtils::is_stdout_verbose()) {
-					print_line("MovieWriterWebM: Web audio-only recording started");
-				}
-				return OK;
-			}
-			cleanup_web_audio_recorder();
-		}
+		ERR_PRINT("MovieWriterWebM: Failed to start Canvas video recording");
 		return ERR_CANT_CREATE;
 	}
+
+	web_video_recording_active = true;
+	if (OS::get_singleton()->is_stdout_verbose()) {
+		print_line("MovieWriterWebM: Canvas video + audio recording started");
+		print_line("  Using Canvas.captureStream() for video");
+		print_line("  Using MediaRecorder API for audio+video combined recording");
+		print_line("  Frame rate: " + itos(p_fps) + " FPS");
+	}
+	return OK;
 }
 
 Error MovieWriterWebM::write_frame(const Ref<Image> &p_image, const int32_t *p_audio_data) {
-	if (web_video_recording_active) {
-		return OK;
-	} else if (web_audio_recording_active) {
-		bool has_audio_data = process_web_audio_data();
-		return has_audio_data ? OK : ERR_CANT_ACQUIRE_RESOURCE;
-	}
-
-	return ERR_UNAVAILABLE;
+	return web_video_recording_active ? OK : ERR_UNAVAILABLE;
 }
 
 void MovieWriterWebM::write_end() {
-	if (web_video_recorder_initialized) {
-		cleanup_web_video_recorder();
-	}
-	if (web_audio_recorder_initialized) {
-		cleanup_web_audio_recorder();
-	}
-}
-
-void MovieWriterWebM::setup_web_audio_recorder() {
-	if (web_audio_recorder_initialized) {
-		if (MovieDebugUtils::is_stdout_verbose()) {
-			print_line("MovieWriterWebM: Web audio recorder already initialized");
-		}
-		return;
-	}
-
-	int result = godot_audio_recorder_init();
-	if (result == 1) {
-		web_audio_recorder_initialized = true;
-		if (MovieDebugUtils::is_stdout_verbose()) {
-			print_line("MovieWriterWebM: Web audio recorder initialized successfully");
-		}
-
-	} else {
-		// Initialization can fail after creating a MediaStreamDestination.
-		godot_audio_recorder_cleanup();
-		ERR_PRINT("MovieWriterWebM: Failed to initialize web audio recorder");
-		web_audio_recorder_initialized = false;
-	}
-}
-
-void MovieWriterWebM::cleanup_web_audio_recorder() {
-	if (!web_audio_recorder_initialized) {
-		return;
-	}
-
-	if (web_audio_recording_active) {
-		godot_audio_recorder_stop();
-		web_audio_recording_active = false;
-	}
-
-	godot_audio_recorder_cleanup();
-	web_audio_recorder_initialized = false;
-	web_audio_buffer.clear();
-
-	if (MovieDebugUtils::is_stdout_verbose()) {
-		print_line("MovieWriterWebM: Web audio recorder cleaned up");
-	}
-}
-
-bool MovieWriterWebM::process_web_audio_data() {
-	if (!web_audio_recorder_initialized || !web_audio_recording_active) {
-		return false;
-	}
-	return true;
-}
-
-void MovieWriterWebM::setup_web_video_recorder(uint32_t p_fps) {
-	if (godot_video_recorder_init(p_fps) == 1) {
-		web_video_recorder_initialized = true;
-		if (MovieDebugUtils::is_stdout_verbose()) {
-			print_line("MovieWriterWebM: Canvas video recorder initialized successfully");
-		}
-	} else {
-		web_video_recorder_initialized = false;
-		ERR_PRINT("MovieWriterWebM: Failed to initialize Canvas video recorder");
-	}
-}
-
-void MovieWriterWebM::cleanup_web_video_recorder() {
-	if (web_video_recording_active) {
-		godot_video_recorder_stop();
-		web_video_recording_active = false;
-
-		if (godot_video_recorder_has_data() == 1 && enable_auto_download) {
-			int data_size = godot_video_recorder_get_data_size();
-			if (MovieDebugUtils::is_stdout_verbose()) {
-				print_line(String("MovieWriterWebM: Canvas video recording completed. Data size: ") + String::humanize_size(data_size));
-			}
-
-			String filename = String("spx_recording_") + Time::get_singleton()->get_datetime_string_from_system(false, true) + ".webm";
-			godot_video_recorder_download_data(filename.utf8().get_data());
-			if (MovieDebugUtils::is_stdout_verbose()) {
-				print_line("MovieWriterWebM: Canvas video file download initiated: " + filename);
-			}
-		} else {
-			if (MovieDebugUtils::is_stdout_verbose()) {
-				print_line("MovieWriterWebM: No Canvas video data to download");
-			}
-		}
-	}
-
-	if (web_video_recorder_initialized) {
-		godot_video_recorder_cleanup();
-		web_video_recorder_initialized = false;
-		if (MovieDebugUtils::is_stdout_verbose()) {
-			print_line("MovieWriterWebM: Canvas video recorder cleaned up");
-		}
-	}
-}
-
-bool MovieWriterWebM::process_web_video_data() {
 	if (!web_video_recording_active) {
-		return false;
+		return;
 	}
 
-	return godot_video_recorder_has_new_data() == 1;
+	godot_video_recorder_stop();
+	web_video_recording_active = false;
+
+	if (enable_auto_download) {
+		// JavaScript retains this session and waits for its final data event.
+		String filename = String("spx_recording_") + Time::get_singleton()->get_datetime_string_from_system(false, true) + ".webm";
+		godot_video_recorder_download_data(filename.utf8().get_data());
+		if (OS::get_singleton()->is_stdout_verbose()) {
+			print_line("MovieWriterWebM: Canvas video file download initiated: " + filename);
+		}
+	}
+
+	godot_video_recorder_cleanup();
+	if (OS::get_singleton()->is_stdout_verbose()) {
+		print_line("MovieWriterWebM: Canvas video recorder cleaned up");
+	}
 }
 
 extern "C" {

@@ -116,7 +116,6 @@ void SpxSprite::_physics_process(double p_delta) {
 			move_and_slide();
 			break;
 		case KINEMATIC:
-			_handle_kinematic_physics(p_delta);
 			move_and_slide();
 			break;
 		case STATIC:
@@ -153,9 +152,6 @@ void SpxSprite::_handle_dynamic_physics(double p_delta) {
 
 	set_velocity(current_velocity);
 	pending_impulse = Vector2();
-}
-
-void SpxSprite::_handle_kinematic_physics(double /* p_delta */) {
 }
 
 void SpxSprite::_handle_static_physics(double /* p_delta */) {

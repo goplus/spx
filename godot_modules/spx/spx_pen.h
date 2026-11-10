@@ -42,12 +42,10 @@ class SpxSprite;
 class SpxPenSurface;
 class SpxPen {
 private:
-	GdObj id;
 	SpxPenSurface *surface = nullptr;
 	Vector2 last_draw_pos;
 	bool needs_start_cap = true;
 	bool is_pen_down = false;
-	float min_draw_distance = 1.0f;
 
 	struct PenProperties {
 		Color color = Color(0, 0, 0, 1); // BLACK
@@ -81,7 +79,6 @@ public:
 public:
 	// Pen APIs
 	void on_erase_all();
-	GdObj get_id();
 	void on_down(GdBool move_by_mouse);
 	void on_up();
 	void stamp();

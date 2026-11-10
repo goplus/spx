@@ -248,7 +248,6 @@ protected:
 	void _notification(int p_what);
 	void _physics_process(double p_delta);
 	void _handle_dynamic_physics(double p_delta);
-	void _handle_kinematic_physics(double p_delta);
 	void _handle_static_physics(double p_delta);
 	void _handle_no_physics(double p_delta);
 
@@ -290,7 +289,7 @@ private:
 	void _enable_collision();
 	void _disable_collision();
 
-	bool _ensure_material_ready(const char *p_context, GdBool p_create_if_missing = false);
+	Ref<ShaderMaterial> _get_shader_material(const char *p_context, bool p_create_if_missing = false);
 	enum class VisualKind { ANIMATION,
 		SVG_ANIMATION,
 		TEXTURE,
@@ -365,7 +364,6 @@ private:
 	float playback_speed = 1.0f;
 
 	Ref<SpriteFrames> default_sprite_frames;
-	Ref<ShaderMaterial> default_material;
 
 	Area2D *area2d = nullptr;
 	CollisionShape2D *trigger2d = nullptr;

@@ -101,7 +101,7 @@ static Ref<Image> render_project_text() {
 	Ref<Image> image;
 	image.instantiate();
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"40\"><text x=\"2\" y=\"30\" font-family=\"Project, default\" font-size=\"24\">SPX fonts</text></svg>";
-	REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == OK);
+	REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1) == OK);
 	return image;
 }
 

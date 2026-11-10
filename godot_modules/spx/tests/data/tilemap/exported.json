@@ -1,0 +1,89 @@
+{
+	"layers": [
+		{
+			"enabled": true,
+			"name": "ground",
+			"offset": [
+				2.5,
+				-3.0
+			],
+			"tile_map_data": "AAACAP//AwAAAAAAAAA=",
+			"z_index": -2
+		},
+		{
+			"enabled": false,
+			"name": "background",
+			"offset": [
+				0.0,
+				0.0
+			],
+			"tile_map_data": "",
+			"z_index": 4
+		}
+	],
+	"name": "exported",
+	"node_offset": [
+		-16,
+		16
+	],
+	"tileset": {
+		"physics_layers": [
+			{
+				"collision_layer": 2,
+				"collision_mask": 5
+			}
+		],
+		"sources": [
+			{
+				"id": 3,
+				"margins": [
+					1,
+					1
+				],
+				"separation": [
+					1,
+					1
+				],
+				"texture": "textures/atlas.png",
+				"texture_region_size": [
+					8,
+					8
+				],
+				"tiles": [
+					{
+						"atlas_coords": [
+							0,
+							0
+						],
+						"physics": [
+							{
+								"layer": 0,
+								"polygons": [
+									[
+										-4.0,
+										-4.0,
+										4.0,
+										-4.0,
+										0.0,
+										4.0
+									]
+								]
+							}
+						],
+						"size_in_atlas": [
+							1,
+							1
+						]
+					}
+				],
+				"type": "atlas"
+			}
+		],
+		"tile_shape": "square",
+		"tile_size": [
+			8,
+			8
+		]
+	},
+	"version": 1
+}

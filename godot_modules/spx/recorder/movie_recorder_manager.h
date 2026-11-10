@@ -17,11 +17,6 @@ public:
 		uint32_t video_fps = 30;
 		uint32_t video_width = 0;
 		uint32_t video_height = 0;
-		float video_quality = 0.85f;
-		uint32_t audio_sample_rate = 48000;
-		uint32_t audio_channels = 2;
-		bool enable_audio = true;
-		bool realtime_mode = true;
 
 		RecordingConfig() = default;
 		explicit RecordingConfig(const String &p_path) :
@@ -33,8 +28,6 @@ public:
 
 	static Error start_recording(const RecordingConfig &p_config);
 	static Error stop_recording();
-	static Error pause_recording();
-	static Error resume_recording();
 
 	static bool is_recording();
 	static bool is_initialized();
@@ -50,7 +43,7 @@ private:
 
 	static SpxRealtimeRecorder *instance;
 	static InstanceState state;
-	static RecordingConfig current_config;
+	static String current_output_path;
 	static Size2i default_movie_size;
 	static uint32_t default_fps;
 	static uint64_t recording_start_time;

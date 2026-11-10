@@ -9,31 +9,20 @@
 #include "simple_audio_writer.h"
 #include "core/os/os.h"
 #include "core/string/print_string.h"
-#include "movie_utils.h"
-
-SimpleAudioWriter::SimpleAudioWriter() {
-	audio_chunk_count = 0;
-}
 
 SimpleAudioWriter::~SimpleAudioWriter() {
-	if (f.is_valid() && f->is_open()) {
-		close();
-	}
+	close();
 }
 
 Error SimpleAudioWriter::open(const String &p_path, uint32_t p_sample_rate, uint32_t p_channels) {
-	base_path = p_path;
-	mix_rate = p_sample_rate;
 	channels = p_channels;
-	audio_chunk_count = 0;
 	audio_chunk_sizes.clear();
 
-	f = FileAccess::open(base_path, FileAccess::WRITE);
+	f = FileAccess::open(p_path, FileAccess::WRITE);
 	ERR_FAIL_COND_V(f.is_null(), ERR_CANT_OPEN);
 
 	const uint32_t bit_depth = 32;
 	uint32_t blockalign = bit_depth / 8 * channels;
-	audio_block_size = blockalign; // Bytes per sample
 
 	// Write AVI header - audio stream only
 	f->store_buffer((const uint8_t *)"RIFF", 4);
@@ -46,7 +35,7 @@ Error SimpleAudioWriter::open(const String &p_path, uint32_t p_sample_rate, uint
 	f->store_32(56);
 
 	f->store_32(1000000); // Microsecs per frame (not very important for audio)
-	f->store_32(mix_rate * blockalign); // Max bytes per second
+	f->store_32(p_sample_rate * blockalign); // Max bytes per second
 	f->store_32(0); // Padding Granularity
 	f->store_32(16);
 	f->store_32(0); // Total frames (not important for audio stream)
@@ -72,7 +61,7 @@ Error SimpleAudioWriter::open(const String &p_path, uint32_t p_sample_rate, uint
 	f->store_16(0); // Language
 	f->store_32(0); // Initial Frames
 	f->store_32(blockalign); // Scale
-	f->store_32(mix_rate * blockalign); // Rate
+	f->store_32(p_sample_rate * blockalign); // Rate
 	f->store_32(0); // Start
 	total_audio_frames_ofs = f->get_position();
 	f->store_32(0); // Number of frames (to be updated later)
@@ -84,8 +73,8 @@ Error SimpleAudioWriter::open(const String &p_path, uint32_t p_sample_rate, uint
 	f->store_32(16); // Standard format, no extra fields
 	f->store_16(1); // Compression code, standard PCM
 	f->store_16(channels);
-	f->store_32(mix_rate); // Samples (frames) / Sec
-	f->store_32(mix_rate * blockalign); // Bytes / sec
+	f->store_32(p_sample_rate); // Samples (frames) / Sec
+	f->store_32(p_sample_rate * blockalign); // Bytes / sec
 	f->store_16(blockalign); // Block align
 	f->store_16(bit_depth); // Bits per sample
 
@@ -95,9 +84,9 @@ Error SimpleAudioWriter::open(const String &p_path, uint32_t p_sample_rate, uint
 	f->store_32(0); // Size (to be updated later)
 	f->store_buffer((const uint8_t *)"movi", 4);
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
-		print_line(String("SimpleAudioWriter: Starting audio recording to ") + base_path);
-		print_line(String("Sample rate: ") + String::num_int64(mix_rate) + "Hz, Channels: " + String::num_int64(channels));
+	if (OS::get_singleton()->is_stdout_verbose()) {
+		print_line(String("SimpleAudioWriter: Starting audio recording to ") + p_path);
+		print_line(String("Sample rate: ") + String::num_int64(p_sample_rate) + "Hz, Channels: " + String::num_int64(channels));
 	}
 
 	return OK;
@@ -114,7 +103,6 @@ Error SimpleAudioWriter::write_audio_chunk(const int32_t *p_audio_data, int p_fr
 	f->store_buffer((const uint8_t *)p_audio_data, data_size);
 
 	audio_chunk_sizes.push_back(data_size);
-	audio_chunk_count++;
 
 	return OK;
 }
@@ -125,6 +113,7 @@ void SimpleAudioWriter::close() {
 	}
 
 	// Write index - only contains audio chunks
+	const uint32_t audio_chunk_count = get_chunk_count();
 	f->store_buffer((const uint8_t *)"idx1", 4);
 	f->store_32(4 * 4 * audio_chunk_count); // 16 bytes per index entry
 	uint32_t ofs = 4;
@@ -156,7 +145,7 @@ void SimpleAudioWriter::close() {
 
 	f.unref();
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
+	if (OS::get_singleton()->is_stdout_verbose()) {
 		print_line(String("SimpleAudioWriter: Audio recording completed, total chunks: ") + String::num_int64(audio_chunk_count));
 		print_line(String("Total samples: ") + String::num_int64(total_samples));
 	}

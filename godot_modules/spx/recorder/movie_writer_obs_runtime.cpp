@@ -8,22 +8,14 @@
 
 #include "movie_writer_obs_runtime.h"
 #include "core/config/project_settings.h"
+#include "core/os/os.h"
 #include "core/string/print_string.h"
-#include "movie_utils.h"
+#include "post_merge_processor.h"
 #include "servers/audio_server.h"
 #include "servers/display_server.h"
 #include "servers/rendering_server.h"
 
-ObsStyleMovieWriter::ObsStyleMovieWriter() :
-		current_state(STATE_UNINITIALIZED),
-		game_frame_sequence(0),
-		recording_start_time(0),
-		audio_driver_replaced(false),
-		last_add_frame_time(0),
-		frames_added_count(0) {
-	// Load configuration from project settings
-	obs_config = get_standard_config();
-
+ObsStyleMovieWriter::ObsStyleMovieWriter() {
 	// Apply project settings
 	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_video_fps")) {
 		obs_config.video_fps = GLOBAL_GET("movie_writer/obs_video_fps");
@@ -37,12 +29,6 @@ ObsStyleMovieWriter::ObsStyleMovieWriter() :
 	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_audio_channels")) {
 		obs_config.audio_channels = GLOBAL_GET("movie_writer/obs_audio_channels");
 	}
-	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_enable_timestamp_chunks")) {
-		obs_config.enable_timestamp_chunks = GLOBAL_GET("movie_writer/obs_enable_timestamp_chunks");
-	}
-	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_enable_repeat_frame_marking")) {
-		obs_config.enable_repeat_frame_marking = GLOBAL_GET("movie_writer/obs_enable_repeat_frame_marking");
-	}
 	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_enable_debug_output")) {
 		obs_config.enable_debug_output = GLOBAL_GET("movie_writer/obs_enable_debug_output");
 	}
@@ -52,18 +38,10 @@ ObsStyleMovieWriter::ObsStyleMovieWriter() :
 	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_keep_intermediate_files")) {
 		obs_config.keep_intermediate_files = GLOBAL_GET("movie_writer/obs_keep_intermediate_files");
 	}
-	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_ffmpeg_path")) {
-		obs_config.ffmpeg_path = GLOBAL_GET("movie_writer/obs_ffmpeg_path");
-	}
-	// Initialize post-merge processor
-	post_merge_processor = new PostMergeProcessor();
 }
 
 ObsStyleMovieWriter::~ObsStyleMovieWriter() {
-	if (current_state == STATE_RECORDING) {
-		write_end();
-	}
-	restore_audio_driver();
+	write_end();
 	cleanup_components();
 }
 
@@ -161,7 +139,6 @@ Error ObsStyleMovieWriter::write_begin(const Size2i &p_movie_size, uint32_t p_fp
 	// Set up audio capture
 	Error audio_error = setup_audio_capture();
 	if (audio_error != OK) {
-		restore_audio_driver();
 		cleanup_components();
 		return audio_error;
 	}
@@ -169,7 +146,6 @@ Error ObsStyleMovieWriter::write_begin(const Size2i &p_movie_size, uint32_t p_fp
 	Error video_start_error = video_recorder->start_recording();
 	if (video_start_error != OK) {
 		ERR_PRINT("ObsStyleMovieWriter: Failed to start video recording");
-		restore_audio_driver();
 		cleanup_components();
 		return video_start_error;
 	}
@@ -177,8 +153,6 @@ Error ObsStyleMovieWriter::write_begin(const Size2i &p_movie_size, uint32_t p_fp
 	Error audio_start_error = audio_recorder->start_recording();
 	if (audio_start_error != OK) {
 		ERR_PRINT("ObsStyleMovieWriter: Failed to start audio recording");
-		video_recorder->stop_recording();
-		restore_audio_driver();
 		cleanup_components();
 		return audio_start_error;
 	}
@@ -186,7 +160,6 @@ Error ObsStyleMovieWriter::write_begin(const Size2i &p_movie_size, uint32_t p_fp
 	// Update state
 	update_recording_state(STATE_RECORDING);
 	recording_start_time = OS::get_singleton()->get_ticks_usec();
-	game_frame_sequence = 0;
 	frames_added_count = 0;
 
 	return OK;
@@ -197,16 +170,11 @@ Error ObsStyleMovieWriter::write_frame(const Ref<Image> &p_image, const int32_t 
 		return ERR_UNCONFIGURED;
 	}
 
-	uint64_t current_time = OS::get_singleton()->get_ticks_usec();
-
-	// Update game frame data to double buffer
+	// Publish the latest game frame.
 	if (p_image.is_valid()) {
-		frame_buffer->update_frame(p_image, current_time, game_frame_sequence);
-		game_frame_sequence++;
+		frame_buffer->update_frame(p_image, frames_added_count);
 		frames_added_count++;
 	}
-
-	last_add_frame_time = current_time;
 
 	// Independent recording mode: audio captured by HybridAudioDriver
 	// p_audio_data parameter is not used in independent recording mode
@@ -221,23 +189,7 @@ void ObsStyleMovieWriter::write_end() {
 
 	update_recording_state(STATE_STOPPING);
 
-	// Stop independent recording threads
-	if (video_recorder) {
-		video_recorder->stop_recording();
-	}
-
-	if (audio_recorder) {
-		audio_recorder->stop_recording();
-	}
-
-	// Store audio_recorder reference before restore (to prevent double cleanup)
-	IndependentAudioRecorder *temp_audio_recorder = audio_recorder;
-
-	// Restore audio driver
-	restore_audio_driver();
-
-	// Clear audio_recorder reference to prevent double cleanup in destructor
-	audio_recorder = nullptr;
+	stop_components();
 
 	// Print recording summary
 	if (obs_config.enable_debug_output) {
@@ -246,15 +198,13 @@ void ObsStyleMovieWriter::write_end() {
 
 	// Post-merge processing (only for desktop platforms)
 #ifndef WEB_ENABLED
-	if (obs_config.enable_post_merge && post_merge_processor) {
+	if (obs_config.enable_post_merge) {
 		perform_post_merge();
 	}
 #endif
 
 	// Clean up components
-	cleanup_components(temp_audio_recorder); // Pass temp_audio_recorder for proper cleanup
-
-	update_recording_state(STATE_UNINITIALIZED);
+	cleanup_components();
 
 	if (obs_config.enable_debug_output) {
 		print_line("=== OBS-style Recording Completed ===");
@@ -262,12 +212,8 @@ void ObsStyleMovieWriter::write_end() {
 }
 
 Error ObsStyleMovieWriter::setup_components() {
-	if (post_merge_processor == nullptr) {
-		post_merge_processor = new PostMergeProcessor();
-	}
-
 	// Independent recording mode
-	// Create double buffer
+	// Create the latest-frame snapshot.
 	frame_buffer = new ThreadSafeFrameBuffer();
 
 	// Create video recorder
@@ -279,8 +225,6 @@ Error ObsStyleMovieWriter::setup_components() {
 	video_config.video_width = obs_config.video_width;
 	video_config.video_height = obs_config.video_height;
 	video_config.jpeg_quality = obs_config.jpeg_quality;
-	video_config.enable_timestamp_chunks = obs_config.enable_timestamp_chunks;
-	video_config.enable_repeat_frame_marking = obs_config.enable_repeat_frame_marking;
 
 	Error video_init_error = video_recorder->initialize(frame_buffer, output_file_path + "_video.avi", video_config);
 	if (video_init_error != OK) {
@@ -296,34 +240,25 @@ Error ObsStyleMovieWriter::setup_components() {
 	return OK;
 }
 
-void ObsStyleMovieWriter::cleanup_components(IndependentAudioRecorder *temp_audio_recorder) {
+void ObsStyleMovieWriter::cleanup_components() {
+	stop_components();
+
 	// Clean up independent recording components
 	if (video_recorder) {
 		delete video_recorder;
 		video_recorder = nullptr;
 	}
 
-	if (temp_audio_recorder) {
-		delete temp_audio_recorder; // This calls ~IndependentAudioRecorder()
-	} else if (audio_recorder) {
-		delete audio_recorder; // This calls ~IndependentAudioRecorder()
+	if (audio_recorder) {
+		delete audio_recorder;
 		audio_recorder = nullptr;
 	}
-
-	// Ensure audio_recorder is null
-	audio_recorder = nullptr;
 
 	if (frame_buffer) {
 		delete frame_buffer;
 		frame_buffer = nullptr;
 	}
 
-	if (post_merge_processor) {
-		delete post_merge_processor;
-		post_merge_processor = nullptr;
-	}
-
-	hybrid_audio_driver = nullptr;
 	current_state = STATE_UNINITIALIZED;
 }
 
@@ -337,10 +272,9 @@ Error ObsStyleMovieWriter::setup_audio_capture() {
 #else
 	// Desktop platform: capture Master through a module-owned AudioEffect.
 	hybrid_audio_driver = memnew(HybridAudioDriver);
-	Error capture_error = hybrid_audio_driver->init(AudioServer::get_singleton()->get_mix_rate(), AudioDriver::SpeakerMode(AudioServer::get_singleton()->get_speaker_mode()));
+	Error capture_error =
+			hybrid_audio_driver->init(AudioServer::get_singleton()->get_mix_rate());
 	if (capture_error != OK) {
-		memdelete(hybrid_audio_driver);
-		hybrid_audio_driver = nullptr;
 		return capture_error;
 	}
 	hybrid_audio_driver->start();
@@ -355,7 +289,6 @@ Error ObsStyleMovieWriter::setup_audio_capture() {
 	audio_config.channels = obs_config.audio_channels;
 	audio_config.chunk_size = (audio_config.sample_rate * obs_config.audio_chunk_ms) / 1000;
 	audio_config.buffer_size_seconds = obs_config.audio_buffer_seconds;
-	audio_config.enable_audio_monitoring = obs_config.enable_audio_monitoring;
 
 	Error audio_init_error = audio_recorder->initialize(hybrid_audio_driver, output_file_path + "_audio.avi", audio_config);
 	if (audio_init_error != OK) {
@@ -374,7 +307,14 @@ Error ObsStyleMovieWriter::setup_audio_capture() {
 	return OK;
 }
 
-void ObsStyleMovieWriter::restore_audio_driver() {
+void ObsStyleMovieWriter::stop_components() {
+	// Join workers before detaching capture and releasing their input source.
+	if (video_recorder) {
+		video_recorder->stop_recording();
+	}
+	if (audio_recorder) {
+		audio_recorder->stop_recording();
+	}
 	if (hybrid_audio_driver && audio_recorder) {
 		hybrid_audio_driver->unregister_audio_recorder(audio_recorder);
 	}
@@ -384,7 +324,6 @@ void ObsStyleMovieWriter::restore_audio_driver() {
 		memdelete(hybrid_audio_driver);
 		hybrid_audio_driver = nullptr;
 	}
-	original_audio_driver = nullptr;
 }
 
 void ObsStyleMovieWriter::update_recording_state(RecordingState new_state) {
@@ -436,49 +375,9 @@ String ObsStyleMovieWriter::get_state_name() const {
 			return "Recording";
 		case STATE_STOPPING:
 			return "Stopping";
-		case STATE_ERROR:
-			return "Error state";
 		default:
 			return "Unknown state";
 	}
-}
-
-// Configuration presets
-ObsStyleMovieWriter::ObsRecordingConfig ObsStyleMovieWriter::get_high_quality_config() {
-	ObsRecordingConfig config;
-	config.video_fps = 30;
-	config.jpeg_quality = 0.95f;
-	config.audio_sample_rate = 48000;
-	config.audio_channels = 2;
-	config.audio_buffer_seconds = 3;
-	config.enable_timestamp_chunks = true;
-	config.enable_repeat_frame_marking = true;
-	return config;
-}
-
-ObsStyleMovieWriter::ObsRecordingConfig ObsStyleMovieWriter::get_standard_config() {
-	ObsRecordingConfig config;
-	config.video_fps = 30;
-	config.jpeg_quality = 0.85f;
-	config.audio_sample_rate = 48000;
-	config.audio_channels = 2;
-	config.audio_buffer_seconds = 2;
-	config.enable_timestamp_chunks = true;
-	config.enable_repeat_frame_marking = true;
-	return config;
-}
-
-ObsStyleMovieWriter::ObsRecordingConfig ObsStyleMovieWriter::get_performance_config() {
-	ObsRecordingConfig config;
-	config.video_fps = 30;
-	config.jpeg_quality = 0.75f;
-	config.audio_sample_rate = 44100;
-	config.audio_channels = 2;
-	config.audio_buffer_seconds = 1;
-	config.enable_timestamp_chunks = false;
-	config.enable_repeat_frame_marking = true;
-	config.enable_debug_output = false;
-	return config;
 }
 
 // Statistics and debug features
@@ -508,7 +407,6 @@ String ObsStyleMovieWriter::get_comprehensive_debug_info() const {
 	info += "=== ObsStyleMovieWriter Comprehensive Debug Info ===\n";
 	info += String("Current state: ") + get_state_name() + "\n";
 	info += String("Output file: ") + output_file_path + "\n";
-	info += String("Game frame sequence: ") + String::num_int64(game_frame_sequence) + "\n";
 	info += String("Game frames added: ") + String::num_int64(frames_added_count) + "\n";
 
 	if (recording_start_time > 0) {
@@ -536,8 +434,7 @@ String ObsStyleMovieWriter::get_comprehensive_debug_info() const {
 	if (frame_buffer) {
 		info += "\n--- Frame Buffer Info ---\n";
 		info += String("Total updates: ") + String::num_int64(frame_buffer->get_total_updates()) + "\n";
-		info += String("Buffer switches: ") + String::num_int64(frame_buffer->get_buffer_switches()) + "\n";
-		info += String("Last sequence: ") + String::num_int64(frame_buffer->get_last_sequence()) + "\n";
+		info += String("Last sequence: ") + String::num_int64(frame_buffer->get_current_frame().frame_sequence) + "\n";
 	}
 
 	info += "\n=========================================\n";
@@ -576,52 +473,16 @@ void ObsStyleMovieWriter::set_recording_config(const ObsRecordingConfig &p_confi
 	}
 }
 
-Error ObsStyleMovieWriter::pause_recording() {
-	ERR_PRINT("ObsStyleMovieWriter: Pause functionality not yet implemented");
-	return ERR_UNAVAILABLE;
-}
-
-Error ObsStyleMovieWriter::resume_recording() {
-	ERR_PRINT("ObsStyleMovieWriter: Resume functionality not yet implemented");
-	return ERR_UNAVAILABLE;
-}
-
-bool ObsStyleMovieWriter::is_paused() const {
-	return false; // Pause functionality not yet implemented
-}
-
 void ObsStyleMovieWriter::perform_post_merge() {
-	if (obs_config.enable_debug_output) {
-		print_line("ObsStyleMovieWriter::perform_post_merge() called");
-		print_line("  post_merge_processor: " + String(post_merge_processor ? "valid" : "null"));
-		print_line("  output_file_path: " + output_file_path);
-		print_line(String("  enable_post_merge: ") + (obs_config.enable_post_merge ? "true" : "false"));
-	}
-
-	if (!post_merge_processor || output_file_path.is_empty()) {
-		if (obs_config.enable_debug_output) {
-			print_line("PostMergeProcessor: Skipping merge - missing processor or output path");
-		}
+	if (output_file_path.is_empty()) {
 		return;
 	}
 
-	// Configure post-merge processor
+	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig merge_config;
-	merge_config.method = PostMergeProcessor::METHOD_FFMPEG_SYSTEM;
 	merge_config.keep_intermediate_files = obs_config.keep_intermediate_files;
 	merge_config.enable_debug_output = obs_config.enable_debug_output;
-	merge_config.ffmpeg_path = obs_config.ffmpeg_path;
-
-	// Try to use recommended method if FFmpeg is not available
-	PostMergeProcessor::MergeMethod recommended = post_merge_processor->get_recommended_method();
-	if (recommended != PostMergeProcessor::METHOD_FFMPEG_SYSTEM) {
-		merge_config.method = recommended;
-		if (obs_config.enable_debug_output) {
-			print_line("PostMergeProcessor: FFmpeg not available, using method: " + post_merge_processor->get_method_name(recommended));
-		}
-	}
-
-	post_merge_processor->set_config(merge_config);
+	processor.set_config(merge_config);
 
 	// Construct file paths
 	String video_path = output_file_path + "_video.avi";
@@ -636,7 +497,7 @@ void ObsStyleMovieWriter::perform_post_merge() {
 	}
 
 	// Execute merge
-	PostMergeProcessor::MergeResult result = post_merge_processor->merge_files(video_path, audio_path, merged_path);
+	PostMergeProcessor::MergeResult result = processor.merge_files(video_path, audio_path, merged_path);
 
 	if (result.error_code == OK) {
 		if (obs_config.enable_debug_output) {

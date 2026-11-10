@@ -38,9 +38,9 @@
 #include "scene/resources/2d/convex_polygon_shape_2d.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
 
+#include "spx_abi.h"
 #include "spx_coordinate.h"
 #include "spx_draw_tiles.h"
-#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_layer_sorter.h"
 #include "spx_physics_mgr.h"
@@ -98,7 +98,7 @@ void SpxSceneMgr::on_update(float delta) {
 void SpxSceneMgr::on_destroy() {
 	_cancel_export();
 	// Clear pure sprites without recreating the root node (we're destroying)
-	id_pure_sprites.clear();
+	_clear_pure_sprites();
 	SpxLayerSorter::instance().reset();
 	if (pure_sprite_root) {
 		pure_sprite_root->queue_free();
@@ -111,10 +111,17 @@ void SpxSceneMgr::on_reset(int reset_code) {
 	clear_pure_sprites();
 }
 
-void SpxSceneMgr::clear_pure_sprites() {
+void SpxSceneMgr::_clear_pure_sprites() {
+	for (const auto &pair : id_pure_sprites) {
+		if (Node *node = Object::cast_to<Node>(ObjectDB::get_instance(pair.value))) {
+			node->queue_free();
+		}
+	}
 	id_pure_sprites.clear();
-	// Clear SpxLayerSorter to avoid dangling pointers
-	SpxLayerSorter::instance().reset();
+}
+
+void SpxSceneMgr::clear_pure_sprites() {
+	_clear_pure_sprites();
 	if (pure_sprite_root) {
 		pure_sprite_root->queue_free();
 		pure_sprite_root = memnew(Node2D);
@@ -131,26 +138,29 @@ void SpxSceneMgr::create_pure_sprite(GdString texture_path, GdVec2 pos, GdInt zi
 }
 
 void SpxSceneMgr::destroy_pure_sprite(GdObj id) {
-	if (id_pure_sprites.has(id)) {
-		auto sprite = id_pure_sprites[id];
-		id_pure_sprites.erase(id);
-
-		// Clear SpxLayerSorter to avoid dangling pointers
-		// Note: This is conservative but safe. Could be optimized later with per-id removal.
-		SpxLayerSorter::instance().reset();
-
-		// Cast to Node2D to remove from scene tree
-		Node2D *node = dynamic_cast<Node2D *>(sprite);
-		if (node && node->is_inside_tree()) {
-			node->queue_free();
-		}
+	const auto *entry = id_pure_sprites.find(id);
+	if (!entry) {
+		return;
+	}
+	Node *node = Object::cast_to<Node>(ObjectDB::get_instance(entry->value()));
+	id_pure_sprites.erase(id);
+	if (node) {
+		node->queue_free();
 	}
 }
 
 void SpxSceneMgr::collect_sortable_sprites(Vector<ISortableSprite *> &out) {
-	for (auto &pair : id_pure_sprites) {
-		if (pair.value && pair.value->is_node_valid()) {
-			out.push_back(pair.value);
+	for (auto it = id_pure_sprites.begin(); it;) {
+		auto current = it;
+		++it;
+		Node *node = Object::cast_to<Node>(ObjectDB::get_instance(current->value));
+		if (!node || node->is_queued_for_deletion()) {
+			id_pure_sprites.remove(current);
+			continue;
+		}
+		auto *sprite = dynamic_cast<ISortableSprite *>(node);
+		if (sprite && sprite->is_node_valid()) {
+			out.push_back(sprite);
 		}
 	}
 }
@@ -186,7 +196,7 @@ Rect2 SpxSceneMgr::get_scene_bounds(Node *node) {
 }
 
 Rect2 SpxSceneMgr::get_tilemap_bounds(TileMapLayer *layer) {
-	if (!layer) {
+	if (!layer || layer->get_tile_set().is_null()) {
 		return Rect2();
 	}
 
@@ -199,8 +209,7 @@ Rect2 SpxSceneMgr::get_tilemap_bounds(TileMapLayer *layer) {
 	Vector2 top_left = layer->map_to_local(used.position);
 	Vector2 bottom_right = layer->map_to_local(used.position + used.size);
 
-	Rect2 rect(top_left - cached_cell_size / 2, bottom_right - top_left);
-	return rect;
+	return Rect2(top_left - Vector2(layer->get_tile_set()->get_tile_size()) / 2, bottom_right - top_left);
 }
 
 void SpxSceneMgr::export_scene_as_png(Node *root) {
@@ -254,7 +263,7 @@ GdObj SpxSceneMgr::create_render_sprite(GdString texture_path, GdVec2 pos, GdFlo
 
 	GdObj id = get_unique_id();
 	sprite->set_sort_id(id);
-	id_pure_sprites[id] = sprite;
+	id_pure_sprites[id] = sprite->get_instance_id();
 
 	pure_sprite_root->add_child(sprite);
 
@@ -349,7 +358,7 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 	// Assign unique ID and register
 	GdObj id = get_unique_id();
 	static_body->set_sort_id(id);
-	id_pure_sprites[id] = static_body;
+	id_pure_sprites[id] = static_body->get_instance_id();
 
 	// Add to scene tree
 	pure_sprite_root->add_child(static_body);

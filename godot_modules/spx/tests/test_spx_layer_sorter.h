@@ -35,6 +35,7 @@
 #include "../spx_camera_mgr.h"
 #include "../spx_engine.h"
 #include "../spx_layer_sorter.h"
+#include "../spx_sprite.h"
 #include "scene/2d/camera_2d.h"
 #include "scene/main/viewport.h"
 #include "scene/main/window.h"
@@ -95,7 +96,7 @@ struct SorterFixture {
 	}
 };
 
-TEST_CASE("[SceneTree][SPX] Layer sorter preserves order and cached updates") {
+TEST_CASE("[SceneTree][SPX] Layer sorter preserves order without redundant z updates") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());
 	SorterFixture fixture;
 	SortableSprite back(1, Point2(10, 20));
@@ -105,7 +106,6 @@ TEST_CASE("[SceneTree][SPX] Layer sorter preserves order and cached updates") {
 	Vector<ISortableSprite *> sprites{ &front, &fixed, &back, &right };
 
 	fixture.sorter.update(sprites);
-	CHECK_EQ(fixture.sorter.get_screen_rect(), Rect2(0, 0, 400, 200));
 	CHECK_EQ(back.z_index, 1);
 	CHECK_EQ(right.z_index, 2);
 	CHECK_EQ(fixed.z_index, 3);
@@ -117,7 +117,6 @@ TEST_CASE("[SceneTree][SPX] Layer sorter preserves order and cached updates") {
 	CHECK_EQ(fixed.z_updates, 1);
 	CHECK_EQ(front.z_updates, 1);
 
-	// One changed entry among three dynamic sprites takes the incremental path.
 	front.position.y = 10;
 	fixture.sorter.update(sprites);
 	CHECK_EQ(front.z_index, 1);
@@ -131,6 +130,10 @@ TEST_CASE("[SceneTree][SPX] Layer sorter filters offscreen sprites and reinserts
 	SorterFixture fixture;
 	SortableSprite left(1, Point2(100, 100));
 	SortableSprite right(2, Point2(200, 100));
+	SUBCASE("Dynamic sprite") {}
+	SUBCASE("Static sprite") {
+		right.is_static = true;
+	}
 	Vector<ISortableSprite *> sprites{ &left, &right };
 
 	fixture.sorter.update(sprites);
@@ -139,65 +142,30 @@ TEST_CASE("[SceneTree][SPX] Layer sorter filters offscreen sprites and reinserts
 
 	right.position.x = 400;
 	fixture.sorter.update(sprites);
-	REQUIRE_EQ(fixture.sorter.get_dynamic_sorted().size(), 1);
-	CHECK_EQ(fixture.sorter.get_dynamic_sorted()[0].id, left.id);
 	CHECK_EQ(right.z_updates, 1);
+	CHECK_EQ(left.z_index, 1);
 
 	right.position.x = 50;
 	fixture.sorter.update(sprites);
-	REQUIRE_EQ(fixture.sorter.get_dynamic_sorted().size(), 2);
-	CHECK_EQ(fixture.sorter.get_dynamic_sorted()[0].id, left.id);
-	CHECK_EQ(fixture.sorter.get_dynamic_sorted()[1].id, right.id);
 	CHECK_EQ(left.z_index, 1);
 	CHECK_EQ(right.z_index, 2);
-}
-
-TEST_CASE("[SceneTree][SPX] Layer sorter reset drops cached sprites") {
-	REQUIRE_FALSE(SpxEngine::is_initialized());
-	SorterFixture fixture;
-	SortableSprite fixed(1, Point2(10, 10), true);
-	SortableSprite moving(2, Point2(20, 20));
-	Vector<ISortableSprite *> sprites{ &moving, &fixed };
-	fixture.sorter.update(sprites);
-	REQUIRE_EQ(fixture.sorter.get_static_sorted().size(), 1);
-	REQUIRE_EQ(fixture.sorter.get_dynamic_sorted().size(), 1);
-
-	fixture.sorter.reset();
-	CHECK(fixture.sorter.get_static_sorted().empty());
-	CHECK(fixture.sorter.get_dynamic_sorted().empty());
-
-	SortableSprite replacement(2, Point2(30, 30));
-	Vector<ISortableSprite *> replacements{ &replacement };
-	fixture.sorter.update(replacements);
-	CHECK(fixture.sorter.get_static_sorted().empty());
-	REQUIRE_EQ(fixture.sorter.get_dynamic_sorted().size(), 1);
-	CHECK_EQ(fixture.sorter.get_dynamic_sorted()[0].sortable, &replacement);
-	CHECK_EQ(replacement.z_index, 1);
-	CHECK_EQ(fixed.z_updates, 1);
-	CHECK_EQ(moving.z_updates, 1);
 }
 
 TEST_CASE("[SceneTree][SPX] Static-only layers update z-order when members disappear") {
 	SorterFixture fixture;
 	SortableSprite back(1, Point2(10, 10), true), front(2, Point2(20, 20), true);
-	fixture.sorter.add_static_sprite(nullptr);
-	fixture.sorter.add_static_sprite(&front);
-	fixture.sorter.add_static_sprite(&front);
-	fixture.sorter.add_static_sprite(&back);
-	CHECK(fixture.sorter.get_static_sorted().size() == 2);
-	fixture.sorter.update(Vector<ISortableSprite *>({ &front, &back }));
+	fixture.sorter.update(Vector<ISortableSprite *>({ nullptr, &front, &front, &back }));
 	CHECK(back.z_index == 1);
 	CHECK(front.z_index == 2);
 	back.valid = false;
 	fixture.sorter.update(Vector<ISortableSprite *>({ &front, &back, nullptr }));
-	CHECK(fixture.sorter.get_static_sorted().size() == 1);
 	CHECK(front.z_index == 1);
-	fixture.sorter.remove_static_sprite(nullptr);
-	fixture.sorter.remove_static_sprite(&front);
-	CHECK(fixture.sorter.get_static_sorted().empty());
-	fixture.sorter.add_static_sprite(&back);
-	CHECK(fixture.sorter.get_static_sorted().empty());
+	front.valid = false;
+	fixture.sorter.update(Vector<ISortableSprite *>({ &front, &back }));
+	CHECK(back.z_updates == 1);
+	CHECK(front.z_updates == 2);
 	fixture.sorter.set_mode(LayerSortMode::NONE);
+	front.valid = true;
 	front.position = Point2(1, 1);
 	int count = front.z_updates;
 	fixture.sorter.update(Vector<ISortableSprite *>({ &front }));
@@ -230,7 +198,23 @@ TEST_CASE("[SceneTree][SPX] Layer sorting debug overlay follows the scene lifecy
 	CHECK(fixed.z_index == 2);
 	fixture.sorter.reset();
 	CHECK(drawer->is_queued_for_deletion());
-	memdelete(drawer);
+	fixture.sorter.update(sprites);
+	Node *replacement = fixture.viewport->get_child(-1);
+	REQUIRE(replacement != drawer);
+	memdelete(drawer); // An old drawer's delayed deletion must not unlink the replacement.
+	fixture.sorter.update(sprites);
+	CHECK(fixture.viewport->get_child(-1) == replacement);
+	fixture.sorter.reset();
+	CHECK(replacement->is_queued_for_deletion());
+	memdelete(replacement);
+	fixture.sorter.update(sprites);
+	Node *external = fixture.viewport->get_child(-1);
+	memdelete(external);
+	fixture.sorter.update(sprites);
+	CHECK(Object::cast_to<LayerSorterDebugDrawer>(fixture.viewport->get_child(-1)) != nullptr);
+	Spx::set_debug_mode(false);
+	fixture.sorter.update(sprites);
+	CHECK(fixture.viewport->get_child(-1)->is_queued_for_deletion());
 }
 
 TEST_CASE("[SceneTree][SPX] Moving static sprites refreshes their order against both groups") {
@@ -249,12 +233,45 @@ TEST_CASE("[SceneTree][SPX] Moving static sprites refreshes their order against 
 	CHECK(front.z_index == 1);
 	CHECK(back.z_index == 2);
 	CHECK(moving.z_index == 3);
-	CHECK(fixture.sorter.get_static_sorted().front().id == front.id);
 
 	fixture.sorter.update(sprites);
 	CHECK(front.z_updates == 2);
 	CHECK(back.z_updates == 2);
 	CHECK(moving.z_updates == 2);
+}
+
+TEST_CASE("[SceneTree][SPX] Layer sorting follows current membership and physics mode with stable ties") {
+	SorterFixture fixture;
+	SortableSprite a(1, Point2(20, 20)), b(2, Point2(20, 20)), c(3, Point2(20, 20), true);
+	Vector<ISortableSprite *> sprites{ &b, &c, &a, &a };
+	fixture.sorter.update(sprites);
+	CHECK(c.z_index == 1);
+	CHECK(a.z_index == 2);
+	CHECK(b.z_index == 3);
+	a.is_static = true;
+	c.is_static = false;
+	fixture.sorter.update(sprites);
+	CHECK(a.z_index == 1);
+	CHECK(b.z_index == 2);
+	CHECK(c.z_index == 3);
+	fixture.sorter.update(Vector<ISortableSprite *>{ &c });
+	CHECK(c.z_index == 1);
+}
+
+TEST_CASE("[SceneTree][SPX] Layer sorting and deferred drawing never retain deleted sprites") {
+	SorterFixture fixture;
+	Spx::set_debug_mode(true);
+	auto *deleted = memnew(SpxRenderSprite);
+	deleted->set_sort_id(1);
+	deleted->set_position(Point2(20, 20));
+	fixture.viewport->add_child(deleted);
+	SortableSprite survivor(2, Point2(30, 30));
+	fixture.sorter.update(Vector<ISortableSprite *>{ deleted, &survivor });
+	CHECK(survivor.z_index == 2);
+	memdelete(deleted);
+	MessageQueue::get_singleton()->flush(); // Redraw still sees only copied values.
+	fixture.sorter.update(Vector<ISortableSprite *>{ &survivor });
+	CHECK(survivor.z_index == 1);
 }
 
 } // namespace TestSpxLayerSorter

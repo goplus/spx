@@ -43,12 +43,10 @@
 
 void SpxTilemapparserMgr::on_destroy() {
 	destroy_all_tilemaps();
-	tileset_cache.clear();
 }
 
 void SpxTilemapparserMgr::on_reset(int reset_code) {
 	destroy_all_tilemaps();
-	tileset_cache.clear();
 }
 
 // ============================================================================
@@ -90,16 +88,15 @@ void SpxTilemapparserMgr::load_tilemap(GdString json_path) {
 
 	// Stage 2: Data Structure -> Godot Objects (handled by this manager)
 	Ref<TileSet> tileset = _create_tileset(data.tileset, base_path);
-	tileset_cache[tilemap_name] = tileset;
 
-	Vector<TileMapLayer *> layers;
+	Vector<ObjectID> layers;
 	for (int i = 0; i < data.layers.size(); i++) {
 		TileMapLayer *layer = _create_tilemap_layer(data.layers[i], tileset, data.node_offset);
 		Node *spx_root = get_spx_root();
 		if (spx_root != nullptr) {
 			spx_root->add_child(layer);
 		}
-		layers.push_back(layer);
+		layers.push_back(layer->get_instance_id());
 	}
 
 	tilemap_layers[tilemap_name] = layers;
@@ -109,24 +106,24 @@ void SpxTilemapparserMgr::unload_tilemap(GdString name) {
 	String tilemap_name = SpxStr(name);
 
 	if (tilemap_layers.has(tilemap_name)) {
-		Vector<TileMapLayer *> &layers = tilemap_layers[tilemap_name];
-		for (TileMapLayer *layer : layers) {
-			layer->queue_free();
+		for (ObjectID id : tilemap_layers[tilemap_name]) {
+			if (Node *layer = Object::cast_to<Node>(ObjectDB::get_instance(id))) {
+				layer->queue_free();
+			}
 		}
 		tilemap_layers.erase(tilemap_name);
 	}
-
-	tileset_cache.erase(tilemap_name);
 }
 
 void SpxTilemapparserMgr::destroy_all_tilemaps() {
-	for (KeyValue<String, Vector<TileMapLayer *>> &kv : tilemap_layers) {
-		for (TileMapLayer *layer : kv.value) {
-			layer->queue_free();
+	for (const KeyValue<String, Vector<ObjectID>> &kv : tilemap_layers) {
+		for (ObjectID id : kv.value) {
+			if (Node *layer = Object::cast_to<Node>(ObjectDB::get_instance(id))) {
+				layer->queue_free();
+			}
 		}
 	}
 	tilemap_layers.clear();
-	tileset_cache.clear();
 }
 
 // ============================================================================
@@ -145,10 +142,6 @@ GdInt SpxTilemapparserMgr::get_tilemap_layer_count(GdString name) {
 	}
 	return 0;
 }
-
-// ============================================================================
-// Helper Methods
-// ============================================================================
 
 // ============================================================================
 // Godot Object Creation Methods

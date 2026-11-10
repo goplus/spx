@@ -9,27 +9,16 @@
 #include "simple_video_writer.h"
 #include "core/os/os.h"
 #include "core/string/print_string.h"
-#include "movie_utils.h"
-
-SimpleVideoWriter::SimpleVideoWriter() {
-	frame_count = 0;
-	quality = 0.75f;
-}
 
 SimpleVideoWriter::~SimpleVideoWriter() {
-	if (f.is_valid() && f->is_open()) {
-		close();
-	}
+	close();
 }
 
 Error SimpleVideoWriter::open(const String &p_path, const Size2i &p_movie_size, uint32_t p_fps, float p_quality) {
-	base_path = p_path;
-	fps = p_fps;
 	quality = p_quality;
-	frame_count = 0;
 	jpg_frame_sizes.clear();
 
-	f = FileAccess::open(base_path, FileAccess::WRITE);
+	f = FileAccess::open(p_path, FileAccess::WRITE);
 	ERR_FAIL_COND_V(f.is_null(), ERR_CANT_OPEN);
 
 	// Write AVI header - video stream only
@@ -110,8 +99,8 @@ Error SimpleVideoWriter::open(const String &p_path, const Size2i &p_movie_size, 
 	f->store_32(0); // Number of frames (to be updated later)
 	f->store_buffer((const uint8_t *)"movi", 4);
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
-		print_line(String("SimpleVideoWriter: Starting video recording to ") + base_path);
+	if (OS::get_singleton()->is_stdout_verbose()) {
+		print_line(String("SimpleVideoWriter: Starting video recording to ") + p_path);
 	}
 
 	return OK;
@@ -137,8 +126,6 @@ Error SimpleVideoWriter::write_frame(const Ref<Image> &p_image) {
 	}
 	jpg_frame_sizes.push_back(jpg_buffer.size());
 
-	frame_count++;
-
 	return OK;
 }
 
@@ -148,6 +135,7 @@ void SimpleVideoWriter::close() {
 	}
 
 	// Write index - only contains video frames
+	const uint32_t frame_count = get_frame_count();
 	f->store_buffer((const uint8_t *)"idx1", 4);
 	f->store_32(4 * 4 * frame_count); // 16 bytes per index entry
 	uint32_t ofs = 4;
@@ -178,7 +166,7 @@ void SimpleVideoWriter::close() {
 
 	f.unref();
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
+	if (OS::get_singleton()->is_stdout_verbose()) {
 		print_line(String("SimpleVideoWriter: Video recording completed, total frames: ") + String::num_int64(frame_count));
 	}
 }
