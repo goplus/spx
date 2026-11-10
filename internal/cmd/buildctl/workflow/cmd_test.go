@@ -410,8 +410,18 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 	for _, target := range []string{"dev", "editor", "desktop", "web", "android", "ios"} {
 		t.Run(target, func(t *testing.T) {
 			runner := newWorkflowBuildFixture(t)
+			database := filepath.Join(os.Getenv("GODOT_SRC"), "compile_commands.json")
+			previousDatabase := []byte("[{\"command\":\"previous editor\"}]\n")
+			mustWriteFile(t, database, previousDatabase)
 			if err := Build(BuildConfig{Target: target, Mode: "normal"}, runner); err != nil {
 				t.Fatal(err)
+			}
+			wantDatabase := previousDatabase
+			if target == "dev" || target == "editor" {
+				wantDatabase = []byte("[{\"command\":\"editor\"}]\n")
+			}
+			if data, err := os.ReadFile(database); err != nil || string(data) != string(wantDatabase) {
+				t.Fatalf("%s compilation database = %q (%v), want %q", target, data, err, wantDatabase)
 			}
 			wantScripts := []recordedCall{{script: "cmd/spx/install.sh"}}
 			if target == "dev" {
@@ -643,6 +653,17 @@ case "$*" in
   *platform=linuxbsd*|*platform=macos*) [ "$WORKFLOW_FAIL" != host ] || exit 23 ;;
   *platform=web*) [ "$WORKFLOW_FAIL" != web ] || exit 23 ;;
 esac
+compiledb=no
+build_target=
+for arg in "$@"; do
+  case "$arg" in
+    compiledb=yes) compiledb=yes ;;
+    target=*) build_target=${arg#target=} ;;
+  esac
+done
+if [ "$compiledb" = yes ]; then
+  printf '[{"command":"%s"}]\n' "$build_target" > compile_commands.json
+fi
 exit 0
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))

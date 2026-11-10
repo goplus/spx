@@ -104,12 +104,13 @@ func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
 }
 
 func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, module shared.SPXModule, plan BuildShellPlan, testModule bool) error {
-	buildArgs := []string{"target=editor", "dev_build=yes"}
+	// Generate the host compilation database alongside the editor.
+	buildArgs := []string{"target=editor", "dev_build=yes", "compiledb=yes"}
 	if testModule {
 		buildArgs = append(buildArgs, "tests=yes")
 	}
 	if plan.EditorUseVSProj {
-		buildArgs = append(buildArgs, "vsproj=yes")
+		buildArgs = append(buildArgs, "vsproj=yes", "vsproj_gen_only=no")
 	}
 	args := module.EditorBuildArgs(buildArgs...)
 	fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(args))
