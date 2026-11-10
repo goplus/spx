@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package projectbundle
+package bundle
 
 import (
 	"fmt"

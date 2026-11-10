@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/driverbundle"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/release/driverbundle"
 )
 
 var zipEpoch = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -172,9 +172,8 @@ func addZipFile(archive *zip.Writer, sourcePath, name string, mode uint32) (driv
 	if err != nil {
 		return driverbundle.File{}, err
 	}
-	header := &zip.FileHeader{Name: name, Method: zip.Store}
+	header := &zip.FileHeader{Name: name, Method: zip.Store, Modified: zipEpoch}
 	header.SetMode(os.FileMode(mode))
-	header.SetModTime(zipEpoch)
 	entry, err := archive.CreateHeader(header)
 	if err != nil {
 		_ = input.Close()

@@ -23,16 +23,6 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-type animationPayloadConfig struct {
-	FrameFrom int
-	FrameTo   int
-}
-
-type animationFrameSource struct {
-	Path  string
-	Frame costumeFrame
-}
-
 type animationNormalFrame struct {
 	Path   string     `json:"path"`
 	Offset [2]float64 `json:"offset"`
@@ -53,19 +43,19 @@ type animationPayload struct {
 	MaxBitmap int64  `json:"max_bitmap"`
 }
 
-func buildAnimationPayloadJSON(cfg animationPayloadConfig, costumes []animationFrameSource, isAtlas bool) (string, int, error) {
+func buildAnimationPayloadJSON(costumes []*costume, from, to int, isAtlas bool) (string, int, error) {
 	if len(costumes) == 0 {
 		return "", 0, fmt.Errorf("createAnimation: no costumes configured")
 	}
-	if cfg.FrameFrom < 0 || cfg.FrameFrom >= len(costumes) ||
-		cfg.FrameTo < 0 || cfg.FrameTo >= len(costumes) {
+	if from < 0 || from >= len(costumes) ||
+		to < 0 || to >= len(costumes) {
 		return "", 0, fmt.Errorf(
 			"createAnimation: frame index out of bounds (from=%d, to=%d, costumes=%d)",
-			cfg.FrameFrom, cfg.FrameTo, len(costumes),
+			from, to, len(costumes),
 		)
 	}
 
-	payload := buildAnimationPayload(cfg, costumes, isAtlas)
+	payload := buildAnimationPayload(costumes, from, to, isAtlas)
 	bin, err := json.Marshal(payload)
 	if err != nil {
 		return "", 0, fmt.Errorf("createAnimation: failed to marshal animation payload: %w", err)
@@ -73,21 +63,21 @@ func buildAnimationPayloadJSON(cfg animationPayloadConfig, costumes []animationF
 	return string(bin), int(payload.MaxBitmap), nil
 }
 
-func buildAnimationPayload(cfg animationPayloadConfig, costumes []animationFrameSource, isAtlas bool) animationPayload {
+func buildAnimationPayload(costumes []*costume, from, to int, isAtlas bool) animationPayload {
 	result := animationPayload{}
 	if isAtlas {
-		result.BasePath = engine.ToAssetPath(costumes[0].Path)
+		result.BasePath = engine.ToAssetPath(costumes[0].path)
 		result.MaxBitmap = 1
 	}
 	step := 1
-	if cfg.FrameTo < cfg.FrameFrom {
+	if to < from {
 		step = -1
 	}
-	frameCount := (cfg.FrameTo-cfg.FrameFrom)*step + 1
+	frameCount := (to-from)*step + 1
 	result.Frames = make([]any, 0, frameCount)
-	for i := cfg.FrameFrom; i != cfg.FrameTo+step; i += step {
+	for i := from; i != to+step; i += step {
 		c := costumes[i]
-		frame := c.Frame
+		frame := c.frame
 		if isAtlas {
 			result.Frames = append(result.Frames, animationAtlasFrame{
 				X: int64(frame.PosX),
@@ -101,7 +91,7 @@ func buildAnimationPayload(cfg animationPayloadConfig, costumes []animationFrame
 		result.MaxBitmap = max(result.MaxBitmap, b)
 		half := frame.ImageSize.Mulf(0.5)
 		result.Frames = append(result.Frames, animationNormalFrame{
-			Path: engine.ToAssetPath(c.Path),
+			Path: engine.ToAssetPath(c.path),
 			Offset: [2]float64{
 				frame.Center.X - half.X,
 				-(frame.Center.Y - half.Y),

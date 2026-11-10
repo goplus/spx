@@ -391,6 +391,9 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 		if got := warnings.String(); !strings.Contains(got, "[WARN] [SPX] "+coreruntime.LoopExecutionTimedOutMsg) {
 			t.Fatalf("timeout warning = %q, want loop timeout warning", got)
 		}
+		if got := warnings.String(); !strings.Contains(got, "goroutine ") || !strings.Contains(got, "spx/v4.Sched(") {
+			t.Fatalf("timeout warning lacks the calling goroutine stack: %q", got)
+		}
 		// Processing the current frame must leave the timeout suspended.
 		currentScheduler.Update()
 		synctest.Wait()

@@ -134,36 +134,13 @@ func TestCostumeFrameGeometryFixtures(t *testing.T) {
 	}
 }
 
-func TestCostumeFrameMetadataOwnership(t *testing.T) {
-	c := &costume{
-		path: "backdrop.svg",
-		frame: costumeFrame{
-			Width: 11, Height: 17, BitmapResolution: 2, ImageSize: mathf.NewVec2(55.75, 54.25),
-			Center: mathf.NewVec2(52, 89), PosX: 4, PosY: 6, AtlasUVRect: mathf.NewVec4(0.1, 0.2, 0.3, 0.4),
-		},
-	}
-	costumes := []*costume{c, newCostumeWithSize(7, 9)}
-	sources := buildAnimationSources(costumes)
-	if len(sources) != len(costumes) {
-		t.Fatalf("animation sources = %d, want %d", len(sources), len(costumes))
-	}
-	for i, source := range sources {
-		if source.Path != costumes[i].path || source.Frame != costumes[i].frame {
-			t.Fatalf("animation source %d lost metadata: %+v", i, source)
-		}
-	}
-	sources[0].Frame.Center.X++
-	if c.frame.Center == sources[0].Frame.Center {
-		t.Fatal("animation source aliases the costume descriptor")
-	}
+func TestCloneSharesCostumeMetadata(t *testing.T) {
+	c := newCostumeWithSize(11, 17)
 	var clone baseObj
 	original := baseObj{costumes: []*costume{c}}
 	clone.initFrom(&original)
 	if clone.currentCostume() != c {
 		t.Fatal("clones must continue sharing costume metadata")
-	}
-	if got := buildAnimationSources(nil); got == nil || len(got) != 0 {
-		t.Fatalf("empty animation sources = %#v, want non-nil empty slice", got)
 	}
 }
 

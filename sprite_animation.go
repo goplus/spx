@@ -98,11 +98,7 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []*animState) []*animState 
 func (e *animationEntry) ensureRegistered() int {
 	e.loadOnce.Do(func() {
 		payloadJSON, maxBitmap, err := buildAnimationPayloadJSON(
-			animationPayloadConfig{
-				FrameFrom: e.config.IFrameFrom,
-				FrameTo:   e.config.IFrameTo,
-			},
-			buildAnimationSources(e.costumes),
+			e.costumes, e.config.IFrameFrom, e.config.IFrameTo,
 			e.isCostumeSet,
 		)
 		if err != nil {
@@ -118,12 +114,4 @@ func (e *animationEntry) ensureRegistered() int {
 		)
 	})
 	return e.adaptBitmapResolution
-}
-
-func buildAnimationSources(costumes []*costume) []animationFrameSource {
-	frames := make([]animationFrameSource, len(costumes))
-	for i, c := range costumes {
-		frames[i] = animationFrameSource{Path: c.path, Frame: c.frame}
-	}
-	return frames
 }

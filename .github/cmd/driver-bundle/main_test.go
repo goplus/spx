@@ -34,8 +34,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/driverbundle"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/release/driverbundle"
 )
 
 type driverShortWriter struct {

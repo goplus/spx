@@ -29,7 +29,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/projectbundle"
+	"github.com/goplus/spx/v4/internal/launchpack/bundle"
 	"github.com/goplus/spx/v4/internal/projectpolicy"
 	"github.com/goplus/spx/v4/internal/release"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
@@ -337,7 +337,7 @@ func TestPinnedPayloadSourcesRejectMutationAndShortReads(t *testing.T) {
 func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 	for _, tt := range []struct {
 		name, want    string
-		mutate        func(*testing.T, *Config, *Assets, *projectbundle.Config, string)
+		mutate        func(*testing.T, *Config, *Assets, *bundle.Config, string)
 		failWriter    bool
 		replaceSource string
 	}{
@@ -345,25 +345,25 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 		{name: "engine replaced during write", want: "changed while reading", replaceSource: "engine"},
 		{name: "pack replaced during write", want: "changed while reading", replaceSource: "pack"},
 		{name: "bridge replaced during write", want: "changed while reading", replaceSource: "bridge"},
-		{name: "project archive exists", want: "create project archive", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "project archive exists", want: "create project archive", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			writeProjectTestFile(t, filepath.Join(work, "project.zip"), "existing")
 		}},
-		{name: "project missing", want: "collect project", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "project missing", want: "collect project", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			p.ProjectDir = filepath.Join(work, "missing")
 		}},
-		{name: "engine missing", want: "lstat Engine", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "engine missing", want: "lstat Engine", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			a.EnginePath += ".missing"
 		}},
-		{name: "pack missing", want: "lstat runtime PCK", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "pack missing", want: "lstat runtime PCK", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			a.PackPath += ".missing"
 		}},
-		{name: "bridge missing", want: "lstat interpreter bridge", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "bridge missing", want: "lstat interpreter bridge", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			a.BridgePath += ".missing"
 		}},
-		{name: "duplicate engine component", want: "identify Engine bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "duplicate engine component", want: "identify Engine bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			a.PackPath = a.EnginePath
 		}},
-		{name: "bridge manifest collision", want: "identify bridge bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *projectbundle.Config, work string) {
+		{name: "bridge manifest collision", want: "identify bridge bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
 			a.BridgePath = filepath.Join(work, "bridge-manifest.json")
 			writeProjectTestFile(t, a.BridgePath, "bridge")
 		}},

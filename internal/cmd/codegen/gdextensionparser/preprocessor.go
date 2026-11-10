@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-// Package preprocessor handles the C directives used by SPX headers.
-package preprocessor
+package gdextensionparser
 
 import (
 	"fmt"
@@ -26,39 +25,39 @@ import (
 	"github.com/alecthomas/participle/v2/lexer"
 )
 
-type PreprocVars map[string]struct{}
+type preprocessorVars map[string]struct{}
 
-type PreprocessorHeaderFileAST struct {
-	Directives []Directive `parser:" @@* "`
+type preprocessorFile struct {
+	Directives []directive `parser:" @@* "`
 }
 
-type Directive struct {
-	Ifndef  *IfndefDirective  `parser:" EOL* ( @@          "`
-	Ifdef   *IfdefDirective   `parser:"   | @@        "`
-	Define  *DefineDirective  `parser:"   | @@        "`
-	Include *IncludeDirective `parser:"   | @@        "`
+type directive struct {
+	Ifndef  *ifndefDirective  `parser:" EOL* ( @@          "`
+	Ifdef   *ifdefDirective   `parser:"   | @@        "`
+	Define  *defineDirective  `parser:"   | @@        "`
+	Include *includeDirective `parser:"   | @@        "`
 	Source  string            `parser:"   | @Source ) "`
 }
 
-type IfndefDirective struct {
+type ifndefDirective struct {
 	Name       string      `parser:" @Ifndef EOL      "`
-	Directives []Directive `parser:" @@* '#endif' EOL "`
+	Directives []directive `parser:" @@* '#endif' EOL "`
 }
 
-type IfdefDirective struct {
+type ifdefDirective struct {
 	Name       string      `parser:" @Ifdef EOL       "`
-	Directives []Directive `parser:" @@* '#endif' EOL "`
+	Directives []directive `parser:" @@* '#endif' EOL "`
 }
 
-type DefineDirective struct {
+type defineDirective struct {
 	Name string `parser:" @Define EOL" `
 }
 
-type IncludeDirective struct {
+type includeDirective struct {
 	Name string `parser:" @Include EOL" `
 }
 
-func ParsePreprocessorString(s string) (*PreprocessorHeaderFileAST, error) {
+func parsePreprocessor(s string) (*preprocessorFile, error) {
 	var preprocessorHeaderFileLexer = lexer.MustStateful(lexer.Rules{
 		"Root": {
 			{Name: `Ifdef`, Pattern: `#ifdef[ \t]+[a-zA-Z_][a-zA-Z0-9_]*`, Action: lexer.Push("Root")},
@@ -73,7 +72,7 @@ func ParsePreprocessorString(s string) (*PreprocessorHeaderFileAST, error) {
 		},
 	})
 
-	parser, err := participle.Build[PreprocessorHeaderFileAST](
+	parser, err := participle.Build[preprocessorFile](
 		participle.Lexer(preprocessorHeaderFileLexer),
 		participle.Elide("Whitespace", "Comment"),
 		directiveIdent("Ifdef", "Ifndef", "Define"),
@@ -93,8 +92,8 @@ func ParsePreprocessorString(s string) (*PreprocessorHeaderFileAST, error) {
 	return ast, nil
 }
 
-func (f PreprocessorHeaderFileAST) Eval(isCpp bool) string {
-	vars := PreprocVars{}
+func (f preprocessorFile) eval(isCpp bool) string {
+	vars := preprocessorVars{}
 
 	if isCpp {
 		vars["__cplusplus"] = struct{}{}
@@ -103,21 +102,21 @@ func (f PreprocessorHeaderFileAST) Eval(isCpp bool) string {
 	return evalDirectives(f.Directives, vars)
 }
 
-func (d Directive) Eval(vars PreprocVars) string {
+func (d directive) eval(vars preprocessorVars) string {
 	if d.Ifndef != nil {
-		return d.Ifndef.Eval(vars)
+		return d.Ifndef.eval(vars)
 	} else if d.Ifdef != nil {
-		return d.Ifdef.Eval(vars)
+		return d.Ifdef.eval(vars)
 	} else if d.Define != nil {
-		return d.Define.Eval(vars)
+		return d.Define.eval(vars)
 	} else if d.Include != nil {
-		return d.Include.Eval(vars)
+		return d.Include.eval(vars)
 	} else {
 		return d.Source
 	}
 }
 
-func (d IfndefDirective) Eval(vars PreprocVars) string {
+func (d ifndefDirective) eval(vars preprocessorVars) string {
 	if len(d.Name) == 0 {
 		panic("#ifndef missing variable")
 	}
@@ -128,7 +127,7 @@ func (d IfndefDirective) Eval(vars PreprocVars) string {
 	return ""
 }
 
-func (d IfdefDirective) Eval(vars PreprocVars) string {
+func (d ifdefDirective) eval(vars preprocessorVars) string {
 	if len(d.Name) == 0 {
 		panic("#ifdef missing variable")
 	}
@@ -139,7 +138,7 @@ func (d IfdefDirective) Eval(vars PreprocVars) string {
 	return ""
 }
 
-func (d DefineDirective) Eval(vars PreprocVars) string {
+func (d defineDirective) eval(vars preprocessorVars) string {
 	if len(d.Name) == 0 {
 		panic("#define missing variable")
 	}
@@ -149,15 +148,15 @@ func (d DefineDirective) Eval(vars PreprocVars) string {
 	return ""
 }
 
-func (d IncludeDirective) Eval(vars PreprocVars) string {
+func (d includeDirective) eval(vars preprocessorVars) string {
 	return ""
 }
 
-func evalDirectives(directives []Directive, vars PreprocVars) string {
+func evalDirectives(directives []directive, vars preprocessorVars) string {
 	sb := strings.Builder{}
 
 	for _, d := range directives {
-		sb.WriteString(d.Eval(vars))
+		sb.WriteString(d.eval(vars))
 		sb.WriteString("\n")
 	}
 

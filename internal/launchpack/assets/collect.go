@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package projectassets resolves typed resource references in an SPX project.
-package projectassets
+// Package assets resolves typed resource references in an SPX project.
+package assets
 
 import (
 	"fmt"

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package projectassets
+package assets
 
 import (
 	"encoding/json"

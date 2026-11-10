@@ -149,15 +149,18 @@ func TestLauncherConfigurationRejectsUnsafeInputs(t *testing.T) {
 }
 
 func TestLauncherPublicEntryPointsRejectNilContext(t *testing.T) {
+	//lint:ignore SA1012 Verify the public API rejects a nil context.
 	if _, err := BuildLauncher(nil, Config{}); err == nil || !strings.Contains(err.Error(), "nil context") {
 		t.Fatalf("BuildLauncher: %v", err)
 	}
+	//lint:ignore SA1012 Verify the public API rejects a nil context.
 	if _, cleanup, err := BuildSourceBridge(nil, Config{}); err == nil || cleanup != nil {
 		t.Fatalf("BuildSourceBridge: cleanup nil=%t, err=%v", cleanup == nil, err)
 	}
 	if _, cleanup, err := BuildSourceBridge(context.Background(), Config{}); err == nil || cleanup != nil {
 		t.Fatalf("BuildSourceBridge invalid config: %v", err)
 	}
+	//lint:ignore SA1012 Verify the public API rejects a nil context.
 	if _, err := AcquireRuntimeAssets(nil, Config{}); err == nil || !strings.Contains(err.Error(), "nil context") {
 		t.Fatalf("AcquireRuntimeAssets: %v", err)
 	}
