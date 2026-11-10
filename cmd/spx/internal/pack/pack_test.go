@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 type zipSnapshot struct {
@@ -1145,7 +1145,7 @@ func TestReadJSONFileMapsStableReadFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTestFile(t, name, `{}`)
-	if err := readJSONFileWithReader(name, new(any), stablefile.Reader{
+	if err := readJSONFileWithReader(name, new(any), fileutil.StableReader{
 		MaxBytes: maxPackJSONSize,
 		Expected: original,
 	}); err == nil || !strings.Contains(err.Error(), "changed while it was opened") {
@@ -1154,7 +1154,7 @@ func TestReadJSONFileMapsStableReadFailures(t *testing.T) {
 
 	writeTestFile(t, name, `{}`)
 	calls := 0
-	reader := stablefile.Reader{
+	reader := fileutil.StableReader{
 		MaxBytes: maxPackJSONSize,
 		Lstat: func(path string) (os.FileInfo, error) {
 			calls++

@@ -26,7 +26,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 const (
@@ -132,7 +132,7 @@ func (s PortableConfigSnapshot) Verify(projectDir string) error {
 	if info == nil {
 		return nil
 	}
-	if !os.SameFile(s.fileInfo, info) || !stablefile.SameMetadata(s.fileInfo, info) ||
+	if !os.SameFile(s.fileInfo, info) || !fileutil.SameMetadata(s.fileInfo, info) ||
 		!bytes.Equal(data, s.data) {
 		return fmt.Errorf("project config %q changed after validation", configPath)
 	}

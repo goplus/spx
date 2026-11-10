@@ -21,10 +21,10 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

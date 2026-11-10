@@ -25,8 +25,8 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"

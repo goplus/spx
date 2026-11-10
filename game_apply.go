@@ -22,8 +22,8 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/platform"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	"github.com/goplus/spx/v4/internal/ui"
 )
 
 func (p *Game) applySpriteFields(gamer reflect.Value, plan *projectPlan) {
@@ -220,7 +220,7 @@ func (p *Game) prepareStageBootstrap(sprites []Sprite, proj *coreproject.Project
 			}
 		}
 	})
-	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
+	if loader, ok := reflect.TypeAssert[interface{ OnLoaded() }](g.Addr()); ok {
 		p.queueBootstrap(generation, loader.OnLoaded)
 	}
 }

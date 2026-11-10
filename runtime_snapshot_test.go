@@ -19,8 +19,8 @@ package spx
 import (
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 

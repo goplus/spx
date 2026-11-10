@@ -20,7 +20,7 @@ import (
 	"runtime/debug"
 	stime "time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	"github.com/goplus/spx/v4/internal/time"
 )

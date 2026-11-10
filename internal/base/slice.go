@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package base
+
+import "unsafe"
+
+// Reset clears elements and returns an empty slice, preserving its storage.
+// initialCap is used only when allocating a nil slice.
+func Reset[T any](items []T, initialCap int) []T {
+	if items == nil && initialCap > 0 {
+		return make([]T, 0, initialCap)
+	}
+	clear(items)
+	return items[:0]
+}
+
+func MoveToEnd[T any](slice []T, idx int) []T {
+	n := len(slice)
+	item := slice[idx]
+	copy(slice[idx:n-1], slice[idx+1:])
+	slice[n-1] = item
+	return slice
+}
+
+func MoveToIndex[T any](slice []T, oldIdx, newIdx int) []T {
+	if oldIdx == newIdx {
+		return slice
+	}
+
+	item := slice[oldIdx]
+	if oldIdx < newIdx {
+		copy(slice[oldIdx:newIdx], slice[oldIdx+1:newIdx+1])
+	} else {
+		copy(slice[newIdx+1:oldIdx+1], slice[newIdx:oldIdx])
+	}
+	slice[newIdx] = item
+
+	return slice
+}
+
+// CopyInto reuses disjoint storage and clears unused elements.
+func CopyInto[T any](dst, src []T, minCap int) []T {
+	requiredCap := max(minCap, len(src))
+	if cap(dst) < requiredCap || overlaps(dst[:max(len(dst), len(src))], src) {
+		dst = make([]T, len(src), requiredCap)
+	} else if len(src) < len(dst) {
+		clear(dst[len(src):])
+	}
+	dst = dst[:len(src)]
+	copy(dst, src)
+	return dst
+}
+
+func overlaps[T any](a, b []T) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	size := unsafe.Sizeof(a[0])
+	if size == 0 {
+		return false
+	}
+	aStart := uintptr(unsafe.Pointer(unsafe.SliceData(a)))
+	bStart := uintptr(unsafe.Pointer(unsafe.SliceData(b)))
+	return aStart < bStart+uintptr(len(b))*size && bStart < aStart+uintptr(len(a))*size
+}

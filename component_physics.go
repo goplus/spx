@@ -21,8 +21,8 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/base"
 	"github.com/goplus/spx/v4/internal/base/collision"
-	"github.com/goplus/spx/v4/internal/base/defaults"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
@@ -58,7 +58,7 @@ func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject
 	p.initTriggerConfig(sprite, spriteCfg)
 
 	p.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
-	p.gravity = defaults.OrDefault(spriteCfg.Gravity, 1)
+	p.gravity = base.OrDefault(spriteCfg.Gravity, 1)
 	p.collisionTargets = make(map[string]bool)
 }
 
@@ -302,5 +302,5 @@ func (p *physicsComponent) addCollisionTarget(target string) {
 // ============================================================================
 
 func parseLayerMaskValue(pval *int64) int64 {
-	return defaults.OrDefault(pval, 1)
+	return base.OrDefault(pval, 1)
 }

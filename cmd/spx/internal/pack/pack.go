@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 type dirInfo struct {
@@ -137,12 +137,12 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 		if err != nil {
 			return err
 		}
-		reader := stablefile.Reader{Expected: info, Lstat: dirInfo.root.Lstat, Open: dirInfo.root.Open}
+		reader := fileutil.StableReader{Expected: info, Lstat: dirInfo.root.Lstat, Open: dirInfo.root.Open}
 		if _, err := reader.Copy(dirInfo.rootPath, writer); err != nil {
 			switch err {
-			case stablefile.ErrNotRegular, stablefile.ErrChangedOpening:
+			case fileutil.ErrNotRegular, fileutil.ErrChangedOpening:
 				return fmt.Errorf("project entry %s changed while opening", filePath)
-			case stablefile.ErrChangedReading:
+			case fileutil.ErrChangedReading:
 				return fmt.Errorf("project entry %s changed while packing", filePath)
 			default:
 				return err

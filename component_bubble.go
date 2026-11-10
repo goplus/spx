@@ -20,8 +20,8 @@ import (
 	"sync"
 
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // ============================================================================

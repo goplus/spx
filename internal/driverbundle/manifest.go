@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/goplus/spx/v4/internal/strictjson"
+	"github.com/goplus/spx/v4/internal/base/strictjson"
 )
 
 const (

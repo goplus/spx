@@ -628,7 +628,7 @@ func TestRuntimeCommandsPropagateRunnerFailure(t *testing.T) {
 			runner := newRuntimeFixtureRunner(t)
 			t.Chdir(runner.repoRoot)
 			mustWriteFile(t, filepath.Join(runner.repoRoot, "go.mod"), []byte("module fixture\n"))
-			mustMkdirAll(t, filepath.Join(runner.repoRoot, "internal", "tools"))
+			mustMkdirAll(t, filepath.Join(runner.repoRoot, "internal", "cmd", "buildctl"))
 			log := filepath.Join(runner.repoRoot, "command.log")
 			t.Setenv("RUNTIME_COMMAND_LOG", log)
 			script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > \"$RUNTIME_COMMAND_LOG\"\nexit 23\n"

@@ -20,22 +20,22 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 func readStableRegularFile(name string) ([]byte, os.FileInfo, error) {
-	return readStableFile(name, stablefile.Reader{})
+	return readStableFile(name, fileutil.StableReader{})
 }
 
 func readStableRegularRootFile(root *os.Root, name string) ([]byte, os.FileInfo, error) {
-	return readStableFile(name, stablefile.Reader{Lstat: root.Lstat, Open: root.Open})
+	return readStableFile(name, fileutil.StableReader{Lstat: root.Lstat, Open: root.Open})
 }
 
-func readStableFile(name string, reader stablefile.Reader) ([]byte, os.FileInfo, error) {
+func readStableFile(name string, reader fileutil.StableReader) ([]byte, os.FileInfo, error) {
 	reader.MaxBytes = maxPortableConfigBytes
 	reader.AllowMissing = true
 	data, info, err := reader.Read(name)
-	if err == stablefile.ErrTooLarge {
+	if err == fileutil.ErrTooLarge {
 		return nil, nil, fmt.Errorf("exceeds %d bytes", maxPortableConfigBytes)
 	}
 	return data, info, err

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/goplus/spx/v4/internal/tools"
+	"github.com/goplus/spx/v4/internal/base/numeric"
 )
 
 // CostumeFrame identifies one expanded costume frame. Part is zero for a
@@ -87,7 +87,7 @@ func (l *CostumeLayout) ResolveFrameIndex(value any) (int, bool) {
 		index, exists := l.nameIndexes[name]
 		return index, exists
 	}
-	valueAsFloat, ok := tools.GetFloat(value)
+	valueAsFloat, ok := numeric.ParseFloat64(value)
 	if !ok {
 		return 0, true
 	}

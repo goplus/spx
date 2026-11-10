@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
 	"github.com/goplus/spx/v4/internal/base/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
@@ -314,8 +313,8 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 
 	sprite := newTouchingTestSprite("mover", 0, 0, 1)
 	sprite.costumes = []*costume{
-		{name: "idle", path: "idle.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
-		{name: "hit", path: "hit.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
+		{name: "idle", path: "idle.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
+		{name: "hit", path: "hit.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
 	}
 	sprite.costumeIndex = 0
 	sprite.runtimeState.isCostumeDirty = false
@@ -672,8 +671,8 @@ func TestTouchingNameUsesRotatedCostume(t *testing.T) {
 	_, mgr, receiver, target := newTouchingPair(t, false)
 	receiver.SetXYpos(4, 0)
 	target.costumes = []*costume{
-		{name: "small", atlas: true, frame: assetutil.FrameDescriptor{Width: 2, Height: 10, BitmapResolution: 1}},
-		{name: "wide", atlas: true, frame: assetutil.FrameDescriptor{Width: 10, Height: 2, BitmapResolution: 1}},
+		{name: "small", atlas: true, frame: costumeFrame{Width: 2, Height: 10, BitmapResolution: 1}},
+		{name: "wide", atlas: true, frame: costumeFrame{Width: 10, Height: 2, BitmapResolution: 1}},
 	}
 	target.transform().direction = 90
 	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }

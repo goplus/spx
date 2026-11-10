@@ -24,9 +24,9 @@ import (
 	"slices"
 
 	spxfs "github.com/goplus/spx/v4/fs"
-	"github.com/goplus/spx/v4/internal/base/defaults"
+	"github.com/goplus/spx/v4/internal/base"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	tm "github.com/goplus/spx/v4/internal/tilemap"
+	tm "github.com/goplus/spx/v4/internal/core/tilemap"
 )
 
 // projectPlan owns parsed input. Preparing it neither changes live game
@@ -144,7 +144,7 @@ func (g *Game) allocSpriteField(v reflect.Value, i int) (string, Sprite) {
 	if g.typs[name] == nil {
 		return name, nil
 	}
-	sprite, _ := value.Interface().(Sprite)
+	sprite, _ := reflect.TypeAssert[Sprite](value)
 	return name, sprite
 }
 
@@ -254,9 +254,9 @@ func prepareFrameAnimations(animations map[string]*coreproject.AniConfig, layout
 		}
 
 		definition := *animation
-		defaults.SetDefaultIfZero(&definition.FrameFps, 25)
-		defaults.SetDefaultIfZero(&definition.TurnToDuration, 1.0)
-		defaults.SetDefaultIfZero(&definition.StepDuration, 0.01)
+		base.SetDefaultIfZero(&definition.FrameFps, 25)
+		base.SetDefaultIfZero(&definition.TurnToDuration, 1.0)
+		base.SetDefaultIfZero(&definition.StepDuration, 0.01)
 		definition.IFrameFrom = frameFrom
 		definition.IFrameTo = frameTo
 		definition.Speed = 1

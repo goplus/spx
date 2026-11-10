@@ -21,10 +21,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 
@@ -439,7 +438,7 @@ func TestFixWorldRange(t *testing.T) {
 			sprite.g.displayState.MinWorldY = -180
 			sprite.costumes = []*costume{{
 				atlas: true,
-				frame: assetutil.FrameDescriptor{
+				frame: costumeFrame{
 					Width:            tt.width,
 					Height:           tt.height,
 					BitmapResolution: 1,
@@ -466,7 +465,7 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 	sprite.g.displayState.MinWorldY = -180
 	sprite.baseObj.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width:            55,
 			Height:           54,
 			BitmapResolution: 2,
@@ -491,7 +490,7 @@ func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 	sprite.baseObj.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width:            100,
 			Height:           40,
 			BitmapResolution: 1,
@@ -518,7 +517,7 @@ func TestClampSpriteScaleToMaxScale(t *testing.T) {
 	sprite.g.displayState.WorldHeight = 360
 	sprite.baseObj.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width:            480,
 			Height:           360,
 			BitmapResolution: 1,

@@ -159,7 +159,7 @@ func TestEnsureSConsUsesPinnedEnvironment(t *testing.T) {
 			t.Chdir(root)
 			writeToolFixture(t, filepath.Join(root, "go.mod"), "module fixture\n", 0o644)
 			writeToolFixture(t, filepath.Join(root, "cmd", "spx", "install.sh"), "", 0o644)
-			if err := os.MkdirAll(filepath.Join(root, "internal", "tools"), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Join(root, "internal", "cmd", "buildctl"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 			bin := filepath.Join(root, "bin")
@@ -595,7 +595,7 @@ func TestEnsureSConsRejectsBlockedEnvironmentDirectory(t *testing.T) {
 	t.Chdir(root)
 	writeToolFixture(t, filepath.Join(root, "go.mod"), "module fixture\n", 0600)
 	writeToolFixture(t, filepath.Join(root, "cmd", "spx", "install.sh"), "", 0600)
-	if err := os.MkdirAll(filepath.Join(root, "internal", "tools"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "internal", "cmd", "buildctl"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	writeToolFixture(t, filepath.Join(root, ".bin"), "blocked", 0600)

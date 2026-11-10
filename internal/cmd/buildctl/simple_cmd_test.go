@@ -504,7 +504,7 @@ func newBuildctlFixture(t *testing.T) string {
 	}
 	mustWriteFile(t, filepath.Join(root, "go.mod"), nil)
 	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "install.sh"), nil)
-	mustMkdirAll(t, filepath.Join(root, "internal", "tools"))
+	mustMkdirAll(t, filepath.Join(root, "internal", "cmd", "buildctl"))
 	mustWriteFile(t, filepath.Join(root, "module", "SCsub"), nil)
 	mustWriteFile(t, filepath.Join(root, "module", "config.py"), nil)
 	mustWriteFile(t, filepath.Join(root, "module", "spx_scons_profile.json"), []byte(`{"schema":1,"common":[],"editor_release":[],"template_release":[]}`))

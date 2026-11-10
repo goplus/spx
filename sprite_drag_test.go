@@ -26,7 +26,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

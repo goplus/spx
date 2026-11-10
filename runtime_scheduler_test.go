@@ -23,8 +23,8 @@ import (
 	"time"
 
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )

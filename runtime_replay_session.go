@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sync"
 
+	inputstate "github.com/goplus/spx/v4/internal/core/input"
 	"github.com/goplus/spx/v4/internal/engine"
-	inputstate "github.com/goplus/spx/v4/internal/input"
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 

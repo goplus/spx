@@ -21,7 +21,7 @@ import (
 	"slices"
 	"time"
 
-	inputstate "github.com/goplus/spx/v4/internal/input"
+	inputstate "github.com/goplus/spx/v4/internal/core/input"
 )
 
 type inputSessionTick struct {

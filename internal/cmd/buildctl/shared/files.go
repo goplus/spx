@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/httpclient"
+	"github.com/goplus/spx/v4/internal/base/httpclient"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 

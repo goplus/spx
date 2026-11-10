@@ -21,7 +21,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/ui"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 )
 
 // -------------------------------------------------------------------------------------

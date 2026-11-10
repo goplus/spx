@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/goplus/spx/v4/internal/assetindex"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 type resourceConfig struct {
@@ -67,7 +67,7 @@ func parseConfig(sourceName string, sourceData []byte, packedName string, packed
 	}
 
 	var config packedConfig
-	if err := assetindex.DecodeRoot(assetindex.Merge(sourceRoot, packedRoot), &config.project); err != nil {
+	if err := coreproject.DecodeIndexRoot(coreproject.MergeIndexRoot(sourceRoot, packedRoot), &config.project); err != nil {
 		name := sourceName
 		if len(packedData) != 0 {
 			name = packedName
@@ -102,7 +102,7 @@ func parseRoot(name string, data []byte) (map[string]json.RawMessage, error) {
 }
 
 func decodePackedObjects[T any](indexName, section string, raw json.RawMessage) (map[string]T, error) {
-	entries, err := assetindex.ParseEntries(raw)
+	entries, err := coreproject.ParseIndexEntries(raw)
 	if err != nil {
 		return nil, fmt.Errorf("projectassets: decode %q section %q: %w", indexName, section, err)
 	}

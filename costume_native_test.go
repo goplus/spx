@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
@@ -118,9 +117,9 @@ func TestCostumeFrameGeometryFixtures(t *testing.T) {
 			path: "sprites/atlas.png", width: 256, height: 128, nx: 3,
 			rc: coreproject.CostumeSetRect{X: 16, Y: 8, W: 131, H: 43},
 		}, 90, -1, 2), [2]int{21, 21}, [2]float64{128, 64}, mathf.NewVec2(-53.25, 21.25), false},
-		{"missing logical size", &costume{frame: assetutil.FrameDescriptor{Width: 11, Height: 17, BitmapResolution: 2}},
+		{"missing logical size", &costume{frame: costumeFrame{Width: 11, Height: 17, BitmapResolution: 2}},
 			[2]int{5, 8}, [2]float64{5.5, 8.5}, mathf.NewVec2(-2.75, 4.25), false},
-		{"zero logical height", &costume{frame: assetutil.FrameDescriptor{Width: 11, Height: 17, ImageSize: mathf.NewVec2(11.5, 0), BitmapResolution: 2}},
+		{"zero logical height", &costume{frame: costumeFrame{Width: 11, Height: 17, ImageSize: mathf.NewVec2(11.5, 0), BitmapResolution: 2}},
 			[2]int{5, 8}, [2]float64{5.5, 8.5}, mathf.NewVec2(-2.75, 4.25), false},
 	}
 	for _, fixture := range fixtures {
@@ -138,7 +137,7 @@ func TestCostumeFrameGeometryFixtures(t *testing.T) {
 func TestCostumeFrameMetadataOwnership(t *testing.T) {
 	c := &costume{
 		path: "backdrop.svg",
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width: 11, Height: 17, BitmapResolution: 2, ImageSize: mathf.NewVec2(55.75, 54.25),
 			Center: mathf.NewVec2(52, 89), PosX: 4, PosY: 6, AtlasUVRect: mathf.NewVec4(0.1, 0.2, 0.3, 0.4),
 		},

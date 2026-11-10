@@ -7,7 +7,7 @@ import (
 	"time"
 
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 type shiftedSprite struct {

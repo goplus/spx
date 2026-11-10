@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	inputstate "github.com/goplus/spx/v4/internal/core/input"
+	inkey "github.com/goplus/spx/v4/internal/core/input/keycode"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
-	inputstate "github.com/goplus/spx/v4/internal/input"
-	inkey "github.com/goplus/spx/v4/internal/input/keycode"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )

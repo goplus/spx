@@ -23,8 +23,6 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
-	internalaudio "github.com/goplus/spx/v4/internal/audio"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
@@ -86,7 +84,7 @@ type penCanvasCameraMgr struct {
 }
 
 type penCanvasAudioBackend struct {
-	internalaudio.Backend
+	soundBackend
 }
 
 func TestPenComponentInitializesDefaultColorComponents(t *testing.T) {
@@ -1304,7 +1302,7 @@ func configurePenRenderOffsetSprite(sprite *penTestSprite) {
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
 	sprite.costumes = []*costume{{
 		path: "sprites/PenTest/costume1.svg",
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Center:           mathf.NewVec2(10, 20),
 			BitmapResolution: 1,
 			Width:            100,

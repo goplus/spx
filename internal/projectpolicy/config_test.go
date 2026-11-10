@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 func TestValidatePortableConfig(t *testing.T) {
@@ -112,7 +112,7 @@ func TestPortableConfigSnapshotRejectsIdentityAndContentDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !os.SameFile(snapshot.fileInfo, info) || !stablefile.SameMetadata(snapshot.fileInfo, info) {
+	if !os.SameFile(snapshot.fileInfo, info) || !fileutil.SameMetadata(snapshot.fileInfo, info) {
 		t.Fatal("content-drift fixture also changed identity or metadata")
 	}
 	if err := snapshot.Verify(projectDir); err == nil || !strings.Contains(err.Error(), "changed after validation") {
@@ -251,7 +251,7 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 			projectDir := t.TempDir()
 			configPath := filepath.Join(projectDir, configName)
 			writePolicyTestFile(t, configPath, []byte(`{}`))
-			access := stablefile.Reader{Lstat: os.Lstat, Open: os.Open}
+			access := fileutil.StableReader{Lstat: os.Lstat, Open: os.Open}
 			switch test.name {
 			case "initial stat failure":
 				access.Lstat = func(string) (os.FileInfo, error) { return nil, os.ErrPermission }
@@ -323,7 +323,7 @@ func TestReadStableFileRejectsChangesDuringRead(t *testing.T) {
 			projectDir := t.TempDir()
 			configPath := filepath.Join(projectDir, configName)
 			writePolicyTestFile(t, configPath, []byte(`{}`))
-			access := stablefile.Reader{Lstat: os.Lstat, Open: os.Open}
+			access := fileutil.StableReader{Lstat: os.Lstat, Open: os.Open}
 			want := "changed while reading"
 			if kind == "oversized on open" {
 				want = "exceeds"

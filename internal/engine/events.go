@@ -21,8 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/goplus/spx/v4/internal/base/sliceutil"
-	"github.com/goplus/spx/v4/internal/input"
+	"github.com/goplus/spx/v4/internal/base"
+	"github.com/goplus/spx/v4/internal/core/input"
 )
 
 type KeyEvent = input.KeyEvent
@@ -277,19 +277,19 @@ func (b *frameBuffer[T]) enqueue(event T) {
 func (b *frameBuffer[T]) publish() bool {
 	changed := len(b.pending) != 0
 	b.ready = append(b.ready, b.pending...)
-	b.pending = sliceutil.Reset(b.pending, 0)
+	b.pending = base.Reset(b.pending, 0)
 	return changed
 }
 
 func (b *frameBuffer[T]) drain(dst []T) []T {
 	dst = append(dst, b.ready...)
-	b.ready = sliceutil.Reset(b.ready, 0)
+	b.ready = base.Reset(b.ready, 0)
 	return dst
 }
 
 func (b *frameBuffer[T]) discard() {
-	b.pending = sliceutil.Reset(b.pending, 0)
-	b.ready = sliceutil.Reset(b.ready, 0)
+	b.pending = base.Reset(b.pending, 0)
+	b.ready = base.Reset(b.ready, 0)
 }
 
 func (b *frameBuffer[T]) reset() {

@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/profiler"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // -----------------------------------------------------------------------------

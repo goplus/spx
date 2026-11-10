@@ -25,12 +25,11 @@ import (
 	_ "github.com/goplus/spx/v4/fs/asset"
 	_ "github.com/goplus/spx/v4/fs/zip"
 
-	"github.com/goplus/spx/v4/internal/audio"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	inputstate "github.com/goplus/spx/v4/internal/core/input"
 	"github.com/goplus/spx/v4/internal/engine"
-	inputstate "github.com/goplus/spx/v4/internal/input"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
 )
 
 const (
@@ -106,7 +105,7 @@ type Game struct {
 	inputSession   *inputSession
 	inputTerminal  InputSessionStatus
 	inputClaimed   bool
-	soundMgr       audio.Manager
+	soundMgr       soundManager
 	shapeMgr       shapeManager
 	tilemapMgr     gameTilemapMgr
 

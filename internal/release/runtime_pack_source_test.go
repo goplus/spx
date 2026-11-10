@@ -47,6 +47,8 @@ func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 		"100644 blob aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tpkg/spx/pkg/engine/engine.go",
 		"100644 blob bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\t.github/workflows/release.yml",
 		"100644 blob cccccccccccccccccccccccccccccccccccccccc\tcmd/spx/internal/command/buildlauncher.go",
+		"100644 blob dddddddddddddddddddddddddddddddddddddddd\tinternal/base/defaults.go",
+		"100644 blob eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\tinternal/base/fileutil/zip_preflight.go",
 	}
 	tree := gitTreeFixture(entries...)
 
@@ -55,7 +57,7 @@ func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	hasher := sha256.New()
-	for _, index := range []int{1, 3, 6, 9} {
+	for _, index := range []int{1, 3, 6, 9, 12, 13} {
 		_, _ = hasher.Write([]byte(entries[index]))
 		_, _ = hasher.Write([]byte{0})
 	}
@@ -104,8 +106,35 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"cmd/spx/install.sh", false},
 		{"fs/fsutil/fsutil.go", false},
 		{"fs/asset/asset.go", true},
+		{"internal/base/defaults.go", true},
+		{"internal/base/slice.go", true},
+		{"internal/base/slice_test.go", false},
+		{"internal/base/fileutil/fileutil.go", true},
+		{"internal/base/fileutil/path.go", true},
+		{"internal/base/fileutil/stable_read.go", true},
+		{"internal/base/fileutil/zip_preflight.go", true},
+		{"internal/base/fileutil/zip_preflight_test.go", false},
+		{"internal/base/httpclient/http.go", false},
+		{"internal/base/strictjson/decode.go", false},
+		{"internal/base/quoted/quoted.go", false},
 		{"internal/base/licenseheader/licenseheader.go", false},
-		{"internal/audio/audio.go", true},
+		{"internal/core/input/replay.go", true},
+		{"internal/core/input/replay_test.go", false},
+		{"internal/core/input/keycode/keycode.go", true},
+		{"internal/core/input/keycode/parse.go", true},
+		{"internal/core/input/keycode/parse_test.go", false},
+		{"internal/core/project/asset_index.go", true},
+		{"internal/core/project/asset_index_test.go", false},
+		{"internal/core/tilemap/load.go", true},
+		{"internal/core/tilemap/tilemap.go", true},
+		{"internal/core/tilemap/load_test.go", false},
+		{"internal/engine/coroutine/scheduler.go", true},
+		{"internal/engine/coroutine/scheduler_test.go", false},
+		{"internal/engine/ui/ui_ask.go", true},
+		{"internal/engine/ui/text_wrap.go", true},
+		{"internal/engine/ui/ui_lifecycle_test.go", false},
+		{"sound_manager.go", true},
+		{"sound_test.go", false},
 		{"internal/gdengine/binding/web/ffi.go", false},
 		{"internal/scaffold/gdextension.go", true},
 		{"pkg/ispx/runner.go", false},
@@ -194,8 +223,13 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/shared/macos_go_toolchain.go", true},
 		{"internal/base/quoted/quoted.go", true},
 		{"internal/base/quoted/quoted_test.go", false},
-		{"internal/httpclient/http.go", true},
-		{"internal/httpclient/http_test.go", false},
+		{"internal/base/httpclient/http.go", true},
+		{"internal/base/httpclient/http_test.go", false},
+		{"internal/base/fileutil/fileutil.go", true},
+		{"internal/base/fileutil/fileutil_test.go", false},
+		{"internal/base/fileutil/path.go", false},
+		{"internal/base/fileutil/stable_read.go", false},
+		{"internal/base/fileutil/zip_preflight.go", false},
 		{".github/scripts/release/assemble.py", false},
 		{".github/cmd/runtime-manifest/main.go", false},
 		{".github/cmd/runtime-digest/main.go", false},
@@ -442,7 +476,8 @@ func TestRuntimeBuildRecipeTracksBuildInputs(t *testing.T) {
 		".github/scripts/runtime/build_contract.py",
 		".github/scripts/setup/build_buildctl.sh",
 		"internal/cmd/buildctl/shared/files.go",
-		"internal/httpclient/http.go",
+		"internal/base/fileutil/fileutil.go",
+		"internal/base/httpclient/http.go",
 	} {
 		t.Run(name, func(t *testing.T) {
 			before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(
@@ -502,6 +537,9 @@ func TestRuntimeBuildRecipeIgnoresIndependentBuildPaths(t *testing.T) {
 		".github/scripts/runtime_build_contract.py",
 		".github/scripts/setup/install_linux_dependencies.sh",
 		".github/scripts/setup/setup_test.py",
+		"internal/base/fileutil/path.go",
+		"internal/base/fileutil/stable_read.go",
+		"internal/base/fileutil/zip_preflight.go",
 		"internal/cmd/buildctl/root.go",
 		"internal/cmd/buildctl/engine/download.go",
 		"internal/cmd/buildctl/engine/download_desktop.go",

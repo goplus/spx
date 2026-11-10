@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 )
@@ -43,7 +42,7 @@ type costume struct {
 	pivot     mathf.Vec2
 	faceRight float64
 	atlas     bool
-	frame     assetutil.FrameDescriptor
+	frame     costumeFrame
 }
 
 type costumeSizeKey struct {
@@ -93,12 +92,12 @@ func (c *costume) isAtlas() bool {
 
 // newCostumeWithSize creates a costume with specified dimensions (no image file).
 func newCostumeWithSize(width, height int) *costume {
-	return &costume{frame: assetutil.NewSizedFrame(width, height)}
+	return &costume{frame: newSizedCostumeFrame(width, height)}
 }
 
 // newCostumeWith creates a costume from a costume set image.
 func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameIndex, bitmapResolution int) *costume {
-	frame := assetutil.NewAtlasFrame(
+	frame := newAtlasCostumeFrame(
 		img.width,
 		img.height,
 		img.path,
@@ -116,7 +115,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 
 // newCostume creates a costume from a costume configuration.
 func newCostume(config *coreproject.CostumeConfig) *costume {
-	frame := assetutil.NewStandaloneFrame(
+	frame := newStandaloneCostumeFrame(
 		config.ImageWidth,
 		config.ImageHeight,
 		config.Path,
@@ -132,7 +131,7 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 // original canvas, which would displace the sprite, so pixel-less frames stay centered.
 // Both dimensions must degenerate: a 1xN line costume has real pixels and may anchor
 // outside its center.
-func costumeCenterInAsset(frame assetutil.FrameDescriptor, declared mathf.Vec2) mathf.Vec2 {
+func costumeCenterInAsset(frame costumeFrame, declared mathf.Vec2) mathf.Vec2 {
 	if frame.Width <= 1 && frame.Height <= 1 {
 		return mathf.NewVec2(float64(frame.Width)/2, float64(frame.Height)/2)
 	}

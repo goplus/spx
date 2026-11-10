@@ -20,7 +20,7 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/base/defaults"
+	"github.com/goplus/spx/v4/internal/base"
 )
 
 type DisplaySettings struct {
@@ -81,8 +81,8 @@ func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 
 func ResolveMapConfig(cfg MapConfig, hasTilemap bool, defaultWidth, defaultHeight int) MapConfig {
 	if hasTilemap {
-		defaults.SetDefaultIfZero(&cfg.Width, defaultWidth)
-		defaults.SetDefaultIfZero(&cfg.Height, defaultHeight)
+		base.SetDefaultIfZero(&cfg.Width, defaultWidth)
+		base.SetDefaultIfZero(&cfg.Height, defaultHeight)
 	}
 	return cfg
 }

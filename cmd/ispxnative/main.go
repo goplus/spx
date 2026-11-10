@@ -27,7 +27,7 @@ import (
 	"sync"
 	_ "unsafe"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/interpruntime"
 	"github.com/goplus/spx/v4/pkg/ispx"
 )
@@ -139,12 +139,12 @@ func validateAssetIndex(assetDir string) error {
 }
 
 func validateStableRegularFile(name string) (bool, error) {
-	return validateStableFile(name, stablefile.Reader{AllowMissing: true})
+	return validateStableFile(name, fileutil.StableReader{AllowMissing: true})
 }
 
-func validateStableFile(name string, reader stablefile.Reader) (bool, error) {
+func validateStableFile(name string, reader fileutil.StableReader) (bool, error) {
 	info, err := reader.Copy(name, io.Discard)
-	if err == stablefile.ErrChangedOpening || err == stablefile.ErrChangedReading {
+	if err == fileutil.ErrChangedOpening || err == fileutil.ErrChangedReading {
 		return false, fmt.Errorf("changed while it was read")
 	}
 	return info != nil, err

@@ -9,8 +9,8 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	tm "github.com/goplus/spx/v4/internal/core/tilemap"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
-	tm "github.com/goplus/spx/v4/internal/tilemap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

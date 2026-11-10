@@ -20,9 +20,8 @@ import (
 	"time"
 
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
-	"github.com/goplus/spx/v4/internal/coroutine"
-	"github.com/goplus/spx/v4/internal/debug"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
@@ -68,7 +67,7 @@ func Sched() int {
 	if thread == nil || handleMainExecutionTimeout(thread) || !thread.IsSchedTimeout(schedTimeoutMs) {
 		return 0
 	}
-	spxlog.Warn("%s\n%s", coreruntime.LoopExecutionTimedOutMsg, debug.GetStackTrace())
+	spxlog.Warn("%s\n%s", coreruntime.LoopExecutionTimedOutMsg, spxlog.GetStackTrace())
 	engine.WaitNextFrame()
 	engine.Panic(coreruntime.LoopExecutionTimedOutMsg)
 	return 0
@@ -100,7 +99,7 @@ func handleMainExecutionTimeout(thread coroutine.Thread) bool {
 	if !coreruntime.MainExecutionTimedOut(thread.MainStartedAt(), time.Now(), mainExecTimeoutSec*time.Second) {
 		return false
 	}
-	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.GetStackTrace())
+	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, spxlog.GetStackTrace())
 	// Warn once, then schedule Main as a regular coroutine.
 	thread.DisableMainTimeout()
 	scheduler.Sched(thread)

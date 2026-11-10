@@ -18,7 +18,6 @@ package engine
 
 import (
 	"math"
-	"slices"
 	"testing"
 )
 
@@ -50,49 +49,6 @@ func TestAnglesAndVectors(t *testing.T) {
 			t.Errorf("UniformVec2(%v) = %v", value, got)
 		}
 	}
-}
-
-func TestFloatSliceConversions(t *testing.T) {
-	t.Run("nil and empty", func(t *testing.T) {
-		if F64Tof32(nil) != nil || F32Tof64(nil) != nil {
-			t.Fatal("conversion did not preserve nil")
-		}
-		if got := F64Tof32([]float64{}); got == nil || len(got) != 0 {
-			t.Fatalf("F64Tof32(empty) = %#v, want non-nil empty slice", got)
-		}
-		if got := F32Tof64([]float32{}); got == nil || len(got) != 0 {
-			t.Fatalf("F32Tof64(empty) = %#v, want non-nil empty slice", got)
-		}
-	})
-	t.Run("values and ownership", func(t *testing.T) {
-		input := []float64{-2.5, 0, 1.25}
-		narrowed := F64Tof32(input)
-		if !slices.Equal(narrowed, []float32{-2.5, 0, 1.25}) {
-			t.Fatalf("F64Tof32 = %v", narrowed)
-		}
-		widened := F32Tof64(narrowed)
-		if !slices.Equal(widened, input) {
-			t.Fatalf("F32Tof64 = %v, want %v", widened, input)
-		}
-		narrowed[0] = 7
-		widened[1] = 8
-		if input[0] != -2.5 || input[1] != 0 || widened[0] != -2.5 || narrowed[1] != 0 {
-			t.Fatal("conversion shared mutable storage")
-		}
-	})
-	t.Run("IEEE values", func(t *testing.T) {
-		input := []float64{math.Copysign(0, -1), math.Inf(1), math.Inf(-1), math.NaN(), math.MaxFloat64, -math.MaxFloat64}
-		got := F32Tof64(F64Tof32(input))
-		if len(got) != len(input) {
-			t.Fatalf("converted length = %d, want %d", len(got), len(input))
-		}
-		if got[0] != 0 || !math.Signbit(got[0]) || !math.IsInf(got[1], 1) || !math.IsInf(got[2], -1) || !math.IsNaN(got[3]) {
-			t.Fatalf("special values were not preserved: %v", got[:4])
-		}
-		if !math.IsInf(got[4], 1) || !math.IsInf(got[5], -1) {
-			t.Fatalf("overflow did not preserve sign: %v", got[4:])
-		}
-	})
 }
 
 func FuzzSplitInt64BatchBits(f *testing.F) {

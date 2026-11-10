@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 
 	spxfs "github.com/goplus/spx/v4/fs"
+	"github.com/goplus/spx/v4/internal/base"
 	"github.com/goplus/spx/v4/internal/base/collision"
-	"github.com/goplus/spx/v4/internal/base/defaults"
 )
 
 const (
@@ -106,15 +106,15 @@ func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, projectDir string, 
 func ResolveSystemSettings(proj *ProjectConfig) SystemSettings {
 	return SystemSettings{
 		LayerSortMode:           proj.LayerSortMode,
-		PathCellSizeX:           defaults.OrDefault(proj.PathCellSizeX, DefaultPathCellSize),
-		PathCellSizeY:           defaults.OrDefault(proj.PathCellSizeY, DefaultPathCellSize),
-		AudioAttenuation:        defaults.OrDefault(proj.AudioAttenuation, 0),
-		AudioMaxDistance:        defaults.OrDefault(proj.AudioMaxDistance, float64(DefaultAudioMaxDistance)),
+		PathCellSizeX:           base.OrDefault(proj.PathCellSizeX, DefaultPathCellSize),
+		PathCellSizeY:           base.OrDefault(proj.PathCellSizeY, DefaultPathCellSize),
+		AudioAttenuation:        base.OrDefault(proj.AudioAttenuation, 0),
+		AudioMaxDistance:        base.OrDefault(proj.AudioMaxDistance, float64(DefaultAudioMaxDistance)),
 		CollisionByPixel:        !proj.CollisionByShape && !proj.Physics,
 		AutoSetCollisionLayer:   proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer,
 		PixelCollisionPrecision: collision.ParsePixelCollisionPrecision(proj.PixelCollisionPrecision),
-		GlobalGravity:           defaults.OrDefault(proj.GlobalGravity, 1),
-		GlobalFriction:          defaults.OrDefault(proj.GlobalFriction, 1),
-		GlobalAirDrag:           defaults.OrDefault(proj.GlobalAirDrag, 1),
+		GlobalGravity:           base.OrDefault(proj.GlobalGravity, 1),
+		GlobalFriction:          base.OrDefault(proj.GlobalFriction, 1),
+		GlobalAirDrag:           base.OrDefault(proj.GlobalAirDrag, 1),
 	}
 }

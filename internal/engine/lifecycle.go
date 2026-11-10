@@ -17,7 +17,7 @@
 package engine
 
 import (
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/platform"
 	itime "github.com/goplus/spx/v4/internal/time"
 )

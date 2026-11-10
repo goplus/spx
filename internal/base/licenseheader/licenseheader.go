@@ -79,10 +79,7 @@ func AddToGoFile(path string) error {
 }
 
 func Has(src []byte) bool {
-	limit := src
-	if len(limit) > 1024 {
-		limit = limit[:1024]
-	}
+	limit := src[:min(len(src), 1024)]
 	return bytes.Contains(limit, []byte(Phrase))
 }
 
@@ -107,7 +104,7 @@ func splitBuildTagPrefix(src []byte) ([]byte, []byte) {
 		return nil, src
 	}
 
-	prefix := append([]byte(nil), src[:idx]...)
+	prefix := bytes.Clone(src[:idx])
 	if i < len(lines) && len(bytes.TrimSpace(lines[i])) == 0 {
 		prefix = append(prefix, lines[i]...)
 		idx += len(lines[i])

@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
@@ -130,7 +129,7 @@ func (p *baseObj) initSpriteCostumes(sprite *coreproject.SpriteConfig, layout *c
 }
 
 func (p *baseObj) addCostumeFrames(frames []coreproject.CostumeFrame, images []*costumeSetImage, faceRight float64, bitmapResolution int) {
-	resolution := assetutil.ToBitmapResolution(bitmapResolution)
+	resolution := normalizeBitmapResolution(bitmapResolution)
 	for _, frame := range frames {
 		p.addCostumeWith(frame.Name, images[frame.Part], faceRight, frame.Index, resolution)
 	}

@@ -232,7 +232,7 @@ func isWithinRoot(path, root string) bool {
 
 func leadingParentCount(name string) int {
 	count := 0
-	for _, segment := range strings.Split(cleanFilesystemPath(name), "/") {
+	for segment := range strings.SplitSeq(cleanFilesystemPath(name), "/") {
 		if segment != ".." {
 			break
 		}

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/goplus/spx/v4/internal/base/pathutil"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 type observedRoot struct {
@@ -55,12 +55,12 @@ func validateRelativePath(name, field string) (string, error) {
 }
 
 func validatePortableComponent(component string) error {
-	switch pathutil.CheckComponent(component) {
-	case pathutil.TrailingDotOrSpace:
+	switch fileutil.CheckPathComponent(component) {
+	case fileutil.TrailingDotOrSpace:
 		return errors.New("component ends in a dot or space")
-	case pathutil.ReservedCharacter:
+	case fileutil.ReservedCharacter:
 		return errors.New("component contains a Windows-reserved character")
-	case pathutil.ControlCharacter:
+	case fileutil.ControlCharacter:
 		return errors.New("component contains a control character")
 	}
 	base := component
@@ -68,7 +68,7 @@ func validatePortableComponent(component string) error {
 		base = base[:dot]
 	}
 	base = strings.ToUpper(strings.TrimRight(base, " ."))
-	if pathutil.IsDeviceBase(base) {
+	if fileutil.IsDeviceBase(base) {
 		return errors.New("component uses a reserved DOS device name")
 	}
 	return nil

@@ -18,6 +18,7 @@ package engine
 
 import (
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/base/numeric"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -140,7 +141,7 @@ func (s *Sprite) SetColliderShapeCapsule(trigger bool, center mathf.Vec2, size m
 }
 
 func (s *Sprite) SetColliderShapePolygon(trigger bool, center mathf.Vec2, points []float64) {
-	points32 := F64Tof32(points)
+	points32 := numeric.ConvertFloatSlice[float32](points)
 	if trigger {
 		s.Sprite.SetTriggerPolygon(center, points32)
 	} else {

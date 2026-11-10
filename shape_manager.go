@@ -20,11 +20,11 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/goplus/spx/v4/internal/base/sliceutil"
+	"github.com/goplus/spx/v4/internal/base"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // Scratch renders the shared pen canvas above the backdrop and below every
@@ -88,18 +88,18 @@ func (s *shapeManager) init() {
 	s.cloneCount = 0
 	s.pendingClones = 0
 	s.named = nil
-	s.items = sliceutil.Reset(s.items, 64)
-	s.dirtySprites = sliceutil.Reset(s.dirtySprites, 0)
+	s.items = base.Reset(s.items, 64)
+	s.dirtySprites = base.Reset(s.dirtySprites, 0)
 	if s.dirtySpriteIndex != nil {
 		clear(s.dirtySpriteIndex)
 	}
-	s.tempItems = sliceutil.Reset(s.tempItems, 50)
-	s.destroyItems = sliceutil.Reset(s.destroyItems, 16)
-	s.proxyChangeBuffer = sliceutil.Reset(s.proxyChangeBuffer, 0)
-	s.bubbles = sliceutil.Reset(s.bubbles, 0)
-	s.textBubbles = sliceutil.Reset(s.textBubbles, 0)
-	s.activeTextBubbles = sliceutil.Reset(s.activeTextBubbles, 0)
-	s.sayLayouts = sliceutil.Reset(s.sayLayouts, 0)
+	s.tempItems = base.Reset(s.tempItems, 50)
+	s.destroyItems = base.Reset(s.destroyItems, 16)
+	s.proxyChangeBuffer = base.Reset(s.proxyChangeBuffer, 0)
+	s.bubbles = base.Reset(s.bubbles, 0)
+	s.textBubbles = base.Reset(s.textBubbles, 0)
+	s.activeTextBubbles = base.Reset(s.activeTextBubbles, 0)
+	s.sayLayouts = base.Reset(s.sayLayouts, 0)
 	s.nextTextBubbleLayoutID = 0
 }
 
@@ -167,8 +167,8 @@ func (s *shapeManager) flushBubbleVisuals(items []Shape) {
 }
 
 func (s *shapeManager) collectBubbles(items []Shape) {
-	s.bubbles = sliceutil.Reset(s.bubbles, 0)
-	s.textBubbles = sliceutil.Reset(s.textBubbles, 0)
+	s.bubbles = base.Reset(s.bubbles, 0)
+	s.textBubbles = base.Reset(s.textBubbles, 0)
 	for _, item := range items {
 		bubble, ok := item.(bubbleShape)
 		if !ok {
@@ -182,7 +182,7 @@ func (s *shapeManager) collectBubbles(items []Shape) {
 }
 
 func (s *shapeManager) layoutTextBubbles() {
-	s.sayLayouts = sliceutil.Reset(s.sayLayouts, 0)
+	s.sayLayouts = base.Reset(s.sayLayouts, 0)
 
 	s.textBubbles = slices.DeleteFunc(s.textBubbles, func(bubble *textBubble) bool {
 		return bubble.panel == nil || !bubble.sprite.Visible()
@@ -193,7 +193,7 @@ func (s *shapeManager) layoutTextBubbles() {
 	})
 	topologyChanged := !slices.Equal(s.textBubbles, s.activeTextBubbles)
 	if topologyChanged {
-		s.activeTextBubbles = sliceutil.CopyInto(s.activeTextBubbles, s.textBubbles, 0)
+		s.activeTextBubbles = base.CopyInto(s.activeTextBubbles, s.textBubbles, 0)
 	}
 	if len(s.textBubbles) == 0 {
 		return
@@ -287,7 +287,7 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 		return
 	}
 
-	s.items = sliceutil.InsertAt(s.items, idx, clone)
+	s.items = slices.Insert(s.items, idx, clone)
 	clear(s.named)
 	if sprite, ok := clone.(*SpriteImpl); ok && sprite.IsCloned() {
 		s.cloneCount++
@@ -313,7 +313,7 @@ func (s *shapeManager) removeShape(child Shape) {
 		return
 	}
 
-	s.items = sliceutil.DeleteAt(s.items, idx)
+	s.items = slices.Delete(s.items, idx, idx+1)
 	clear(s.named)
 	if sprite, ok := child.(*SpriteImpl); ok {
 		// Keep deletion dirty until its native destroy batch commits.
@@ -333,7 +333,7 @@ func (s *shapeManager) activateShape(child Shape) {
 		return
 	}
 
-	s.items = sliceutil.MoveToEnd(s.items, idx)
+	s.items = base.MoveToEnd(s.items, idx)
 	clear(s.named)
 	s.updateRenderLayers()
 }
@@ -356,7 +356,7 @@ func (s *shapeManager) goBackLayers(spr *SpriteImpl, n int) {
 		return
 	}
 
-	s.items = sliceutil.MoveToIndex(s.items, idx, newIdx)
+	s.items = base.MoveToIndex(s.items, idx, newIdx)
 	clear(s.named)
 	if s.layersDirty {
 		s.updateRenderLayers()
@@ -400,7 +400,7 @@ func (s *shapeManager) all() []Shape {
 
 // getTempShapes returns a copy of all active shapes in a temporary buffer.
 func (s *shapeManager) getTempShapes() []Shape {
-	s.tempItems = sliceutil.CopyInto(s.tempItems, s.items, 50)
+	s.tempItems = base.CopyInto(s.tempItems, s.items, 50)
 	return s.tempItems
 }
 
