@@ -74,7 +74,7 @@ func TestGoResolvesOwner(t *testing.T) {
 			start := func() {
 				Go(tc.owner, func(ctx context.Context, owner any) {
 					defer close(done)
-					thread := coroutine.Caller(scheduler)
+					thread := scheduler.Caller()
 					if thread == nil || thread.Owner != tc.want || owner != tc.want {
 						t.Errorf("callback owner = %v, thread = %v, want owner %v", owner, thread, tc.want)
 					} else if ctx != thread.Context() || ctx.Err() != nil {
@@ -126,7 +126,7 @@ func TestExecuteWaitsForCompletionWithDefaultOwner(t *testing.T) {
 	go func() {
 		Execute(nil, func(ctx context.Context, owner any) {
 			callbackContext = ctx
-			if !IsInCoroutine() || owner != game || coroutine.Caller(scheduler).Owner != game {
+			if !IsInCoroutine() || owner != game || scheduler.Caller().Owner != game {
 				t.Error("Execute did not use a managed coroutine owned by the game")
 			}
 			close(started)

@@ -315,7 +315,7 @@ func TestRuntimeCallbackProxyUsesLogicalOwner(t *testing.T) {
 			}
 			var started, completed atomic.Bool
 			gdx.DelaySpriteCall(0, handle, func() {
-				if coroutine.Caller(scheduler).Owner != owner {
+				if scheduler.Caller().Owner != owner {
 					t.Error("callback did not retain the logical sprite owner")
 				}
 				started.Store(true)

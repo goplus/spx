@@ -57,14 +57,14 @@ func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 // Scheduling
 // -----------------------------------------------------------------------------
 func SchedNow() int {
-	if thread := coroutine.Caller(scheduler); thread != nil && !handleMainExecutionTimeout(thread) {
+	if thread := scheduler.Caller(); thread != nil && !handleMainExecutionTimeout(thread) {
 		scheduler.Sched(thread)
 	}
 	return 0
 }
 
 func Sched() int {
-	thread := coroutine.Caller(scheduler)
+	thread := scheduler.Caller()
 	if thread == nil || handleMainExecutionTimeout(thread) || !thread.IsSchedTimeout(schedTimeoutMs) {
 		return 0
 	}

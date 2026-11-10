@@ -166,7 +166,7 @@ func (r assetResolver) packmodePath(reference string) string {
 	if suffix, ok := r.extAssetSuffix(relPath); ok {
 		return projectResourcePath(pathpkg.Join(engineExtAssetPath, suffix))
 	}
-	if suffix, ok := packmodeCompatibilitySuffix(relPath); ok {
+	if suffix, ok := strings.CutPrefix(pathpkg.Clean(relPath), "../../"); ok {
 		return projectResourcePath(suffix)
 	}
 	root := strings.TrimPrefix(r.root, packmodeAssetPrefix)
@@ -243,18 +243,6 @@ func leadingParentCount(name string) int {
 		count++
 	}
 	return count
-}
-
-func packmodeCompatibilitySuffix(relPath string) (string, bool) {
-	clean := pathpkg.Clean(relPath)
-	if !strings.HasPrefix(clean, "../../") {
-		return "", false
-	}
-	suffix := strings.TrimPrefix(clean, "../../")
-	if suffix == "" || suffix == clean {
-		return "", false
-	}
-	return suffix, true
 }
 
 func projectResourcePath(name string) string {

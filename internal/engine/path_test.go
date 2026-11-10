@@ -381,6 +381,27 @@ func TestToAssetPathRejectsNULBeforeNormalization(t *testing.T) {
 	}
 }
 
+func TestPackmodePathNormalizesCompatibilityPrefix(t *testing.T) {
+	resolver := newAssetResolver(packmodeAssetPrefix, "assets")
+	for _, tc := range []struct{ reference, want string }{
+		{"../../shared/cat.svg", "res://shared/cat.svg"},
+		{"./../../shared//sprites/../cat.svg", "res://shared/cat.svg"},
+		{"sprites/../../../shared/cat.svg", "res://shared/cat.svg"},
+		{"../res/cat.svg", "res://res/cat.svg"},
+		{"../..", ""},
+		{"../../", ""},
+		{"../../shared/..", ""},
+		{"../../../shared/cat.svg", ""},
+		{"res://../../shared/cat.svg", ""},
+	} {
+		t.Run(tc.reference, func(t *testing.T) {
+			if got := resolver.packmodePath(tc.reference); got != tc.want {
+				t.Fatalf("packmodePath(%q) = %q, want %q", tc.reference, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
 	for _, tc := range []struct {
 		name, directory, path, want string

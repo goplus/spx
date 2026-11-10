@@ -299,7 +299,7 @@ func runMainUntilYield(owner any, mainFn func()) {
 
 // runMain calls Main synchronously while tracking its execution timeout.
 func runMain(call func()) {
-	if thread := coroutine.Caller(scheduler); thread != nil {
+	if thread := scheduler.Caller(); thread != nil {
 		end := thread.BeginMain(time.Now())
 		defer end()
 	}

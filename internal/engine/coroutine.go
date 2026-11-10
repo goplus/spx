@@ -35,7 +35,7 @@ func SetScheduler(next *coroutine.Scheduler) {
 }
 
 func IsInCoroutine() bool {
-	return coroutine.Caller(scheduler) != nil
+	return scheduler.Caller() != nil
 }
 
 func Go(owner any, fn func(ctx context.Context, owner any)) {
@@ -68,7 +68,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 }
 
 func ExecuteNative(fn func(ctx context.Context, owner any)) {
-	thread := coroutine.Caller(scheduler)
+	thread := scheduler.Caller()
 	if thread == nil {
 		fn(context.Background(), nil)
 		return
@@ -110,12 +110,12 @@ func WaitForChan[T any](ch <-chan T) T {
 }
 
 func IsRunWithoutScreenRefresh() bool {
-	thread := coroutine.Caller(scheduler)
+	thread := scheduler.Caller()
 	return thread != nil && thread.Warp()
 }
 
 func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
-	if thread := coroutine.Caller(scheduler); thread != nil {
+	if thread := scheduler.Caller(); thread != nil {
 		return thread.SetWarp(enabled)
 	}
 	return false
@@ -131,7 +131,7 @@ func RunWithoutScreenRefresh(call func()) {
 }
 
 func ShouldWaitNextFrame() bool {
-	if thread := coroutine.Caller(scheduler); thread != nil {
+	if thread := scheduler.Caller(); thread != nil {
 		return thread.ShouldYield(warpBudget)
 	}
 	return true
@@ -140,7 +140,7 @@ func ShouldWaitNextFrame() bool {
 // NewControlFlowWaiter caches the calling thread for generated loop yields.
 func NewControlFlowWaiter() func() {
 	current := scheduler
-	thread := coroutine.Caller(current)
+	thread := current.Caller()
 	if thread == nil {
 		return func() {
 			if ShouldWaitNextFrame() {
@@ -193,7 +193,7 @@ func resolveOwner(owner any) any {
 	if owner != nil {
 		return owner
 	}
-	if thread := coroutine.Caller(scheduler); thread != nil {
+	if thread := scheduler.Caller(); thread != nil {
 		return thread.Owner
 	}
 	return GetGame()

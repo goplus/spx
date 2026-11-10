@@ -76,6 +76,9 @@ consumer together when changing them.
 - `ci/test_go.sh` runs native Go tests in both modules and forwards Go test arguments.
   Its optional leading `--cover` flag uses the selected test packages as the `-coverpkg` list.
 - `ci/test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, `codegen`, `native`, `macos`, or `windows` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After all tests succeed, `compact-coverage` merges duplicate blocks in each profile, retaining zero-hit blocks and summing execution counts. Only then does the script report the profiles as newline-separated paths through the `coverage` step output when `GITHUB_OUTPUT` is set.
+- `web` also runs host-independent engine lifecycle tests in `coverage-web-engine.out`,
+  including the public Web exit path and repeated resets. Full engine startup tests
+  require a Godot JavaScript host and are not part of this Node suite.
 - `native` runs the selected root and `cmd/ispx` module packages once with cross-package
   instrumentation, producing one `coverage.out` per module. Both testing and
   instrumentation reuse `ci/test_go.sh`'s package selection, which excludes examples,

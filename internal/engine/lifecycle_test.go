@@ -46,6 +46,7 @@ type resetRecordingExt struct {
 type resetBlockingExt struct {
 	gdx.IExtMgr
 	callback func()
+	calls    atomic.Int32
 	entered  chan int64
 	release  chan struct{}
 }
@@ -114,39 +115,73 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	waitForResetAdmissionOpen(t, current)
 }
 
-func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
+func TestResetWebRuntimeCoalescesConcurrentRequests(t *testing.T) {
 	isolateGameBinding(t)
 	current := coroutine.New(nil)
 	setupWebResetTest(t, current)
-
-	game, owner := new(bindingTestGame), new(struct{})
-	binding, err := bindGame(game, owner)
+	game := new(bindingTestGame)
+	binding, err := bindGame(game, game)
 	if err != nil {
 		t.Fatal(err)
 	}
 	backend := &resetBlockingExt{
 		callback: onReset,
-		entered:  make(chan int64, 1),
+		entered:  make(chan int64, 64),
 		release:  make(chan struct{}),
 	}
 	gdx.ExtMgr = backend
 	releaseBackend := sync.OnceFunc(func() { close(backend.release) })
 	t.Cleanup(releaseBackend)
+	workerStarted, workerRelease := make(chan struct{}), make(chan struct{})
+	releaseWorker := sync.OnceFunc(func() { close(workerRelease) })
+	t.Cleanup(releaseWorker)
+	current.Create("blocked during drain", func(coroutine.Thread) {
+		close(workerStarted)
+		<-workerRelease
+	})
+	waitForEngineSignal(t, workerStarted, time.Second, "worker did not start")
+	requestDuplicates := func() {
+		var requests sync.WaitGroup
+		for range 32 {
+			requests.Go(func() { resetWebRuntime(22) })
+		}
+		done := make(chan struct{})
+		go func() {
+			requests.Wait()
+			close(done)
+		}()
+		t.Cleanup(func() {
+			releaseWorker()
+			releaseBackend()
+			waitForEngineSignal(t, done, time.Second, "duplicate reset requests did not finish cleanup")
+		})
+		waitForEngineSignal(t, done, time.Second, "duplicate reset requests did not return")
+	}
 
 	resetWebRuntime(11)
+	waitForResetAdmissionClose(t, current)
+	requestDuplicates()
+	if backend.calls.Load() != 0 || game.reset.Load() != 0 {
+		t.Fatal("reset ran before coroutine drain")
+	}
+	if activeGame.Load() != binding {
+		t.Fatal("binding was released before coroutine drain")
+	}
+	releaseWorker()
 	select {
 	case code := <-backend.entered:
 		if code != 11 {
-			t.Fatalf("reset code = %d, want 11", code)
+			t.Fatalf("reset code = %d, want first request's code 11", code)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("backend reset was not requested")
+		t.Fatal("reset did not reach backend")
 	}
-	if game.reset.Load() != 1 {
-		t.Fatalf("reset callbacks = %d, want 1", game.reset.Load())
+	requestDuplicates()
+	if backend.calls.Load() != 1 || game.reset.Load() != 1 {
+		t.Fatalf("reset calls: backend = %d, game = %d; want 1 each", backend.calls.Load(), game.reset.Load())
 	}
-	if got := activeGame.Load(); got != binding {
-		t.Fatalf("binding was released inside the reset barrier: %p", got)
+	if activeGame.Load() != binding {
+		t.Fatal("binding was released before backend reset completed")
 	}
 	if got := binding.loadPhase(); got != gameClosing {
 		t.Fatalf("binding phase during reset = %d, want closing", got)
@@ -155,13 +190,16 @@ func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
 
 	releaseBackend()
 	deadline := time.Now().Add(time.Second)
-	for GetGame() != nil && time.Now().Before(deadline) {
+	for activeGame.Load() != nil && time.Now().Before(deadline) {
 		runtime.Gosched()
 	}
-	if got := GetGame(); got != nil {
-		t.Fatalf("binding after reset completion = %v, want nil", got)
+	if activeGame.Load() != nil {
+		t.Fatal("completed reset retained the binding")
 	}
 	waitForResetAdmissionOpen(t, current)
+	if backend.calls.Load() != 1 {
+		t.Fatalf("backend reset calls after completion = %d, want 1", backend.calls.Load())
+	}
 }
 
 func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
@@ -278,6 +316,7 @@ func (p resetMainThreadPlatform) IsMainThread() bool { return gid.Get() == p.mai
 func (resetDirectPlatform) IsMainThread() bool { return true }
 
 func (r *resetBlockingExt) RequestReset(exitCode int64) {
+	r.calls.Add(1)
 	if r.callback != nil {
 		r.callback()
 	}

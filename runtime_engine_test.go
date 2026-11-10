@@ -459,7 +459,7 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 			started, completed, active, later, keys, touches, starts := 0, 0, 0, 0, 0, 0, 0
 			var threads []coroutine.Thread
 			game.shapeMgr.add(frameUpdateFunc(func(float64) {
-				threads = append(threads, coroutine.Caller(scheduler))
+				threads = append(threads, scheduler.Caller())
 				started++
 				active++
 				defer func() { active-- }()
@@ -831,7 +831,7 @@ func (m *frameSyncSpriteMgr) BatchUpdateTransforms(data []float32) {
 func (f frameUpdateFunc) onUpdate(delta float64) { f(delta) }
 
 func (g *frameMonitorWaitGame) Value() float64 {
-	g.thread = coroutine.Caller(scheduler)
+	g.thread = scheduler.Caller()
 	g.started++
 	g.active++
 	defer func() { g.active-- }()

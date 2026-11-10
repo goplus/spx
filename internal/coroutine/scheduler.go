@@ -139,15 +139,6 @@ func New(onPanic func(PanicReport)) *Scheduler {
 	return p
 }
 
-// Caller returns the calling thread in scheduler, or nil if scheduler is nil
-// or the calling goroutine is not managed by it.
-func Caller(scheduler *Scheduler) Thread {
-	if scheduler == nil {
-		return nil
-	}
-	return scheduler.Caller()
-}
-
 // Sched yields the current coroutine and resumes it without an Update pass.
 func (p *Scheduler) Sched(me Thread) {
 	p.requireCurrent(me)
@@ -179,8 +170,12 @@ func (p *Scheduler) Current() Thread {
 }
 
 // Caller returns this scheduler's thread running on the calling goroutine, or nil.
+// A nil scheduler has no calling thread.
 // Unlike Current, it never borrows another goroutine's script ownership.
 func (p *Scheduler) Caller() Thread {
+	if p == nil {
+		return nil
+	}
 	value, ok := p.goroutineThreads.Load(gid.Get())
 	if !ok {
 		return nil

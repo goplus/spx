@@ -480,7 +480,7 @@ func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
 
 // Shared Event State
 func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchContext {
-	thread := coroutine.Caller(scheduler)
+	thread := scheduler.Caller()
 	if thread == nil {
 		return new(messageDispatchContext)
 	}

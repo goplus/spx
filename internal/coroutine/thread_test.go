@@ -195,22 +195,26 @@ func TestCancelStopsSuspendedThread(t *testing.T) {
 }
 
 func TestIsInCoroutineTracksCaller(t *testing.T) {
-	if got := Caller(nil); got != nil {
-		t.Fatalf("Caller(nil) = %v, want nil", got)
+	var absent *Scheduler
+	if got := absent.Caller(); got != nil {
+		t.Fatalf("nil scheduler Caller() = %v, want nil", got)
+	}
+	if absent.IsInCoroutine() {
+		t.Fatal("nil scheduler reported a coroutine")
 	}
 	scheduler := New(nil)
 	other := New(nil)
-	if Caller(scheduler) != nil || scheduler.IsInCoroutine() {
+	if scheduler.Caller() != nil || scheduler.IsInCoroutine() {
 		t.Fatal("external caller was reported as a coroutine")
 	}
 
 	managed := make(chan bool, 1)
 	scheduler.Create("managed", func(me Thread) {
-		if got := Caller(scheduler); got != me {
-			t.Errorf("Caller(scheduler) = %v, want %v", got, me)
+		if got := scheduler.Caller(); got != me {
+			t.Errorf("scheduler.Caller() = %v, want %v", got, me)
 		}
-		if got := Caller(other); got != nil {
-			t.Errorf("Caller(other) = %v, want nil", got)
+		if got := other.Caller(); got != nil {
+			t.Errorf("other.Caller() = %v, want nil", got)
 		}
 		managed <- scheduler.IsInCoroutine()
 	})

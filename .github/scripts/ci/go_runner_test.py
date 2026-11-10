@@ -173,6 +173,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "./internal/gdengine/binding/web", "./internal/gdengine/impl", "./internal/engine/wrap",
                 "./pkg/ispx", "./internal/coroutine",
             ],
+            "coverage-web-engine.out": ["./internal/engine"],
         },
         "web-process": {
             "coverage-web-process.out": ["./internal/cmd/buildctl/engine", "./internal/processsupervisor", "./pkg/launcher"],
@@ -226,7 +227,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                         options.append("-coverpkg=" + ",".join(packages))
                     if suite in ("native", "tools", "macos", "windows"):
                         options.append("-v")
-                    if suite in ("macos", "windows", "web-process"):
+                    if suite in ("macos", "windows", "web-process") or profile == "coverage-web-engine.out":
                         self.assertIn("-run", args)
                         for option in options:
                             self.assertIn(option, args)
@@ -272,6 +273,21 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                      "TestVerifyPrivateSecurityDescriptorRejectsMissingDACL"):
             with self.subTest(name=name):
                 self.assertRegex(name, args[args.index("-run") + 1])
+
+    def test_web_coverage_includes_host_independent_engine_lifecycle_tests(self):
+        result = self.run_coverage_suite("web")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        engine_test, = [call for call in self.recorded_calls() if "./internal/engine" in call["args"]]
+        args = engine_test["args"]
+        pattern = args[args.index("-run") + 1]
+        for name in ("TestRequestExitStopsManagedCallerOnWeb",
+                     "TestResetWebRuntimeCoalescesConcurrentRequests",
+                     "TestResetWebRuntimeStopsManagedCaller",
+                     "TestResetWebRuntimeWaitsForManagedCallersOnMainThread",
+                     "TestDrainAndReleaseGameFinishesCleanupBeforeRelease"):
+            with self.subTest(name=name):
+                self.assertRegex(name, pattern)
+        self.assertNotRegex("TestMainStartsAndReleasesBinding", pattern)
 
     def test_web_compaction_uses_host_with_exported_target(self):
         for suite in ("web", "web-process", "web-interpreter"):
