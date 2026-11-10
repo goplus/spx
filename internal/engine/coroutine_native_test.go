@@ -4,6 +4,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -274,6 +276,66 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 	waitForEngineSignal(t, second, 2*time.Second, "second engine drain did not return")
 	if !called {
 		t.Fatal("waiting for the shutdown gate prevented worker cleanup on the main thread")
+	}
+}
+
+func TestDrainAndReleaseGameKeepsBindingWhenDrainIsInterrupted(t *testing.T) {
+	isolateGameBinding(t)
+	current := setupExecuteTest(t)
+	platform := &executeMainThreadPlatform{}
+	gdx.PlatformMgr = platform
+	binding, err := bindGame(new(bindingTestGame), "old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beginGameClose(binding)
+	workerStarted, releaseWorker := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(releaseWorker) })
+	t.Cleanup(func() { release(); current.RunAfterStop(func() { releaseGame(binding) }) })
+	worker := current.Create("pending worker", func(coroutine.Thread) {
+		current.WaitToDo(func() { close(workerStarted); <-releaseWorker })
+	})
+	waitForEngineSignal(t, workerStarted, time.Second, "native worker did not start")
+	cleanupStarted := make(chan struct{})
+	cleanupOwner := current.Create("cleanup exits engine caller", func(thread coroutine.Thread) {
+		defer current.CleanupMainThread(runtime.Goexit)
+		close(cleanupStarted)
+		<-thread.Context().Done()
+	})
+	waitForEngineSignal(t, cleanupStarted, time.Second, "cleanup owner did not start")
+	exited := make(chan struct{})
+	var cleaned, returned atomic.Bool
+	go func() {
+		defer close(exited)
+		platform.mainGID.Store(gid.Get())
+		drainAndReleaseGame(current, binding, func() { cleaned.Store(true) })
+		returned.Store(true)
+	}()
+	waitForEngineSignal(t, exited, time.Second, "drain did not pump Goexit cleanup")
+	current.Join(cleanupOwner)
+	current.Join(worker)
+	if cleaned.Load() || returned.Load() {
+		t.Fatal("interrupted drain ran game cleanup or returned normally")
+	}
+	if activeGame.Load() != binding {
+		t.Fatal("interrupted drain released an active native worker's game")
+	}
+	if _, err := beginGame(new(bindingTestGame), "too early"); !errors.Is(err, ErrGameAlreadyRunning) {
+		t.Fatalf("interrupted drain allowed rebinding: %v", err)
+	}
+	probe := current.Create("before recovery", func(coroutine.Thread) { t.Error("interrupted drain reopened admission") })
+	if !probe.Stopped() {
+		t.Fatal("interrupted drain admitted a new script")
+	}
+	release()
+	drainAndReleaseGame(current, binding, nil)
+	if activeGame.Load() != nil {
+		t.Fatal("completed recovery retained game binding")
+	}
+	fresh := current.Create("after recovery", func(coroutine.Thread) {})
+	current.Join(fresh)
+	if fresh.Stopped() {
+		t.Fatal("successful drain recovery did not reopen admission")
 	}
 }
 

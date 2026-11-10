@@ -325,6 +325,43 @@ func TestBuildFilesystemAssetPath(t *testing.T) {
 	}
 }
 
+func TestFilesystemPathRejectsUnresolvedRoots(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct {
+		name     string
+		resolver assetResolver
+	}{
+		{"absolute assets without project root", newAssetResolver("", root)},
+		{"missing canonical project", newLegacyFilesystemAssetResolver(filepath.Join(root, "missing")+string(os.PathSeparator), "assets", true)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.resolver.filesystemPath("image.png"); got != "" {
+				t.Fatalf("filesystemPath() = %q, want unresolved root rejected", got)
+			}
+		})
+	}
+}
+
+func TestIsWithinRoot(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct {
+		name, path string
+		want       bool
+	}{
+		{"root itself", root, true},
+		{"child", filepath.Join(root, "assets"), true},
+		{"parent", filepath.Dir(root), false},
+		{"sibling with matching prefix", root + "-other", false},
+		{"relative path against absolute root", "assets", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isWithinRoot(tc.path, root); got != tc.want {
+				t.Fatalf("isWithinRoot(%q, %q) = %v, want %v", tc.path, root, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestToAssetPathRejectsNULBeforeNormalization(t *testing.T) {
 	setupAssetPathTest(t)
 	assetPaths = assetResolver{}
