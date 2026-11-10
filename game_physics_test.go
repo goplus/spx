@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"

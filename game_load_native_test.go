@@ -34,12 +34,12 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -360,7 +360,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 
 func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 	// Restore real frame timing after the bubble advances it with its fake clock.
-	t.Cleanup(func() { itime.Start() })
+	t.Cleanup(func() { clock.Start() })
 	synctest.Test(t, func(t *testing.T) {
 		var warnings bytes.Buffer
 		spxlog.SetStdoutOutput(&warnings)
@@ -399,7 +399,7 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 				returned, recorder.messages, recorder.exits, thread.Stopped())
 		}
 
-		itime.Update(0, 0)
+		clock.Update(0, 0)
 		currentScheduler.Update()
 		synctest.Wait()
 		if want := []string{coreruntime.LoopExecutionTimedOutMsg}; !slices.Equal(recorder.messages, want) {

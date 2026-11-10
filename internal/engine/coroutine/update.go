@@ -17,10 +17,10 @@
 package coroutine
 
 import (
-	stime "time"
+	"time"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 type waitKind int
@@ -44,8 +44,8 @@ type waitJob struct {
 type updateState struct {
 	frame            int64
 	levelTime        float64
-	watchdogDeadline stime.Time
-	workDeadline     stime.Time
+	watchdogDeadline time.Time
+	workDeadline     time.Time
 }
 
 // waitBatch retains a wait scan's clock, boundary, and unpublished results.
@@ -69,7 +69,7 @@ const (
 )
 
 const (
-	updateWatchdogTimeout = stime.Second
+	updateWatchdogTimeout = time.Second
 	// Bound lock hold time and amortize watchdog checks across small chunks.
 	waitScanChunkSize = 64
 )
@@ -77,7 +77,7 @@ const (
 // Update processes queued wait jobs and resumes eligible coroutines.
 // The engine must serialize Update calls.
 func (p *Scheduler) Update() {
-	start := stime.Now()
+	start := time.Now()
 	gcStatsBefore := p.captureGCStats()
 
 	stats, state := p.beginUpdate()
@@ -87,10 +87,10 @@ func (p *Scheduler) Update() {
 }
 
 func (p *Scheduler) beginUpdate() (UpdateStats, updateState) {
-	start := stime.Now()
+	start := time.Now()
 	state := updateState{
-		frame:            itime.Frame(),
-		levelTime:        itime.TimeSinceLevelLoad(),
+		frame:            clock.Frame(),
+		levelTime:        clock.TimeSinceLevelLoad(),
 		watchdogDeadline: p.updateWatchdogNow().Add(updateWatchdogTimeout),
 		workDeadline:     start.Add(loopWorkBudget),
 	}
@@ -98,7 +98,7 @@ func (p *Scheduler) beginUpdate() (UpdateStats, updateState) {
 }
 
 func (p *Scheduler) runUpdateLoop(stats *UpdateStats, state *updateState) {
-	start := stime.Now()
+	start := time.Now()
 	iterations := 0
 
 updateLoop:
@@ -112,7 +112,7 @@ updateLoop:
 			}
 			break updateLoop
 		case updateMainThreadCall:
-			start := stime.Now()
+			start := time.Now()
 			stats.JobCount++
 			if !pending.caller.canceled() {
 				pending.run(p)
@@ -136,7 +136,7 @@ updateLoop:
 }
 
 func (p *Scheduler) nextUpdateAction(state *updateState, stats *UpdateStats) (updateAction, *mainThreadCall) {
-	start := stime.Now()
+	start := time.Now()
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
 	// Service engine calls before waiting for scripts or publishing a batch.
@@ -171,7 +171,7 @@ func (p *Scheduler) nextUpdateAction(state *updateState, stats *UpdateStats) (up
 // Scan a bounded part of the batch without publishing any scripts. Each chunk
 // releases schedulerMu and returns to the watchdog. Caller has no pending work.
 func (p *Scheduler) scanWaitBatchLocked(state *updateState, stats *UpdateStats) {
-	start := stime.Now()
+	start := time.Now()
 	batch := &p.waitBatch
 	if !batch.active {
 		batch.active = true
@@ -225,7 +225,7 @@ func (p *Scheduler) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 }
 
 func (p *Scheduler) promoteDeferredJobs(stats *UpdateStats) {
-	start := stime.Now()
+	start := time.Now()
 	p.deferredJobs.appendFrom(p.roundJobs)
 	// The ready queue orders scripts after the whole wait batch is scanned.
 	p.schedulerMu.Lock()

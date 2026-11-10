@@ -13,12 +13,15 @@ Go 到引擎的边界随平台变化：原生平台通过 GDExtension/native 绑
 | 层 | 职责 | 边界 |
 | --- | --- | --- |
 | 根 `spx` 包 | 游戏/精灵公开接口、资源装配、造型帧、动画载荷、声音播放生命周期、脚本与帧调度 | 持有游戏对象和引擎代理 |
+| `internal/core/clock` | 逻辑帧时间、固定步长与计时器 | 后端无关的游戏时钟，区别于真实时间 |
+| `internal/core/collision` | 碰撞类型、精度默认值与 AABB 规则 | 领域规则，不依赖引擎 |
+| `internal/core/scratch` | Scratch 值、列表、运算与画笔语义 | 保持兼容语义隔离，不依赖引擎 |
 | `internal/core/project` | 配置、共享资源索引解析与合并、打包配置覆盖、字体和显示方案 | 消费资源能力，不选择引擎 |
 | `internal/core/tilemap` | 瓦片地图解析、数据模型与地图边界计算 | 保持独立包，不依赖引擎 |
 | `internal/core/runtime`、`internal/core/input` | 输入归一化、回放数据和脚本循环规则 | 处理值，通过参数接收回调和时钟 |
 | `internal/base` | 默认值处理与通用切片操作 | 仅依赖标准库 |
 | `internal/base/fileutil` | 文件操作、可移植路径检查、稳定读取和 ZIP 预检 | 不同操作使用独立 API，保留各自的行为保证 |
-| 其他 `internal/base/*` 包 | 数值转换、碰撞规则、JSON 校验、HTTP 策略和源码工具 | 各工具保持独立包，不依赖引擎 |
+| 其他 `internal/base/*` 包 | 数值转换、JSON 校验、HTTP 策略和源码工具 | 各工具保持独立包，不依赖引擎 |
 | `internal/engine` | 引擎生命周期、坐标转换、帧同步 | 使用有类型的 manager 包装 |
 | `internal/engine/coroutine` | 协作式调度、等待、脚本生命周期与关闭屏障 | 保持独立包，通过 `internal/engine/platform` 协调主线程调用 |
 | `internal/engine/ui` | UI 控件、文本布局与 UI 节点绑定 | 保持独立包，单向依赖 `internal/engine` |

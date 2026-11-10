@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestInterruptedMixedWaitsPreserveClockAndExecutionOrder(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	const count = waitScanChunkSize * 2
 	resumed := make(chan int, count)
@@ -28,7 +28,7 @@ func TestInterruptedMixedWaitsPreserveClockAndExecutionOrder(t *testing.T) {
 	// Deferred and next-round waits may be scanned in a different order from
 	// registration. Execution order must still be determined by the ready queue.
 	scheduler.Update()
-	itime.Update(1, 30)
+	clock.Update(1, 30)
 	expireUpdateAtFirstCheckpoint(scheduler)
 	scheduler.Update()
 	if got := len(resumed); got != 0 {
@@ -39,7 +39,7 @@ func TestInterruptedMixedWaitsPreserveClockAndExecutionOrder(t *testing.T) {
 	}
 
 	// Crossing the time deadline cannot change the interrupted batch's clock.
-	itime.Update(20, 30)
+	clock.Update(20, 30)
 	scheduler.updateWatchdogNow = time.Now
 	scheduler.Update()
 	checkOrder := func(first int) {
@@ -56,7 +56,7 @@ func TestInterruptedMixedWaitsPreserveClockAndExecutionOrder(t *testing.T) {
 		}
 	}
 	checkOrder(1)
-	itime.Update(1, 30)
+	clock.Update(1, 30)
 	scheduler.Update()
 	checkOrder(0)
 }

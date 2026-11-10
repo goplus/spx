@@ -21,11 +21,11 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -506,7 +506,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 				ghost:             make(map[pkgengine.Object]float64),
 			}
 			pkgengine.SpriteMgr = mgr
-			itime.Start()
+			clock.Start()
 
 			ground := newCloneLimitSprite(game, "Ground")
 			player := newCloneLimitSprite(game, "Player")
@@ -537,7 +537,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 			var samples, missedFrames []int64
 			player.OnStart(func() {
 				Forever(func() {
-					frame := itime.Frame()
+					frame := clock.Frame()
 					touching := player.Touching__1("Ground")
 					if frame > 0 {
 						samples = append(samples, frame)
@@ -554,7 +554,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 			for range frames {
 				currentScheduler.Update()
 				flushCloneProxyUpdates(game)
-				itime.Update(1.0/30, 30)
+				clock.Update(1.0/30, 30)
 			}
 			if len(samples) != frames-1 {
 				t.Fatalf("collision samples = %v, want one per frame after startup", samples)

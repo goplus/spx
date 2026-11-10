@@ -25,11 +25,11 @@ import (
 	_ "github.com/goplus/spx/v4/fs/asset"
 	_ "github.com/goplus/spx/v4/fs/zip"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	inputstate "github.com/goplus/spx/v4/internal/core/input"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 const (
@@ -197,7 +197,7 @@ func (p *Game) reset() {
 	costumeSizeCache.Clear()
 	p.inputMgr.init(p)
 
-	itime.ClearTimers()
+	clock.ClearTimers()
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {

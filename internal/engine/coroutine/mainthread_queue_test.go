@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func (p *Scheduler) queueMainThreadCallForTest(caller Thread, call func()) *mainThreadCall {
@@ -21,11 +21,11 @@ func TestMainThreadQueuePreservesPriorityAndStats(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			scheduler := New(nil)
-			itime.Start()
+			clock.Start()
 			t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 			waiter := scheduler.Create("next-frame", func(Thread) { scheduler.WaitNextFrame() })
 			scheduler.JoinFirstSlice(waiter)
-			frame, round := itime.Frame(), scheduler.ScriptRound()
+			frame, round := clock.Frame(), scheduler.ScriptRound()
 			var order []int
 			scheduler.queueMainThreadCallForTest(nil, func() { order = append(order, 1) })
 			scheduler.queueMainThreadCallForTest(nil, func() { order = append(order, 2) })
@@ -44,7 +44,7 @@ func TestMainThreadQueuePreservesPriorityAndStats(t *testing.T) {
 			if !slices.Equal(order, []int{2, 1}) {
 				t.Fatalf("main-thread order = %v, want [2 1]", order)
 			}
-			if itime.Frame() != frame || scheduler.ScriptRound() != round {
+			if clock.Frame() != frame || scheduler.ScriptRound() != round {
 				t.Fatal("servicing engine calls advanced a frame or script round")
 			}
 			wantJobs, wantMain := 4, 2 // One script wait plus three engine calls, one canceled.

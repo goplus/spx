@@ -19,9 +19,9 @@ package spx
 import (
 	"sync"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // ============================================================================
@@ -137,7 +137,7 @@ func (b *bubbleComponent) stopText() {
 // expireText defers removal so the next frame can renew the bubble.
 func (b *bubbleComponent) expireText(token bubbleToken) {
 	b.mu.Lock()
-	if b.textObj == nil || !b.textObj.scheduleRemoval(token, itime.Frame()) {
+	if b.textObj == nil || !b.textObj.scheduleRemoval(token, clock.Frame()) {
 		b.mu.Unlock()
 		return
 	}
@@ -163,7 +163,7 @@ func (b *bubbleComponent) flushPendingTextRemoval(textObj *textBubble, frame int
 // expireQuote defers removal so the next frame can renew the bubble.
 func (b *bubbleComponent) expireQuote(token bubbleToken) {
 	b.mu.Lock()
-	if b.quoteObj == nil || !b.quoteObj.scheduleRemoval(token, itime.Frame()) {
+	if b.quoteObj == nil || !b.quoteObj.scheduleRemoval(token, clock.Frame()) {
 		b.mu.Unlock()
 		return
 	}

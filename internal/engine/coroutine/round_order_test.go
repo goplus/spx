@@ -22,13 +22,13 @@ import (
 	"sync"
 	"testing"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func TestFrameWaitBatchResetsScriptCursor(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	var order []string
@@ -47,14 +47,14 @@ func TestFrameWaitBatchResetsScriptCursor(t *testing.T) {
 	scheduler.Update()
 
 	// Only A resumes in this frame, while B keeps waiting for its deadline.
-	itime.Update(0.25, 30)
+	clock.Update(0.25, 30)
 	scheduler.Update()
 	if want := []string{"A1"}; !slices.Equal(order, want) {
 		t.Fatalf("first frame order = %v, want %v", order, want)
 	}
 
 	// Both waits are now eligible. The new frame starts at A, before B.
-	itime.Update(0.25, 30)
+	clock.Update(0.25, 30)
 	scheduler.Update()
 	if want := []string{"A1", "A2", "B"}; !slices.Equal(order, want) {
 		t.Fatalf("second frame order = %v, want %v", order, want)
@@ -66,7 +66,7 @@ func TestWaitMainThreadKeepsAdmittedRoundOrder(t *testing.T) {
 	gdx.PlatformMgr = nil
 	t.Cleanup(func() { gdx.PlatformMgr = previousPlatform })
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	var mu sync.Mutex
@@ -105,7 +105,7 @@ func TestWaitMainThreadKeepsAdmittedRoundOrder(t *testing.T) {
 	scheduler.JoinFirstSlice(second)
 	scheduler.Update()
 
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 	mu.Lock()
 	got := slices.Clone(order)

@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	spxapi "github.com/goplus/spx/v4/pkg/spx"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -602,8 +602,8 @@ func TestGameBackdropOverloads(t *testing.T) {
 
 func TestGameGraphicEffectsAndClock(t *testing.T) {
 	setupRuntimeScheduler(t)
-	itime.Start()
-	t.Cleanup(func() { itime.Start() })
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
 	var game Game
 	game.SetGraphicEffect(ColorEffect, 10)
 	game.ChangeGraphicEffect(ColorEffect, 5)
@@ -630,8 +630,8 @@ func TestGameGraphicEffectsAndClock(t *testing.T) {
 
 func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
 	currentScheduler := setupRuntimeScheduler(t)
-	itime.Start()
-	t.Cleanup(func() { itime.Start() })
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
 	var game Game
 	count := 0
 	finished := false
@@ -645,7 +645,7 @@ func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
 		t.Fatal("WaitNextFrame completed before a frame update")
 	}
 	for range 5 {
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		currentScheduler.Update()
 	}
 	if !finished || count != 3 {

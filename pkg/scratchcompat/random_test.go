@@ -24,7 +24,7 @@ import (
 	"github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
-// Scalar classification and range boundaries are covered in internal/scratch.
+// Scalar classification and range boundaries are covered in internal/core/scratch.
 // Keep public input types, Value unwrapping, and runtime random integration here.
 func TestRandPreservesOperandTypes(t *testing.T) {
 	t.Cleanup(spx.ResetRandomSeed)

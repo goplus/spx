@@ -31,7 +31,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
 	_ "github.com/goplus/spx/v4/fs/asset"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/core/collision"
 )
 
 type fakeGdDir struct {

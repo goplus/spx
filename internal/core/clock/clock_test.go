@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package time
+package clock
 
 import (
 	"math"
 	"slices"
 	"sync"
 	"testing"
-	stdtime "time"
+	"time"
 )
 
 func TestStartInitializesTimeState(t *testing.T) {
@@ -266,7 +266,7 @@ func resetStateForTest() {
 	deltaTime = 0
 	fixedDeltaTimeBits.Store(0)
 	curFrame.Store(0)
-	startTimestamp = stdtime.Time{}
+	startTimestamp = time.Time{}
 	fps = 0
 	timerBaseTime = 0
 	registeredTimers = nil

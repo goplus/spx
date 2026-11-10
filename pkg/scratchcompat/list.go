@@ -16,7 +16,7 @@
 
 package scratchcompat
 
-import "github.com/goplus/spx/v4/internal/scratch"
+import "github.com/goplus/spx/v4/internal/core/scratch"
 
 // List stores values using 0-based indexes.
 // Its elements are reported as [github.com/goplus/spx/v4.Value].

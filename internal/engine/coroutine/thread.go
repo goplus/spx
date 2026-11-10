@@ -22,9 +22,9 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
-	stime "time"
+	"time"
 
-	"github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 type suspendState uint8
@@ -59,8 +59,8 @@ type threadImpl struct {
 	done       chan struct{}
 
 	schedFrame     int64
-	schedTimestamp stime.Time
-	mainStartedAt  stime.Time
+	schedTimestamp time.Time
+	mainStartedAt  time.Time
 
 	warp            atomic.Bool
 	warpStart       atomic.Int64
@@ -142,18 +142,18 @@ func (th Thread) SetWarp(enabled bool) bool {
 }
 
 // ShouldYield checks a loop edge, resetting the warp budget when exhausted.
-func (th Thread) ShouldYield(budget stime.Duration) bool {
+func (th Thread) ShouldYield(budget time.Duration) bool {
 	if !th.Warp() {
 		return true
 	}
 
-	now := stime.Now().UnixNano()
+	now := time.Now().UnixNano()
 	startedAt := th.warpStart.Load()
 	if startedAt == 0 {
 		th.warpStart.Store(now)
 		return false
 	}
-	if stime.Duration(now-startedAt) <= budget {
+	if time.Duration(now-startedAt) <= budget {
 		return false
 	}
 
@@ -163,16 +163,16 @@ func (th Thread) ShouldYield(budget stime.Duration) bool {
 
 // IsSchedTimeout reports whether ms has elapsed in the current scheduler frame.
 func (th Thread) IsSchedTimeout(ms float64) bool {
-	frame := time.Frame()
+	frame := clock.Frame()
 	if th.schedFrame < frame {
 		th.schedFrame = frame
-		th.schedTimestamp = stime.Now()
+		th.schedTimestamp = time.Now()
 	}
-	return stime.Since(th.schedTimestamp) > stime.Duration(ms)*stime.Millisecond
+	return time.Since(th.schedTimestamp) > time.Duration(ms)*time.Millisecond
 }
 
 // BeginMain tracks this Main's start time and returns a function to restore the previous one.
-func (th Thread) BeginMain(startedAt stime.Time) func() {
+func (th Thread) BeginMain(startedAt time.Time) func() {
 	previous := th.mainStartedAt
 	th.mainStartedAt = startedAt
 	return func() {
@@ -181,13 +181,13 @@ func (th Thread) BeginMain(startedAt stime.Time) func() {
 }
 
 // MainStartedAt returns the current Main's start time, or zero if its timeout is disabled.
-func (th Thread) MainStartedAt() stime.Time {
+func (th Thread) MainStartedAt() time.Time {
 	return th.mainStartedAt
 }
 
 // DisableMainTimeout stops timeout checks for the current Main.
 func (th Thread) DisableMainTimeout() {
-	th.mainStartedAt = stime.Time{}
+	th.mainStartedAt = time.Time{}
 }
 
 // resume wakes th or records a signal for its next yield.

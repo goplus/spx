@@ -20,8 +20,8 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/scratch"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

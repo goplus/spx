@@ -18,9 +18,9 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // Sampling runs between script slices; pending is consumed on the engine thread.
@@ -167,7 +167,7 @@ func (p *Game) dispatchFrameEvents() {
 	withEventRegistrationBarrier(frameEventDispatcher{}, func() {
 		// Freeze due timers before dispatch: handlers may register or reset timers.
 		for {
-			timestamp, ok := itime.NextTimer()
+			timestamp, ok := clock.NextTimer()
 			if !ok {
 				break
 			}

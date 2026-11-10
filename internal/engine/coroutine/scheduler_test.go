@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
@@ -480,7 +480,7 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 
 func TestStartupCanWaitForNextFrame(t *testing.T) {
 	var completed atomic.Bool
-	itime.Start()
+	clock.Start()
 	scheduler := New(nil)
 	scheduler.Create("startup", func(me Thread) {
 		scheduler.WaitNextFrameFor(me)
@@ -499,13 +499,13 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 		if got, want := completed.Load(), frame == 1; got != want {
 			t.Fatalf("frame %d: completed = %v, want %v", frame, got, want)
 		}
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 	}
 }
 
 func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() {
 		scheduler.RunAfterStop(nil)
 	})
@@ -556,7 +556,7 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	if created.Stopped() {
 		t.Fatal("watchdog rejected a new script")
 	}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 	waitForThreadSignal(t, resumed, "script did not resume on the next Update")
 	waitForThreadSignal(t, deferredResumed, "deferred wait was lost after a slow frame")
@@ -642,7 +642,7 @@ func TestWakeThreadDoesNotWakeCompletedThread(t *testing.T) {
 
 func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() {
 		scheduler.RunAfterStop(nil)
 	})
@@ -695,7 +695,7 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 	if resumed.Load() != 0 {
 		t.Fatal("deferred waits resumed in their issuing frame")
 	}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 	if got := resumed.Load(); got != producerCount {
 		t.Fatalf("resumed %d deferred waits, want %d", got, producerCount)
@@ -704,7 +704,7 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 
 func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 
 	resumed := false
 	thread := scheduler.Create("waiting", func(Thread) {

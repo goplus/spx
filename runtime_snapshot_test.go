@@ -19,9 +19,9 @@ package spx
 import (
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
@@ -83,7 +83,7 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			currentScheduler, game := setupRuntimeEventGame(t)
 			setupCaptureTest(t)
-			base := itime.Frame()
+			base := clock.Frame()
 
 			bodyStarted, bodyCompleted := false, false
 			var captured []engine.CaptureRequest
@@ -112,7 +112,7 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 			if stopOwner {
 				game.Stop(OtherScriptsInGame)
 			}
-			itime.Update(0, 0)
+			clock.Update(0, 0)
 			currentScheduler.Update()
 			currentScheduler.Join(thread)
 			if stopOwner {

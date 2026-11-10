@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package time
+package clock
 
 import (
 	"math"
 	"sync/atomic"
-	stdtime "time"
+	"time"
 )
 
 const DefaultFPS = 30
@@ -30,12 +30,12 @@ var (
 	deltaTime               float64
 	fixedDeltaTimeBits      atomic.Uint64
 	curFrame                atomic.Int64
-	startTimestamp          stdtime.Time
+	startTimestamp          time.Time
 	fps                     float64
 )
 
 func RealTimeSinceStart() float64 {
-	return stdtime.Since(startTimestamp).Seconds()
+	return time.Since(startTimestamp).Seconds()
 }
 
 func FPS() float64 {
@@ -85,7 +85,7 @@ func Start() {
 	curFrame.Store(0)
 	fps = DefaultFPS
 
-	startTimestamp = stdtime.Now()
+	startTimestamp = time.Now()
 	ResetTimer()
 }
 

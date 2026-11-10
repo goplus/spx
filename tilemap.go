@@ -21,8 +21,8 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
-	"github.com/goplus/spx/v4/internal/base/collision"
 	"github.com/goplus/spx/v4/internal/base/numeric"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	tm "github.com/goplus/spx/v4/internal/core/tilemap"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"

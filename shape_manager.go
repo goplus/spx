@@ -21,10 +21,10 @@ import (
 	"slices"
 
 	"github.com/goplus/spx/v4/internal/base"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // Scratch renders the shared pen canvas above the backdrop and below every
@@ -153,7 +153,7 @@ func (s *shapeManager) reset() {
 func (s *shapeManager) flushBubbleVisuals(items []Shape) {
 	s.collectBubbles(items)
 
-	frame := itime.Frame()
+	frame := clock.Frame()
 	// Remove expired bubbles before resolving this frame's layouts.
 	for _, bubble := range s.bubbles {
 		bubble.flushPendingRemoval(frame)

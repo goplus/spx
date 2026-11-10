@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -164,11 +164,11 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 func TestOnTimerMatchesMilliseconds(t *testing.T) {
 	previous := scheduler
 	scheduler = nil
-	itime.Start()
-	itime.ClearTimers()
+	clock.Start()
+	clock.ClearTimers()
 	t.Cleanup(func() {
 		scheduler = previous
-		itime.ClearTimers()
+		clock.ClearTimers()
 	})
 
 	var game Game
@@ -181,9 +181,9 @@ func TestOnTimerMatchesMilliseconds(t *testing.T) {
 	game.OnTimer(0.5, nil)
 
 	for round := 1; round <= 2; round++ {
-		itime.Update(2, 60)
+		clock.Update(2, 60)
 		for {
-			at, ok := itime.NextTimer()
+			at, ok := clock.NextTimer()
 			if !ok {
 				break
 			}
@@ -194,7 +194,7 @@ func TestOnTimerMatchesMilliseconds(t *testing.T) {
 				t.Errorf("timer %v after round %d: %d calls, want %d", times[i], round, got, round)
 			}
 		}
-		itime.ResetTimer()
+		clock.ResetTimer()
 	}
 }
 
@@ -487,7 +487,7 @@ func TestDistinctNestedAsyncBroadcastRunsReceiverBatchInCurrentFrame(t *testing.
 		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls after next frame = %v, want no deferred handlers", calls)
@@ -508,7 +508,7 @@ func TestSelfBroadcastWaitsForNextFrame(t *testing.T) {
 	game.Broadcast__0("tick")
 	for frame := 1; frame <= 3; frame++ {
 		if frame > 1 {
-			itime.Update(0, 0)
+			clock.Update(0, 0)
 		}
 		currentScheduler.Update()
 		if calls != frame {
@@ -533,7 +533,7 @@ func TestCatchAllMessageReceiverCannotReenterWithAnotherMessage(t *testing.T) {
 	game.Broadcast__0(messages[0])
 	for frame := 1; frame <= len(messages); frame++ {
 		if frame > 1 {
-			itime.Update(0, 0)
+			clock.Update(0, 0)
 		}
 		currentScheduler.Update()
 		if want := messages[:frame]; !reflect.DeepEqual(calls, want) {
@@ -564,7 +564,7 @@ func TestRepeatedReceiverDoesNotDeferNewSibling(t *testing.T) {
 		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	want = append(want, "any-inner")
 	if !reflect.DeepEqual(calls, want) {
@@ -602,7 +602,7 @@ func TestNestedAsyncBroadcastCycleYieldsAtRoundBoundary(t *testing.T) {
 			game.Broadcast__0("a")
 			for frame := 0; frame < 4; frame++ {
 				if frame > 0 {
-					itime.Update(0, 0)
+					clock.Update(0, 0)
 				}
 				currentScheduler.Update()
 				want := []string{"a", "b", "a", "b", "a", "b", "a", "b"}[:2*(frame+1)]
@@ -733,7 +733,7 @@ func TestAsyncBroadcastAfterFrameWaitRunsWithoutAnotherDelay(t *testing.T) {
 		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if want := []string{"outer-before-wait", "outer-after-wait", "inner"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls after handler resumed = %v, want %v", calls, want)
@@ -761,13 +761,13 @@ func TestSelfBroadcastAfterFrameWaitNeedsAnotherRound(t *testing.T) {
 		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if want := []string{"before-wait", "after-wait"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls after handler resumed = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	want := []string{"before-wait", "after-wait", "restarted"}
 	if !reflect.DeepEqual(calls, want) {
@@ -800,13 +800,13 @@ func TestSelfBroadcastAfterFrameWaitWithRedrawDoesNotRunInSameFrame(t *testing.T
 		t.Fatalf("calls in initial frame = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if want := []string{"before-wait", "after-wait"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls after resumed frame = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	want := []string{"before-wait", "after-wait", "restarted"}
 	if !reflect.DeepEqual(calls, want) {
@@ -834,7 +834,7 @@ func TestNestedBroadcastAndWaitCompletesInCurrentFrame(t *testing.T) {
 		t.Fatalf("synchronous nested broadcast calls = %v, want %v", calls, want)
 	}
 
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("synchronous broadcast left deferred handlers: calls = %v, want %v", calls, want)
@@ -856,7 +856,7 @@ func TestRecursiveBroadcastAndWaitYieldsAtRoundBoundary(t *testing.T) {
 	game.Broadcast__0("self")
 	for frame := 1; frame <= 3; frame++ {
 		if frame > 1 {
-			itime.Update(0, 0)
+			clock.Update(0, 0)
 		}
 		currentScheduler.Update()
 		if calls != frame {
@@ -1534,8 +1534,8 @@ func TestEventHandlerRetriggerPolicies(t *testing.T) {
 				game.OnMsg__0(func(MsgName, any) { run() })
 				fire = func() { game.Broadcast__0("msg") }
 			case "timer":
-				itime.ClearTimers()
-				t.Cleanup(itime.ClearTimers)
+				clock.ClearTimers()
+				t.Cleanup(clock.ClearTimers)
 				game.OnTimer(0, run)
 				fire = func() { game.doWhenTimer(0) }
 			case "swipe":

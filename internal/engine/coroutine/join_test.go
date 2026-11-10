@@ -239,6 +239,7 @@ func TestCompletionResumesWaitersInScriptOrder(t *testing.T) {
 			waitForThreadSignal(t, later.firstSliceDone, "later waiter did not block")
 			// Wait for the last yield to release its scheduler permit.
 			scheduler.runMu.Lock()
+			//lint:ignore SA2001 This lock/unlock is a barrier, not a protected operation.
 			scheduler.runMu.Unlock()
 			target.Cancel()
 			waitForThreadSignal(t, earlier.done, "earlier waiter did not finish")

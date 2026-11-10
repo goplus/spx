@@ -16,7 +16,7 @@
 
 package coroutine
 
-import "github.com/goplus/spx/v4/internal/time"
+import "github.com/goplus/spx/v4/internal/core/clock"
 
 // WaitForChan receives one value from ch. Inside a coroutine it yields while
 // waiting; otherwise it blocks the caller directly.
@@ -52,8 +52,8 @@ func (p *Scheduler) Wait(t float64) {
 	p.enqueueAndYield(&waitJob{
 		thread:   me,
 		kind:     waitTime,
-		deadline: time.TimeSinceLevelLoad() + max(t, 0),
-		frame:    time.Frame(),
+		deadline: clock.TimeSinceLevelLoad() + max(t, 0),
+		frame:    clock.Frame(),
 	})
 }
 

@@ -13,12 +13,15 @@ Unhandled coroutine panics reach the engine as `coroutine.PanicReport`, preservi
 | Layer | Responsibility | Boundary |
 | --- | --- | --- |
 | Root `spx` package | Public game/sprite API, resource assembly, costume frames, animation payloads, sound playback lifecycle, script and frame orchestration | Owns live game objects and engine proxies |
+| `internal/core/clock` | Logical frame time, fixed steps and timers | Backend-independent game clock; distinct from wall time |
+| `internal/core/collision` | Collider types, precision defaults and AABB rules | Domain rules without engine dependencies |
+| `internal/core/scratch` | Scratch values, lists, operators and pen semantics | Isolated compatibility rules without engine dependencies |
 | `internal/core/project` | Configuration, shared asset index parsing and merging, packed overlays, fonts and display plans | Consumes resource capabilities; does not select an engine |
 | `internal/core/tilemap` | Tilemap parsing, data models and map bounds | Separate package without engine dependencies |
 | `internal/core/runtime`, `internal/core/input` | Input normalization, replay values and script-loop rules | Operates on values and supplied callbacks/clocks |
 | `internal/base` | Default values and reusable slice operations | Depends only on the standard library |
 | `internal/base/fileutil` | File operations, portable path checks, stable reads and ZIP preflight checks | Separate APIs preserve the guarantees of each operation |
-| Other `internal/base/*` packages | Numeric conversions, collision rules, JSON validation, HTTP policy and source tooling | Independent utility packages without engine dependencies |
+| Other `internal/base/*` packages | Numeric conversions, JSON validation, HTTP policy and source tooling | Independent utility packages without engine dependencies |
 | `internal/engine` | Engine lifecycle, coordinate adaptation and frame synchronization | Uses typed manager wrappers |
 | `internal/engine/coroutine` | Cooperative scheduling, waits, script lifetime and shutdown barriers | Separate package; coordinates engine-thread calls through `internal/engine/platform` |
 | `internal/engine/ui` | UI controls, text layout and UI node binding | Separate package with a one-way dependency on `internal/engine` |

@@ -21,7 +21,7 @@ import (
 
 	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/base"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/core/collision"
 )
 
 const (

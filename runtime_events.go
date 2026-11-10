@@ -22,11 +22,11 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // Event Types
@@ -151,7 +151,7 @@ func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
 }
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
-	timestamp := itime.RegisterTimer(time)
+	timestamp := clock.RegisterTimer(time)
 	p.register(coreevent.BucketTimer,
 		func() {
 			if isDebugEventEnabled() {
@@ -518,7 +518,7 @@ func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *
 }
 
 func (p *messageDispatchContext) claimTurn(receiver *scriptEventHandler) bool {
-	frame, round := itime.Frame(), scheduler.ScriptRound()
+	frame, round := clock.Frame(), scheduler.ScriptRound()
 	if p.frame != frame || p.round != round {
 		p.frame, p.round = frame, round
 		clear(p.receivers)

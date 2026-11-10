@@ -27,8 +27,10 @@ import (
 const _ int8 = scratchcompat.All
 
 func TestListTypeIdentity(t *testing.T) {
+	//lint:ignore SA1019 Verify type identity and interoperability with the legacy API.
 	var native spx.List = scratchcompat.NewList("first", "second")
 	var compatible scratchcompat.List = native
+	//lint:ignore SA1019 Verify type identity and interoperability with the legacy API.
 	var nativePointer *spx.List = &compatible
 	var compatiblePointer *scratchcompat.List = nativePointer
 	if compatible.At(0).String() != "first" || compatible.At(1).String() != "second" {
@@ -48,6 +50,7 @@ func TestListTypeIdentity(t *testing.T) {
 }
 
 func TestListInitFromAcrossPackages(t *testing.T) {
+	//lint:ignore SA1019 Verify type identity and interoperability with the legacy API.
 	var source spx.List
 	source.Init(spx.NewValue("first"), "second")
 	var copied scratchcompat.List
@@ -60,6 +63,7 @@ func TestListInitFromAcrossPackages(t *testing.T) {
 	if source.String() != "source second" || copied.String() != "first copy" {
 		t.Fatalf("InitFrom shared storage: source=%q, copy=%q", source.String(), copied.String())
 	}
+	//lint:ignore SA1019 Verify type identity and interoperability with the legacy API.
 	var nativeCopy spx.List
 	nativeCopy.InitFrom(&copied)
 	copied.Set(0, "changed")
@@ -69,12 +73,13 @@ func TestListInitFromAcrossPackages(t *testing.T) {
 }
 
 func TestNewListOwnsStorageAndUnwrapsOnce(t *testing.T) {
-	for name, newList := range map[string]func(...any) spx.List{
+	for name, newList := range map[string]func(...any) scratchcompat.List{
+		//lint:ignore SA1019 Verify both constructors retain the same storage and unwrapping semantics.
 		"spx":           spx.NewList,
 		"scratchcompat": scratchcompat.NewList,
 	} {
 		t.Run(name, func(t *testing.T) {
-			var nested spx.List
+			var nested scratchcompat.List
 			nested.Init(spx.NewValue("nested"))
 			items := []any{spx.NewValue("wrapped"), "tail", nested.At(0)}
 			list := newList(items...)

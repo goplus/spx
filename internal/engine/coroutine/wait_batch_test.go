@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
@@ -39,7 +39,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 		for _, count := range []int{2, 256} {
 			t.Run(fmt.Sprintf("%s/%d", wait.name, count), func(t *testing.T) {
 				scheduler := New(nil)
-				itime.Start()
+				clock.Start()
 				t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 				var mu sync.Mutex
@@ -64,7 +64,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 				}
 				scheduler.RunBetweenScripts(func() {})
 				if wait.advance {
-					itime.Update(1.0/30, 30)
+					clock.Update(1.0/30, 30)
 				}
 
 				// Expire at the first watchdog checkpoint, including when the
@@ -97,7 +97,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 				}
 
 				scheduler.updateWatchdogNow = time.Now
-				itime.Update(1.0/30, 30)
+				clock.Update(1.0/30, 30)
 				scheduler.Update()
 				mu.Lock()
 				got = slices.Clone(order)
@@ -113,7 +113,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 
 func TestInterruptedWaitBatchKeepsClockSnapshot(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	var resumed atomic.Int32
 	const count = 256
@@ -125,7 +125,7 @@ func TestInterruptedWaitBatchKeepsClockSnapshot(t *testing.T) {
 		scheduler.JoinFirstSlice(thread)
 	}
 	scheduler.Update()
-	itime.Update(0.5, 30)
+	clock.Update(0.5, 30)
 	expireUpdateAtFirstCheckpoint(scheduler)
 	scheduler.Update()
 	if got := scheduler.UpdateStats().JobCount; got == 0 || got >= count {
@@ -134,13 +134,13 @@ func TestInterruptedWaitBatchKeepsClockSnapshot(t *testing.T) {
 
 	// All waits were unexpired at the original batch clock. Crossing their
 	// deadline while paused must not recheck only the already-scanned prefix.
-	itime.Update(0.5, 30)
+	clock.Update(0.5, 30)
 	scheduler.updateWatchdogNow = time.Now
 	scheduler.Update()
 	if got := resumed.Load(); got != 0 {
 		t.Fatalf("%d waits resumed using a different clock from the rest of their batch", got)
 	}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 	if got := resumed.Load(); got != count {
 		t.Fatalf("resumed %d waits after the next frame, want %d", got, count)
@@ -149,7 +149,7 @@ func TestInterruptedWaitBatchKeepsClockSnapshot(t *testing.T) {
 
 func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(scheduler.StopAll)
 	var cleaned, resumed atomic.Int32
 	threads := make([]Thread, 256)
@@ -162,7 +162,7 @@ func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 		scheduler.JoinFirstSlice(threads[i])
 	}
 	scheduler.Update()
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 
 	expireUpdateAtFirstCheckpoint(scheduler)
 	scheduler.Update()
@@ -211,7 +211,7 @@ func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 
 	restarted := scheduler.Create(nil, func(Thread) { scheduler.WaitNextFrame() })
 	waitForThreadSignal(t, restarted.firstSliceDone, "scheduler did not accept new work after shutdown")
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 	waitForThreadSignal(t, restarted.done, "new script did not resume after shutdown")
 }

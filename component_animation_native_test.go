@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -188,9 +188,9 @@ func TestAnimationCancellationDuringInitializationReleasesCapturedAudio(t *testi
 // scheduling phases rather than assigning curAnimState directly.
 func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	currentScheduler, anim, _, audio := setupAnimationLifecycle(t)
-	itime.ClearTimers()
-	itime.Start()
-	t.Cleanup(itime.ClearTimers)
+	clock.ClearTimers()
+	clock.Start()
+	t.Cleanup(clock.ClearTimers)
 	game := anim.sprite.g
 	game.bindScriptEvents()
 	game.shapeMgr.items = []Shape{anim.sprite}
@@ -220,7 +220,7 @@ func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	// Actual engine phase order: sample, advance clock, dispatch condition,
 	// then update coroutine jobs including the waiting logic loop.
 	currentScheduler.RunBetweenScripts(game.scriptEvents.sampleConditions)
-	itime.Update(1.0/60.0, 60)
+	clock.Update(1.0/60.0, 60)
 	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 	currentScheduler.Update()
 	currentScheduler.Join(logic)

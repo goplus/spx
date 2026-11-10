@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -138,7 +138,7 @@ func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 	setMainThreadForTest(t, false)
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() {
 		scheduler.RunAfterStop(nil)
 	})
@@ -176,7 +176,7 @@ func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 
 	want := []string{"A-before", "main", "A-after", "B"}
 	for frame := range 3 {
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		scheduler.Update()
 		mu.Lock()
 		got := append([]string(nil), trace...)
@@ -763,7 +763,7 @@ func TestShutdownPumpsCleanupWithoutAdvancingFrames(t *testing.T) {
 			waitForQueuedJob(t, scheduler)
 
 			setMainThreadForTest(t, true)
-			frame, round := itime.Frame(), scheduler.ScriptRound()
+			frame, round := clock.Frame(), scheduler.ScriptRound()
 			scheduler.RunAfterStop(func() {
 				if !cleaned {
 					t.Error("shutdown callback ran before engine cleanup")
@@ -772,7 +772,7 @@ func TestShutdownPumpsCleanupWithoutAdvancingFrames(t *testing.T) {
 			if first != nil {
 				waitForThreadSignal(t, first, "first shutdown did not finish")
 			}
-			if itime.Frame() != frame || scheduler.ScriptRound() != round {
+			if clock.Frame() != frame || scheduler.ScriptRound() != round {
 				t.Fatal("shutdown advanced a frame or script round while serving engine cleanup")
 			}
 		})

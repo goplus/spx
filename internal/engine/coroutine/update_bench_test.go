@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"testing"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func BenchmarkUpdateSleepingThreads(b *testing.B) {
 	for _, count := range []int{1, 100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			scheduler := New(nil)
-			itime.Start()
+			clock.Start()
 			// Measure scheduler bookkeeping without goroutine startup or script work.
 			for range count {
 				thread := scheduler.newThread("sleeper")

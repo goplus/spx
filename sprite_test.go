@@ -156,6 +156,9 @@ func TestSpriteLayoutKeepsFirstImplementation(t *testing.T) {
 		t.Fatal(err)
 	}
 	game.loadPreparedSprite(source, "extra", gamer, &prepared)
+	if source.owner != &game.Game {
+		t.Fatal("loading did not initialize the owner field")
+	}
 	if spriteOf(source) != &source.SpriteImpl {
 		t.Fatal("lookup did not select the first SpriteImpl field")
 	}

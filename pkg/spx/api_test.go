@@ -9,9 +9,9 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
 	"github.com/visualfc/gid"
 )
 
@@ -310,8 +310,8 @@ func TestWaitOutsideCoroutine(t *testing.T) {
 }
 
 func TestWaitUsesLogicalFrames(t *testing.T) {
-	itime.Start()
-	t.Cleanup(func() { itime.Start() })
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
 	scheduler := newAPIScheduler(t, "game")
 	results := make(chan float64, 2)
 	thread := scheduler.Create("waiter", func(coroutine.Thread) {
@@ -320,9 +320,9 @@ func TestWaitUsesLogicalFrames(t *testing.T) {
 	})
 	joinAPIThread(t, scheduler, thread, true)
 	for range 2 {
-		itime.Update(0.125, 8)
+		clock.Update(0.125, 8)
 		scheduler.Update()
-		if itime.Frame() == 1 {
+		if clock.Frame() == 1 {
 			select {
 			case <-results:
 				t.Fatal("Wait resumed before its logical deadline")
@@ -338,7 +338,7 @@ func TestWaitUsesLogicalFrames(t *testing.T) {
 		t.Fatal("WaitNextFrame resumed within the same frame")
 	default:
 	}
-	itime.Update(0.0625, 16)
+	clock.Update(0.0625, 16)
 	scheduler.Update()
 	if got := awaitAPI(t, results); got != 0.0625 {
 		t.Fatalf("WaitNextFrame returned %v, want logical delta 0.0625", got)

@@ -20,12 +20,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	iterations := 0
 	th := scheduler.Create(nil, func(me Thread) {
@@ -40,7 +40,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 		t.Fatalf("iterations = %d, stopped = %v", iterations, th.Stopped())
 	}
 	previous := iterations
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 	if iterations <= previous || th.Stopped() {
 		t.Fatalf("script did not continue after budget: %d -> %d", previous, iterations)
@@ -49,7 +49,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 
 func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	var rounds []uint64
@@ -69,7 +69,7 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 
 func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	resumed := false
@@ -83,7 +83,7 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 		t.Fatal("passive round wait admitted its own round")
 	}
 
-	itime.Update(0, 30)
+	clock.Update(0, 30)
 	scheduler.Update()
 	if !resumed {
 		t.Fatal("passive round wait did not resume in the next frame")
@@ -92,7 +92,7 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 
 func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 
 	passiveResumed := false

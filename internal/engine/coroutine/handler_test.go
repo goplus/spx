@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestRestartHandlerIgnoresRetiredCleanup(t *testing.T) {
@@ -196,7 +196,7 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			scheduler := New(nil)
-			itime.Start()
+			clock.Start()
 			t.Cleanup(func() {
 				scheduler.RunAfterStop(nil)
 			})
@@ -243,7 +243,7 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 			}
 
 			scheduler.Update()
-			itime.Update(1.0/30, 30)
+			clock.Update(1.0/30, 30)
 			scheduler.Update()
 			if !slices.Equal(order, test.want) {
 				t.Fatalf("frame order = %v, want %v", order, test.want)

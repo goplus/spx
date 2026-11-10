@@ -23,11 +23,11 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/base/numeric"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
-	"github.com/goplus/spx/v4/internal/scratch"
-	itime "github.com/goplus/spx/v4/internal/time"
 	spxapi "github.com/goplus/spx/v4/pkg/spx"
 )
 
@@ -162,11 +162,11 @@ func (p *Game) Wait(secs Seconds) {
 }
 
 func (p *Game) Timer() Seconds {
-	return itime.Timer()
+	return clock.Timer()
 }
 
 func (p *Game) ResetTimer() {
-	itime.ResetTimer()
+	clock.ResetTimer()
 }
 
 func (p *Game) Now() time.Time {

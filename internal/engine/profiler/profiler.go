@@ -18,11 +18,11 @@ package profiler
 
 import (
 	"runtime/debug"
-	stime "time"
+	"time"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	"github.com/goplus/spx/v4/internal/time"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 	timingData     = make(map[string]TimingInfo)
 
 	lastUpdateDuration float64
-	totalStart         stime.Time
+	totalStart         time.Time
 	Debug              bool
 	Enabled            bool
 )
@@ -46,12 +46,12 @@ type TimingInfo struct {
 	ActualCall  float64 // Actual function execution time
 	PostCall    float64 // Cleanup time after the call
 	GCCount     int64
-	GCPauseTime stime.Duration
+	GCPauseTime time.Duration
 }
 
 func Calcfps() float64 {
-	curTime := time.RealTimeSinceStart()
-	curFrame := time.Frame()
+	curTime := clock.RealTimeSinceStart()
+	curFrame := clock.Frame()
 	if curFrame < debugLastFrame {
 		// A new engine time session restarts the public frame counter. Rebase
 		// profiling so the first interval cannot report negative FPS.
@@ -78,7 +78,7 @@ func BeginSample() {
 	}
 	spxlog.Info("========== Begin profiling sample: Unnamed ==========")
 
-	totalStart = stime.Now()
+	totalStart = time.Now()
 	// Clear the timing data of the previous frame
 	clear(timingData)
 }
@@ -88,7 +88,7 @@ func EndSample() {
 		return
 	}
 	// Calculate the total time
-	total := stime.Since(totalStart).Seconds() * 1000
+	total := time.Since(totalStart).Seconds() * 1000
 
 	// print a brief message
 	if total > 20 {
@@ -121,22 +121,22 @@ func MeasureFunctionTime(name string, fn func()) {
 		return
 	}
 	// Record the time before the call
-	preCallStart := stime.Now()
+	preCallStart := time.Now()
 
 	// Get the GC statistics before the call
 	debug.ReadGCStats(&gcStats)
 	previousGCCount, previousGCPause := gcStats.NumGC, gcStats.PauseTotal
 
 	// Preparation phase ends
-	preCallEnd := stime.Now()
+	preCallEnd := time.Now()
 
 	// Execute the actual function
-	actualCallStart := stime.Now()
+	actualCallStart := time.Now()
 	fn()
-	actualCallEnd := stime.Now()
+	actualCallEnd := time.Now()
 
 	// Post-processing phase starts
-	postCallStart := stime.Now()
+	postCallStart := time.Now()
 
 	// Get the GC difference
 	debug.ReadGCStats(&gcStats)
@@ -144,7 +144,7 @@ func MeasureFunctionTime(name string, fn func()) {
 	gcPause := gcStats.PauseTotal - previousGCPause
 
 	// Post-processing phase ends
-	postCallEnd := stime.Now()
+	postCallEnd := time.Now()
 
 	// Calculate the time for each phase (milliseconds)
 	preCallTime := preCallEnd.Sub(preCallStart).Seconds() * 1000
@@ -182,7 +182,7 @@ func printTimingInfo() {
 		if info.GCCount > 0 {
 			spxlog.Info("  GC: %d times, Total pause: %.3fms",
 				info.GCCount,
-				float64(info.GCPauseTime)/float64(stime.Millisecond))
+				float64(info.GCPauseTime)/float64(time.Millisecond))
 		}
 	}
 
@@ -251,7 +251,7 @@ func printCoroStats(coroInfo TimingInfo) {
 		if coroInfo.GCCount > 0 {
 			spxlog.Info("  - Garbage collection: %d GCs occurred during the engine's measurement, total pause time %.3fms",
 				coroInfo.GCCount,
-				float64(coroInfo.GCPauseTime)/float64(stime.Millisecond))
+				float64(coroInfo.GCPauseTime)/float64(time.Millisecond))
 		}
 
 		// Check coroutine internal GC

@@ -23,6 +23,7 @@ import (
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/spx/v4"
+	"github.com/goplus/spx/v4/pkg/scratchcompat"
 	"github.com/visualfc/funcval"
 )
 
@@ -426,9 +427,9 @@ func BenchmarkInterpretedProcedureStop(b *testing.B) {
 
 func TestInterpretedListMutation(t *testing.T) {
 	i := newDirectFuncInterp(t, ixgo.EnableCachedReg)
-	items := spx.NewList("coin", "potion")
+	items := scratchcompat.NewList("coin", "potion")
 	result := directFuncRun(t, i, "UpdateInventory", &items).([]any)
-	previous := result[0].(*spx.List)
+	previous := result[0].(*scratchcompat.List)
 	if got := previous.String(); got != "coin potion" {
 		t.Fatalf("snapshot changed with the inventory: %q", got)
 	}

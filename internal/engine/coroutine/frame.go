@@ -17,13 +17,13 @@
 package coroutine
 
 import (
-	stime "time"
+	"time"
 
-	"github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 // Scratch budgets 75% of the default stepping interval for script rounds.
-const loopWorkBudget = stime.Second * 3 / (4 * time.DefaultFPS)
+const loopWorkBudget = time.Second * 3 / (4 * clock.DefaultFPS)
 
 // ScriptRound counts additional script rounds within engine frames.
 // Pair it with the frame number to identify a scheduling round.
@@ -53,17 +53,17 @@ func (p *Scheduler) YieldToNextRoundFor(me Thread) {
 
 // RequestRedraw ends additional script rounds after the current round finishes.
 func (p *Scheduler) RequestRedraw() {
-	p.redrawFrame.Store(time.Frame())
+	p.redrawFrame.Store(clock.Frame())
 }
 
 func (p *Scheduler) yieldAtFrame(me Thread, kind waitKind) {
-	p.enqueueAndYield(&waitJob{thread: me, kind: kind, frame: time.Frame()})
+	p.enqueueAndYield(&waitJob{thread: me, kind: kind, frame: clock.Frame()})
 }
 
 // Admit a new round only after all runnable scripts have yielded.
 func (p *Scheduler) queueNextRound(state *updateState) bool {
 	if p.redrawFrame.Load() == state.frame ||
-		!stime.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
+		!time.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
 		return false
 	}
 	// A script round does not advance the frame clock.

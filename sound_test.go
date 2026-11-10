@@ -23,10 +23,10 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 type soundControlBackend struct {
@@ -549,13 +549,13 @@ func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
 	if play.soundObj != 77 || play.owner != 42 || play.attenation != 0.35 || play.maxDist != 640 || len(backend.loops) != 0 {
 		t.Fatalf("blocking playback parameters = %+v, loops = %v", play, backend.loops)
 	}
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if finished {
 		t.Fatal("PlayAndWait returned while the backend still reported active playback")
 	}
 	backend.playing[backend.nextID] = false
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if !finished {
 		t.Fatal("PlayAndWait did not resume after playback completed")

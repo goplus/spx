@@ -17,9 +17,9 @@
 package engine
 
 import (
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/platform"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func RequestExit(exitCode int64) {
@@ -53,7 +53,7 @@ func onStart() {
 	if binding == nil {
 		return
 	}
-	itime.Start()
+	clock.Start()
 	binding.callbacks.OnEngineStart()
 }
 

@@ -18,7 +18,7 @@ package spx
 
 import (
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
-	"github.com/goplus/spx/v4/internal/scratch"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 )
 
 // -----------------------------------------------------------------------------

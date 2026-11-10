@@ -19,13 +19,13 @@
 package scratch
 
 import (
-	q "github.com/goplus/spx/v4/internal/scratch"
+	q "github.com/goplus/spx/v4/internal/core/scratch"
 
 	"github.com/goplus/ixgo"
 )
 
 func init() {
-	ixgo.RegisterDirectCalls("github.com/goplus/spx/v4/internal/scratch", map[string]ixgo.DirectCallAdapter{
+	ixgo.RegisterDirectCalls("github.com/goplus/spx/v4/internal/core/scratch", map[string]ixgo.DirectCallAdapter{
 		"(*List).Append":   method_ptr_List_Append,
 		"(*List).At":       method_ptr_List_At,
 		"(*List).Clear":    method_ptr_List_Clear,

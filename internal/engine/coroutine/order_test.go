@@ -22,12 +22,12 @@ import (
 	"slices"
 	"testing"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() {
 		scheduler.RunAfterStop(nil)
 	})
@@ -73,7 +73,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	}
 	for frame := 1; frame <= 3; frame++ {
 		resumed = nil
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		scheduler.Update()
 		if want := []string{"loop", "frame", "next round", "time"}; !slices.Equal(resumed, want) {
 			t.Fatalf("frame %d: resume order = %v, want %v", frame, resumed, want)
@@ -85,7 +85,7 @@ func TestFrameResumesOlderScriptBeforeBatchFirstSlices(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 	scheduler := New(nil)
-	itime.Start()
+	clock.Start()
 	t.Cleanup(func() {
 		scheduler.RunAfterStop(nil)
 	})
@@ -113,7 +113,7 @@ func TestFrameResumesOlderScriptBeforeBatchFirstSlices(t *testing.T) {
 	})
 	scheduler.JoinFirstSlice(sibling)
 	scheduler.Update()
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	scheduler.Update()
 
 	// Waiting for the new batch yields to the older sibling already admitted

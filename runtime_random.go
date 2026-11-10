@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/scratch"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 )
 
 type randomScope uint8

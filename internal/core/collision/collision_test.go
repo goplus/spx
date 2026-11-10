@@ -16,9 +16,7 @@
 
 package collision
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestParseColliderShapeType(t *testing.T) {
 	tests := []struct {

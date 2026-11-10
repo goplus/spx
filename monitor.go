@@ -25,9 +25,9 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/base/numeric"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine/ui"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	"github.com/goplus/spx/v4/internal/scratch"
 )
 
 // -----------------------------------------------------------------------------

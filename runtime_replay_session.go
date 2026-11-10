@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	inputstate "github.com/goplus/spx/v4/internal/core/input"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 const defaultInputSessionRandomSeed int64 = 1
@@ -337,16 +337,16 @@ func (s *inputSession) completeReplayFrame(freeze func()) (bool, error) {
 }
 
 func (e *inputSessionEnvironment) start(fixedTimestep float64) {
-	e.previousFixed, e.previousFixedEnabled = itime.FixedDeltaTime()
-	itime.SetFixedDeltaTime(fixedTimestep)
+	e.previousFixed, e.previousFixedEnabled = clock.FixedDeltaTime()
+	clock.SetFixedDeltaTime(fixedTimestep)
 }
 
 func (e *inputSessionEnvironment) stop() {
 	e.stopOnce.Do(func() {
 		if e.previousFixedEnabled {
-			itime.SetFixedDeltaTime(e.previousFixed)
+			clock.SetFixedDeltaTime(e.previousFixed)
 		} else {
-			itime.SetFixedDeltaTime(0)
+			clock.SetFixedDeltaTime(0)
 		}
 	})
 }

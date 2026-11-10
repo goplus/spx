@@ -23,7 +23,7 @@ package scratchcompat
 
 import (
 	"github.com/goplus/spx/v4"
-	"github.com/goplus/spx/v4/internal/scratch"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 )
 
 // LimitPrecision rounds a coordinate when it is strictly within 1e-9 of an

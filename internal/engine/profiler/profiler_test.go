@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func TestEndSampleSkipsMissingCoroutineStats(t *testing.T) {
@@ -138,12 +138,12 @@ func TestEndSampleReportsCoroutineStats(t *testing.T) {
 }
 
 func TestCalcfpsRebasesAfterEngineTimeRestart(t *testing.T) {
-	itime.Start()
+	clock.Start()
 	debugLastFrame = 100
 	debugLastTime = -1
 	fps = 30
 
-	itime.Start()
+	clock.Start()
 
 	if got := Calcfps(); got < 0 {
 		t.Fatalf("Calcfps() after engine time restart = %v, want non-negative", got)
@@ -224,13 +224,13 @@ func TestDetailedTimingExplainsPreparationAndGC(t *testing.T) {
 
 func TestCalcfpsUpdatesElapsedInterval(t *testing.T) {
 	captureProfile(t)
-	debugLastFrame = itime.Frame()
-	debugLastTime = itime.RealTimeSinceStart() - 1
+	debugLastFrame = clock.Frame()
+	debugLastTime = clock.RealTimeSinceStart() - 1
 	fps = 123
 	if got := Calcfps(); got != 0 {
 		t.Fatalf("idle interval FPS=%g, want 0", got)
 	}
-	if debugLastFrame != itime.Frame() || debugLastTime < 0 {
+	if debugLastFrame != clock.Frame() || debugLastTime < 0 {
 		t.Fatalf("interval state frame=%d,time=%g", debugLastFrame, debugLastTime)
 	}
 }
