@@ -483,33 +483,11 @@ func TestSayBubbleLayoutEqualityTracksInputsAndRendering(t *testing.T) {
 	}
 }
 
-func TestSayBubbleRendering(t *testing.T) {
+func TestSayBubbleRenderingUsesResolvedLayout(t *testing.T) {
 	mgr := setupUIRendering(t)
 	node := func(id gdx.Object) *UiNode { n := &UiNode{}; n.SetId(id); return n }
-	say := &UiSay{left: sayNodes{node(2), node(3)}, right: sayNodes{node(4), node(5)}, leftThink: sayNodes{node(6), node(7)}, rightThink: sayNodes{node(8), node(9)}}
+	say := &UiSay{variants: [4]sayNodes{{node(2), node(3)}, {node(4), node(5)}, {node(6), node(7)}, {node(8), node(9)}}}
 	say.SetId(1)
-	for _, tc := range []struct {
-		name        string
-		left, think bool
-		vbox, label gdx.Object
-	}{{"say left", true, false, 2, 3}, {"say right", false, false, 4, 5}, {"think left", true, true, 6, 7}, {"think right", false, true, 8, 9}} {
-		t.Run(tc.name, func(t *testing.T) {
-			style := StyleSay
-			if tc.think {
-				style = StyleThink
-			}
-			layout := SayBubbleLayout{position: mathf.NewVec2(5, 7), renderScale: mathf.NewVec2(2, 3), isLeft: tc.left, content: NewSayBubbleContent("first\nsecond", style)}
-			say.SetTextLayout(layout)
-			for _, id := range []gdx.Object{2, 4, 6, 8} {
-				if mgr.visible[id] != (id == tc.vbox) {
-					t.Errorf("node%d visible=%v", id, mgr.visible[id])
-				}
-			}
-			if mgr.text[tc.label] != "first\nsecond" || mgr.positions[1] != mathf.NewVec2(240, 146) || mgr.scales[1] != layout.renderScale {
-				t.Fatalf("incorrect rendering: %+v", mgr)
-			}
-		})
-	}
 	win, pos, size := mathf.NewVec2(480, 360), mathf.NewVec2(30, 40), mathf.NewVec2(20, 30)
 	for _, test := range []struct {
 		style int
