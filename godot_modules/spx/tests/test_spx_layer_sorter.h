@@ -225,6 +225,19 @@ TEST_CASE("[SceneTree][SPX] Layer sorting debug overlay follows the scene lifecy
 	Spx::set_debug_mode(false);
 	fixture.sorter.update(sprites);
 	CHECK(fixture.viewport->get_child(-1)->is_queued_for_deletion());
+
+	// Scene teardown must not prevent sorting or recreate an overlay without a root.
+	fixture.sorter.reset();
+	auto *engine = SpxEngine::get_singleton();
+	engine->set_root_node(SceneTree::get_singleton(), nullptr);
+	Spx::set_debug_mode(true);
+	const int children = fixture.viewport->get_child_count();
+	moving.position.y = 50;
+	fixture.sorter.update(sprites);
+	CHECK(fixed.z_index == 1);
+	CHECK(moving.z_index == 2);
+	CHECK(fixture.viewport->get_child_count() == children);
+	engine->set_root_node(SceneTree::get_singleton(), fixture.viewport);
 }
 
 TEST_CASE("[SceneTree][SPX] Moving static sprites refreshes their order against both groups") {
