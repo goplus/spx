@@ -28,14 +28,6 @@ func Reset[T any](items []T, initialCap int) []T {
 	return items[:0]
 }
 
-func MoveToEnd[T any](slice []T, idx int) []T {
-	n := len(slice)
-	item := slice[idx]
-	copy(slice[idx:n-1], slice[idx+1:])
-	slice[n-1] = item
-	return slice
-}
-
 func MoveToIndex[T any](slice []T, oldIdx, newIdx int) []T {
 	if oldIdx == newIdx {
 		return slice

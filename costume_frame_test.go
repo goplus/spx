@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 func TestToBitmapResolution(t *testing.T) {
@@ -96,7 +97,11 @@ func TestNewAtlasFrame(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := newAtlasCostumeFrame(100, 20, "path", test.rect[0], test.rect[1], test.rect[2], test.rect[3], test.nx, test.index, 2, func(string) mathf.Vec2 {
+			img := &costumeSetImage{
+				width: 100, height: 20, path: "path", nx: test.nx,
+				rc: coreproject.CostumeSetRect{X: test.rect[0], Y: test.rect[1], W: test.rect[2], H: test.rect[3]},
+			}
+			got := newAtlasCostumeFrame(img, test.index, 2, func(string) mathf.Vec2 {
 				t.Fatal("fallback should not be called")
 				return mathf.Vec2{}
 			})
@@ -115,7 +120,7 @@ func TestNewAtlasFrame(t *testing.T) {
 }
 
 func TestNewStandaloneFrame(t *testing.T) {
-	got := newStandaloneCostumeFrame(32, 16, "path", 0, func(string) mathf.Vec2 {
+	got := newStandaloneCostumeFrame(&coreproject.CostumeConfig{ImageWidth: 32, ImageHeight: 16, Path: "path"}, func(string) mathf.Vec2 {
 		t.Fatal("fallback should not be called")
 		return mathf.Vec2{}
 	})
@@ -127,5 +132,29 @@ func TestNewStandaloneFrame(t *testing.T) {
 	}
 	if got.Center != mathf.NewVec2(16, 8) {
 		t.Fatalf("newStandaloneCostumeFrame center = %v, want {16 8}", got.Center)
+	}
+}
+
+func TestCostumeFrameFallback(t *testing.T) {
+	calls := 0
+	fallback := func(path string) mathf.Vec2 {
+		calls++
+		if path != "image.svg" {
+			t.Fatalf("fallback path = %q, want image.svg", path)
+		}
+		return mathf.NewVec2(31.5, 17.5)
+	}
+	img := costumeSetImage{path: "image.svg", nx: -1}
+	atlas := newAtlasCostumeFrame(&img, 1, 0, fallback)
+	if atlas.Width != 31 || atlas.Height != 17 || atlas.PosX != 31 || atlas.BitmapResolution != 0 || img.nx != -1 {
+		t.Fatalf("atlas fallback = %+v, columns = %d", atlas, img.nx)
+	}
+	config := coreproject.CostumeConfig{Path: "image.svg"}
+	standalone := newStandaloneCostumeFrame(&config, fallback)
+	if standalone.ImageSize != mathf.NewVec2(31.5, 17.5) || standalone.Center != mathf.NewVec2(15.75, 8.75) || standalone.BitmapResolution != 1 || config.BitmapResolution != 0 {
+		t.Fatalf("standalone fallback = %+v, configured resolution = %d", standalone, config.BitmapResolution)
+	}
+	if calls != 2 {
+		t.Fatalf("fallback calls = %d, want 2", calls)
 	}
 }

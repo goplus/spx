@@ -97,31 +97,13 @@ func newCostumeWithSize(width, height int) *costume {
 
 // newCostumeWith creates a costume from a costume set image.
 func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameIndex, bitmapResolution int) *costume {
-	frame := newAtlasCostumeFrame(
-		img.width,
-		img.height,
-		img.path,
-		img.rc.X,
-		img.rc.Y,
-		img.rc.W,
-		img.rc.H,
-		img.nx,
-		frameIndex,
-		bitmapResolution,
-		costumePixelSize,
-	)
+	frame := newAtlasCostumeFrame(img, frameIndex, bitmapResolution, costumePixelSize)
 	return &costume{name: name, path: img.path, atlas: frameIndex >= 0, faceRight: faceRight, frame: frame}
 }
 
 // newCostume creates a costume from a costume configuration.
 func newCostume(config *coreproject.CostumeConfig) *costume {
-	frame := newStandaloneCostumeFrame(
-		config.ImageWidth,
-		config.ImageHeight,
-		config.Path,
-		config.BitmapResolution,
-		costumeLogicalSize,
-	)
+	frame := newStandaloneCostumeFrame(config, costumeLogicalSize)
 	frame.Center = costumeCenterInAsset(frame, mathf.NewVec2(config.X, config.Y))
 	return &costume{name: config.Name, path: config.Path, faceRight: config.FaceRight, frame: frame}
 }

@@ -67,19 +67,11 @@ func TestResetClearsAndReusesStorage(t *testing.T) {
 	}
 	value := new(int)
 	again = append(again, value)
-	if backing[0] != value {
+	if len(again) != 1 || again[0] != value || backing[0] != value {
 		t.Fatal("append after Reset did not reuse the backing array")
 	}
 	if empty := Reset(make([]int, 0), 10); empty == nil || len(empty) != 0 || cap(empty) != 0 {
 		t.Fatalf("Reset allocated for a non-nil zero-capacity slice: len/cap/nil = %d/%d/%v", len(empty), cap(empty), empty == nil)
-	}
-}
-
-func TestMoveToEnd(t *testing.T) {
-	got := MoveToEnd([]int{1, 2, 3}, 0)
-	want := []int{2, 3, 1}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("MoveToEnd = %v, want %v", got, want)
 	}
 }
 
@@ -91,6 +83,8 @@ func TestMoveToIndex(t *testing.T) {
 	}{
 		{"backward", 3, 1, []int{1, 4, 2, 3}},
 		{"forward", 0, 2, []int{2, 3, 1, 4}},
+		{"to end", 0, 3, []int{2, 3, 4, 1}},
+		{"to start", 3, 0, []int{4, 1, 2, 3}},
 		{"same index", 1, 1, []int{1, 2, 3, 4}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

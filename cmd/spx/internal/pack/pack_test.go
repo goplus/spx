@@ -870,7 +870,7 @@ func TestPackPathHelpersRejectMixedPathForms(t *testing.T) {
 }
 
 func TestPackZipDetectsWriteFailuresAndConcurrentFileChanges(t *testing.T) {
-	for _, kind := range []string{"output failure", "file changed", "file header too long", "directory header too long", "root entry"} {
+	for _, kind := range []string{"output failure", "file changed", "file replaced before opening", "file header too long", "directory header too long", "root entry"} {
 		t.Run(kind, func(t *testing.T) {
 			directory := t.TempDir()
 			name := filepath.Join(directory, "asset")
@@ -901,12 +901,22 @@ func TestPackZipDetectsWriteFailuresAndConcurrentFileChanges(t *testing.T) {
 			if strings.Contains(kind, "header too long") {
 				entry.zipPath = strings.Repeat("a", 1<<16)
 			}
+			if kind == "file replaced before opening" {
+				// Flush the ZIP header before StableReader checks the collected file.
+				entry.zipPath = strings.Repeat("a", 8192)
+			}
 			writeErr := errors.New("archive destination failed")
 			writes := 0
 			writer := zip.NewWriter(packWriteFunc(func(data []byte) (int, error) {
 				writes++
 				if kind == "output failure" {
 					return 0, writeErr
+				}
+				if kind == "file replaced before opening" && writes == 1 {
+					if err := os.Rename(name, name+".original"); err != nil {
+						t.Fatal(err)
+					}
+					writeTestFile(t, name, "replacement")
 				}
 				if kind == "file changed" && writes == 1 {
 					if err := os.Truncate(name, 1); err != nil {
@@ -925,6 +935,10 @@ func TestPackZipDetectsWriteFailuresAndConcurrentFileChanges(t *testing.T) {
 			case "output failure":
 				if !errors.Is(err, writeErr) {
 					t.Fatalf("write failure = %v", err)
+				}
+			case "file replaced before opening":
+				if err == nil || !strings.Contains(err.Error(), "changed while opening") {
+					t.Fatalf("replaced file error = %v", err)
 				}
 			case "file changed":
 				if err == nil || !strings.Contains(err.Error(), "changed while packing") {

@@ -16,7 +16,10 @@
 
 package spx
 
-import "github.com/goplus/spbase/mathf"
+import (
+	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+)
 
 const (
 	defaultBitmapResolution = 1
@@ -78,27 +81,19 @@ func newSizedCostumeFrame(width, height int) costumeFrame {
 }
 
 // newAtlasCostumeFrame creates a descriptor for one frame inside an atlas/costume set.
-func newAtlasCostumeFrame(
-	cfgWidth, cfgHeight float64,
-	imagePath string,
-	rectX, rectY, rectW, rectH float64,
-	nx, frameIndex, bitmapResolution int,
-	fallback func(string) mathf.Vec2,
-) costumeFrame {
-	if nx <= 0 {
-		nx = 1
-	}
-	imageSize := resolveCostumeImageSize(cfgWidth, cfgHeight, imagePath, fallback)
+func newAtlasCostumeFrame(img *costumeSetImage, frameIndex, bitmapResolution int, fallback func(string) mathf.Vec2) costumeFrame {
+	nx := max(img.nx, 1)
+	imageSize := resolveCostumeImageSize(img.width, img.height, img.path, fallback)
 	width := int(imageSize.X) / nx
 	height := int(imageSize.Y)
 	posX := frameIndex * width
 	posY := 0
 
-	if rectH != 0 {
-		width = int(rectW) / nx
-		height = int(rectH)
-		posX = int(rectX) + frameIndex*width
-		posY = int(rectY)
+	if img.rc.H != 0 {
+		width = int(img.rc.W) / nx
+		height = int(img.rc.H)
+		posX = int(img.rc.X) + frameIndex*width
+		posY = int(img.rc.Y)
 	}
 
 	return costumeFrame{
@@ -114,17 +109,12 @@ func newAtlasCostumeFrame(
 }
 
 // newStandaloneCostumeFrame creates a descriptor for a single non-atlas texture.
-func newStandaloneCostumeFrame(
-	cfgWidth, cfgHeight float64,
-	imagePath string,
-	bitmapResolution int,
-	fallback func(string) mathf.Vec2,
-) costumeFrame {
-	imageSize := resolveCostumeImageSize(cfgWidth, cfgHeight, imagePath, fallback)
+func newStandaloneCostumeFrame(config *coreproject.CostumeConfig, fallback func(string) mathf.Vec2) costumeFrame {
+	imageSize := resolveCostumeImageSize(config.ImageWidth, config.ImageHeight, config.Path, fallback)
 	return costumeFrame{
 		Width:            int(imageSize.X),
 		Height:           int(imageSize.Y),
-		BitmapResolution: normalizeBitmapResolution(bitmapResolution),
+		BitmapResolution: normalizeBitmapResolution(config.BitmapResolution),
 		ImageSize:        imageSize,
 		Center:           imageSize.Mulf(0.5),
 		AtlasUVRect:      defaultAtlasUV(),

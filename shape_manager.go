@@ -333,7 +333,7 @@ func (s *shapeManager) activateShape(child Shape) {
 		return
 	}
 
-	s.items = base.MoveToEnd(s.items, idx)
+	s.items = base.MoveToIndex(s.items, idx, len(s.items)-1)
 	clear(s.named)
 	s.updateRenderLayers()
 }
