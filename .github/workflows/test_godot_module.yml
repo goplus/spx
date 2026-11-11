@@ -78,10 +78,162 @@ jobs:
       spx_repository: ${{ github.repository }}
       spx_ref: ${{ needs.resolve-inputs.outputs.spx_sha }}
 
+  # Keep the published/default runtime job unchanged; exercise the opt-in build
+  # separately, with its own coverage cache and report.
+  test-spine:
+    name: Linux editor and opt-in Spine tests
+    needs: resolve-inputs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CC: gcc
+      CXX: g++
+      GCOV: gcov
+      # Restore signatures and products together, without source, counts, or editor.
+      COVERAGE_BUILD_PATHS: |
+        .sconsign*.dblite
+        **/*.o
+        **/*.a
+        **/*.gcno
+    steps:
+      - name: Check out locked Godot source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ needs.resolve-inputs.outputs.godot_repository }}
+          ref: ${{ needs.resolve-inputs.outputs.godot_commit }}
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc \
+            g++ \
+            pkg-config \
+            libgl1-mesa-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            xorg-dev \
+            libasound2-dev \
+            libopenal-dev \
+            libwayland-bin
+
+      - name: Set up current SPX module and locked native context
+        id: spx-build
+        uses: ./.github/actions/setup-spx-module/build-context
+        with:
+          runtime-version: ${{ needs.resolve-inputs.outputs.runtime_version }}
+          runtime-abi: ${{ needs.resolve-inputs.outputs.runtime_abi }}
+          repository: ${{ github.repository }}
+          ref: ${{ needs.resolve-inputs.outputs.spx_sha }}
+          toolchain-scope: native
+          cache-scope: linux-x86_64-spine-tests
+          cache-enabled: 'false'
+
+      - name: Install coverage tools
+        run: python3 -m pip install -r .github/scripts/requirements.txt
+
+      - name: Verify coverage collection
+        run: python3 .github/scripts/spx_coverage_test.py
+
+      - name: Identify coverage build cache
+        id: coverage-context
+        shell: bash
+        env:
+          CACHE_SCOPE: spx-coverage-spine-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-inputs.outputs.godot_commit }}-${{ hashFiles('.spx-source/.github/workflows/test_godot_module.yml', '.github/actions/godot-build/action.yml', '.spx-source/godot_modules/spx/spx_scons_profile.json') }}
+        run: |
+          set -euo pipefail
+          toolchain="$(
+            set -e
+            {
+              printf '%s\n' "${ImageOS:-}" "${ImageVersion:-}" "${GITHUB_WORKSPACE}"
+              "${CC}" --version
+              "${CXX}" --version
+              "${GCOV}" --version
+              python3 --version
+              scons --version
+            } | sha256sum | cut -d ' ' -f 1
+          )"
+          module="$(git -C .spx-source rev-parse --verify HEAD:godot_modules/spx)"
+          printf '%s\n' "prefix=${CACHE_SCOPE}-${toolchain}" "module=${module}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore coverage build
+        id: coverage-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.COVERAGE_BUILD_PATHS }}
+          key: ${{ steps.coverage-context.outputs.prefix }}-${{ steps.coverage-context.outputs.module }}
+          restore-keys: |
+            ${{ steps.coverage-context.outputs.prefix }}-
+
+      - name: Prepare restored coverage build
+        env:
+          CACHE_HIT: ${{ steps.coverage-cache.outputs.cache-hit }}
+        run: |
+          python3 .github/scripts/spx_coverage.py reset
+          if [ "${CACHE_HIT}" != true ]; then
+            # Preserve engine objects, but rebuild the changed module and tests.
+            python3 .github/scripts/spx_coverage.py clean
+          fi
+
+      - name: Build Linux editor with Spine and unit tests
+        uses: ./.github/actions/godot-build
+        with:
+          # Recheck capabilities: cached probe objects lack Configure's other files.
+          sconsflags: >-
+            ${{ steps.spx-build.outputs.editor-release-flags }}
+            dev_build=yes debug_symbols=no use_coverage=yes optimize=none fast_unsafe=no spx_spine=yes
+            --config=force
+            CC=${{ env.CC }} CXX=${{ env.CXX }}
+          custom-modules: ${{ steps.spx-build.outputs.module-path }}
+          platform: linuxbsd
+          target: editor
+          tests: 'yes'
+          # SCons caches objects but does not track their .gcno sidecar files.
+          scons-cache: ''
+
+      - name: Save coverage build
+        if: steps.coverage-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.COVERAGE_BUILD_PATHS }}
+          key: ${{ steps.coverage-cache.outputs.cache-primary-key }}
+
+      - name: Run SPX and Spine module unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot_bin=./bin/godot.linuxbsd.editor.dev.x86_64
+          test_list="${RUNNER_TEMP}/godot-test-cases.txt"
+
+          test -x "${godot_bin}"
+          "${godot_bin}" --version
+          "${godot_bin}" --headless --test --test-case='*SPX*' --list-test-cases | tee "${test_list}"
+          if ! grep -F '[SPX] Spine playback' "${test_list}" >/dev/null; then
+            echo "[error] The opt-in build did not register Spine module unit tests" >&2
+            exit 1
+          fi
+          python3 .github/scripts/spx_coverage.py reset
+          "${godot_bin}" --headless --test --test-case='*SPX*' --force-colors
+
+      - name: Collect SPX module coverage
+        run: python3 .github/scripts/spx_coverage.py report
+
+      - name: Upload SPX module coverage
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-spx-cpp-spine
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
   integration-gate:
     name: SPX module integration gate
     if: ${{ !cancelled() }}
-    needs: [resolve-inputs, test-module]
+    needs: [resolve-inputs, test-module, test-spine]
     runs-on: ubuntu-latest
     steps:
       - name: Verify integration checks passed
@@ -94,7 +246,7 @@ jobs:
           import sys
 
           needs = json.loads(os.environ["NEEDS_JSON"])
-          for job in ("resolve-inputs", "test-module"):
+          for job in ("resolve-inputs", "test-module", "test-spine"):
               result = needs.get(job, {}).get("result", "missing")
               if result != "success":
                   sys.exit(f"Required integration job did not pass: {job}: {result}")

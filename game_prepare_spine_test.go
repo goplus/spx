@@ -77,7 +77,7 @@ func TestPrepareSpineConfigValidation(t *testing.T) {
 		}
 	}
 	for _, config := range []*coreproject.SpineAnimConfig{{Atlas: "a"}, {Skeleton: "s"}, {}} {
-		if _, err := prepareSpineAnimation(config); err == nil {
+		if _, err := prepareSpriteConfig(&coreproject.SpriteConfig{SpineAnim: config}); err == nil {
 			t.Fatal("accepted missing resource")
 		}
 	}
@@ -151,6 +151,18 @@ func TestPrepareSpineRejectsEmptyAnimationNames(t *testing.T) {
 	for _, names := range []map[string]string{{"": "walk"}, {"walk": ""}} {
 		if _, err := prepareSpineAnimation(&coreproject.SpineAnimConfig{Atlas: "a", Skeleton: "s", AnimMap: names}); err == nil {
 			t.Fatal("accepted empty animation name")
+		}
+	}
+}
+
+func TestPrepareSpineRejectsInvalidTurnTiming(t *testing.T) {
+	for _, value := range []float64{-1, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		source := &coreproject.SpriteConfig{
+			SpineAnim:   &coreproject.SpineAnimConfig{Atlas: "a", Skeleton: "s"},
+			FAnimations: map[string]*coreproject.AniConfig{"walk": {TurnToDuration: value}},
+		}
+		if _, err := prepareSpriteConfig(source); err == nil || !strings.Contains(err.Error(), `fAnimations["walk"].turnToDuration`) {
+			t.Fatalf("turnToDuration=%v: %v", value, err)
 		}
 	}
 }

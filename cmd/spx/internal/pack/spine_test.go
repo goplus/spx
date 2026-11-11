@@ -17,6 +17,7 @@
 package pack
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,5 +64,49 @@ func TestPackProjectRejectsEscapingSpinePage(t *testing.T) {
 		if err := PackProject(project, filepath.Join(root, "game.zip")); err == nil || !strings.Contains(err.Error(), "unsafe page") || !strings.Contains(err.Error(), "hero.atlas") {
 			t.Fatalf("page %q: %v", page, err)
 		}
+	}
+}
+
+func TestPackProjectRejectsUnavailableSpineResources(t *testing.T) {
+	for _, kind := range []string{"missing atlas", "oversized atlas", "missing page"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			project := filepath.Join(root, "Game")
+			writeTestFile(t, filepath.Join(project, "assets", "index_pack.json"), `{"sprites":{"Hero":{"spineAnim":{"atlas":"hero.atlas","skeleton":"hero.skel"}}}}`)
+			dir := filepath.Join(project, "assets", "sprites", "Hero")
+			writeTestFile(t, filepath.Join(dir, "hero.skel"), "skeleton")
+			want := "stat Spine atlas"
+			if kind != "missing atlas" {
+				atlas := filepath.Join(dir, "hero.atlas")
+				writeTestFile(t, atlas, "missing.png\nsize: 1,1\n")
+				want = `page "missing.png"`
+				if kind == "oversized atlas" {
+					if err := os.Truncate(atlas, maxPackJSONSize+1); err != nil {
+						t.Fatal(err)
+					}
+					want = "read Spine atlas"
+				}
+			}
+			output := filepath.Join(root, "game.zip")
+			if err := PackProject(project, output); err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "hero.atlas") {
+				t.Fatalf("%s: %v", kind, err)
+			}
+		})
+	}
+}
+
+func TestCollectSpineRejectsSymlinkCompatibilityRoot(t *testing.T) {
+	root := t.TempDir()
+	realRoot := filepath.Join(root, "real")
+	project := filepath.Join(realRoot, "Game")
+	writeTestFile(t, filepath.Join(project, "assets", "index_pack.json"), `{"sprites":{"Hero":{"spineAnim":{"atlas":"hero.atlas","skeleton":"hero.skel"}}}}`)
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(realRoot, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	// The project itself is real, but shared-asset lookup must not pin a symlink root.
+	_, err := collectExternalAssetPaths(filepath.Join(link, "Game"), nil, engineExtAssetDir)
+	if err == nil || !strings.Contains(err.Error(), "must be a real directory") {
+		t.Fatalf("symlink compatibility root accepted: %v", err)
 	}
 }

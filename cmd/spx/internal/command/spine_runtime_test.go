@@ -17,10 +17,12 @@
 package command
 
 import (
+	"embed"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/runtimevariant"
@@ -60,5 +62,32 @@ func TestSpineRuntimeDisallowsFallback(t *testing.T) {
 	t.Setenv("SPX_SPINE", "0")
 	if _, err := cmd.resolveInterpretedRuntimeAssets(); err == nil {
 		t.Fatal("default selection accepted marked Spine bin")
+	}
+}
+
+func TestSpineRuntimeRejectsInvalidSelectionAtEveryEntry(t *testing.T) {
+	for _, selection := range []string{"invalid", "1"} {
+		t.Run(selection, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("GOPATH", root)
+			t.Setenv("SPX_SPINE", selection)
+			setTestCommandLine(t, "spx", "run")
+			cmd := &CmdTool{GoBinPath: filepath.Join(root, "bin"), Version: "4.0.0"}
+			for name, run := range map[string]func() error{
+				"CLI":         func() error { return cmd.RunCmd("spx", ".spx", "4.0.0", embed.FS{}, "", "project") },
+				"interpreted": func() error { _, err := cmd.resolveInterpretedRuntimeAssets(); return err },
+				"Web":         func() error { return cmd.installRepoWebRuntime(webNormalMode) },
+			} {
+				if err := run(); err == nil || !strings.Contains(err.Error(), "SPX_SPINE") {
+					t.Fatalf("%s accepted invalid selection: %v", name, err)
+				}
+			}
+			if cmd.ProjectDir != "" || cmd.TargetDir != "" {
+				t.Fatal("invalid runtime selection prepared a project")
+			}
+			if got := cmd.runtimeSearchDirs(); !reflect.DeepEqual(got, []string{cmd.GoBinPath}) {
+				t.Fatalf("invalid selection allowed fallback: %v", got)
+			}
+		})
 	}
 }

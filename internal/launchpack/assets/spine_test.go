@@ -17,6 +17,8 @@
 package assets
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -63,5 +65,31 @@ func TestCollectSpineRejectsMissingOrEscapingPage(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "shared/hero.atlas") || !strings.Contains(err.Error(), wantError) {
 			t.Fatalf("page %s: %v", page, err)
 		}
+	}
+}
+
+func TestCollectSpineRejectsInvalidResources(t *testing.T) {
+	for _, tc := range []struct{ name, config, want string }{
+		{"missing atlas field", `{"skeleton":"hero.skel"}`, "requires atlas and skeleton"},
+		{"missing skeleton field", `{"atlas":"hero.atlas"}`, "requires atlas and skeleton"},
+		{"missing atlas file", `{"atlas":"missing.atlas","skeleton":"hero.skel"}`, "missing.atlas"},
+		{"missing skeleton file", `{"atlas":"hero.atlas","skeleton":"missing.skel"}`, "missing.skel"},
+		{"oversized atlas", `{"atlas":"hero.atlas","skeleton":"hero.skel"}`, "exceeds"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeAssetTestFile(t, dir, "assets/index_pack.json", `{"sprites":{"Hero":{"spineAnim":`+tc.config+`}}}`)
+			const atlas = "assets/sprites/Hero/hero.atlas"
+			writeAssetTestFile(t, dir, atlas, "page.png\nsize: 1,1\n")
+			writeAssetTestFile(t, dir, "assets/sprites/Hero/hero.skel", "skeleton")
+			if tc.name == "oversized atlas" {
+				if err := os.Truncate(filepath.Join(dir, filepath.FromSlash(atlas)), maxConfigBytes+1); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := Collect(Config{ProjectDir: dir, PackDir: "assets", PackIndex: "index.json"}); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Collect() error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }

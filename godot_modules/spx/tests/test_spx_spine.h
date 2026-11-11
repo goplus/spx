@@ -35,6 +35,8 @@
 #include "../spx_sprite_mgr.h"
 #include "../spx_sprite.h"
 #include "spx_test_fixtures.h"
+#include "scene/2d/animated_sprite_2d.h"
+#include <limits>
 
 #ifndef SPX_SPINE_ENABLED
 TEST_CASE("[SceneTree][SPX] Spine is disabled by default without changing sprite state") {
@@ -42,6 +44,20 @@ TEST_CASE("[SceneTree][SPX] Spine is disabled by default without changing sprite
 	CHECK_FALSE(SpxSpriteMgr::is_spine_supported());
 	const GdObj id = scene.engine->get_sprite()->create_bare_sprite(Vector2());
 	SpxSprite *sprite = scene.engine->get_sprite()->get_sprite(id);
+	AnimatedSprite2D *animated = sprite->get_anim2d();
+	Ref<SpriteFrames> frames = animated->get_sprite_frames();
+	frames->add_animation("frames");
+	frames->add_frame("frames", Ref<Texture2D>());
+	frames->add_frame("frames", Ref<Texture2D>());
+	animated->play("frames", 2.0);
+	animated->set_frame_and_progress(1, 0.25);
+	sprite->set_anim_speed_scale(0.5);
+	sprite->set_anim_flip_h(true);
+	sprite->set_anim_flip_v(true);
+	sprite->set_anim_offset(Vector2(3, 4));
+	sprite->set_render_scale(Vector2(2, 3));
+	sprite->set_color(Color(0.2, 0.4, 0.6, 0.8));
+	const Rect2 bounds = sprite->get_rect();
 	ERR_PRINT_OFF;
 	CHECK_FALSE(scene.engine->get_sprite()->set_spine_skeleton(id, "missing.atlas", "missing.json", 0.1));
 	ERR_PRINT_ON;
@@ -49,24 +65,45 @@ TEST_CASE("[SceneTree][SPX] Spine is disabled by default without changing sprite
 	CHECK_FALSE(scene.engine->get_sprite()->has_spine_animation(id, "walk"));
 	CHECK(Rect2(scene.engine->get_sprite()->get_spine_bounds(id)) == Rect2());
 	scene.engine->get_sprite()->clear_spine_skeleton(id);
+	scene.engine->get_sprite()->clear_spine_skeleton(id);
+	CHECK(animated->is_visible());
+	CHECK(animated->is_playing());
+	CHECK(animated->get_sprite_frames() == frames);
+	CHECK(animated->get_animation() == "frames");
+	CHECK(animated->get_frame() == 1);
+	CHECK(animated->get_frame_progress() == doctest::Approx(0.25));
+	CHECK(sprite->get_anim_playing_speed() == doctest::Approx(1.0));
+	CHECK(sprite->is_anim_flipped_h());
+	CHECK(sprite->is_anim_flipped_v());
+	CHECK(Vector2(sprite->get_anim_offset()) == Vector2(3, 4));
+	CHECK(Vector2(sprite->get_render_scale()) == Vector2(2, 3));
+	CHECK(Color(sprite->get_color()) == Color(0.2, 0.4, 0.6, 0.8));
+	CHECK(sprite->get_rect() == bounds);
 	CHECK_FALSE(ClassDB::class_exists("SpineSprite"));
 }
 #endif
 
+TEST_CASE("[SceneTree][SPX] Spine manager rejects invalid sprite handles") {
+	TestSpx::EngineScene scene;
+	SpxSpriteMgr *manager = scene.engine->get_sprite();
+	ERR_PRINT_OFF;
+	CHECK_FALSE(manager->set_spine_skeleton(0, "missing.atlas", "missing.json", 0.1));
+	CHECK_FALSE(manager->has_spine_animation(0, "move"));
+	CHECK(Rect2(manager->get_spine_bounds(0)) == Rect2());
+	manager->clear_spine_skeleton(0);
+	ERR_PRINT_ON;
+}
+
 #ifdef SPX_SPINE_ENABLED
 
 #include "../spx_res_mgr.h"
-#include "../spx_sprite.h"
-#include "../spx_sprite_mgr.h"
 #include "../thirdparty/spine_godot/SpineAnimationState.h"
 #include "../thirdparty/spine_godot/SpineSkeleton.h"
 #include "../thirdparty/spine_godot/SpineSprite.h"
 #include "../thirdparty/spine_godot/SpineTrackEntry.h"
-#include "scene/2d/animated_sprite_2d.h"
 #include "scene/resources/material.h"
 #include "scene/resources/shader.h"
 #include "core/io/json.h"
-#include "spx_test_fixtures.h"
 
 namespace TestSpxSpine {
 
@@ -305,6 +342,103 @@ TEST_CASE("[SceneTree][SPX] Spine clones own their skeleton and can replace it r
 		CHECK(original->is_playing_anim());
 		CHECK(original_child->get_animation_state()->get_current(0)->get_track_time() == doctest::Approx(0.25f));
 	}
+	SceneTree::get_singleton()->process(0);
+}
+
+TEST_CASE("[SceneTree][SPX] Spine animation controls preserve tracks and reject invalid input") {
+	TestSpx::EngineScene scene;
+	Assets files;
+	SpxSpriteMgr *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	SpxSprite *sprite = manager->get_sprite(id);
+	REQUIRE(manager->set_spine_skeleton(id, files.file("quad.atlas").utf8().get_data(), files.file("quad.json").utf8().get_data(), 0.1f));
+	SpineSprite *child = get_child(sprite);
+	REQUIRE(child != nullptr);
+	child->set_update_mode(SpineConstant::UpdateMode_Manual);
+	sprite->set_anim("move");
+	CHECK_FALSE(sprite->is_playing_anim());
+	CHECK(TestSpx::take_string(sprite->get_anim()) == "move");
+	Ref<SpineTrackEntry> entry = child->get_animation_state()->get_current(0);
+	REQUIRE(entry.is_valid());
+	child->update_skeleton(0.25f);
+	CHECK(entry->get_track_time() == 0.0f);
+	sprite->play_backwards_anim("move");
+	CHECK(entry->get_reverse());
+	CHECK_FALSE(entry->get_loop());
+	CHECK(sprite->get_anim_playing_speed() == -1.0f);
+	child->update_skeleton(0.25f);
+	const float time = entry->get_track_time();
+	sprite->set_anim_frame(17);
+	CHECK(sprite->get_anim_frame() == 0);
+	CHECK(entry->get_track_time() == doctest::Approx(time));
+	sprite->set_anim("move");
+	CHECK(sprite->is_playing_anim());
+	CHECK(entry->get_track_time() == doctest::Approx(time));
+	ERR_PRINT_OFF;
+	sprite->play_anim("missing", 2.0f, true, false);
+	sprite->set_anim("missing");
+	for (float speed : { std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN() }) {
+		sprite->play_anim("move", speed, true, false);
+		sprite->set_anim_speed_scale(speed);
+	}
+	ERR_PRINT_ON;
+	CHECK(TestSpx::take_string(sprite->get_anim()) == "move");
+	CHECK(sprite->is_playing_anim());
+	CHECK(sprite->get_anim_playing_speed() == -1.0f);
+	CHECK(sprite->get_anim_speed_scale() == 1.0f);
+	CHECK(entry->get_track_time() == doctest::Approx(time));
+	CHECK(entry->get_reverse());
+	CHECK_FALSE(entry->get_loop());
+	sprite->stop_anim();
+	CHECK(child->get_animation_state()->get_current(0).is_null());
+	CHECK(TestSpx::take_string(sprite->get_anim()).is_empty());
+	CHECK(sprite->get_anim_playing_speed() == 0.0f);
+	sprite->play_anim("move", 1.0f, true, true);
+	CHECK(child->get_animation_state()->get_current(0)->get_reverse());
+	CHECK(sprite->is_playing_anim());
+}
+
+TEST_CASE("[SceneTree][SPX] Spine transforms and color update before clearing") {
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	Assets files;
+	SpxSpriteMgr *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	SpxSprite *sprite = manager->get_sprite(id);
+	sprite->set_position(Vector2(20, 30));
+	sprite->set_render_offset(Vector2(5, 7));
+	sprite->set_anim_offset(Vector2(3, 4));
+	sprite->set_render_scale(Vector2(2, 3));
+	sprite->set_anim_flip_h(true);
+	sprite->set_anim_flip_v(true);
+	sprite->set_color(Color(0.2, 0.4, 0.6, 0.8));
+	REQUIRE(manager->set_spine_skeleton(id, files.file("quad.atlas").utf8().get_data(), files.file("quad.json").utf8().get_data(), 0.1f));
+	SpineSprite *child = get_child(sprite);
+	REQUIRE(child != nullptr);
+	child->set_update_mode(SpineConstant::UpdateMode_Manual);
+	CHECK(child->get_modulate() == Color(0.2, 0.4, 0.6, 0.8));
+	CHECK(child->get_scale() == Vector2(-2, -3));
+	CHECK(child->get_position() == Vector2(6, 12));
+	CHECK(Vector2(sprite->get_anim_offset()) == Vector2(3, 4));
+	CHECK(Rect2(manager->get_spine_bounds(id)) == Rect2(-8, -4, 16, 8));
+	CHECK(sprite->get_rect() == Rect2(15, 37, 32, 24));
+	sprite->set_anim_offset(Vector2(1, 2));
+	CHECK(child->get_position() == Vector2(2, 6));
+	sprite->set_color(Color(0.6, 0.5, 0.4, 0.3));
+	CHECK(child->get_modulate() == Color(0.6, 0.5, 0.4, 0.3));
+	finished = looped = 0;
+	scene.engine->get_callbacks()->func_on_sprite_animation_looped = [](GdObj) { ++looped; };
+	scene.engine->get_callbacks()->func_on_sprite_animation_finished = [](GdObj) { ++finished; };
+	sprite->play_anim("move", 1.0f, true, false);
+	manager->clear_spine_skeleton(id);
+	CHECK(child->get_parent() == nullptr);
+	CHECK(child->is_queued_for_deletion());
+	child->update_skeleton(1.25f);
+	CHECK(looped == 0);
+	CHECK(finished == 0);
+	CHECK_FALSE(manager->has_spine_animation(id, "move"));
+	CHECK(Rect2(manager->get_spine_bounds(id)) == Rect2());
+	CHECK(sprite->get_anim2d()->is_visible());
+	manager->clear_spine_skeleton(id);
 	SceneTree::get_singleton()->process(0);
 }
 

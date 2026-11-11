@@ -123,6 +123,13 @@ jobs:
           name: coverage-spx-cpp
           path: coverage/cpp
 
+      - name: Download Spine C++ coverage artifact
+        if: env.PUBLISH_COVERAGE == 'true' && needs.test-godot-module.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-spx-cpp-spine
+          path: coverage/cpp-spine
+
       - name: Collect Go coverage profiles
         if: env.PUBLISH_COVERAGE == 'true'
         id: profiles
@@ -143,7 +150,7 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           slug: ${{ github.repository }}
-          files: coverage/cpp/coverage.xml
+          files: coverage/cpp/coverage.xml,coverage/cpp-spine/coverage.xml
           flags: cpp
           disable_search: true
           fail_ci_if_error: true

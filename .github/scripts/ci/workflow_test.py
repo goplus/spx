@@ -8,7 +8,7 @@ import unittest
 
 from test_support import (SCRIPTS, WORKFLOWS, action_steps, job_condition, job_needs,
                         load_workflow, named_step, run_command, run_shell,
-                        step_script)
+                        step_script, write_executable)
 
 CI_WORKFLOW_PATH = WORKFLOWS / "ci.yml"
 SOURCE_CHECKS_WORKFLOW_PATH = WORKFLOWS / "check_source.yml"
@@ -92,7 +92,7 @@ class CoverageWorkflowTest(unittest.TestCase):
                            "flags": "go", "disable_search": "true", "fail_ci_if_error": "true"}.items():
             self.assertEqual(go["with"][key], value)
         self.assertEqual(cpp["with"], {
-            "slug": "${{ github.repository }}", "files": "coverage/cpp/coverage.xml", "flags": "cpp",
+            "slug": "${{ github.repository }}", "files": "coverage/cpp/coverage.xml,coverage/cpp-spine/coverage.xml", "flags": "cpp",
             "disable_search": "true", "fail_ci_if_error": "true",
         })
         self.assertEqual(finalize["with"], {
@@ -102,19 +102,20 @@ class CoverageWorkflowTest(unittest.TestCase):
             count = sum(len(action_steps(job, "codecov/codecov-action"))
                         for job in load_workflow(path)["jobs"].values() if "steps" in job)
             self.assertEqual(count, 3 if path == CI_WORKFLOW_PATH else 0, path.name)
-        go_download, cpp_download = action_steps(coverage, "actions/download-artifact")
+        go_download, cpp_download, spine_download = action_steps(coverage, "actions/download-artifact")
         self.assertEqual(go_download["with"], {"pattern": "coverage-{source,macos,windows}", "path": "coverage"})
         self.assertEqual(cpp_download["with"], {"name": "coverage-spx-cpp", "path": "coverage/cpp"})
+        self.assertEqual(spine_download["with"], {"name": "coverage-spx-cpp-spine", "path": "coverage/cpp-spine"})
         collector = named_step(coverage, "Collect Go coverage profiles")
         self.assertEqual(collector["run"], 'python3 .github/scripts/ci/collect_coverage.py coverage --github-output "$GITHUB_OUTPUT"')
         guard = named_step(coverage, "Verify required CI path passed")
-        ordered = (guard, go_download, cpp_download, collector, go, cpp, finalize)
+        ordered = (guard, go_download, cpp_download, spine_download, collector, go, cpp, finalize)
         indices = [coverage["steps"].index(step) for step in ordered]
         self.assertEqual(indices, sorted(indices))
         for step in ordered:
             self.assertNotIn("continue-on-error", step)
             condition = "success()" if step == guard else "env.PUBLISH_COVERAGE == 'true'"
-            if step in (cpp, cpp_download):
+            if step in (cpp, cpp_download, spine_download):
                 condition += " && needs.test-godot-module.result == 'success'"
             self.assertEqual(step.get("if", "success()"), condition)
         static = load_workflow(SOURCE_CHECKS_WORKFLOW_PATH)
@@ -126,7 +127,7 @@ class CoverageWorkflowTest(unittest.TestCase):
         workflow = load_workflow(MODULE_WORKFLOW_PATH)
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         gate = workflow["jobs"]["integration-gate"]
-        self.assertEqual(job_needs(gate), ("resolve-inputs", "test-module"))
+        self.assertEqual(job_needs(gate), ("resolve-inputs", "test-module", "test-spine"))
         self.assertEqual(job_condition(gate), "!cancelled()")
         self.assertEqual(gate["steps"][0]["name"], "Verify integration checks passed")
         self.assertNotIn("continue-on-error", gate)
@@ -143,7 +144,7 @@ class CoverageWorkflowTest(unittest.TestCase):
         def run_gate(needs):
             return run_command([sys.executable, "-c", step["run"]], env={"NEEDS_JSON": json.dumps(needs)})
 
-        success = {job: {"result": "success"} for job in ("resolve-inputs", "test-module")}
+        success = {job: {"result": "success"} for job in ("resolve-inputs", "test-module", "test-spine")}
         result = run_gate(success)
         self.assertEqual(result.returncode, 0, result.stderr)
         for job in success:
@@ -171,6 +172,72 @@ class CoverageWorkflowTest(unittest.TestCase):
         # Both status checks include the combined Go and C++ report.
         for check in ("project", "patch"):
             self.assertEqual(config["coverage"]["status"][check]["default"], {"informational": "true"})
+
+    def test_spine_coverage_keeps_default_build_and_uses_isolated_cache(self):
+        jobs = load_workflow(MODULE_WORKFLOW_PATH)["jobs"]
+        default = jobs["test-module"]
+        self.assertIn("goplus/godot/.github/workflows/spx_module_checks.yml@", default["uses"])
+        self.assertNotIn("spx_spine", default["with"])
+        spine = jobs["test-spine"]
+        self.assertEqual(job_needs(spine), ("resolve-inputs",))
+        checkout = action_steps(spine, "actions/checkout")[0]
+        self.assertEqual(checkout["with"]["ref"], "${{ needs.resolve-inputs.outputs.godot_commit }}")
+        setup = named_step(spine, "Set up current SPX module and locked native context")
+        self.assertEqual(setup["with"]["ref"], "${{ needs.resolve-inputs.outputs.spx_sha }}")
+        self.assertEqual(setup["with"]["cache-enabled"], "false")
+        build = named_step(spine, "Build Linux editor with Spine and unit tests")
+        for flag in ("spx_spine=yes", "use_coverage=yes", "optimize=none", "--config=force"):
+            self.assertIn(flag, build["with"]["sconsflags"].split())
+        self.assertEqual(build["with"]["tests"], "yes")
+        self.assertEqual(build["with"]["scons-cache"], "")
+        context = named_step(spine, "Identify coverage build cache")
+        self.assertTrue(context["env"]["CACHE_SCOPE"].startswith("spx-coverage-spine-v1-"))
+        paths = spine["env"]["COVERAGE_BUILD_PATHS"].splitlines()
+        self.assertIn("**/*.gcno", paths)
+        self.assertNotIn("**/*.gcda", paths)
+        self.assertNotIn("bin/", paths)
+        report = named_step(spine, "Collect SPX module coverage")
+        self.assertEqual(report["run"], "python3 .github/scripts/spx_coverage.py report")
+        upload = action_steps(spine, "actions/upload-artifact")[0]
+        self.assertEqual(upload["with"]["name"], "coverage-spx-cpp-spine")
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        for step in spine["steps"]:
+            self.assertNotIn("continue-on-error", step)
+
+    def test_spine_runner_requires_enabled_tests_and_propagates_failures(self):
+        job = load_workflow(MODULE_WORKFLOW_PATH)["jobs"]["test-spine"]
+        script = step_script(job, "Run SPX and Spine module unit tests")
+        for enabled, status in ((False, 0), (True, 0), (True, 7)):
+            with self.subTest(enabled=enabled, status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "bin").mkdir()
+                write_executable(root / "bin/godot.linuxbsd.editor.dev.x86_64", """#!/bin/bash
+if [[ "$*" == *--list-test-cases* ]]; then
+  if [[ "$ENABLED" == true ]]; then
+    echo '[SceneTree][SPX] Spine playback resumes, loops and keeps its pose when resized'
+  else
+    echo '[SceneTree][SPX] Spine is disabled by default without changing sprite state'
+  fi
+elif [[ "$*" == *--test* ]]; then
+  echo "$*" >> calls
+  exit "$TEST_STATUS"
+fi
+""")
+                collector = root / ".github/scripts/spx_coverage.py"
+                collector.parent.mkdir(parents=True)
+                collector.write_text("from pathlib import Path\nPath('calls').write_text('reset\\n')\n")
+                result = run_shell(script, cwd=root, env={
+                    "RUNNER_TEMP": directory, "ENABLED": str(enabled).lower(), "TEST_STATUS": str(status),
+                })
+                if not enabled:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("did not register Spine", result.stderr)
+                    self.assertFalse((root / "calls").exists())
+                else:
+                    self.assertEqual(result.returncode, status, result.stderr)
+                    self.assertEqual((root / "calls").read_text().splitlines(), [
+                        "reset", "--headless --test --test-case=*SPX* --force-colors",
+                    ])
 
     def test_collection_requires_every_source_and_keeps_module_profiles(self):
         script = SCRIPTS / "ci/collect_coverage.py"
