@@ -144,14 +144,6 @@ func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
 	return trackedTreeSHA256(repoRoot, revision, "runtime build recipe", isRuntimeBuildRecipePath)
 }
 
-func runtimePackSourcePathTreeSHA256(tree []byte) (string, error) {
-	return selectedTreeSHA256(tree, "runtime pack source", isRuntimePackSourcePath)
-}
-
-func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
-	return selectedTreeSHA256(tree, "runtime build recipe", isRuntimeBuildRecipePath)
-}
-
 func trackedTreeSHA256(repoRoot, revision, label string, include func(string) bool) (string, error) {
 	tree, err := trackedTree(repoRoot, revision, label)
 	if err != nil {

@@ -111,7 +111,7 @@ func TestRuntimeBridgeTimersRespectObjectLifetime(t *testing.T) {
 	alive, removed := &gdx.Sprite{Id: 1}, &gdx.Sprite{Id: 2}
 	node := &gdx.UiNode{Id: 3}
 	state.sprites[1], state.sprites[2], state.uiNodes[3] = alive, removed, node
-	if bridge.Sprites()[1] != alive || bridge.UiNodes()[3] != node || bridge.GetUINode(3) != node || !IsNodeExist(3) {
+	if bridge.Sprites()[1] != alive || bridge.UiNodes()[3] != node || bridge.GetUINode(3) != node {
 		t.Fatal("runtime registry adapters returned wrong nodes")
 	}
 	var calls []string

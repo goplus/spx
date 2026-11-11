@@ -111,18 +111,19 @@ func TestSpriteSyncBufferSerializeReusesBuffer(t *testing.T) {
 	buffer := NewSpriteSyncBuffer(1)
 	buffer.AddTransform(1, SpriteTransform{Position: mathf.NewVec2(2, 3), Rotation: 4, Scale: mathf.NewVec2(5, 6), RenderOffset: mathf.NewVec2(7, 8), Visible: true})
 	buffer.AddDelete(9)
-	if buffer.UpdateCount() != 1 || buffer.DeleteCount() != 1 || len(buffer.GetDeleteIDs()) != 1 || buffer.GetDeleteIDs()[0] != 9 {
+	buffer.AddDelete(12)
+	if buffer.UpdateCount() != 1 || !slices.Equal(buffer.deleteIDs, []int64{9, 12}) {
 		t.Fatal("buffer counts or deletion IDs incorrect")
 	}
 
 	first := buffer.Serialize()
-	if len(first) == 0 {
-		t.Fatal("Serialize returned an empty buffer")
+	if want := []float32{1, 2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 9, 12}; !slices.Equal(first, want) {
+		t.Fatalf("Serialize = %v, want %v", first, want)
 	}
 	firstPtr := &first[0]
 
 	buffer.Clear()
-	if buffer.UpdateCount() != 0 || buffer.DeleteCount() != 0 || len(buffer.GetDeleteIDs()) != 0 || buffer.Serialize() != nil {
+	if buffer.UpdateCount() != 0 || len(buffer.deleteIDs) != 0 || buffer.Serialize() != nil {
 		t.Fatal("clear retained buffer entries")
 	}
 	buffer.AddTransform(10, SpriteTransform{Position: mathf.NewVec2(11, 12), Rotation: 13, Scale: mathf.NewVec2(14, 15), RenderOffset: mathf.NewVec2(16, 17), Visible: false})

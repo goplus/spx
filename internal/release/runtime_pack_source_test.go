@@ -31,6 +31,14 @@ import (
 	"testing"
 )
 
+func runtimePackSourcePathTreeSHA256(tree []byte) (string, error) {
+	return selectedTreeSHA256(tree, "runtime pack source", isRuntimePackSourcePath)
+}
+
+func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
+	return selectedTreeSHA256(tree, "runtime build recipe", isRuntimeBuildRecipePath)
+}
+
 func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 	t.Parallel()
 

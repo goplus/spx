@@ -112,7 +112,7 @@ func TestPinnedProjectRootRejectsEscapingSymlink(t *testing.T) {
 }
 
 func TestBuildPinnedProjectKeepsFilesystemAliveForDeferredResourceLoads(t *testing.T) {
-	t.Cleanup(releaseProjectRoot)
+	t.Cleanup(func() { retainProjectRoot(nil) })
 	projectDir := t.TempDir()
 	writeNativeTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n")
 
@@ -130,7 +130,7 @@ func TestBuildPinnedProjectKeepsFilesystemAliveForDeferredResourceLoads(t *testi
 }
 
 func TestBuildPinnedProjectClosesFilesystemOnBuildFailure(t *testing.T) {
-	t.Cleanup(releaseProjectRoot)
+	t.Cleanup(func() { retainProjectRoot(nil) })
 	projectDir := t.TempDir()
 	writeNativeTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n")
 
@@ -306,8 +306,8 @@ func TestOpenPinnedProjectRootRejectsUnreadableDirectory(t *testing.T) {
 }
 
 func TestBuildPinnedProjectReplacesAndReleasesRoots(t *testing.T) {
-	releaseProjectRoot()
-	t.Cleanup(releaseProjectRoot)
+	retainProjectRoot(nil)
+	t.Cleanup(func() { retainProjectRoot(nil) })
 	var previous fs.FS
 	for _, content := range []string{"first project", "second project"} {
 		dir := t.TempDir()
@@ -329,16 +329,16 @@ func TestBuildPinnedProjectReplacesAndReleasesRoots(t *testing.T) {
 		}
 		previous = current
 	}
-	releaseProjectRoot()
-	releaseProjectRoot()
+	retainProjectRoot(nil)
+	retainProjectRoot(nil)
 	if _, err := fs.ReadFile(previous, "main.spx"); !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("released project filesystem read error = %v, want closed", err)
 	}
 }
 
 func TestBuildPinnedProjectFailurePreservesPreviousRoot(t *testing.T) {
-	releaseProjectRoot()
-	t.Cleanup(releaseProjectRoot)
+	retainProjectRoot(nil)
+	t.Cleanup(func() { retainProjectRoot(nil) })
 	dir := t.TempDir()
 	writeNativeTestFile(t, filepath.Join(dir, "main.spx"), "previous project")
 	var previous fs.FS
@@ -389,8 +389,8 @@ func TestBuildPinnedProjectUsesConfigOverlay(t *testing.T) {
 		{name: "absent snapshot", overlay: &portableConfigOverlay{}, absent: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			releaseProjectRoot()
-			t.Cleanup(releaseProjectRoot)
+			retainProjectRoot(nil)
+			t.Cleanup(func() { retainProjectRoot(nil) })
 			dir := t.TempDir()
 			writeNativeTestFile(t, filepath.Join(dir, ".config"), "project config")
 			writeNativeTestFile(t, filepath.Join(dir, "main.spx"), "onStart => {}")
@@ -472,7 +472,7 @@ func TestRunRejectsInvalidEnvironment(t *testing.T) {
 
 func TestNativeMainCommand(t *testing.T) {
 	if mode := os.Getenv("SPX_NATIVE_TEST_MODE"); mode != "" {
-		t.Cleanup(releaseProjectRoot)
+		t.Cleanup(func() { retainProjectRoot(nil) })
 		if mode == "run twice" {
 			if code, err := run(os.Environ()); code != 0 || err != nil {
 				t.Fatalf("first run() = (%d, %v), want success", code, err)

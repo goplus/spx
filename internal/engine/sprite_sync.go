@@ -108,14 +108,6 @@ func (b *SpriteSyncBuffer) UpdateCount() int {
 	return len(b.data)
 }
 
-func (b *SpriteSyncBuffer) DeleteCount() int {
-	return len(b.deleteIDs)
-}
-
-func (b *SpriteSyncBuffer) GetDeleteIDs() []int64 {
-	return b.deleteIDs
-}
-
 func (b *SpriteSyncBuffer) Clear() {
 	b.data = b.data[:0]
 	b.deleteIDs = b.deleteIDs[:0]
