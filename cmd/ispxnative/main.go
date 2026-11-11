@@ -112,16 +112,6 @@ func retainProjectRoot(root *os.Root) {
 	}
 }
 
-func releaseProjectRoot() {
-	retainedProjectRoot.Lock()
-	root := retainedProjectRoot.root
-	retainedProjectRoot.root = nil
-	retainedProjectRoot.Unlock()
-	if root != nil {
-		_ = root.Close()
-	}
-}
-
 func validateAssetIndex(assetDir string) error {
 	found := false
 	for _, name := range []string{"index_pack.json", "index.json"} {

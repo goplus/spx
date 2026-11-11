@@ -41,14 +41,6 @@ var state = runtimeState{
 // Type registrations belong to the process and survive game sessions.
 var spriteTypes = make(map[string]reflect.Type)
 
-func IsNodeExist(id Object) bool {
-	if _, ok := state.uiNodes[id]; ok {
-		return true
-	}
-	_, ok := state.sprites[id]
-	return ok
-}
-
 func registerSpriteType(t reflect.Type) {
 	spriteTypes[t.Name()] = t
 }
