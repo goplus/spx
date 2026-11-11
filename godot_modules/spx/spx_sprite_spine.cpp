@@ -82,7 +82,6 @@ GdBool SpxSprite::set_spine_skeleton(GdString p_atlas, GdString p_skeleton,
 			callable_mp(this, &SpxSprite::_on_spine_completed));
 	anim2d->stop();
 	anim2d->hide();
-	spine_speed_scale = anim2d->get_speed_scale();
 	_update_spine_transform();
 	_update_spine_speed();
 	return true;
@@ -125,12 +124,12 @@ void SpxSprite::_update_spine_speed() {
 	if (spine_child == nullptr) {
 		return;
 	}
-	spine_child->set_time_scale(spine_playing ? Math::abs(spine_speed_scale)
-											  : 0.0f);
+	const float speed_scale = anim2d->get_speed_scale();
+	spine_child->set_time_scale(spine_playing ? Math::abs(speed_scale) : 0.0f);
 	Ref<SpineTrackEntry> entry =
 			spine_child->get_animation_state()->get_current(0);
 	if (entry.is_valid()) {
-		entry->set_reverse(playback_speed * spine_speed_scale < 0.0f);
+		entry->set_reverse(playback_speed * speed_scale < 0.0f);
 		entry->set_time_scale(Math::abs(playback_speed));
 	}
 }

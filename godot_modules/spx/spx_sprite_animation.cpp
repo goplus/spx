@@ -212,27 +212,20 @@ GdInt SpxSprite::get_anim_frame() const {
 }
 
 void SpxSprite::set_anim_speed_scale(GdFloat p_speed_scale) {
-	if (spine_child) {
-		ERR_FAIL_COND(!Math::is_finite(p_speed_scale));
-		spine_speed_scale = p_speed_scale;
-		_update_spine_speed();
-		return;
-	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
+	ERR_FAIL_COND(spine_child && !Math::is_finite(p_speed_scale));
 	anim2d->set_speed_scale(p_speed_scale);
+	_update_spine_speed();
 }
 
 GdFloat SpxSprite::get_anim_speed_scale() const {
-	if (spine_child) {
-		return spine_speed_scale;
-	}
 	ERR_FAIL_NULL_V_MSG(anim2d, 1.0f, "SpxSprite: AnimatedSprite2D component is missing.");
 	return anim2d->get_speed_scale();
 }
 
 GdFloat SpxSprite::get_anim_playing_speed() const {
 	if (spine_child) {
-		return spine_playing ? playback_speed * spine_speed_scale : 0.0f;
+		return spine_playing ? playback_speed * anim2d->get_speed_scale() : 0.0f;
 	}
 	ERR_FAIL_NULL_V_MSG(anim2d, 0.0f, "SpxSprite: AnimatedSprite2D component is missing.");
 	return anim2d->get_playing_speed();

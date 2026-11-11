@@ -175,6 +175,76 @@ TEST_CASE("[SceneTree][SPX] Spine playback resumes, loops and keeps its pose whe
 	SceneTree::get_singleton()->process(0);
 }
 
+TEST_CASE("[SceneTree][SPX] Spine speed survives pause, skeleton replacement and frame playback") {
+	TestSpx::EngineScene scene;
+	Assets files;
+	const CharString atlas_path = files.file("quad.atlas").utf8();
+	const CharString skeleton_path = files.file("quad.json").utf8();
+	SpxSpriteMgr *manager = scene.engine->get_sprite();
+	for (float speed : { 2.5f, -1.5f, 0.0f }) {
+		CAPTURE(speed);
+		const GdObj id = manager->create_bare_sprite(Vector2());
+		SpxSprite *sprite = manager->get_sprite(id);
+		AnimatedSprite2D *animated = sprite->get_anim2d();
+		Ref<SpriteFrames> frames = animated->get_sprite_frames();
+		frames->add_animation("frames");
+		frames->add_frame("frames", scene.engine->get_res()->load_texture(files.file("quad.png")));
+		manager->set_anim_speed_scale(id, 0.5f);
+		REQUIRE(sprite->set_spine_skeleton(atlas_path.get_data(), skeleton_path.get_data(), 0.1f));
+		CHECK(manager->get_anim_speed_scale(id) == doctest::Approx(0.5f));
+		SpineSprite *child = get_child(sprite);
+		REQUIRE(child != nullptr);
+		child->set_update_mode(SpineConstant::UpdateMode_Manual);
+
+		manager->play_anim(id, "move", -2.0f, true, false);
+		manager->set_anim_speed_scale(id, speed);
+		Ref<SpineTrackEntry> entry = child->get_animation_state()->get_current(0);
+		REQUIRE(entry.is_valid());
+		CHECK(manager->get_anim_speed_scale(id) == doctest::Approx(speed));
+		CHECK(animated->get_speed_scale() == doctest::Approx(speed));
+		CHECK(manager->get_anim_playing_speed(id) == doctest::Approx(-2.0f * speed));
+		CHECK(child->get_time_scale() == doctest::Approx(Math::abs(speed)));
+		CHECK(entry->get_reverse() == (speed > 0.0f));
+		child->update_skeleton(0.1f);
+		CHECK(entry->get_track_time() == doctest::Approx(0.2f * Math::abs(speed)));
+		CHECK(manager->is_playing_anim(id));
+
+		manager->pause_anim(id);
+		const float paused_time = entry->get_track_time();
+		manager->set_anim_speed_scale(id, -speed);
+		CHECK_FALSE(manager->is_playing_anim(id));
+		CHECK(manager->get_anim_playing_speed(id) == 0.0f);
+		CHECK(child->get_time_scale() == 0.0f);
+		child->update_skeleton(0.1f);
+		CHECK(entry->get_track_time() == doctest::Approx(paused_time));
+		manager->set_anim_speed_scale(id, speed);
+		manager->play_anim(id, "move", 2.0f, true, false);
+		CHECK(entry->get_track_time() == doctest::Approx(paused_time));
+		CHECK(entry->get_reverse() == (speed < 0.0f));
+		CHECK(manager->get_anim_playing_speed(id) == doctest::Approx(2.0f * speed));
+
+		REQUIRE(sprite->set_spine_skeleton(atlas_path.get_data(), skeleton_path.get_data(), 0.3f));
+		SpineSprite *replacement = get_child(sprite);
+		REQUIRE(replacement != nullptr);
+		CHECK(replacement != child);
+		replacement->set_update_mode(SpineConstant::UpdateMode_Manual);
+		CHECK_FALSE(manager->is_playing_anim(id));
+		CHECK(manager->get_anim_speed_scale(id) == doctest::Approx(speed));
+		manager->play_anim(id, "move", 2.0f, true, false);
+		CHECK(replacement->get_time_scale() == doctest::Approx(Math::abs(speed)));
+		CHECK(manager->get_anim_playing_speed(id) == doctest::Approx(2.0f * speed));
+
+		manager->clear_spine_skeleton(id);
+		CHECK_FALSE(sprite->is_spine_mode());
+		CHECK(animated->is_visible());
+		CHECK(manager->get_anim_speed_scale(id) == doctest::Approx(speed));
+		manager->play_anim(id, "frames", 2.0f, true, false);
+		CHECK(manager->is_playing_anim(id));
+		CHECK(manager->get_anim_playing_speed(id) == doctest::Approx(2.0f * speed));
+	}
+	SceneTree::get_singleton()->process(0);
+}
+
 TEST_CASE("[SceneTree][SPX] Spine loads transactionally and keeps per-sprite mix independent") {
 	TestSpx::EngineScene scene;
 	Assets files;
@@ -209,19 +279,25 @@ TEST_CASE("[SceneTree][SPX] Spine clones own their skeleton and can replace it r
 	const GdObj original_id = manager->create_bare_sprite(Vector2());
 	SpxSprite *original = manager->get_sprite(original_id);
 	REQUIRE(original->set_spine_skeleton(files.file("quad.atlas").utf8().get_data(), files.file("quad.json").utf8().get_data(), 0.1f));
+	original->set_anim_speed_scale(2.5f);
 	original->play_anim("move", 1, true, false);
 	SpineSprite *original_child = get_child(original);
 	REQUIRE(original_child != nullptr);
 	original_child->set_update_mode(SpineConstant::UpdateMode_Manual);
-	original_child->update_skeleton(0.25f);
+	original_child->update_skeleton(0.1f);
 	const GdObj clone_id = manager->clone_sprite(original_id);
 	SpxSprite *clone = manager->get_sprite(clone_id);
 	REQUIRE(clone != nullptr);
+	CHECK(clone->get_anim_speed_scale() == doctest::Approx(2.5f));
 	for (int i = 0; i < 2; ++i) {
 		REQUIRE(clone->set_spine_skeleton(files.file("quad.atlas").utf8().get_data(), files.file("quad.json").utf8().get_data(), 0.3f));
 		SpineSprite *child = get_child(clone);
 		REQUIRE(child != nullptr);
 		CHECK(child != original_child);
+		CHECK(clone->get_anim_speed_scale() == doctest::Approx(i == 0 ? 2.5f : -2.0f));
+		clone->set_anim_speed_scale(-2.0f);
+		CHECK(original->get_anim_speed_scale() == doctest::Approx(2.5f));
+		CHECK(original_child->get_time_scale() == doctest::Approx(2.5f));
 		child->set_update_mode(SpineConstant::UpdateMode_Manual);
 		clone->play_anim("move", 1, false, false);
 		child->update_skeleton(1.1f);

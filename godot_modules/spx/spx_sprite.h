@@ -364,7 +364,6 @@ private:
 	SpineSprite *spine_child = nullptr;
 	Rect2 spine_bounds;
 	String spine_animation;
-	float spine_speed_scale = 1.0f;
 	bool spine_playing = false;
 
 	// State
