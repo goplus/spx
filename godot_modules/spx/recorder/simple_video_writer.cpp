@@ -15,6 +15,7 @@ SimpleVideoWriter::~SimpleVideoWriter() {
 }
 
 Error SimpleVideoWriter::open(const String &p_path, const Size2i &p_movie_size, uint32_t p_fps, float p_quality) {
+	ERR_FAIL_COND_V(p_fps == 0, ERR_INVALID_PARAMETER);
 	quality = p_quality;
 	jpg_frame_sizes.clear();
 

@@ -15,11 +15,10 @@
 #include "simple_video_writer.h"
 #include "thread_safe_frame_buffer.h"
 #include <atomic>
-#include <chrono>
 
 /**
  * Independent video recording thread.
- * Runs at a fixed 30fps, completely independent of the game's main thread.
+ * Runs at the configured frame rate, independently of the game's main thread.
  * Reads the latest frame snapshot to generate a recorded video with a standard timeline.
  */
 class IndependentVideoRecorder {
@@ -36,6 +35,11 @@ public:
 				video_width(1920),
 				video_height(1080),
 				jpeg_quality(0.85f) {}
+
+		// Derive deadlines from frame positions instead of accumulating a rounded interval.
+		uint64_t frame_time_usec(uint64_t p_frame_index) const {
+			return p_frame_index * 1000000 / target_fps;
+		}
 	};
 
 	// Recording statistics
@@ -49,9 +53,6 @@ public:
 	};
 
 private:
-	// Recording parameters (fixed)
-	static const uint64_t FRAME_INTERVAL_USEC = 1000000 / 30; // 33333 microseconds (30fps)
-
 	// Thread control
 	Thread recording_thread;
 	std::atomic<bool> recording_active{ false };
@@ -61,7 +62,7 @@ private:
 	ThreadSafeFrameBuffer *frame_buffer = nullptr;
 	Ref<SimpleVideoWriter> video_writer;
 
-	// Recording configuration
+	// Session configuration, fixed when the AVI header is opened.
 	RecordingConfig config;
 
 	// State tracking
@@ -87,7 +88,7 @@ public:
 	~IndependentVideoRecorder();
 
 	/**
-	 * Initialize recorder
+	 * Initialize a new session (required again after stop)
 	 */
 	Error initialize(ThreadSafeFrameBuffer *p_frame_buffer,
 			const String &p_video_path,
@@ -99,7 +100,7 @@ public:
 	Error start_recording();
 
 	/**
-	 * Stop recording
+	 * Stop recording and finalize the session
 	 */
 	void stop_recording();
 
@@ -120,12 +121,7 @@ public:
 	float get_repeat_frame_ratio() const;
 
 	/**
-	 * Update configuration
-	 */
-	void update_config(const RecordingConfig &p_config);
-
-	/**
-	 * Reset statistics
+	 * Reset statistics while stopped. Active sessions keep their clock and frame identity.
 	 */
 	void reset_statistics();
 

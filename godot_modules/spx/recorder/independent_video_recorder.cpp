@@ -21,6 +21,8 @@ IndependentVideoRecorder::~IndependentVideoRecorder() {
 Error IndependentVideoRecorder::initialize(ThreadSafeFrameBuffer *p_frame_buffer,
 		const String &p_video_path,
 		const RecordingConfig &p_config) {
+	ERR_FAIL_COND_V(is_recording(), ERR_ALREADY_IN_USE);
+	ERR_FAIL_COND_V(p_config.target_fps == 0 || p_config.target_fps > 120, ERR_INVALID_PARAMETER);
 	if (!p_frame_buffer || p_video_path.is_empty()) {
 		ERR_PRINT("IndependentVideoRecorder: Invalid frame_buffer or video_path");
 		return ERR_INVALID_PARAMETER;
@@ -34,6 +36,7 @@ Error IndependentVideoRecorder::initialize(ThreadSafeFrameBuffer *p_frame_buffer
 	Size2i movie_size(config.video_width, config.video_height);
 	Error open_result = video_writer->open(p_video_path, movie_size, config.target_fps, config.jpeg_quality);
 	if (open_result != OK) {
+		video_writer.unref();
 		ERR_PRINT("IndependentVideoRecorder: Failed to open video writer");
 		return open_result;
 	}
@@ -90,6 +93,7 @@ void IndependentVideoRecorder::stop_recording() {
 
 	if (video_writer.is_valid()) {
 		video_writer->close();
+		video_writer.unref();
 	}
 
 	if (OS::get_singleton()->is_stdout_verbose()) {
@@ -117,15 +121,8 @@ float IndependentVideoRecorder::get_repeat_frame_ratio() const {
 	return (float)stats.repeated_frames_count / (float)stats.total_recorded_frames;
 }
 
-void IndependentVideoRecorder::update_config(const RecordingConfig &p_config) {
-	config = p_config;
-
-	if (video_writer.is_valid()) {
-		video_writer->set_quality(config.jpeg_quality);
-	}
-}
-
 void IndependentVideoRecorder::reset_statistics() {
+	ERR_FAIL_COND_MSG(is_recording() || is_thread_running(), "IndependentVideoRecorder: Cannot reset statistics until the worker has stopped");
 	MutexLock lock(stats_mutex);
 
 	stats = RecordingStats();
@@ -162,6 +159,7 @@ void IndependentVideoRecorder::recording_thread_func(void *p_userdata) {
 void IndependentVideoRecorder::recording_loop() {
 	uint64_t next_record_time = recording_start_time;
 	uint64_t frame_count = 0;
+	uint64_t scheduled_frames = 0;
 
 	while (recording_active.load()) {
 		uint64_t current_time = OS::get_singleton()->get_ticks_usec();
@@ -181,15 +179,15 @@ void IndependentVideoRecorder::recording_loop() {
 				}
 			}
 
-			next_record_time += FRAME_INTERVAL_USEC;
+			next_record_time = recording_start_time + config.frame_time_usec(++scheduled_frames);
 		}
 
-		// Precise sleep control
+		// Recheck stop regularly, even when the next frame is far away.
 		current_time = OS::get_singleton()->get_ticks_usec();
 		if (next_record_time > current_time) {
 			uint64_t sleep_time = next_record_time - current_time;
 			if (sleep_time > 1000) { // If waiting for more than 1ms
-				OS::get_singleton()->delay_usec(sleep_time - 500); // Leave a 500 microsecond buffer
+				OS::get_singleton()->delay_usec(MIN(sleep_time - 500, uint64_t(10000))); // Leave a 500 microsecond buffer
 			}
 		}
 	}

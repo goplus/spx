@@ -111,7 +111,8 @@ Error ObsStyleMovieWriter::write_begin(const Size2i &p_movie_size, uint32_t p_fp
 
 	output_file_path = p_base_path;
 
-	// Update video resolution in config
+	// OBS output follows obs_video_fps, independently of the caller's p_fps.
+	// The video worker uses this same session rate for its clock and AVI header.
 	obs_config.video_width = p_movie_size.width;
 	obs_config.video_height = p_movie_size.height;
 
