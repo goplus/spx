@@ -398,7 +398,7 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
 Core regression coverage is in `runtime_scheduler_test.go`,
-`runtime_events_test.go`, `runtime_event_order_test.go`,
+`runtime_events_test.go`,
 `runtime_engine_test.go`, `runtime_replay_test.go`,
 `runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/frame_test.go`,
 `internal/engine/coroutine_native_test.go`,
