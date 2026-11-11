@@ -50,22 +50,31 @@ func acquireSourceRuntime(ctx context.Context, cfg Config, env []string, cacheRo
 		}
 		// The bridge is built from the selected source graph, so the source-mode
 		// fallback consumes only the co-located Engine/PCK from this installation.
-		enginePath, packPath := filepath.Join(bin, spec.RuntimeName), filepath.Join(bin, spec.PackName)
-		manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
+		local, err = inspectLocalRuntimeBin(bin, lock, spec)
 		if err != nil {
 			return Assets{}, sourceRuntimeError(root, publishedErr, fmt.Errorf("inspect %s: %w", bin, err))
 		}
-		data, err := manifest.JSON()
-		if err != nil {
-			return Assets{}, sourceRuntimeError(root, publishedErr, err)
-		}
-		local = localRuntimeSource{manifest: manifest, bytes: data, enginePath: enginePath, packPath: packPath}
 	}
 	assets, err := materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
 	if err != nil {
 		return Assets{}, sourceRuntimeError(root, publishedErr, err)
 	}
 	return assets, nil
+}
+
+// inspectLocalRuntimeBin pairs the installed engine and PCK before either is
+// cached. Source builds and opt-in builds use the same manifest construction.
+func inspectLocalRuntimeBin(bin string, lock release.RuntimeLock, spec release.HostRuntimeSpec) (localRuntimeSource, error) {
+	enginePath, packPath := filepath.Join(bin, spec.RuntimeName), filepath.Join(bin, spec.PackName)
+	manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
+	if err != nil {
+		return localRuntimeSource{}, err
+	}
+	data, err := manifest.JSON()
+	if err != nil {
+		return localRuntimeSource{}, err
+	}
+	return localRuntimeSource{manifest: manifest, bytes: data, enginePath: enginePath, packPath: packPath}, nil
 }
 
 func resolveGoBin(ctx context.Context, cfg Config, env []string) (string, error) {

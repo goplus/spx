@@ -90,6 +90,9 @@ func parseEngineExecArgs(args []string) (engineExecConfig, error) {
 }
 
 func execEngineCommand(cfg engineExecConfig, repoRoot string) error {
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		return err
+	}
 	lockDir := cfg.lockDir
 	if !filepath.IsAbs(lockDir) {
 		lockDir = filepath.Join(repoRoot, lockDir)

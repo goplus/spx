@@ -63,6 +63,9 @@ func Run(args []string) error {
 }
 
 func InstallTools(cfg InstallConfig, runner shared.ScriptRunner) error {
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		return err
+	}
 	var args []string
 	if cfg.Web {
 		args = append(args, "--web")

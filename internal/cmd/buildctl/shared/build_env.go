@@ -42,6 +42,9 @@ type BuildEnvironment struct {
 }
 
 func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
+	if err := ValidateSpineEnvironment(); err != nil {
+		return BuildEnvironment{}, err
+	}
 	runtimeLock := release.DefaultRuntimeLock()
 	goPath, err := EnsureGoPath()
 	if err != nil {

@@ -27,6 +27,23 @@ import (
 
 const SpineMarker = ".spx-spine"
 
+// SpineBinMarked reports whether bin belongs to an opt-in runtime workspace.
+// Invalid markers and lookup failures are errors, never default workspaces.
+func SpineBinMarked(bin string) (bool, error) {
+	marker := filepath.Join(bin, SpineMarker)
+	info, err := os.Lstat(marker)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("Spine workspace marker is not a regular file: %s", marker)
+	}
+	return true, nil
+}
+
 func SpineEnabled(env []string) (bool, error) {
 	value := ""
 	found := false
@@ -69,8 +86,10 @@ func LocalSpineBin(env []string, bin string) (string, bool, error) {
 	}
 	marked := false
 	if bin != "" {
-		info, err := os.Stat(filepath.Join(bin, SpineMarker))
-		marked = err == nil && info.Mode().IsRegular()
+		marked, err = SpineBinMarked(bin)
+		if err != nil {
+			return "", enabled, err
+		}
 	}
 	if !enabled {
 		if marked {

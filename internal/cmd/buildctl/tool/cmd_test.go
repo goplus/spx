@@ -30,6 +30,7 @@ import (
 
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
 type toolRecordedCall struct {
@@ -38,8 +39,9 @@ type toolRecordedCall struct {
 }
 
 type toolRecordingRunner struct {
-	calls []toolRecordedCall
-	err   error
+	calls     []toolRecordedCall
+	err       error
+	beforeRun func() error
 }
 
 func TestToolDispatchAndInstallArguments(t *testing.T) {
@@ -262,6 +264,11 @@ func TestCleanInstalledAssetsRejectsLookupAndGlobFailures(t *testing.T) {
 }
 
 func (r *toolRecordingRunner) RunScript(path string, args ...string) error {
+	if r.beforeRun != nil {
+		if err := r.beforeRun(); err != nil {
+			return err
+		}
+	}
 	r.calls = append(r.calls, toolRecordedCall{path: path, args: append([]string(nil), args...)})
 	return r.err
 }
@@ -277,5 +284,35 @@ func writeToolFixture(t *testing.T, path, content string, mode fs.FileMode) {
 	}
 	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestInstallToolsPreparesSpineBeforeScript(t *testing.T) {
+	goPath := filepath.Join(t.TempDir(), "spine")
+	t.Setenv("GOPATH", goPath)
+	t.Setenv("GOBIN", "")
+	t.Setenv("SPX_SPINE", "1")
+	t.Setenv("SPX_SPINE_GOPATH", goPath)
+	runner := &toolRecordingRunner{beforeRun: func() error {
+		for _, name := range []string{runtimevariant.SpineMarker, "_sc_"} {
+			if info, err := os.Stat(filepath.Join(goPath, "bin", name)); err != nil || !info.Mode().IsRegular() {
+				return fmt.Errorf("script started before %s was prepared: %v", name, err)
+			}
+		}
+		return nil
+	}}
+	if err := InstallTools(InstallConfig{}, runner); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatal("installer was not run")
+	}
+	t.Setenv("SPX_SPINE", "0")
+	runner.calls = nil
+	if err := InstallTools(InstallConfig{}, runner); err == nil || !strings.Contains(err.Error(), "reserved for Spine") {
+		t.Fatalf("default installer accepted Spine workspace: %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatal("installer ran before rejecting reserved workspace")
 	}
 }

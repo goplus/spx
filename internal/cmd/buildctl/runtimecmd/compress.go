@@ -41,6 +41,9 @@ func compressWasmArtifacts() error {
 		return err
 	}
 
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		return err
+	}
 	if err := ensureBrotliAvailable(); err != nil {
 		return err
 	}

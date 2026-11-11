@@ -51,3 +51,36 @@ func TestLocalSpineBin(t *testing.T) {
 		t.Fatalf("default behavior changed: %v, %v", selected, err)
 	}
 }
+
+func TestLocalSpineBinRejectsInvalidMarker(t *testing.T) {
+	for _, kind := range []string{"directory", "symlink", "dangling symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			bin := filepath.Join(root, "bin")
+			if err := os.Mkdir(bin, 0755); err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(bin, SpineMarker)
+			if kind == "directory" {
+				if err := os.Mkdir(marker, 0755); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				target := filepath.Join(root, "target")
+				if kind == "symlink" {
+					if err := os.WriteFile(target, nil, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Symlink(target, marker); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
+			}
+			for _, enabled := range []string{"0", "1"} {
+				if _, _, err := LocalSpineBin([]string{"SPX_SPINE=" + enabled, "GOPATH=" + root}, bin); err == nil {
+					t.Fatalf("accepted %s marker with SPX_SPINE=%s", kind, enabled)
+				}
+			}
+		})
+	}
+}

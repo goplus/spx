@@ -112,16 +112,11 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 			}
 			return materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
 		}
-		enginePath, packPath := filepath.Join(spineBin, spec.RuntimeName), filepath.Join(spineBin, spec.PackName)
-		manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
+		local, err := inspectLocalRuntimeBin(spineBin, lock, spec)
 		if err != nil {
 			return Assets{}, fmt.Errorf("Spine local runtime unavailable; run SPX_SPINE=1 make dev: %w", err)
 		}
-		data, err := manifest.JSON()
-		if err != nil {
-			return Assets{}, err
-		}
-		return materializeLocalRuntime(ctx, cacheRoot, lock, spec, localRuntimeSource{manifest: manifest, bytes: data, enginePath: enginePath, packPath: packPath})
+		return materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
 	}
 	offline, err := runtimeOffline(env)
 	if err != nil {

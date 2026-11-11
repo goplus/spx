@@ -69,6 +69,9 @@ func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {
 }
 
 func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) error {
+	if err := shared.ValidateWebMode(cfg.mode); err != nil {
+		return err
+	}
 	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
 		return err
 	}

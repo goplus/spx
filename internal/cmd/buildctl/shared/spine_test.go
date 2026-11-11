@@ -22,6 +22,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
 func TestSpineEnabled(t *testing.T) {
@@ -98,7 +100,7 @@ func TestSpineWorkspaceIsolation(t *testing.T) {
 	if err := prepareSpineWorkspace(root); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{spineWorkspaceMarker, "_sc_"} {
+	for _, name := range []string{runtimevariant.SpineMarker, "_sc_"} {
 		if _, err := os.Stat(filepath.Join(root, "bin", name)); err != nil {
 			t.Fatal(err)
 		}
@@ -153,5 +155,58 @@ func TestSpineTemplateDirectory(t *testing.T) {
 	want := filepath.Join(root, "bin", "editor_data", "export_templates", "4.5.test")
 	if err != nil || got != want {
 		t.Fatalf("template path = %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestValidateSpineEnvironmentDoesNotPrepareWorkspace(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "spine")
+	t.Setenv("GOPATH", root)
+	t.Setenv("GOBIN", "")
+	t.Setenv("SPX_SPINE", "1")
+	t.Setenv("SPX_SPINE_GOPATH", root)
+	if err := ValidateSpineEnvironment(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("validation created workspace: %v", err)
+	}
+	if err := PrepareSpineEnvironment(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{runtimevariant.SpineMarker, "_sc_"} {
+		path := filepath.Join(root, "bin", name)
+		if err := os.WriteFile(path, []byte("unchanged"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ValidateSpineEnvironment(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{runtimevariant.SpineMarker, "_sc_"} {
+		data, err := os.ReadFile(filepath.Join(root, "bin", name))
+		if err != nil || string(data) != "unchanged" {
+			t.Fatalf("validation rewrote %s: %q, %v", name, data, err)
+		}
+	}
+}
+
+func TestSpineWorkspaceRejectsInvalidMarker(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "bin", runtimevariant.SpineMarker), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOPATH", root)
+	t.Setenv("GOBIN", "")
+	t.Setenv("SPX_SPINE_GOPATH", root)
+	for _, enabled := range []string{"0", "1"} {
+		t.Setenv("SPX_SPINE", enabled)
+		for _, check := range []func() error{ValidateSpineEnvironment, PrepareSpineEnvironment} {
+			if err := check(); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+				t.Fatalf("invalid marker accepted with SPX_SPINE=%s: %v", enabled, err)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "bin", "_sc_")); !os.IsNotExist(err) {
+		t.Fatalf("created self-contained flag for invalid marker: %v", err)
 	}
 }

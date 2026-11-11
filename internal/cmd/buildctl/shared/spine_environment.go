@@ -26,32 +26,48 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
-const spineWorkspaceMarker = ".spx-spine"
+// ValidateSpineEnvironment checks runtime isolation without creating a workspace.
+func ValidateSpineEnvironment() error {
+	_, err := spineGoPath()
+	return err
+}
 
-// PrepareSpineEnvironment keeps local opt-in runtimes separate from published
-// assets. The persistent marker also prevents later default builds in this bin.
+// PrepareSpineEnvironment reserves the workspace before installing or exporting
+// local runtime assets. Read-only commands should use validation instead.
 func PrepareSpineEnvironment() error {
+	goPath, err := spineGoPath()
+	if err != nil || goPath == "" {
+		return err
+	}
+	return prepareSpineWorkspace(goPath)
+}
+
+// spineGoPath returns the dedicated GOPATH only when Spine is enabled.
+func spineGoPath() (string, error) {
 	enabled, err := SpineEnabled()
 	if err != nil {
-		return err
+		return "", err
 	}
 	goPath, err := EnsureGoPath()
 	if err != nil {
-		return err
+		return "", err
 	}
-	marker := filepath.Join(goPath, "bin", spineWorkspaceMarker)
+	marked, err := runtimevariant.SpineBinMarked(filepath.Join(goPath, "bin"))
+	if err != nil {
+		return "", err
+	}
 	if !enabled {
-		if _, err := os.Stat(marker); err == nil {
-			return fmt.Errorf("GOPATH %s is reserved for Spine builds; set SPX_SPINE=1 and SPX_SPINE_GOPATH, or use your normal GOPATH", goPath)
+		if marked {
+			return "", fmt.Errorf("GOPATH %s is reserved for Spine builds; set SPX_SPINE=1 and SPX_SPINE_GOPATH, or use your normal GOPATH", goPath)
 		}
-		return nil
+		return "", nil
 	}
 	if goBin := os.Getenv("GOBIN"); goBin != "" && filepath.Clean(goBin) != filepath.Join(goPath, "bin") {
-		return fmt.Errorf("SPX_SPINE=1 requires GOBIN to be unset or equal to the dedicated GOPATH/bin")
+		return "", fmt.Errorf("SPX_SPINE=1 requires GOBIN to be unset or equal to the dedicated GOPATH/bin")
 	}
 	dedicated := os.Getenv("SPX_SPINE_GOPATH")
 	if dedicated == "" || !filepath.IsAbs(goPath) || len(filepath.SplitList(goPath)) != 1 || filepath.Clean(dedicated) != filepath.Clean(goPath) {
-		return fmt.Errorf("SPX_SPINE=1 requires an explicit dedicated absolute GOPATH and matching SPX_SPINE_GOPATH; see docs/en/dev/engine/spine.md")
+		return "", fmt.Errorf("SPX_SPINE=1 requires an explicit dedicated absolute GOPATH and matching SPX_SPINE_GOPATH; see docs/en/dev/engine/spine.md")
 	}
 	cmd := exec.Command("go", "env", "GOPATH")
 	env := CurrentEnvMap()
@@ -59,21 +75,21 @@ func PrepareSpineEnvironment() error {
 	cmd.Env = EnvMapToSlice(env)
 	output, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("resolve default GOPATH for Spine isolation: %w", err)
+		return "", fmt.Errorf("resolve default GOPATH for Spine isolation: %w", err)
 	}
 	if filepath.Clean(strings.TrimSpace(string(output))) == filepath.Clean(goPath) {
-		return fmt.Errorf("Spine GOPATH must differ from the default GOPATH %s", goPath)
+		return "", fmt.Errorf("Spine GOPATH must differ from the default GOPATH %s", goPath)
 	}
-	return prepareSpineWorkspace(goPath)
+	return goPath, nil
 }
 
 func prepareSpineWorkspace(goPath string) error {
 	bin := filepath.Join(goPath, "bin")
-	marker := filepath.Join(bin, spineWorkspaceMarker)
-	if _, err := os.Stat(marker); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
+	marked, err := runtimevariant.SpineBinMarked(bin)
+	if err != nil {
+		return err
+	}
+	if !marked {
 		entries, err := os.ReadDir(bin)
 		if err != nil && !os.IsNotExist(err) {
 			return err
@@ -85,7 +101,7 @@ func prepareSpineWorkspace(goPath string) error {
 	if err := os.MkdirAll(bin, 0755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(marker, []byte("Dedicated local Spine runtime; do not install default/published runtime assets here.\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, runtimevariant.SpineMarker), []byte("Dedicated local Spine runtime; do not install default/published runtime assets here.\n"), 0644); err != nil {
 		return err
 	}
 	// Godot self-contained mode stores export templates beside the editor, rather

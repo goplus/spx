@@ -18,6 +18,7 @@ package runtimecmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
 type recordedCall struct {
@@ -203,7 +205,7 @@ func TestRuntimeExportWebSequence(t *testing.T) {
 	}
 }
 
-func TestRuntimeExportWebInvalidModeInstallsToolsBeforeRejecting(t *testing.T) {
+func TestRuntimeExportWebInvalidModeRejectsBeforeInstallingTools(t *testing.T) {
 	for _, mode := range []string{"", "unknown"} {
 		t.Run(mode, func(t *testing.T) {
 			runner := &recordingRunner{}
@@ -211,8 +213,7 @@ func TestRuntimeExportWebInvalidModeInstallsToolsBeforeRejecting(t *testing.T) {
 			if err == nil || err.Error() != "unsupported web-mode: "+mode {
 				t.Fatalf("error = %v", err)
 			}
-			want := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}}}
-			if !reflect.DeepEqual(runner.calls, want) || len(runner.commands) != 0 {
+			if len(runner.calls) != 0 || len(runner.commands) != 0 {
 				t.Fatalf("calls = %#v; commands = %#v", runner.calls, runner.commands)
 			}
 		})
@@ -1022,7 +1023,7 @@ func mustWriteExecutable(t *testing.T, path, script string) {
 func assertRuntimeWorkspacesCleaned(t *testing.T, repoRoot string) {
 	t.Helper()
 	entries, err := os.ReadDir(filepath.Join(repoRoot, ".tmp"))
-	if err != nil || len(entries) != 0 {
+	if err != nil && !os.IsNotExist(err) || len(entries) != 0 {
 		t.Fatalf("runtime workspaces remain: %v, %v", entries, err)
 	}
 }
@@ -1079,7 +1080,15 @@ func TestSpineExportPreservesDefaultLocalRuntimeManifest(t *testing.T) {
 		return result
 	}
 	before := snapshot()
+	spinePath := filepath.Join(t.TempDir(), "spine")
+	t.Setenv("GOPATH", spinePath)
+	t.Setenv("SPX_SPINE_GOPATH", spinePath)
+	t.Setenv("GOBIN", "")
 	t.Setenv("SPX_SPINE", "1")
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		t.Fatal(err)
+	}
+	bin = filepath.Join(spinePath, "bin")
 	mustWriteFile(t, filepath.Join(bin, spec.RuntimeName), []byte("spine-engine"))
 	if err := ExportPackRuntime(runner); err != nil {
 		t.Fatal(err)
@@ -1093,5 +1102,50 @@ func TestSpineExportPreservesDefaultLocalRuntimeManifest(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(freshRoot, ".spx")); !os.IsNotExist(err) {
 		t.Fatalf("Spine export created default cache: %v", err)
+	}
+}
+
+func TestRuntimeExportsGuardSpineWorkspace(t *testing.T) {
+	for _, enabled := range []string{"0", "1"} {
+		for name, export := range map[string]func(shared.ScriptRunner) error{
+			"pack":     ExportPackRuntime,
+			"web":      func(r shared.ScriptRunner) error { return ExportPreparedWebRuntime("normal", r) },
+			"template": func(r shared.ScriptRunner) error { return ExportWebTemplateRuntime("normal", r) },
+		} {
+			t.Run(enabled+"/"+name, func(t *testing.T) {
+				runner := newRuntimeFixtureRunner(t)
+				goPath := os.Getenv("GOPATH")
+				t.Setenv("GOBIN", "")
+				t.Setenv("SPX_SPINE", enabled)
+				t.Setenv("SPX_SPINE_GOPATH", goPath)
+				if enabled == "0" {
+					mustWriteFile(t, filepath.Join(goPath, "bin", runtimevariant.SpineMarker), nil)
+					if err := export(runner); err == nil || !strings.Contains(err.Error(), "reserved for Spine") {
+						t.Fatalf("default export accepted Spine workspace: %v", err)
+					}
+					if len(runner.commands) != 0 {
+						t.Fatal("export ran before rejecting reserved workspace")
+					}
+					if _, err := os.Stat(filepath.Join(runner.repoRoot, ".tmp")); !os.IsNotExist(err) {
+						t.Fatalf("rejected export created a temporary workspace: %v", err)
+					}
+					return
+				}
+				runner.commandHook = func(workdir, command string, args ...string) error {
+					for _, marker := range []string{runtimevariant.SpineMarker, "_sc_"} {
+						if info, err := os.Stat(filepath.Join(goPath, "bin", marker)); err != nil || !info.Mode().IsRegular() {
+							return fmt.Errorf("export ran before %s was prepared: %v", marker, err)
+						}
+					}
+					return simulateRuntimeCommandOutputs(workdir, command, args...)
+				}
+				if err := export(runner); err != nil {
+					t.Fatal(err)
+				}
+				if len(runner.commands) == 0 {
+					t.Fatal("export was not run")
+				}
+			})
+		}
 	}
 }
