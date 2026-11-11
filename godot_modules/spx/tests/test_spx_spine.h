@@ -107,6 +107,7 @@ TEST_CASE("[SceneTree][SPX] Spine manager rejects invalid sprite handles") {
 
 namespace TestSpxSpine {
 
+static int changed = 0;
 static int looped = 0;
 static int finished = 0;
 
@@ -150,7 +151,7 @@ TEST_CASE("[SceneTree][SPX] Spine playback resumes, loops and keeps its pose whe
 	CHECK_FALSE(manager->has_spine_animation(id, "missing"));
 	Ref<Shader> shader;
 	shader.instantiate();
-	shader->set_code("shader_type canvas_item; uniform vec4 color = vec4(1.0); uniform float alpha_amount = 0.0;");
+	shader->set_code("shader_type canvas_item; uniform vec4 color = vec4(1.0); uniform float alpha_amount = 0.0; uniform float brightness = 0.0;");
 	Ref<ShaderMaterial> material;
 	material.instantiate();
 	material->set_shader(shader);
@@ -159,6 +160,10 @@ TEST_CASE("[SceneTree][SPX] Spine playback resumes, loops and keeps its pose whe
 	sprite->set_material_params("alpha_amount", 0.5);
 	CHECK(child->get_modulate().r == doctest::Approx(0.5));
 	CHECK(child->get_modulate().a == doctest::Approx(0.4));
+	const Color ghost_color = child->get_modulate();
+	sprite->set_material_params("brightness", 0.75);
+	CHECK(sprite->get_material_params("brightness") == doctest::Approx(0.75));
+	CHECK(child->get_modulate() == ghost_color);
 	sprite->set_color(Color(1, 1, 1, 0.6));
 	CHECK(child->get_modulate().a == doctest::Approx(0.3));
 	sprite->set_material_params("alpha_amount", 0);
@@ -309,6 +314,116 @@ TEST_CASE("[SceneTree][SPX] Spine loads transactionally and keeps per-sprite mix
 	CHECK(sprite->is_spine_mode());
 }
 
+TEST_CASE("[SceneTree][SPX] Spine resource failures preserve playback and recover after repair") {
+	TestSpx::EngineScene scene;
+	Assets files;
+	SpxSpriteMgr *manager = scene.engine->get_sprite();
+	SpxSprite *sprite = manager->get_sprite(manager->create_bare_sprite(Vector2()));
+	const CharString atlas = files.file("quad.atlas").utf8();
+	const CharString skeleton = files.file("quad.json").utf8();
+	REQUIRE(sprite->set_spine_skeleton(atlas.get_data(), skeleton.get_data(), 0.1f));
+	SpineSprite *child = get_child(sprite);
+	REQUIRE(child != nullptr);
+	child->set_update_mode(SpineConstant::UpdateMode_Manual);
+	sprite->play_anim("move", 2.0f, true, false);
+	sprite->set_color(Color(0.2, 0.4, 0.6, 0.8));
+	child->update_skeleton(0.125f);
+	Ref<SpineTrackEntry> entry = child->get_animation_state()->get_current(0);
+	REQUIRE(entry.is_valid());
+	const Rect2 bounds = sprite->get_spine_bounds();
+	auto check_preserved = [&]() {
+		CHECK(get_child(sprite) == child);
+		CHECK(sprite->is_playing_anim());
+		CHECK(sprite->get_anim_playing_speed() == 2.0f);
+		CHECK(TestSpx::take_string(sprite->get_anim()) == "move");
+		CHECK(entry->get_track_time() == doctest::Approx(0.25f));
+		CHECK(sprite->get_spine_bounds() == bounds);
+		CHECK(child->get_modulate() == Color(0.2, 0.4, 0.6, 0.8));
+	};
+	for (float mix : { -0.1f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity() }) {
+		ERR_PRINT_OFF;
+		CHECK_FALSE(sprite->set_spine_skeleton(atlas.get_data(), skeleton.get_data(), mix));
+		ERR_PRINT_ON;
+		check_preserved();
+	}
+	const String valid = FileAccess::get_file_as_string(files.file("quad.json"));
+	for (const String &name : { String("missing.json"), String("invalid.json"), String("broken.json") }) {
+		CAPTURE(name);
+		if (name == "invalid.json") {
+			files.write(name, "{}");
+		} else if (name == "broken.json") {
+			// Valid export header, but an attachment refers to an unknown bone.
+			files.write(name, R"({"skeleton":{"spine":"4.2.99"},"bones":[{"name":"root"}],"slots":[{"name":"slot","bone":"missing"}]})");
+		}
+		const CharString path = files.file(name).utf8();
+		ERR_PRINT_OFF;
+		CHECK_FALSE(sprite->set_spine_skeleton(atlas.get_data(), path.get_data(), 0.1f));
+		ERR_PRINT_ON;
+		check_preserved();
+		files.write(name, valid);
+		// Parsed skeleton files are cached, so authored-file changes invalidate them.
+		if (name == "broken.json") {
+			scene.engine->get_res()->update_caches({ files.file(name) });
+		}
+		Ref<SpineSkeletonDataResource> repaired = scene.engine->get_res()->load_spine_data(files.file("quad.atlas"), files.file(name), 0.0f);
+		REQUIRE(repaired.is_valid());
+		CHECK(repaired->get_default_mix() == 0.0f);
+		check_preserved();
+	}
+	REQUIRE(sprite->set_spine_skeleton(atlas.get_data(), files.file("broken.json").utf8().get_data(), 0.0f));
+	CHECK(get_child(sprite) != child);
+	CHECK_FALSE(sprite->is_playing_anim());
+	CHECK(sprite->has_spine_animation("move"));
+	CHECK(sprite->get_spine_bounds() == bounds);
+	CHECK(get_child(sprite)->get_modulate() == Color(0.2, 0.4, 0.6, 0.8));
+	SceneTree::get_singleton()->process(0);
+}
+
+TEST_CASE("[SceneTree][SPX] Spine secondary tracks and blocked signals preserve primary playback") {
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	Assets files;
+	SpxSprite *sprite = scene.engine->get_sprite()->get_sprite(scene.engine->get_sprite()->create_bare_sprite(Vector2()));
+	REQUIRE(sprite->set_spine_skeleton(files.file("quad.atlas").utf8().get_data(), files.file("quad.json").utf8().get_data(), 0.1f));
+	SpineSprite *child = get_child(sprite);
+	REQUIRE(child != nullptr);
+	child->set_update_mode(SpineConstant::UpdateMode_Manual);
+	changed = looped = finished = 0;
+	scene.engine->get_callbacks()->func_on_sprite_animation_changed = [](GdObj) { ++changed; };
+	scene.engine->get_callbacks()->func_on_sprite_animation_looped = [](GdObj) { ++looped; };
+	scene.engine->get_callbacks()->func_on_sprite_animation_finished = [](GdObj) { ++finished; };
+	sprite->play_anim("move", 1.0f, true, false);
+	CHECK(changed == 1);
+	Ref<SpineAnimationState> state = child->get_animation_state();
+	Ref<SpineTrackEntry> secondary = state->set_animation("move", false, 1);
+	REQUIRE(secondary.is_valid());
+	secondary->set_animation_end(0.25f);
+	child->update_skeleton(0.5f);
+	CHECK(secondary->is_complete());
+	CHECK(changed == 1);
+	CHECK(finished == 0);
+	CHECK(looped == 0);
+	CHECK(sprite->is_playing_anim());
+	CHECK(state->get_current(0)->get_track_time() == doctest::Approx(0.5f));
+	state->clear_track(1);
+	sprite->set_block_signals(true);
+	child->update_skeleton(0.75f);
+	CHECK(looped == 0);
+	CHECK(sprite->is_playing_anim());
+	sprite->stop_anim();
+	sprite->play_anim("move", 1.0f, false, false);
+	child->update_skeleton(1.25f);
+	CHECK(changed == 1);
+	CHECK(finished == 0);
+	CHECK_FALSE(sprite->is_playing_anim());
+	CHECK(child->get_time_scale() == 0.0f);
+	sprite->set_block_signals(false);
+	sprite->play_anim("move", 1.0f, false, false);
+	child->update_skeleton(1.25f);
+	CHECK(changed == 2);
+	CHECK(finished == 1);
+	CHECK_FALSE(sprite->is_playing_anim());
+}
+
 TEST_CASE("[SceneTree][SPX] Spine clones own their skeleton and can replace it repeatedly") {
 	TestSpx::EngineScene scene;
 	Assets files;
@@ -404,6 +519,12 @@ TEST_CASE("[SceneTree][SPX] Spine transforms and color update before clearing") 
 	SpxSpriteMgr *manager = scene.engine->get_sprite();
 	const GdObj id = manager->create_bare_sprite(Vector2());
 	SpxSprite *sprite = manager->get_sprite(id);
+	const GdObj peer_id = manager->create_bare_sprite(Vector2());
+	SpxSprite *peer = manager->get_sprite(peer_id);
+	const CharString texture = files.file("quad.png").utf8();
+	sprite->set_texture(texture.get_data());
+	peer->set_texture(texture.get_data());
+	CHECK(manager->check_collision_with_sprite(id, peer_id, 0.1f, true));
 	sprite->set_position(Vector2(20, 30));
 	sprite->set_render_offset(Vector2(5, 7));
 	sprite->set_anim_offset(Vector2(3, 4));
@@ -415,6 +536,13 @@ TEST_CASE("[SceneTree][SPX] Spine transforms and color update before clearing") 
 	SpineSprite *child = get_child(sprite);
 	REQUIRE(child != nullptr);
 	child->set_update_mode(SpineConstant::UpdateMode_Manual);
+	peer->set_position(Vector2(20, 30));
+	peer->set_render_offset(Vector2(5, 7));
+	peer->set_anim_offset(Vector2(3, 4));
+	peer->set_render_scale(Vector2(2, 3));
+	CHECK(sprite->get_rect().intersects(peer->get_rect()));
+	CHECK_FALSE(manager->check_collision_with_sprite(id, peer_id, 0.1f, true));
+	CHECK_FALSE(manager->check_collision_with_sprite(peer_id, id, 0.1f, true));
 	CHECK(child->get_modulate() == Color(0.2, 0.4, 0.6, 0.8));
 	CHECK(child->get_scale() == Vector2(-2, -3));
 	CHECK(child->get_position() == Vector2(6, 12));
