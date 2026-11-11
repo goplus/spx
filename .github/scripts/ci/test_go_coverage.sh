@@ -53,6 +53,8 @@ case "${1:-}" in
       ./internal/cmd/buildctl/engine
     covered_test coverage-fileutil-windows.out -v \
       -run '^TestReplaceRegularFile' ./internal/base/fileutil
+    covered_test coverage-interpsession-windows.out -v \
+      -run '^Test(PrepareSession|ReplaceRootFile.*)$' ./internal/interpsession
     covered_test coverage-runtimebundle-windows.out -v \
       -run '^Test(CacheDefaultPermissionsProtectNestedFilesAndRepair|CacheUsesConfiguredWindowsPermissions|WindowsPrivateDACLIsAppliedAtCreation|AcquireCreatesProtectedWindowsCache|VerifyPrivateSecurityDescriptor.*)$' \
       ./internal/runtimebundle

@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -124,6 +125,25 @@ func TestPinnedDirectoryRejectsInvalidAndChangedRoots(t *testing.T) {
 	if sub, err := ensurePinnedSubdirectory(root, "valid", 0700); err == nil {
 		sub.Close()
 		t.Fatal("accepted closed parent")
+	}
+}
+
+func TestEnsureDirectoryCreationFailure(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions and an unprivileged user")
+	}
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+	path := filepath.Join(parent, "session")
+	err := ensureDirectoryNoSymlink("SessionDir", path, 0o700)
+	if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "create SessionDir") {
+		t.Fatalf("ensureDirectoryNoSymlink = %v; want create failure wrapping permission error", err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("failed creation left a session directory: %v", err)
 	}
 }
 

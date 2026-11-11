@@ -166,6 +166,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "coverage-buildctl-windows.out": ["./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool"],
             "coverage-engine-windows.out": ["./internal/cmd/buildctl/engine"],
             "coverage-fileutil-windows.out": ["./internal/base/fileutil"],
+            "coverage-interpsession-windows.out": ["./internal/interpsession"],
             "coverage-runtimebundle-windows.out": ["./internal/runtimebundle"],
         },
         "web": {
@@ -261,6 +262,18 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         for name in ("TestReplaceRegularFile",
                      "TestReplaceRegularFileRejectsDestinationBeforeRenaming",
                      "TestReplaceRegularFilePreservesFilesystemErrors"):
+            with self.subTest(name=name):
+                self.assertRegex(name, args[args.index("-run") + 1])
+
+    def test_windows_coverage_includes_session_replacement_contract(self):
+        result = self.run_coverage_suite("windows")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        session_test, = [call for call in self.recorded_calls() if "./internal/interpsession" in call["args"]]
+        args = session_test["args"]
+        for name in ("TestPrepareSession",
+                     "TestReplaceRootFileFailurePreservesDestination",
+                     "TestReplaceRootFileTemporaryNameCollisions",
+                     "TestReplaceRootFilePreservesCompetingDestination"):
             with self.subTest(name=name):
                 self.assertRegex(name, args[args.index("-run") + 1])
 
