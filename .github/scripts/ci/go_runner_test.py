@@ -170,6 +170,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         },
         "web": {
             "coverage-web.out": [
+                "./internal/core/project",
                 "./internal/gdengine/binding/web", "./internal/gdengine/impl", "./internal/engine/wrap",
                 "./pkg/ispx", "./internal/engine/coroutine",
             ],
@@ -224,6 +225,8 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     options = [f"-coverprofile={Path(profile).name}", "-covermode=atomic"]
                     if web:
                         options.append('-exec="/mock/go root/lib/wasm/go_js_wasm_exec"')
+                    if suite == "web" and profile == "coverage-web.out":
+                        options.append("-timeout=1m")
                     if profile == "coverage-engine-packmode.out":
                         options.extend(["-tags", "packmode"])
                     elif suite in ("native", "codegen"):
