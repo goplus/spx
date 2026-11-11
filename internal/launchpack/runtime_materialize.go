@@ -29,20 +29,21 @@ import (
 )
 
 type publishedRuntimeArchives struct {
-	engine *runtimebundle.AcquiredFile
-	pack   *runtimebundle.AcquiredFile
+	engine       *runtimebundle.AcquiredFile
+	pack         *runtimebundle.AcquiredFile
+	engineSHA256 string
+	packSHA256   string
 }
 
 type runtimeMaterializationInput struct {
-	manifestSHA256  string
-	enginePath      string
-	packPath        string
-	archives        *publishedRuntimeArchives
-	engineSize      int64
-	engineSHA256    string
-	packSize        int64
-	packSHA256      string
-	releaseManifest release.RuntimeManifest
+	manifestSHA256 string
+	enginePath     string
+	packPath       string
+	archives       *publishedRuntimeArchives
+	engineSize     int64
+	engineSHA256   string
+	packSize       int64
+	packSHA256     string
 }
 
 type runtimeBundleOrigin struct {
@@ -88,9 +89,11 @@ func materializePublishedRuntime(ctx context.Context, cacheRoot string, lock rel
 	}
 	defer packFile.Close()
 	return materializeRuntimeBundle(ctx, cacheRoot, lock, spec, runtimeMaterializationInput{
-		manifestSHA256:  source.manifestSHA256,
-		archives:        &publishedRuntimeArchives{engine: engineFile, pack: packFile},
-		releaseManifest: source.manifest,
+		manifestSHA256: source.manifestSHA256,
+		archives: &publishedRuntimeArchives{
+			engine: engineFile, pack: packFile,
+			engineSHA256: engineAsset.SHA256, packSHA256: packAsset.SHA256,
+		},
 	})
 }
 
@@ -177,13 +180,9 @@ func materializeRuntimeBundle(ctx context.Context, cacheRoot string, lock releas
 		origin.Mode = "local"
 	} else {
 		origin.EngineArchive = spec.ArchiveName
-		if asset, ok := input.releaseManifest.Asset(spec.ArchiveName); ok {
-			origin.EngineArchiveSHA256 = asset.SHA256
-		}
+		origin.EngineArchiveSHA256 = input.archives.engineSHA256
 		origin.PackArchive = release.RuntimeAssetZipName
-		if asset, ok := input.releaseManifest.Asset(release.RuntimeAssetZipName); ok {
-			origin.PackArchiveSHA256 = asset.SHA256
-		}
+		origin.PackArchiveSHA256 = input.archives.packSHA256
 	}
 	originBytes, err := json.Marshal(origin)
 	if err != nil {
