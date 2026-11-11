@@ -20,7 +20,7 @@
 /**
  * Independent video recording thread.
  * Runs at a fixed 30fps, completely independent of the game's main thread.
- * Reads frame data from a double buffer to generate a recorded video with a standard timeline.
+ * Reads the latest frame snapshot to generate a recorded video with a standard timeline.
  */
 class IndependentVideoRecorder {
 public:
@@ -30,16 +30,12 @@ public:
 		uint32_t video_width; // Video width
 		uint32_t video_height; // Video height
 		float jpeg_quality; // JPEG quality
-		bool enable_timestamp_chunks; // Enable timestamp recording
-		bool enable_repeat_frame_marking; // Enable repeat frame marking
 
 		RecordingConfig() :
 				target_fps(30),
 				video_width(1920),
 				video_height(1080),
-				jpeg_quality(0.85f),
-				enable_timestamp_chunks(true),
-				enable_repeat_frame_marking(true) {}
+				jpeg_quality(0.85f) {}
 	};
 
 	// Recording statistics
@@ -69,9 +65,7 @@ private:
 	RecordingConfig config;
 
 	// State tracking
-	uint32_t last_game_frame_sequence = 0;
 	ThreadSafeFrameBuffer::FrameData last_valid_frame;
-	bool has_valid_frame = false;
 
 	// Statistics
 	RecordingStats stats;

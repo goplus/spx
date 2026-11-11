@@ -34,6 +34,7 @@
 #include "../spx_ui.h"
 #include "../spx_ui_binding.h"
 #include "scene/gui/button.h"
+#include "scene/main/scene_tree.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxUiBinding {
@@ -264,8 +265,12 @@ TEST_CASE("[SceneTree][SPX] Rebinding a UI wrapper disconnects the previous cont
 	CHECK(ui.owns_binding(second_binding));
 	CHECK(ui.get_button() == second);
 	CHECK_FALSE(first->is_queued_for_deletion());
+	CHECK(first_binding_node->is_queued_for_deletion());
 	first->emit_signal(SNAME("pressed"));
 	CHECK(listener.events.size() == 1);
+	SceneTree::get_singleton()->process(0);
+	CHECK(ObjectDB::get_instance(first_binding) == nullptr);
+	CHECK(first->get_child_count(true) == 0);
 	memdelete(first);
 	CHECK(listener.destroyed_gid == 0);
 	CHECK(ui.get_button() == second);
@@ -276,6 +281,40 @@ TEST_CASE("[SceneTree][SPX] Rebinding a UI wrapper disconnects the previous cont
 	CHECK(listener.destroyed_gid == 46);
 	CHECK(listener.destroyed_binding_id == second_binding);
 	CHECK(ui.get_control_item() == nullptr);
+}
+
+TEST_CASE("[SceneTree][SPX] Repeated UI rebinding releases obsolete bindings and preserves the control") {
+	BindingListener listener;
+	Button *button = memnew(Button);
+	const ObjectID button_id = button->get_instance_id();
+	ObjectID previous_binding;
+	{
+		SpxUi ui;
+		ui.set_gid(47);
+		ui.set_type((GdInt)ESpxUiType::Button);
+		for (int i = 0; i < 3; i++) {
+			REQUIRE(ui.set_control_item(button, &listener) == OK);
+			SceneTree::get_singleton()->process(0);
+			if (previous_binding.is_valid()) {
+				CHECK(ObjectDB::get_instance(previous_binding) == nullptr);
+			}
+			CHECK(button->get_child_count(true) == 1);
+			listener.events.clear();
+			button->emit_signal(SNAME("pressed"));
+			CHECK(listener.events.size() == 1);
+			CHECK(ui.owns_binding(listener.clicked_binding_id));
+			previous_binding = listener.clicked_binding_id;
+		}
+	}
+	SceneTree::get_singleton()->process(0);
+	CHECK(ObjectDB::get_instance(previous_binding) == nullptr);
+	CHECK(ObjectDB::get_instance(button_id) == button);
+	CHECK(button->get_child_count(true) == 0);
+	CHECK(listener.destroyed_gid == 0);
+	listener.events.clear();
+	button->emit_signal(SNAME("pressed"));
+	CHECK(listener.events.is_empty());
+	memdelete(button);
 }
 
 TEST_CASE("[SceneTree][SPX] UI label wraps only when its natural width exceeds the limit") {

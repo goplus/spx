@@ -32,16 +32,13 @@
 
 #include "scene/main/viewport.h"
 
+#include "spx_batch_validation.h"
 #include "spx_coordinate.h"
 #include "spx_engine.h"
 #include "spx_object_access.h"
 #include "spx_pen_surface.h"
 #include "spx_sprite.h"
 #include "spx_sprite_mgr.h"
-
-#include <cstdint>
-#include <cstring>
-#include <type_traits>
 
 #define SPX_WITH_PEN_OR_RETURN(OBJ_ID, BODY)                \
 	if (!with_object(OBJ_ID, [&](SpxPen *pen) { BODY; })) { \
@@ -61,29 +58,6 @@ enum SpxPenBatchCommand {
 };
 
 constexpr int SPX_PEN_BATCH_FIELDS = 8;
-
-uint32_t read_u32_lane(float p_value) {
-	uint32_t bits = 0;
-	std::memcpy(&bits, &p_value, sizeof(bits));
-	return bits;
-}
-
-template <typename T>
-T gd_obj_from_i64(int64_t p_value) {
-	if constexpr (std::is_pointer_v<T>) {
-		return reinterpret_cast<T>(static_cast<uintptr_t>(p_value));
-	}
-	return static_cast<T>(p_value);
-}
-
-GdObj read_gd_obj_lanes(const float *p_record) {
-	const uint64_t low = read_u32_lane(p_record[1]);
-	const uint64_t high = read_u32_lane(p_record[2]);
-	const uint64_t bits = (high << 32) | low;
-	int64_t value = 0;
-	std::memcpy(&value, &bits, sizeof(value));
-	return gd_obj_from_i64<GdObj>(value);
-}
 
 bool is_valid_pen_batch_command(float p_value) {
 	return p_value == SPX_PEN_BATCH_MOVE ||
@@ -168,7 +142,7 @@ void SpxPenMgr::batch_update_commands(const float *buffer_data, int len) {
 	bool has_missing_pen = false;
 	for (int i = 0; i < command_count; i++) {
 		const float *record = &buffer_data[1 + i * SPX_PEN_BATCH_FIELDS];
-		SpxPen *pen = _find_object(read_gd_obj_lanes(record));
+		SpxPen *pen = _find_object(SpxBatchValidation::read_i64_lanes(record + 1));
 		if (pen == nullptr) {
 			has_missing_pen = true;
 			continue;

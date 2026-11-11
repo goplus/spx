@@ -9,7 +9,6 @@
 #include "independent_video_recorder.h"
 #include "core/os/os.h"
 #include "core/string/print_string.h"
-#include "movie_utils.h"
 
 IndependentVideoRecorder::IndependentVideoRecorder() = default;
 
@@ -41,7 +40,7 @@ Error IndependentVideoRecorder::initialize(ThreadSafeFrameBuffer *p_frame_buffer
 
 	reset_statistics();
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
+	if (OS::get_singleton()->is_stdout_verbose()) {
 		print_line(String("IndependentVideoRecorder initialized"));
 		print_line(String("Video path: ") + p_video_path);
 		print_line(String("Resolution: ") + String::num_int64(config.video_width) + "x" + String::num_int64(config.video_height));
@@ -69,7 +68,7 @@ Error IndependentVideoRecorder::start_recording() {
 	recording_thread.start(recording_thread_func, this);
 	thread_started.store(true);
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
+	if (OS::get_singleton()->is_stdout_verbose()) {
 		print_line("IndependentVideoRecorder: Start recording");
 	}
 
@@ -93,7 +92,7 @@ void IndependentVideoRecorder::stop_recording() {
 		video_writer->close();
 	}
 
-	if (MovieDebugUtils::is_stdout_verbose()) {
+	if (OS::get_singleton()->is_stdout_verbose()) {
 		RecordingStats final_stats = get_statistics();
 		print_line(String("Recording completed - Total frames: ") + String::num_int64(final_stats.total_recorded_frames));
 		print_line(String("New frames: ") + String::num_int64(final_stats.new_frames_count));
@@ -130,8 +129,7 @@ void IndependentVideoRecorder::reset_statistics() {
 	MutexLock lock(stats_mutex);
 
 	stats = RecordingStats();
-	last_game_frame_sequence = 0;
-	has_valid_frame = false;
+	last_valid_frame = ThreadSafeFrameBuffer::FrameData();
 	recording_start_time = 0;
 }
 
@@ -177,7 +175,7 @@ void IndependentVideoRecorder::recording_loop() {
 				frame_count++;
 				update_statistics(frame_process_start);
 
-				if (MovieDebugUtils::is_stdout_verbose() && frame_count % 30 == 0) {
+				if (OS::get_singleton()->is_stdout_verbose() && frame_count % 30 == 0) {
 					print_line(String("Recording progress: ") + String::num_int64(frame_count) + " frames, " +
 							String("Repeated frame ratio: ") + String::num_real(get_repeat_frame_ratio() * 100.0f) + "%");
 				}
@@ -200,36 +198,25 @@ void IndependentVideoRecorder::recording_loop() {
 bool IndependentVideoRecorder::process_frame() {
 	ThreadSafeFrameBuffer::FrameData frame_data = frame_buffer->get_current_frame();
 
-	ThreadSafeFrameBuffer::FrameData frame_to_write;
-
-	if ((has_valid_frame && frame_data.frame_sequence == last_game_frame_sequence) || frame_data.image.is_null()) {
+	if ((last_valid_frame.image.is_valid() && frame_data.frame_sequence == last_valid_frame.frame_sequence) || frame_data.image.is_null()) {
 		// No new frame from the game or invalid frame, use a repeated frame
-		if (!has_valid_frame) {
+		if (last_valid_frame.image.is_null()) {
 			// No valid frame yet, skip
 			return false;
 		}
-		frame_to_write = last_valid_frame;
-
-		// Update timestamp for repeated frames but keep the game timestamp unchanged
-		frame_to_write.is_new_frame = false;
 
 		MutexLock lock(stats_mutex);
 		stats.repeated_frames_count++;
 	} else {
 		// New frame, update records
-		frame_to_write = frame_data;
-		frame_to_write.is_new_frame = true;
-
 		last_valid_frame = frame_data;
-		last_game_frame_sequence = frame_data.frame_sequence;
-		has_valid_frame = true;
 
 		MutexLock lock(stats_mutex);
 		stats.new_frames_count++;
 		stats.last_game_frame_sequence = frame_data.frame_sequence;
 	}
 
-	Error write_result = video_writer->write_frame(frame_to_write.image);
+	Error write_result = video_writer->write_frame(last_valid_frame.image);
 
 	if (write_result != OK) {
 		ERR_PRINT("IndependentVideoRecorder: write video frame failed");

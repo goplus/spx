@@ -30,12 +30,9 @@ void initialize_spx_recorder_core() {
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "movie_writer/obs_video_quality", PROPERTY_HINT_RANGE, "0.1,1.0,0.01"), 0.85);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "movie_writer/obs_audio_sample_rate", PROPERTY_HINT_RANGE, "8000,192000,1,suffix:Hz"), 48000);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "movie_writer/obs_audio_channels", PROPERTY_HINT_RANGE, "2,2,1"), 2);
-	GLOBAL_DEF("movie_writer/obs_enable_timestamp_chunks", true);
-	GLOBAL_DEF("movie_writer/obs_enable_repeat_frame_marking", true);
 	GLOBAL_DEF("movie_writer/obs_enable_debug_output", false);
 	GLOBAL_DEF("movie_writer/obs_enable_post_merge", true);
 	GLOBAL_DEF("movie_writer/obs_keep_intermediate_files", false);
-	GLOBAL_DEF("movie_writer/obs_ffmpeg_path", "ffmpeg");
 }
 
 void uninitialize_spx_recorder_core() {

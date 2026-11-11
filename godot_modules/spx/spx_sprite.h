@@ -57,6 +57,10 @@ public:
 	virtual int get_sort_z_index() const = 0;
 	virtual bool is_node_valid() const = 0;
 	virtual bool is_sort_static() const { return false; }
+	// Custom sortables remain eligible unless they can establish invisibility.
+	virtual bool is_sort_visible() const { return true; }
+	// Unknown bounds must remain eligible for sorting.
+	virtual bool get_sort_bounds(Rect2 &r_bounds) const { return false; }
 };
 
 // SpxRenderSprite - Wrapper for Sprite2D with sortable interface
@@ -78,7 +82,9 @@ public:
 	void set_sort_z_index(int p_z_index) override { set_z_index(p_z_index); }
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
+	bool is_sort_visible() const override { return is_visible_in_tree(); }
 	bool is_sort_static() const override { return true; }
+	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
 private:
 	GdObj sort_id = 0;
@@ -103,7 +109,9 @@ public:
 	void set_sort_z_index(int p_z_index) override { set_z_index(p_z_index); }
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
+	bool is_sort_visible() const override { return is_visible_in_tree(); }
 	bool is_sort_static() const override { return true; }
+	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
 private:
 	GdObj sort_id = 0;
@@ -242,13 +250,14 @@ public:
 	void set_sort_z_index(int p_z_index) override { set_z_index(p_z_index); }
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
+	bool is_sort_visible() const override { return is_visible_in_tree(); }
 	bool is_sort_static() const override { return get_physics_mode() == PhysicsMode::STATIC; }
+	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
 protected:
 	void _notification(int p_what);
 	void _physics_process(double p_delta);
 	void _handle_dynamic_physics(double p_delta);
-	void _handle_kinematic_physics(double p_delta);
 	void _handle_static_physics(double p_delta);
 	void _handle_no_physics(double p_delta);
 
@@ -290,7 +299,7 @@ private:
 	void _enable_collision();
 	void _disable_collision();
 
-	bool _ensure_material_ready(const char *p_context, GdBool p_create_if_missing = false);
+	Ref<ShaderMaterial> _get_shader_material(const char *p_context, bool p_create_if_missing = false);
 	enum class VisualKind { ANIMATION,
 		SVG_ANIMATION,
 		TEXTURE,
@@ -365,7 +374,6 @@ private:
 	float playback_speed = 1.0f;
 
 	Ref<SpriteFrames> default_sprite_frames;
-	Ref<ShaderMaterial> default_material;
 
 	Area2D *area2d = nullptr;
 	CollisionShape2D *trigger2d = nullptr;

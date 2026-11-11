@@ -56,7 +56,7 @@ TEST_CASE("[SceneTree][SPX] Scene manager owns render sprites and static collide
 	const GdObj render = manager->create_render_sprite(path.get_data(), Vector2(10, 20), 30, Vector2(2, 3), 4, Vector2(1, 2));
 	REQUIRE(render != NULL_OBJECT_ID);
 	REQUIRE(manager->id_pure_sprites.has(render));
-	auto *node = dynamic_cast<Node2D *>(manager->id_pure_sprites[render]);
+	auto *node = Object::cast_to<Node2D>(ObjectDB::get_instance(manager->id_pure_sprites[render]));
 	REQUIRE(node != nullptr);
 	CHECK(node->get_parent() == manager->pure_sprite_root);
 	CHECK(node->get_position() == Vector2(10, -20));
@@ -75,7 +75,7 @@ TEST_CASE("[SceneTree][SPX] Scene manager owns render sprites and static collide
 	parameters.data = dimensions;
 	const GdObj body = manager->create_static_sprite(path.get_data(), Vector2(5, 7), 15, Vector2(1, 2), 3, Vector2(2, 4), (int)ColliderType::RECT, Vector2(3, 5), &parameters);
 	REQUIRE(body != NULL_OBJECT_ID);
-	auto *static_node = dynamic_cast<Node2D *>(manager->id_pure_sprites[body]);
+	auto *static_node = Object::cast_to<Node2D>(ObjectDB::get_instance(manager->id_pure_sprites[body]));
 	REQUIRE(static_node != nullptr);
 	CHECK(static_node->get_position() == Vector2(5, -7));
 	CHECK(static_node->get_scale() == Vector2(1, 2));
@@ -125,6 +125,104 @@ TEST_CASE("[SceneTree][SPX] Scene manager owns render sprites and static collide
 	CHECK(manager->pure_sprite_root->get_parent() == scene.root);
 }
 
+TEST_CASE("[SceneTree][SPX] Pure sprite indices tolerate deletion detachment and recreation") {
+	TestSpx::TempDirectory files("spx_scene_lifetime");
+	files.write_png("sprite.png", Vector2i(8, 8), Color(1, 0, 0));
+	const CharString path = files.file("sprite.png").utf8();
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_scene();
+	const auto create = [&]() {
+		return manager->create_render_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2());
+	};
+	const GdObj deleted = create();
+	const GdObj queued = create();
+	const GdObj detached = create();
+	memdelete(ObjectDB::get_instance(manager->id_pure_sprites[deleted]));
+	auto *queued_node = Object::cast_to<Node>(ObjectDB::get_instance(manager->id_pure_sprites[queued]));
+	REQUIRE(queued_node);
+	queued_node->queue_free();
+	auto *detached_node = Object::cast_to<Node>(ObjectDB::get_instance(manager->id_pure_sprites[detached]));
+	REQUIRE(detached_node);
+	manager->pure_sprite_root->remove_child(detached_node);
+	Vector<ISortableSprite *> sprites;
+	manager->collect_sortable_sprites(sprites);
+	CHECK(sprites.is_empty());
+	CHECK_FALSE(manager->id_pure_sprites.has(deleted));
+	CHECK_FALSE(manager->id_pure_sprites.has(queued));
+	CHECK(manager->id_pure_sprites.has(detached));
+	manager->destroy_pure_sprite(deleted);
+	manager->pure_sprite_root->add_child(detached_node);
+	manager->collect_sortable_sprites(sprites);
+	REQUIRE(sprites.size() == 1);
+	CHECK(sprites[0]->get_sort_id() == detached);
+	manager->pure_sprite_root->remove_child(detached_node);
+	manager->destroy_pure_sprite(detached);
+	CHECK(detached_node->is_queued_for_deletion());
+	CHECK(manager->id_pure_sprites.is_empty());
+	memdelete(detached_node);
+
+	const GdObj cleared = create();
+	auto *cleared_node = Object::cast_to<Node>(ObjectDB::get_instance(manager->id_pure_sprites[cleared]));
+	REQUIRE(cleared_node);
+	manager->pure_sprite_root->remove_child(cleared_node);
+	manager->clear_pure_sprites();
+	CHECK(cleared_node->is_queued_for_deletion());
+	CHECK(manager->id_pure_sprites.is_empty());
+	memdelete(cleared_node);
+	const GdObj destroyed = create();
+	memdelete(ObjectDB::get_instance(manager->id_pure_sprites[destroyed]));
+	manager->destroy_pure_sprite(destroyed);
+	CHECK_FALSE(manager->id_pure_sprites.has(destroyed));
+	const GdObj expired = create();
+	memdelete(ObjectDB::get_instance(manager->id_pure_sprites[expired]));
+	manager->clear_pure_sprites();
+	CHECK(manager->id_pure_sprites.is_empty());
+	const GdObj replacement = create();
+	CHECK(replacement != cleared);
+	sprites.clear();
+	manager->collect_sortable_sprites(sprites);
+	REQUIRE(sprites.size() == 1);
+	CHECK(sprites[0]->get_sort_id() == replacement);
+}
+
+TEST_CASE("[SceneTree][SPX] Scene bounds use each layers current tile size") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_scene();
+	Node2D *group = memnew(Node2D);
+	group->set_position(Vector2(3, 5));
+	scene.root->add_child(group);
+	const auto create_layer = [&](Vector2i size, Vector2 position) {
+		Ref<TileSet> tileset;
+		tileset.instantiate();
+		tileset->set_tile_size(size);
+		Ref<PlaceholderTexture2D> texture;
+		texture.instantiate();
+		texture->set_size(size);
+		Ref<TileSetAtlasSource> atlas;
+		atlas.instantiate();
+		atlas->set_texture(texture);
+		atlas->set_texture_region_size(size);
+		atlas->create_tile(Vector2i());
+		tileset->add_source(atlas, 0);
+		auto *layer = memnew(TileMapLayer);
+		layer->set_tile_set(tileset);
+		layer->set_position(position);
+		group->add_child(layer);
+		return layer;
+	};
+	auto *small = create_layer(Vector2i(8, 8), Vector2(10, 20));
+	small->set_cell(Vector2i(-1, 0), 0, Vector2i());
+	small->set_cell(Vector2i(1, 1), 0, Vector2i());
+	auto *wide = create_layer(Vector2i(32, 16), Vector2(50, -20));
+	wide->set_cell(Vector2i(-1, 1), 0, Vector2i());
+	CHECK(manager->get_tilemap_bounds(small) == Rect2(-8, 0, 24, 16));
+	CHECK(manager->get_tilemap_bounds(wide) == Rect2(-32, 16, 32, 16));
+	CHECK(manager->get_scene_bounds(scene.root) == Rect2(5, 1, 48, 40));
+	wide->get_tile_set()->set_tile_size(Vector2i(16, 32));
+	CHECK(manager->get_tilemap_bounds(wide) == Rect2(-16, 32, 16, 32));
+	CHECK(manager->get_scene_bounds(scene.root) == Rect2(5, 17, 48, 32));
+}
+
 TEST_CASE("[SceneTree][SPX] Scene bounds and export snapshots include nested transformed tile layers") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_scene();
@@ -156,7 +254,6 @@ TEST_CASE("[SceneTree][SPX] Scene bounds and export snapshots include nested tra
 	layer->set_tile_set(tileset);
 	layer->set_cell(Vector2i(-1, 0), 0, Vector2i());
 	layer->set_cell(Vector2i(1, 1), 0, Vector2i());
-	manager->set_cached_cell_size(Vector2(16, 16));
 	CHECK(manager->get_tilemap_bounds(layer) == Rect2(-16, 0, 48, 32));
 	CHECK(manager->get_scene_bounds(scene.root) == Rect2(-6, 20, 48, 32));
 	layer->set_scale(Vector2(2, 2));
@@ -240,7 +337,7 @@ TEST_CASE("[SceneTree][SPX] Static sprite creation supports circle, capsule and 
 	for (auto type : { ColliderType::CIRCLE, ColliderType::CAPSULE, ColliderType::POLYGON }) {
 		auto id = manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(type), Vector2(2, 3), &params);
 		REQUIRE(id != 0);
-		auto *node = dynamic_cast<Node2D *>(manager->id_pure_sprites[id]);
+		auto *node = Object::cast_to<Node2D>(ObjectDB::get_instance(manager->id_pure_sprites[id]));
 		REQUIRE(node);
 		auto *collider = Object::cast_to<CollisionShape2D>(node->get_child(1));
 		REQUIRE(collider);
@@ -262,7 +359,7 @@ TEST_CASE("[SceneTree][SPX] Static sprite creation supports circle, capsule and 
 	}
 	auto id = manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(ColliderType::NONE), Vector2(), nullptr);
 	REQUIRE(id != 0);
-	CHECK(dynamic_cast<SpxRenderSprite *>(manager->id_pure_sprites[id]) != nullptr);
+	CHECK(Object::cast_to<SpxRenderSprite>(ObjectDB::get_instance(manager->id_pure_sprites[id])) != nullptr);
 	int before = manager->id_pure_sprites.size();
 	params.size = -1;
 	ERR_PRINT_OFF;
@@ -280,7 +377,7 @@ TEST_CASE("[SceneTree][SPX] Static sprite creation supports circle, capsule and 
 	for (auto type : { ColliderType::CIRCLE, ColliderType::RECT, ColliderType::CAPSULE }) {
 		const auto default_id = manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(type), Vector2(), nullptr);
 		REQUIRE(default_id != 0);
-		auto *body = dynamic_cast<Node2D *>(manager->id_pure_sprites[default_id]);
+		auto *body = Object::cast_to<Node2D>(ObjectDB::get_instance(manager->id_pure_sprites[default_id]));
 		REQUIRE(body);
 		auto *shape = Object::cast_to<CollisionShape2D>(body->get_child(1));
 		REQUIRE(shape);

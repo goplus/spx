@@ -47,7 +47,7 @@ class SpxPathFinder : public RefCounted {
 
 private:
 	Ref<AStarGrid2D> astar;
-	PathDebugDrawer *drawer = nullptr;
+	ObjectID drawer_id;
 	HashMap<ObjectID, HashSet<Vector2i>> obstacle_cells;
 	HashMap<Vector2i, int> cell_occupancy;
 
@@ -60,7 +60,6 @@ public:
 	SpxPathFinder();
 	~SpxPathFinder();
 
-	void setup_spx(GdVec2 size, GdVec2 cell_size, GdBool with_debug);
 	void setup(Vector2i size, Vector2i cell_size, bool with_debug = false);
 
 	void set_jumping_enabled(bool p_enabled);
@@ -98,10 +97,6 @@ public:
 		return _cell_to_world(cell);
 	}
 
-	_FORCE_INLINE_ void clear_drawer() {
-		drawer = nullptr;
-	}
-
 private:
 	Vector2i _world_to_cell(const Vector2 &pos) const;
 	Vector2 _cell_to_world(const Vector2i &cell) const;
@@ -113,7 +108,6 @@ private:
 	void _process_rectangle_shape(Node2D *owner, CollisionShape2D *shape, HashSet<Vector2i> &r_cells);
 	void _process_static_obstacles(Node2D *body, bool add = true);
 	void _process_tilemap_obstacles(TileMapLayer &layer);
-	void _process_sprite_obstacle(GdObj obj, bool add);
 
 	Rect2 _get_scene_bounds(Node *root);
 	void _destroy_drawer();
@@ -145,7 +139,6 @@ protected:
 	void _notification(int p_what);
 	void _ready();
 	void _draw();
-	void _exit_tree();
 	void input(const Ref<InputEvent> &p_event) override;
 
 public:

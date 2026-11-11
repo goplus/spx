@@ -18,10 +18,6 @@ class SimpleVideoWriter : public RefCounted {
 
 private:
 	Ref<FileAccess> f;
-	String base_path;
-
-	uint32_t fps;
-	uint32_t frame_count = 0;
 	float quality = 0.75f;
 
 	uint64_t total_frames_ofs;
@@ -32,7 +28,6 @@ private:
 	Vector<uint32_t> jpg_frame_sizes;
 
 public:
-	SimpleVideoWriter();
 	~SimpleVideoWriter();
 
 	Error open(const String &p_path, const Size2i &p_movie_size, uint32_t p_fps, float p_quality = 0.75f);
@@ -40,7 +35,7 @@ public:
 	void close();
 
 	void set_quality(float p_quality) { quality = p_quality; }
-	uint32_t get_frame_count() const { return frame_count; }
+	uint32_t get_frame_count() const { return jpg_frame_sizes.size(); }
 };
 
 #endif // SPX_SIMPLE_VIDEO_WRITER_H

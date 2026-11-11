@@ -43,51 +43,93 @@
 #include "../recorder/simple_video_writer.h"
 #include "../recorder/thread_safe_frame_buffer.h"
 #include "core/io/marshalls.h"
+#include "core/os/semaphore.h"
+#include "core/string/print_string.h"
 #include "main/main_loop_phase_callback_bus.h"
+#include "servers/audio/effects/audio_effect_amplify.h"
 #include "servers/rendering_server.h"
 #include "spx_test_fixtures.h"
+
+#include <atomic>
 
 namespace TestSpxRecorder {
 
 TEST_CASE("[SPX] Recording buffer publishes the latest frame and resets its statistics") {
 	ThreadSafeFrameBuffer buffer;
-	CHECK_FALSE(buffer.has_new_frame());
 	CHECK(buffer.get_current_frame().image.is_null());
-	CHECK(buffer.get_last_sequence() == 0);
-	buffer.update_frame(Ref<Image>(), 1, 1);
+	CHECK(buffer.get_current_frame().frame_sequence == 0);
+	buffer.update_frame(Ref<Image>(), 1);
 	CHECK(buffer.get_total_updates() == 0);
 	Ref<Image> first = Image::create_empty(2, 2, false, Image::FORMAT_RGB8);
 	Ref<Image> second = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
-	buffer.update_frame(first, 1000, 7);
+	buffer.update_frame(first, 7);
 	const auto snapshot = buffer.get_current_frame();
 	CHECK(snapshot.image == first);
-	CHECK(snapshot.game_timestamp == 1000);
 	CHECK(snapshot.frame_sequence == 7);
-	CHECK(snapshot.is_new_frame);
-	CHECK(buffer.has_new_frame());
-	buffer.update_frame(second, 2000, 8);
+	buffer.update_frame(second, 8);
 	const auto latest = buffer.get_current_frame();
 	CHECK(latest.image == second);
-	CHECK(latest.game_timestamp == 2000);
 	CHECK(latest.frame_sequence == 8);
 	CHECK(snapshot.image == first);
 	CHECK(snapshot.frame_sequence == 7);
-	CHECK(buffer.get_last_sequence() == 8);
 	CHECK(buffer.get_total_updates() == 2);
-	CHECK(buffer.get_buffer_switches() == 2);
 	buffer.reset();
-	CHECK_FALSE(buffer.has_new_frame());
-	CHECK_FALSE(buffer.get_current_frame().is_new_frame);
 	CHECK(buffer.get_current_frame().image.is_null());
-	CHECK(buffer.get_current_frame().game_timestamp == 0);
-	CHECK(buffer.get_last_sequence() == 0);
+	CHECK(buffer.get_current_frame().frame_sequence == 0);
 	CHECK(buffer.get_total_updates() == 0);
-	CHECK(buffer.get_buffer_switches() == 0);
-	buffer.update_frame(first, 3000, 1);
+	CHECK(snapshot.image == first);
+	CHECK(latest.image == second);
+	buffer.update_frame(first, 1);
 	CHECK(buffer.get_current_frame().image == first);
-	CHECK(buffer.get_last_sequence() == 1);
+	CHECK(buffer.get_current_frame().frame_sequence == 1);
 	CHECK(buffer.get_total_updates() == 1);
 }
+
+#ifdef THREADS_ENABLED
+TEST_CASE("[SPX] Recording buffer publishes coherent image and sequence snapshots across threads") {
+	ThreadSafeFrameBuffer buffer;
+	struct Publisher {
+		ThreadSafeFrameBuffer *buffer;
+		Ref<Image> odd = Image::create_empty(2, 2, false, Image::FORMAT_RGB8);
+		Ref<Image> even = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+		Semaphore first_published;
+		Semaphore reader_ready;
+		std::atomic<bool> done{ false };
+	} publisher{ &buffer };
+	Thread producer;
+	producer.start([](void *userdata) {
+		auto &state = *static_cast<Publisher *>(userdata);
+		for (uint32_t sequence = 1; sequence <= 2000; sequence++) {
+			state.buffer->update_frame(sequence % 2 ? state.odd : state.even, sequence);
+			if (sequence == 1) {
+				state.first_published.post();
+				state.reader_ready.wait();
+			}
+		}
+		state.done.store(true);
+	},
+			&publisher);
+	bool coherent = true;
+	const bool started = producer.is_started();
+	if (started) {
+		publisher.first_published.wait();
+		CHECK(buffer.get_current_frame().frame_sequence == 1);
+		publisher.reader_ready.post();
+		do {
+			const auto snapshot = buffer.get_current_frame();
+			if (snapshot.image.is_valid()) {
+				coherent = coherent && snapshot.image == (snapshot.frame_sequence % 2 ? publisher.odd : publisher.even);
+			}
+		} while (!publisher.done.load());
+		producer.wait_to_finish();
+	}
+	REQUIRE(started);
+	CHECK(coherent);
+	CHECK(buffer.get_current_frame().image == publisher.even);
+	CHECK(buffer.get_current_frame().frame_sequence == 2000);
+	CHECK(buffer.get_total_updates() == 2000);
+}
+#endif
 
 // Locate the known chunk tags in these small fixtures, then check the bytes
 // independently of the recorder's own AVI reader.
@@ -213,11 +255,10 @@ TEST_CASE("[SPX] Video recorder encodes frames without mutating caller images") 
 	read_avi(files.file("empty.avi"));
 }
 
-TEST_CASE("[SPX] Movie merge validates inputs and preserves them when merging is disabled") {
+TEST_CASE("[SPX] Movie merge validates inputs and preserves them on failure") {
 	TestSpx::TempDirectory files("spx_merge_validation");
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
 	const String video = files.file("video.avi");
 	const String audio = files.file("audio.avi");
@@ -233,27 +274,11 @@ TEST_CASE("[SPX] Movie merge validates inputs and preserves them when merging is
 	files.write("video.avi", "");
 	CHECK(processor.validate_merge_request(video, audio, output) == ERR_FILE_CORRUPT);
 	files.write("video.avi", "invalid video");
-	CHECK(processor.get_method_name(static_cast<PostMergeProcessor::MergeMethod>(99)) == "Unknown");
 	auto result = processor.merge_files(video, audio, output);
 	CHECK(result.error_code == ERR_FILE_CORRUPT);
 	CHECK_FALSE(result.error_message.is_empty());
 	CHECK_FALSE(result.intermediate_files_cleaned);
 	CHECK_FALSE(FileAccess::exists(output));
-	config.method = PostMergeProcessor::METHOD_NONE;
-	processor.set_config(config);
-	result = processor.merge_files(video, audio, output);
-	CHECK(result.error_code == OK);
-	CHECK(result.output_file_path == video);
-	CHECK_FALSE(result.intermediate_files_cleaned);
-	CHECK(FileAccess::exists(video));
-	CHECK(FileAccess::exists(audio));
-	CHECK_FALSE(FileAccess::exists(output));
-	config.method = static_cast<PostMergeProcessor::MergeMethod>(99);
-	processor.set_config(config);
-	result = processor.merge_files(video, audio, output);
-	CHECK(result.error_code == ERR_UNAVAILABLE);
-	CHECK(result.error_message == "Validation failed");
-	CHECK_FALSE(result.intermediate_files_cleaned);
 	CHECK(FileAccess::get_file_as_string(video) == "invalid video");
 	CHECK(FileAccess::get_file_as_string(audio) == "invalid audio");
 	CHECK_FALSE(FileAccess::exists(output));
@@ -294,11 +319,11 @@ TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its wor
 	ERR_PRINT_ON;
 	Ref<Image> frame = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 	frame->fill(Color(1, 0, 0));
-	buffer.update_frame(frame, 1, 1);
+	buffer.update_frame(frame, 1);
 	REQUIRE(wait_for([&] { return recorder.get_statistics().repeated_frames_count >= 2; }));
 	Ref<Image> second = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 	second->fill(Color(0, 1, 0));
-	buffer.update_frame(second, 2, 2);
+	buffer.update_frame(second, 2);
 	REQUIRE(wait_for([&] { return recorder.get_statistics().new_frames_count == 2; }));
 	recorder.stop_recording();
 	recorder.stop_recording();
@@ -318,91 +343,136 @@ TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its wor
 	CHECK(recorder.get_statistics().total_recorded_frames == 0);
 }
 
-TEST_CASE("[SceneTree][SPX] Audio capture preserves the master mix and detaches its effect") {
+TEST_CASE("[SceneTree][SPX] Audio capture saturates PCM, preserves the master mix and detaches its effect") {
+	TestSpx::TempDirectory files("spx_audio_capture");
 	TestSpx::EngineScene scene;
 	auto *server = AudioServer::get_singleton();
 	const int before = server->get_bus_effect_count(0);
 	HybridAudioDriver driver;
-	REQUIRE(driver.init(100, AudioDriver::SPEAKER_MODE_STEREO) == OK);
+	REQUIRE(driver.init(100) == OK);
 	CHECK(server->get_bus_effect_count(0) == before + 1);
 	CHECK(driver.get_mix_rate() == 100);
-	CHECK(driver.get_channels() == 2);
 	ERR_PRINT_OFF;
-	CHECK(driver.init(100, AudioDriver::SPEAKER_MODE_STEREO) == ERR_ALREADY_IN_USE);
-	CHECK(driver.get_captured_audio_data(nullptr, 1) == 0);
-	int32_t unused[2] = { 1, 1 };
-	CHECK(driver.get_captured_audio_data(unused, -1) == 0);
+	CHECK(driver.init(100) == ERR_ALREADY_IN_USE);
 	driver.register_audio_recorder(nullptr);
 	ERR_PRINT_ON;
-	CHECK(driver.get_captured_audio_data(unused, 0) == 0);
-	CHECK(driver.get_captured_audio_data(unused, 1) == 1);
-	CHECK(unused[0] == 0);
-	CHECK(unused[1] == 0);
 	IndependentAudioRecorder first, second, absent;
 	driver.register_audio_recorder(&first);
+	driver.register_audio_recorder(&first); // Duplicate registration must not duplicate PCM.
 	driver.register_audio_recorder(&second);
 	driver.unregister_audio_recorder(&absent);
 	driver.unregister_audio_recorder(nullptr);
 	CHECK(driver.get_registered_recorder_count() == 2);
 	driver.unregister_audio_recorder(&second);
 	CHECK(driver.get_registered_recorder_count() == 1);
-	driver.start();
+	IndependentAudioRecorder::AudioConfig config;
+	config.sample_rate = 100;
+	config.chunk_size = 4;
+	config.buffer_size_seconds = 1;
+	REQUIRE(first.initialize(&driver, files.file("audio.avi"), config) == OK);
+	REQUIRE(first.start_recording() == OK);
 	Ref<AudioEffectInstance> effect = server->get_bus_effect(0, before)->instantiate();
 	REQUIRE(effect.is_valid());
 	CHECK_FALSE(effect->process_silence());
+	AudioFrame input[4] = { AudioFrame(0.25, -0.5), AudioFrame(-0.25, 0.5), AudioFrame(1, -1), AudioFrame(2, -2) };
+	AudioFrame silence[4] = {};
+	AudioFrame output[4];
+	effect->process(silence, output, 4); // Disabled capture must not enqueue these frames.
+	CHECK_FALSE(driver.is_recording_enabled());
+	driver.enable_recording(true);
+	effect->process(input, output, 4);
+	for (int i = 0; i < 4; ++i) {
+		CHECK(output[i].left == input[i].left);
+		CHECK(output[i].right == input[i].right);
+	}
+	REQUIRE(wait_for([&] { return first.get_statistics().total_chunks_recorded >= 1; }));
+	driver.enable_recording(false);
+	effect->process(silence, output, 4);
+	driver.enable_recording(true);
+	driver.capture_audio_data(nullptr, 1);
+	int32_t unused[2] = {};
+	driver.capture_audio_data(unused, 0);
+	effect->process(input, output, 4);
+	REQUIRE(wait_for([&] { return first.get_statistics().total_chunks_recorded >= 2; }));
+	Ref<AudioEffectAmplify> project_effect;
+	project_effect.instantiate();
+	server->add_bus_effect(0, project_effect);
+	driver.finish();
+	CHECK(server->get_bus_effect_count(0) == before + 1);
+	CHECK(server->get_bus_effect(0, before) == project_effect);
+	server->remove_bus_effect(0, before);
+	CHECK(server->get_bus_effect_count(0) == before);
+	CHECK(driver.get_registered_recorder_count() == 0);
+	CHECK_FALSE(driver.is_recording_enabled());
+	effect->process(input, output, 4); // Detached instances must remain safe passthroughs.
+	CHECK(output[0].right == input[0].right);
+	driver.finish();
+	first.stop_recording();
+	CHECK(first.get_statistics().total_chunks_recorded == 2);
+	const auto bytes = read_avi(files.file("audio.avi"));
+	int chunk = find_tag(bytes, "00wb");
+	REQUIRE(chunk >= 0);
+	for (int i = 0; i < 2; i++) {
+		REQUIRE(chunk + 40 <= bytes.size());
+		CHECK(memcmp(bytes.ptr() + chunk, "00wb", 4) == 0);
+		CHECK(decode_uint32(bytes.ptr() + chunk + 4) == 32);
+		CHECK(decode_uint32(bytes.ptr() + chunk + 8) == uint32_t(536870912));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 12) == uint32_t(-1073741824));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 16) == uint32_t(-536870912));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 20) == uint32_t(1073741824));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 24) == uint32_t(INT32_MAX));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 28) == uint32_t(INT32_MIN));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 32) == uint32_t(INT32_MAX));
+		CHECK(decode_uint32(bytes.ptr() + chunk + 36) == uint32_t(INT32_MIN));
+		chunk += 40;
+	}
+
+	REQUIRE(driver.init(100) == OK);
+	auto detached_effect = server->get_bus_effect(0, before)->instantiate();
+	REQUIRE(detached_effect.is_valid());
+	server->remove_bus_effect(0, before); // The project can remove the effect before shutdown.
+	driver.finish();
+	detached_effect->process(input, output, 4);
+	CHECK(output[0].left == input[0].left);
+	CHECK(server->get_bus_effect_count(0) == before);
+}
+
+TEST_CASE("[Audio][SPX] Audio capture safely detaches after the audio server shuts down") {
+	auto *server = AudioServer::get_singleton();
+	REQUIRE(server != nullptr);
+	HybridAudioDriver driver;
+	REQUIRE(driver.init(8000) == OK);
+	Ref<AudioEffectInstance> effect = server->get_bus_effect(0, server->get_bus_effect_count(0) - 1)->instantiate();
+	REQUIRE(effect.is_valid());
+	IndependentAudioRecorder recorder;
+	driver.register_audio_recorder(&recorder);
+	driver.enable_recording(true);
+
+	// Shutdown can destroy AudioServer before the capture owner and retained effect instances.
+	server->finish();
+	memdelete(server);
+	REQUIRE(AudioServer::get_singleton() == nullptr);
+	driver.finish();
+	CHECK_FALSE(driver.is_recording_enabled());
+	CHECK(driver.get_registered_recorder_count() == 0);
 	AudioFrame input[2] = { AudioFrame(0.25, -0.5), AudioFrame(-0.25, 0.5) };
 	AudioFrame output[2];
 	effect->process(input, output, 2);
-	CHECK(output[0].left == input[0].left);
-	CHECK(output[1].right == input[1].right);
-	CHECK_FALSE(driver.has_audio_data());
-	driver.enable_recording(true);
-	effect->process(input, output, 2);
-	CHECK(driver.get_available_frames() == 2);
-	int32_t pcm[6] = {};
-	CHECK(driver.get_captured_audio_data(pcm, 3) == 3);
-	CHECK(pcm[0] == 536870912);
-	CHECK(pcm[1] == -1073741824);
-	CHECK(pcm[2] == -536870912);
-	CHECK(pcm[3] == 1073741824);
-	CHECK(pcm[4] == 0);
-	CHECK(pcm[5] == 0);
-	CHECK_FALSE(driver.has_audio_data());
-	int32_t mono[40];
-	for (int i = 0; i < 40; ++i) {
-		mono[i] = i * 65536;
+	for (int i = 0; i < 2; ++i) {
+		CHECK(output[i].left == input[i].left);
+		CHECK(output[i].right == input[i].right);
 	}
-	driver.capture_audio_data(mono, 40, 0); // Overflow retains the newest samples.
-	int available = driver.get_available_frames();
-	REQUIRE(available > 0);
-	REQUIRE(available < 40);
-	Vector<int32_t> captured;
-	captured.resize(available * 2);
-	driver.get_captured_audio_data(captured.ptrw(), available);
-	CHECK(captured[0] == mono[40 - available]);
-	CHECK(captured[1] == captured[0]);
-	CHECK(captured[captured.size() - 1] == mono[39]);
-	driver.enable_recording(false);
-	driver.capture_audio_data(mono, 1, 0);
-	CHECK_FALSE(driver.has_audio_data());
-	driver.enable_recording(true);
-	driver.capture_audio_data(nullptr, 1, 0);
-	driver.capture_audio_data(mono, 0, 0);
-	CHECK_FALSE(driver.has_audio_data());
-	driver.finish();
-	CHECK(server->get_bus_effect_count(0) == before);
-	CHECK_FALSE(driver.is_recording_enabled());
-	effect->process(input, output, 2); // Detached instances must remain safe passthroughs.
-	CHECK(output[0].right == input[0].right);
-	CHECK_FALSE(driver.has_audio_data());
-	driver.finish();
+	driver.finish(); // Explicit cleanup and the destructor remain idempotent.
+	ERR_PRINT_OFF;
+	CHECK(driver.init(8000) == ERR_UNCONFIGURED);
+	ERR_PRINT_ON;
 }
 
 TEST_CASE("[SceneTree][SPX] Audio recorder consumes captured PCM and closes the worker file") {
 	TestSpx::TempDirectory files("spx_audio_thread");
 	TestSpx::EngineScene scene;
 	HybridAudioDriver driver;
-	REQUIRE(driver.init(8000, AudioDriver::SPEAKER_MODE_STEREO) == OK);
+	REQUIRE(driver.init(8000) == OK);
 	IndependentAudioRecorder recorder;
 	CHECK_FALSE(recorder.is_recording());
 	CHECK(recorder.get_buffer_usage_ratio() == 0);
@@ -444,7 +514,7 @@ TEST_CASE("[SceneTree][SPX] Audio recorder consumes captured PCM and closes the 
 	Vector<int32_t> samples;
 	samples.resize(80 * 2 * 4);
 	samples.fill(0x10000000);
-	driver.capture_audio_data(samples.ptr(), 80 * 4, 1);
+	driver.capture_audio_data(samples.ptr(), 80 * 4);
 	REQUIRE(wait_for([&] { return recorder.get_statistics().total_chunks_recorded >= 4; }));
 	recorder.stop_recording();
 	CHECK_FALSE(recorder.is_recording());
@@ -500,21 +570,22 @@ static void check_avi_index(const PackedByteArray &bytes, int expected_count) {
 }
 
 // One video frame and one stereo PCM chunk represent the same 1/30-second interval.
-static void write_avi_pair(const String &video, const String &audio, int frame_count = 2) {
+static void write_avi_pair(const String &video, const String &audio, int frame_count = 2, int fps = 30, int sample_rate = 48000) {
 	Ref<SimpleVideoWriter> video_writer;
 	video_writer.instantiate();
 	Ref<SimpleAudioWriter> audio_writer;
 	audio_writer.instantiate();
-	REQUIRE(video_writer->open(video, Size2i(4, 4), 30, 0.85) == OK);
-	REQUIRE(audio_writer->open(audio, 48000, 2) == OK);
+	REQUIRE(video_writer->open(video, Size2i(4, 4), fps, 0.85) == OK);
+	REQUIRE(audio_writer->open(audio, sample_rate, 2) == OK);
 	auto image = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 	image->fill(Color(1, 0, 0));
 	Vector<int32_t> pcm;
-	pcm.resize(1600 * 2);
+	const int samples_per_frame = sample_rate / fps;
+	pcm.resize(samples_per_frame * 2);
 	pcm.fill(0x12340000);
 	for (int i = 0; i < frame_count; ++i) {
 		REQUIRE(video_writer->write_frame(image) == OK);
-		REQUIRE(audio_writer->write_audio_chunk(pcm.ptr(), 1600) == OK);
+		REQUIRE(audio_writer->write_audio_chunk(pcm.ptr(), samples_per_frame) == OK);
 	}
 	video_writer->close();
 	audio_writer->close();
@@ -533,103 +604,108 @@ TEST_CASE("[SPX] AVI merger preserves frame payloads and converts PCM with valid
 		encode_uint16(0x1234, expected_pcm.ptrw() + i);
 	}
 	PostMergeProcessor processor;
-	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED, PostMergeProcessor::MergeConfig::INTERLEAVE_BUFFERED_TIMESTAMP }) {
-		PostMergeProcessor::MergeConfig config;
-		config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
-		config.interleave_strategy = strategy;
-		config.keep_intermediate_files = true;
-		config.enable_debug_output = true;
-		processor.set_config(config);
-		const String output = files.file("merged_" + itos(strategy) + ".avi");
-		const auto result = processor.merge_files(video, audio, output);
-		INFO(result.error_message);
-		REQUIRE(result.error_code == OK);
-		CHECK(result.output_file_path == output);
-		CHECK_FALSE(result.intermediate_files_cleaned);
-		auto bytes = read_avi(output);
-		check_avi_index(bytes, 4);
-		int avih = find_tag(bytes, "avih"), video_chunk = find_tag(bytes, "00db"), audio_chunk = find_tag(bytes, "01wb");
-		REQUIRE(avih >= 0);
-		REQUIRE(video_chunk >= 0);
-		REQUIRE(audio_chunk >= 0);
-		CHECK(decode_uint32(bytes.ptr() + avih + 32) == 2);
-		const int original_chunk = find_tag(original, "00db");
-		uint32_t frame_size = decode_uint32(original.ptr() + original_chunk + 4);
-		REQUIRE(decode_uint32(bytes.ptr() + video_chunk + 4) == frame_size);
-		CHECK(memcmp(bytes.ptr() + video_chunk + 8, original.ptr() + original_chunk + 8, frame_size) == 0);
-		REQUIRE(decode_uint32(bytes.ptr() + audio_chunk + 4) == 1600 * 2 * 2);
-		CHECK(memcmp(bytes.ptr() + audio_chunk + 8, expected_pcm.ptr(), expected_pcm.size()) == 0);
-	}
-	auto config = processor.get_config();
+	PostMergeProcessor::MergeConfig config;
+	config.keep_intermediate_files = true;
+	config.enable_debug_output = true;
+	processor.set_config(config);
+	const String output = files.file("merged.avi");
+	const auto result = processor.merge_files(video, audio, output);
+	INFO(result.error_message);
+	REQUIRE(result.error_code == OK);
+	CHECK(result.output_file_path == output);
+	CHECK_FALSE(result.intermediate_files_cleaned);
+	auto bytes = read_avi(output);
+	check_avi_index(bytes, 4);
+	int avih = find_tag(bytes, "avih"), video_chunk = find_tag(bytes, "00db"), audio_chunk = find_tag(bytes, "01wb");
+	REQUIRE(avih >= 0);
+	REQUIRE(video_chunk >= 0);
+	REQUIRE(audio_chunk >= 0);
+	CHECK(decode_uint32(bytes.ptr() + avih + 32) == 2);
+	const int original_chunk = find_tag(original, "00db");
+	uint32_t frame_size = decode_uint32(original.ptr() + original_chunk + 4);
+	REQUIRE(decode_uint32(bytes.ptr() + video_chunk + 4) == frame_size);
+	CHECK(memcmp(bytes.ptr() + video_chunk + 8, original.ptr() + original_chunk + 8, frame_size) == 0);
+	REQUIRE(decode_uint32(bytes.ptr() + audio_chunk + 4) == 1600 * 2 * 2);
+	CHECK(memcmp(bytes.ptr() + audio_chunk + 8, expected_pcm.ptr(), expected_pcm.size()) == 0);
 	config.keep_intermediate_files = false;
 	processor.set_config(config);
-	auto result = processor.merge_files(video, audio, files.file("final.avi"));
-	REQUIRE(result.error_code == OK);
-	CHECK(result.intermediate_files_cleaned);
+	const auto cleaned = processor.merge_files(video, audio, files.file("final.avi"));
+	REQUIRE(cleaned.error_code == OK);
+	CHECK(cleaned.intermediate_files_cleaned);
 	CHECK_FALSE(FileAccess::exists(video));
 	CHECK_FALSE(FileAccess::exists(audio));
 }
 
-TEST_CASE("[SPX] AVI interleaving preserves unequal streams and strategy ordering") {
-	TestSpx::TempDirectory files("spx_interleave_order");
-	const String video = files.file("video.avi"), audio = files.file("audio.avi");
-	write_avi_pair(video, audio); // Video frames occur at 0 and 33,333 microseconds.
-	SimpleAudioWriter writer;
-	REQUIRE(writer.open(audio, 48000, 2) == OK);
-	Vector<int32_t> pcm;
-	pcm.resize(480 * 2);
-	for (int i = 0; i < 3; ++i) {
-		pcm.fill((i + 1) * 0x10000000);
-		REQUIRE(writer.write_audio_chunk(pcm.ptr(), 480) == OK); // 0, 10,000, 20,000 microseconds.
-	}
-	writer.close();
-	const auto original_video = read_avi(video), original_audio = read_avi(audio);
-	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED, PostMergeProcessor::MergeConfig::INTERLEAVE_BUFFERED_TIMESTAMP }) {
-		INFO("Interleave strategy: ", strategy);
+TEST_CASE("[SPX] AVI interleaving preserves unequal streams in timestamp order") {
+	struct Case {
+		int fps;
+		int sample_rate;
+		int audio_chunks;
+	};
+	for (const Case &test : { Case{ 30, 48000, 3 }, Case{ 30, 44100, 7 }, Case{ 60, 48000, 7 }, Case{ 25, 44100, 7 } }) {
+		INFO(test.fps, " fps, ", test.sample_rate, " Hz, ", test.audio_chunks, " audio chunks");
+		TestSpx::TempDirectory files("spx_interleave_order");
+		const String video = files.file("video.avi"), audio = files.file("audio.avi");
+		write_avi_pair(video, audio, 2, test.fps, test.sample_rate);
+		SimpleAudioWriter writer;
+		REQUIRE(writer.open(audio, test.sample_rate, 2) == OK);
+		const int samples_per_chunk = test.sample_rate / 100; // 10 ms chunks.
+		Vector<int32_t> pcm;
+		pcm.resize(samples_per_chunk * 2);
+		for (int i = 0; i < test.audio_chunks; ++i) {
+			pcm.fill((i + 1) * 0x10000000);
+			REQUIRE(writer.write_audio_chunk(pcm.ptr(), samples_per_chunk) == OK);
+		}
+		writer.close();
+		const auto original_video = read_avi(video), original_audio = read_avi(audio);
 		PostMergeProcessor processor;
 		PostMergeProcessor::MergeConfig config;
-		config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
-		config.interleave_strategy = strategy;
 		config.keep_intermediate_files = true;
 		processor.set_config(config);
 		const String output = files.file("merged.avi");
 		REQUIRE(processor.merge_files(video, audio, output).error_code == OK);
 		const auto bytes = read_avi(output);
-		check_avi_index(bytes, 5);
+		check_avi_index(bytes, 2 + test.audio_chunks);
 		const int index = find_tag(bytes, "idx1"), movi = find_tag(bytes, "movi"), stream = find_tag(bytes, "auds");
 		REQUIRE(stream > 0);
-		CHECK(decode_uint32(bytes.ptr() + stream + 32) == 1440);
-		bool is_video[5] = {};
+		CHECK(decode_uint32(bytes.ptr() + stream + 32) == test.audio_chunks * samples_per_chunk);
+		int video_chunks = 0;
 		int audio_chunks = 0;
-		for (int i = 0; i < 5; ++i) {
+		uint64_t previous_time = 0;
+		bool previous_video = true;
+		for (int i = 0; i < 2 + test.audio_chunks; ++i) {
 			const uint8_t *entry = bytes.ptr() + index + 8 + i * 16;
-			is_video[i] = memcmp(entry, "00db", 4) == 0;
-			if (!is_video[i]) {
+			const bool is_video = memcmp(entry, "00db", 4) == 0;
+			const uint64_t time = is_video ? uint64_t(video_chunks++) * (1000000 / test.fps) : uint64_t(audio_chunks) * 10000;
+			CHECK(time >= previous_time);
+			if (i > 0 && time == previous_time) {
+				CHECK(previous_video); // Video precedes audio at equal timestamps, including 0.
+				CHECK_FALSE(is_video);
+			}
+			previous_time = time;
+			previous_video = is_video;
+			if (is_video) {
+				const uint8_t *source_entry = original_video.ptr() + find_tag(original_video, "idx1") + 8 + (video_chunks - 1) * 16;
+				const uint32_t size = decode_uint32(source_entry + 12);
+				REQUIRE(decode_uint32(entry + 12) == size);
+				const uint32_t source = find_tag(original_video, "movi") + decode_uint32(source_entry + 8);
+				const uint32_t target = movi + decode_uint32(entry + 8);
+				CHECK(memcmp(bytes.ptr() + target + 8, original_video.ptr() + source + 8, size) == 0);
+			} else {
 				CHECK(memcmp(entry, "01wb", 4) == 0);
-				REQUIRE(decode_uint32(entry + 12) == 480 * 2 * 2);
+				REQUIRE(decode_uint32(entry + 12) == samples_per_chunk * 2 * 2);
 				const uint32_t chunk = movi + decode_uint32(entry + 8);
 				++audio_chunks;
 				PackedByteArray expected_pcm;
-				expected_pcm.resize(480 * 2 * 2);
-				for (int sample = 0; sample < 480 * 2; ++sample) {
+				expected_pcm.resize(samples_per_chunk * 2 * 2);
+				for (int sample = 0; sample < samples_per_chunk * 2; ++sample) {
 					encode_uint16(audio_chunks * 0x1000, expected_pcm.ptrw() + sample * 2);
 				}
 				CHECK(memcmp(bytes.ptr() + chunk + 8, expected_pcm.ptr(), expected_pcm.size()) == 0);
 			}
 		}
-		CHECK(audio_chunks == 3);
-		if (strategy == PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
-			CHECK(is_video[0]);
-			CHECK_FALSE(is_video[1]);
-			CHECK(is_video[2]);
-			CHECK_FALSE(is_video[3]);
-			CHECK_FALSE(is_video[4]);
-		} else {
-			CHECK(is_video[0] != is_video[1]); // Equal timestamps need not have a stable tie order.
-			CHECK_FALSE(is_video[2]);
-			CHECK_FALSE(is_video[3]);
-			CHECK(is_video[4]);
-		}
+		CHECK(video_chunks == 2);
+		CHECK(audio_chunks == test.audio_chunks);
 		CHECK(FileAccess::get_file_as_bytes(video) == original_video);
 		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
 	}
@@ -648,7 +724,10 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 	const int effects = AudioServer::get_singleton()->get_bus_effect_count(0);
 	auto destroy = [](RealtimeWriter *value) { memdelete(value); };
 	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
-	auto config = ObsStyleMovieWriter::get_performance_config();
+	ObsStyleMovieWriter::ObsRecordingConfig config;
+	config.jpeg_quality = 0.75f;
+	config.audio_sample_rate = 44100;
+	config.audio_buffer_seconds = 1;
 	config.enable_post_merge = false;
 	writer->set_recording_config(config);
 	CHECK(writer->get_audio_mix_rate() == config.audio_sample_rate);
@@ -661,11 +740,6 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 	REQUIRE(extensions.size() == 1);
 	CHECK(extensions.front()->get() == "avi");
 	CHECK(writer->write_frame(Ref<Image>(), nullptr) == ERR_UNCONFIGURED);
-	ERR_PRINT_OFF;
-	CHECK(writer->pause_recording() == ERR_UNAVAILABLE);
-	CHECK(writer->resume_recording() == ERR_UNAVAILABLE);
-	ERR_PRINT_ON;
-	CHECK_FALSE(writer->is_paused());
 	Ref<Image> frame = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 	frame->fill(Color(1, 0, 0));
 	for (int run = 0; run < 2; ++run) {
@@ -740,7 +814,7 @@ TEST_CASE("[SceneTree][SPX] Realtime capture tolerates a detached main viewport"
 	} restore{ window, window->get_content_scale_factor() };
 	auto destroy = [](RealtimeWriter *writer) { memdelete(writer); };
 	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
-	auto config = ObsStyleMovieWriter::get_standard_config();
+	ObsStyleMovieWriter::ObsRecordingConfig config;
 	config.enable_post_merge = false;
 	writer->set_recording_config(config);
 	const String path = files.file("capture.avi");
@@ -762,7 +836,7 @@ TEST_CASE("[SceneTree][SPX] Realtime recording rejects invalid configuration bef
 	auto destroy = [](RealtimeWriter *value) { memdelete(value); };
 	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
 	for (int invalid = 0; invalid < 9; ++invalid) {
-		auto config = ObsStyleMovieWriter::get_standard_config();
+		ObsStyleMovieWriter::ObsRecordingConfig config;
 		Size2i size(4, 4);
 		switch (invalid) {
 			case 0:
@@ -800,13 +874,26 @@ TEST_CASE("[SceneTree][SPX] Realtime recording rejects invalid configuration bef
 		CHECK(writer->get_recording_state() == ObsStyleMovieWriter::STATE_UNINITIALIZED);
 		CHECK_FALSE(FileAccess::exists(files.file("invalid.avi_video.avi")));
 	}
-	auto config = ObsStyleMovieWriter::get_high_quality_config();
+	ObsStyleMovieWriter::ObsRecordingConfig config;
+	config.jpeg_quality = 0.95f;
+	config.audio_buffer_seconds = 3;
 	config.enable_post_merge = false;
 	writer->set_recording_config(config);
+	const int effects = AudioServer::get_singleton()->get_bus_effect_count(0);
 	ERR_PRINT_OFF;
 	CHECK(writer->begin_realtime(Size2i(4, 4), 30, files.file("missing/invalid.avi")) != OK);
 	ERR_PRINT_ON;
 	CHECK(writer->get_recording_state() == ObsStyleMovieWriter::STATE_UNINITIALIZED);
+	CHECK(AudioServer::get_singleton()->get_bus_effect_count(0) == effects);
+	writer->end_realtime();
+	const String path = files.file("after_video_failure.avi");
+	REQUIRE(writer->begin_realtime(Size2i(4, 4), 30, path) == OK);
+	writer->end_realtime();
+	writer->end_realtime();
+	CHECK(writer->get_recording_state() == ObsStyleMovieWriter::STATE_UNINITIALIZED);
+	CHECK(AudioServer::get_singleton()->get_bus_effect_count(0) == effects);
+	check_avi_index(read_avi(path + "_video.avi"), 0);
+	check_avi_index(read_avi(path + "_audio.avi"), 0);
 }
 
 TEST_CASE("[SceneTree][SPX] Recording manager owns API sessions and command-line movie routes") {
@@ -835,8 +922,6 @@ TEST_CASE("[SceneTree][SPX] Recording manager owns API sessions and command-line
 	CHECK_FALSE(MovieRecorderManager::has_active_instance());
 	CHECK(MovieRecorderManager::get_recording_duration() == 0);
 	CHECK(MovieRecorderManager::stop_recording() == ERR_INVALID_PARAMETER);
-	CHECK(MovieRecorderManager::pause_recording() == ERR_UNAVAILABLE);
-	CHECK(MovieRecorderManager::resume_recording() == ERR_UNAVAILABLE);
 	MovieRecorderManager::RecordingConfig request;
 	request.video_width = 4;
 	request.video_height = 4;
@@ -1011,22 +1096,14 @@ TEST_CASE("[SPX] AVI recovery scans unindexed streams and rejects malformed head
 	}
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	config.keep_intermediate_files = true;
 	config.enable_debug_output = true;
-	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED }) {
-		config.interleave_strategy = strategy;
-		processor.set_config(config);
-		String output = files.file("recovered_" + itos(strategy) + ".avi");
-		auto result = processor.merge_files(video, audio, output);
-		INFO(result.error_message);
-		REQUIRE(result.error_code == OK);
-		check_avi_index(read_avi(output), 40);
-	}
-	CHECK(processor.get_recommended_method() == PostMergeProcessor::METHOD_CUSTOM_AVI);
-	CHECK(processor.get_method_name(PostMergeProcessor::METHOD_NONE) == "No Merge");
-	CHECK(processor.get_method_name(PostMergeProcessor::METHOD_FFMPEG_SYSTEM) == "FFmpeg System Command");
-	CHECK_FALSE(processor.is_method_available(static_cast<PostMergeProcessor::MergeMethod>(99)));
+	processor.set_config(config);
+	String output = files.file("recovered.avi");
+	auto result = processor.merge_files(video, audio, output);
+	INFO(result.error_message);
+	REQUIRE(result.error_code == OK);
+	check_avi_index(read_avi(output), 40);
 	auto valid = read_avi(video);
 	for (const char *tag : { "AVI ", "hdrl", "avih", "strh", "vids", "movi" }) {
 		auto bad = valid;
@@ -1046,12 +1123,6 @@ TEST_CASE("[SPX] AVI recovery scans unindexed streams and rejects malformed head
 	CHECK(processor.merge_files(video, files.file("bad_audio.avi"), files.file("bad.avi")).error_code == ERR_FILE_CORRUPT);
 	ERR_PRINT_ON;
 	CHECK(processor.merge_files(video, audio, files.file("missing/output.avi")).error_code == ERR_FILE_BAD_PATH);
-	config.method = PostMergeProcessor::METHOD_FFMPEG_SYSTEM;
-	config.ffmpeg_path = files.file("missing-ffmpeg");
-	processor.set_config(config);
-	ERR_PRINT_OFF;
-	CHECK(processor.merge_files(video, audio, files.file("ffmpeg.avi")).error_code == ERR_UNAVAILABLE);
-	ERR_PRINT_ON;
 	CHECK(FileAccess::exists(video));
 	CHECK(FileAccess::exists(audio));
 }
@@ -1065,7 +1136,6 @@ TEST_CASE("[SPX] AVI merger rejects damaged indexes without consuming input stre
 	REQUIRE(index > 0);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	config.keep_intermediate_files = false;
 	processor.set_config(config);
 
@@ -1109,6 +1179,77 @@ TEST_CASE("[SPX] AVI merger rejects damaged indexes without consuming input stre
 	}
 }
 
+TEST_CASE("[SPX] AVI merger rejects source truncation between parsing and interleaving") {
+	TestSpx::TempDirectory files("spx_avi_changed_input");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	write_avi_pair(video, audio);
+	const auto original_video = read_avi(video), original_audio = read_avi(audio);
+	const int chunk = find_tag(original_video, "00db");
+	REQUIRE(chunk > 0);
+	const uint32_t payload_size = decode_uint32(original_video.ptr() + chunk + 4);
+	REQUIRE(payload_size > 0);
+
+	// The second index log marks a real I/O boundary: video parsing has closed its
+	// handle, while audio parsing is still in progress. Change the file there to
+	// exercise a concurrent writer deterministically, without racing test threads.
+	struct ChangeParsedInput {
+		PrintHandlerList handler;
+		String path;
+		PackedByteArray bytes;
+		int indexes_seen = 0;
+		bool changed = false;
+
+		ChangeParsedInput(const String &p_path, const PackedByteArray &p_bytes) :
+				path(p_path), bytes(p_bytes) {
+			handler.userdata = this;
+			handler.printfunc = [](void *userdata, const String &message, bool, bool) {
+				auto &change = *static_cast<ChangeParsedInput *>(userdata);
+				if (message.begins_with("PostMergeProcessor: Parsing ") && ++change.indexes_seen == 2) {
+					auto file = FileAccess::open(change.path, FileAccess::WRITE);
+					change.changed = file.is_valid() && file->store_buffer(change.bytes.ptr(), change.bytes.size());
+				}
+			};
+			add_print_handler(&handler);
+		}
+		~ChangeParsedInput() { remove_print_handler(&handler); }
+	};
+
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.enable_debug_output = true;
+	processor.set_config(config);
+	for (int damage = 0; damage < 4; damage++) {
+		INFO("Source change: ", damage);
+		write_avi(video, original_video);
+		auto changed = original_video;
+		switch (damage) {
+			case 0:
+				changed.resize(chunk - 1); // The first chunk no longer exists.
+				break;
+			case 1:
+				changed.resize(chunk + 7); // The chunk header is incomplete.
+				break;
+			case 2:
+				encode_uint32(payload_size - 1, changed.ptrw() + chunk + 4); // The parsed size is stale.
+				break;
+			case 3:
+				changed.resize(chunk + 8 + payload_size - 1); // The payload was truncated.
+				break;
+		}
+		ChangeParsedInput change(video, changed);
+		ERR_PRINT_OFF;
+		const auto result = processor.merge_files(video, audio, files.file("output.avi"));
+		ERR_PRINT_ON;
+		REQUIRE(change.changed);
+		CHECK(result.error_code == ERR_FILE_CORRUPT);
+		CHECK(result.error_message == "Failed to interleave video and audio data");
+		CHECK(result.output_file_path.is_empty());
+		CHECK_FALSE(result.intermediate_files_cleaned);
+		CHECK(FileAccess::get_file_as_bytes(video) == changed);
+		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
+	}
+}
+
 TEST_CASE("[SPX] AVI merger requires complete ordered indexes and preserves existing output") {
 	TestSpx::TempDirectory files("spx_avi_index_order");
 	const String video = files.file("video.avi"), audio = files.file("audio.avi"), output = files.file("merged.avi");
@@ -1118,46 +1259,42 @@ TEST_CASE("[SPX] AVI merger requires complete ordered indexes and preserves exis
 	const auto original_output = FileAccess::get_file_as_bytes(output);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
-	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED }) {
-		config.interleave_strategy = strategy;
-		processor.set_config(config);
-		for (bool damage_audio : { true, false }) {
-			for (int damage = 0; damage < 4; ++damage) {
-				INFO("Strategy: ", strategy, ", audio: ", damage_audio, ", index damage: ", damage);
-				auto bytes = damage_audio ? original_audio : original_video;
-				const int index = find_tag(bytes, "idx1");
-				REQUIRE(index > 0);
-				if (damage == 0) {
-					// Duplicating a valid entry must not duplicate its payload.
-					memcpy(bytes.ptrw() + index + 24, bytes.ptr() + index + 8, 16);
-				} else if (damage == 1) {
-					// A valid prefix must not silently drop the last payload.
-					bytes.resize(index + 24);
-					encode_uint32(16, bytes.ptrw() + index + 4);
-					encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
-				} else if (damage == 2) {
-					// Individually valid entries must preserve their recording order.
-					for (int i = 0; i < 16; ++i) {
-						uint8_t first = bytes[index + 8 + i];
-						bytes.set(index + 8 + i, bytes[index + 24 + i]);
-						bytes.set(index + 24 + i, first);
-					}
-				} else {
-					// A stale index size must not be copied into the merged file.
-					encode_uint32(1, bytes.ptrw() + index + 20);
+	processor.set_config(config);
+	for (bool damage_audio : { true, false }) {
+		for (int damage = 0; damage < 4; ++damage) {
+			INFO("Audio: ", damage_audio, ", index damage: ", damage);
+			auto bytes = damage_audio ? original_audio : original_video;
+			const int index = find_tag(bytes, "idx1");
+			REQUIRE(index > 0);
+			if (damage == 0) {
+				// Duplicating a valid entry must not duplicate its payload.
+				memcpy(bytes.ptrw() + index + 24, bytes.ptr() + index + 8, 16);
+			} else if (damage == 1) {
+				// A valid prefix must not silently drop the last payload.
+				bytes.resize(index + 24);
+				encode_uint32(16, bytes.ptrw() + index + 4);
+				encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
+			} else if (damage == 2) {
+				// Individually valid entries must preserve their recording order.
+				for (int i = 0; i < 16; ++i) {
+					uint8_t first = bytes[index + 8 + i];
+					bytes.set(index + 8 + i, bytes[index + 24 + i]);
+					bytes.set(index + 24 + i, first);
 				}
-				write_avi(video, damage_audio ? original_video : bytes);
-				write_avi(audio, damage_audio ? bytes : original_audio);
-				ERR_PRINT_OFF;
-				auto result = processor.merge_files(video, audio, output);
-				ERR_PRINT_ON;
-				CHECK(result.error_code == ERR_FILE_CORRUPT);
-				CHECK_FALSE(result.intermediate_files_cleaned);
-				CHECK(FileAccess::get_file_as_bytes(output) == original_output);
-				CHECK(FileAccess::get_file_as_bytes(video) == (damage_audio ? original_video : bytes));
-				CHECK(FileAccess::get_file_as_bytes(audio) == (damage_audio ? bytes : original_audio));
+			} else {
+				// A stale index size must not be copied into the merged file.
+				encode_uint32(1, bytes.ptrw() + index + 20);
 			}
+			write_avi(video, damage_audio ? original_video : bytes);
+			write_avi(audio, damage_audio ? bytes : original_audio);
+			ERR_PRINT_OFF;
+			auto result = processor.merge_files(video, audio, output);
+			ERR_PRINT_ON;
+			CHECK(result.error_code == ERR_FILE_CORRUPT);
+			CHECK_FALSE(result.intermediate_files_cleaned);
+			CHECK(FileAccess::get_file_as_bytes(output) == original_output);
+			CHECK(FileAccess::get_file_as_bytes(video) == (damage_audio ? original_video : bytes));
+			CHECK(FileAccess::get_file_as_bytes(audio) == (damage_audio ? bytes : original_audio));
 		}
 	}
 }
@@ -1197,7 +1334,6 @@ TEST_CASE("[SPX] AVI merger rejects invalid timing and nested chunk boundaries")
 	};
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
 	const String output = files.file("invalid.avi");
 	for (const Damage &damage : cases) {
@@ -1226,7 +1362,6 @@ TEST_CASE("[SPX] AVI recovery rejects incomplete PCM frames and truncated uninde
 	const auto original = read_avi(audio);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
 	for (bool indexed : { true, false }) {
 		for (int damage = 0; damage < 3; ++damage) {
@@ -1272,7 +1407,6 @@ TEST_CASE("[SPX] AVI merger rejects non-video payload tags even when the index a
 	const auto original = read_avi(video), original_audio = read_avi(audio);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
 	for (bool indexed : { true, false }) {
 		auto bytes = original;
@@ -1305,7 +1439,6 @@ TEST_CASE("[SPX] AVI parser keeps word padding inside the parent header") {
 	const auto original = read_avi(video);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
 	for (bool main_header : { true, false }) {
 		auto bytes = original;
@@ -1333,18 +1466,14 @@ TEST_CASE("[SPX] AVI merger accepts empty video and audio streams") {
 	write_avi_pair(empty_video, empty_audio, 0);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	config.keep_intermediate_files = true;
-	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED }) {
-		config.interleave_strategy = strategy;
-		processor.set_config(config);
-		for (int empty = 1; empty <= 3; ++empty) {
-			const String output = files.file("merged.avi");
-			auto result = processor.merge_files(empty & 1 ? empty_video : video, empty & 2 ? empty_audio : audio, output);
-			INFO(result.error_message);
-			REQUIRE(result.error_code == OK);
-			check_avi_index(read_avi(output), empty == 3 ? 0 : 2);
-		}
+	processor.set_config(config);
+	for (int empty = 1; empty <= 3; ++empty) {
+		const String output = files.file("merged.avi");
+		auto result = processor.merge_files(empty & 1 ? empty_video : video, empty & 2 ? empty_audio : audio, output);
+		INFO(result.error_message);
+		REQUIRE(result.error_code == OK);
+		check_avi_index(read_avi(output), empty == 3 ? 0 : 2);
 	}
 }
 
@@ -1388,116 +1517,6 @@ TEST_CASE("[SPX] WebM recorder consistently reports unavailable on native platfo
 }
 #endif
 
-#ifdef UNIX_ENABLED
-TEST_CASE("[SPX] FFmpeg merge validates command arguments exit status and produced output") {
-	TestSpx::TempDirectory files("spx_ffmpeg");
-	const String video = files.file("video.avi"), audio = files.file("audio.avi");
-	write_avi_pair(video, audio);
-	const auto original_video = read_avi(video), original_audio = read_avi(audio);
-	// A local executable models the subprocess contract without depending on installed codecs.
-	files.write("ffmpeg fixture", R"SH(#!/bin/sh
-if [ "$1" = "-version" ]; then
-  printf 'ffmpeg test fixture\n'
-  exit 0
-fi
-if [ "$#" -ne 8 ] || [ "$1" != "-i" ] || [ "$3" != "-i" ] || [ "$5" != "-c" ] || [ "$6" != "copy" ] || [ "$8" != "-y" ]; then
-  exit 99
-fi
-case "$7" in
-  *failure.avi) printf 'synthetic encoder failure\n'; exit 7 ;;
-  *no-output.avi) exit 0 ;;
-  *) cp "$2" "$7" ;;
-esac
-)SH");
-	REQUIRE(FileAccess::set_unix_permissions(files.file("ffmpeg fixture"), 0700) == OK);
-	PostMergeProcessor processor;
-	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_FFMPEG_SYSTEM;
-	config.ffmpeg_path = files.file("ffmpeg fixture");
-	config.keep_intermediate_files = true;
-	config.enable_debug_output = true;
-	processor.set_config(config);
-	REQUIRE(processor.is_method_available(config.method));
-	const String output = files.file("success.avi");
-	auto result = processor.merge_files(video, audio, output);
-	REQUIRE(result.error_code == OK);
-	CHECK(result.output_file_path == output);
-	CHECK(FileAccess::get_file_as_bytes(output) == original_video);
-	files.write("failure.avi", "previous recording");
-	const auto previous = FileAccess::get_file_as_bytes(files.file("failure.avi"));
-	result = processor.merge_files(video, audio, files.file("failure.avi"));
-	CHECK(result.error_code == ERR_FILE_CANT_WRITE);
-	CHECK(result.error_message.contains("exit code 7"));
-	CHECK(result.error_message.contains("synthetic encoder failure"));
-	CHECK(FileAccess::get_file_as_bytes(files.file("failure.avi")) == previous);
-	CHECK_FALSE(result.intermediate_files_cleaned);
-	result = processor.merge_files(video, audio, files.file("no-output.avi"));
-	CHECK(result.error_code == ERR_FILE_CANT_WRITE);
-	CHECK(result.error_message.contains("not created"));
-	CHECK(FileAccess::get_file_as_bytes(video) == original_video);
-	CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
-	files.write("ffmpeg fixture", "#!/bin/sh\nprintf 'ffmpeg failed version check\n'\nexit 4\n");
-	CHECK_FALSE(processor.is_method_available(config.method));
-	result = processor.merge_files(video, audio, files.file("unavailable.avi"));
-	CHECK(result.error_code == ERR_UNAVAILABLE);
-	CHECK(result.error_message == "Validation failed");
-	CHECK_FALSE(FileAccess::exists(files.file("unavailable.avi")));
-	files.write("ffmpeg fixture", "#!/bin/sh\nprintf 'unrelated executable\\n'\nexit 0\n");
-	CHECK_FALSE(processor.is_method_available(config.method));
-	CHECK(FileAccess::get_file_as_bytes(video) == original_video);
-	CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
-}
-
-TEST_CASE("[SPX] FFmpeg merge preserves recordings when a checked executable stops working") {
-	TestSpx::TempDirectory files("spx_ffmpeg_changed");
-	const String video = files.file("video.avi"), audio = files.file("audio.avi"), output = files.file("output.avi");
-	write_avi_pair(video, audio);
-	const auto original_video = read_avi(video), original_audio = read_avi(audio);
-	for (int failure = 0; failure < 3; ++failure) {
-		INFO("Subprocess failure: ", failure);
-		// Deterministic subprocess lifecycle: fail the second probe, disappear after
-		// the second probe, or launch successfully but fail without diagnostics.
-		const String executable = "ffmpeg_" + itos(failure);
-		String script = R"SH(#!/bin/sh
-if [ "$1" = "-version" ]; then
-  if [ -f "$0.checked" ]; then
-    SECOND_PROBE
-  else
-    touch "$0.checked"
-  fi
-  printf 'ffmpeg test fixture\n'
-  exit 0
-fi
-exit 7
-)SH";
-		script = script.replace("SECOND_PROBE", failure == 0 ? "exit 1" : (failure == 1 ? "rm -- \"$0\"" : ":"));
-		files.write(executable, script);
-		REQUIRE(FileAccess::set_unix_permissions(files.file(executable), 0700) == OK);
-		files.write("output.avi", "previous recording");
-		PostMergeProcessor processor;
-		PostMergeProcessor::MergeConfig config;
-		config.method = PostMergeProcessor::METHOD_FFMPEG_SYSTEM;
-		config.ffmpeg_path = files.file(executable);
-		config.keep_intermediate_files = false;
-		processor.set_config(config);
-		ERR_PRINT_OFF;
-		const auto result = processor.merge_files(video, audio, output);
-		ERR_PRINT_ON;
-		CHECK(result.error_code == (failure == 0 ? ERR_FILE_NOT_FOUND : ERR_FILE_CANT_WRITE));
-		if (failure == 0) {
-			CHECK(result.error_message == "FFmpeg not found in system PATH");
-		} else if (failure == 2) {
-			CHECK(result.error_message == "FFmpeg failed with exit code 7");
-		}
-		CHECK_FALSE(result.intermediate_files_cleaned);
-		CHECK(result.output_file_path.is_empty());
-		CHECK(FileAccess::get_file_as_string(output) == "previous recording");
-		CHECK(FileAccess::get_file_as_bytes(video) == original_video);
-		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
-	}
-}
-#endif
-
 TEST_CASE("[SPX] AVI merge preserves inputs on output failure and cleans up only after success") {
 	TestSpx::TempDirectory files("spx_merge_cleanup");
 	const String video = files.file("video.avi"), audio = files.file("audio.avi");
@@ -1505,7 +1524,6 @@ TEST_CASE("[SPX] AVI merge preserves inputs on output failure and cleans up only
 	const auto original_video = read_avi(video), original_audio = read_avi(audio);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	config.keep_intermediate_files = false;
 	config.enable_debug_output = true;
 	processor.set_config(config);
@@ -1526,6 +1544,19 @@ TEST_CASE("[SPX] AVI merge preserves inputs on output failure and cleans up only
 	check_avi_index(read_avi(blocked), 4);
 	CHECK_FALSE(FileAccess::exists(video));
 	CHECK_FALSE(FileAccess::exists(audio));
+	// Cleanup must have identical behavior with diagnostics disabled.
+	write_avi_pair(video, audio);
+	config.enable_debug_output = false;
+	processor.set_config(config);
+	result = processor.merge_files(video, audio, blocked);
+	REQUIRE(result.error_code == OK);
+	CHECK(result.intermediate_files_cleaned);
+	CHECK(result.output_file_path == blocked);
+	check_avi_index(read_avi(blocked), 4);
+	CHECK_FALSE(FileAccess::exists(video));
+	CHECK_FALSE(FileAccess::exists(audio));
+	config.enable_debug_output = true;
+	processor.set_config(config);
 #ifdef UNIX_ENABLED
 	const auto expected_output = FileAccess::get_file_as_bytes(blocked);
 	for (bool block_video : { true, false }) {
@@ -1573,7 +1604,7 @@ TEST_CASE("[SceneTree][SPX] Recording workers finalize their files when destroye
 	TestSpx::EngineScene scene;
 	ThreadSafeFrameBuffer buffer;
 	HybridAudioDriver driver;
-	REQUIRE(driver.init(8000, AudioDriver::SPEAKER_MODE_STEREO) == OK);
+	REQUIRE(driver.init(8000) == OK);
 	{
 		IndependentVideoRecorder video;
 		IndependentVideoRecorder::RecordingConfig video_config;
@@ -1584,7 +1615,7 @@ TEST_CASE("[SceneTree][SPX] Recording workers finalize their files when destroye
 		REQUIRE(video.start_recording() == OK);
 		auto frame = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 		frame->fill(Color(0.5, 0.25, 0));
-		buffer.update_frame(frame, 1, 0);
+		buffer.update_frame(frame, 0);
 		REQUIRE(wait_for([&] { return video.get_statistics().total_recorded_frames >= 1; }));
 		IndependentAudioRecorder audio;
 		IndependentAudioRecorder::AudioConfig audio_config;
@@ -1613,7 +1644,7 @@ TEST_CASE("[SceneTree][SPX] Realtime capture failure detaches audio and allows a
 	REQUIRE(DirAccess::make_dir_absolute(path + "_audio.avi") == OK);
 	auto destroy = [](RealtimeWriter *writer) { memdelete(writer); };
 	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
-	auto config = ObsStyleMovieWriter::get_standard_config();
+	ObsStyleMovieWriter::ObsRecordingConfig config;
 	config.enable_post_merge = true;
 	config.keep_intermediate_files = false;
 	config.enable_debug_output = true;
@@ -1679,7 +1710,7 @@ TEST_CASE("[SPX] Recorder configuration uses documented defaults when project ov
 			}
 		}
 	} restore;
-	for (const char *name : { "obs_video_fps", "obs_video_quality", "obs_audio_sample_rate", "obs_audio_channels", "obs_enable_timestamp_chunks", "obs_enable_repeat_frame_marking", "obs_enable_debug_output", "obs_enable_post_merge", "obs_keep_intermediate_files", "obs_ffmpeg_path" }) {
+	for (const char *name : { "obs_video_fps", "obs_video_quality", "obs_audio_sample_rate", "obs_audio_channels", "obs_enable_debug_output", "obs_enable_post_merge", "obs_keep_intermediate_files" }) {
 		String key = String("movie_writer/") + name;
 		restore.values[key] = ProjectSettings::get_singleton()->get_setting(key);
 		ProjectSettings::get_singleton()->set_setting(key, Variant());
@@ -1691,12 +1722,9 @@ TEST_CASE("[SPX] Recorder configuration uses documented defaults when project ov
 	CHECK(config.jpeg_quality == doctest::Approx(0.85));
 	CHECK(config.audio_sample_rate == 48000);
 	CHECK(config.audio_channels == 2);
-	CHECK(config.enable_timestamp_chunks);
-	CHECK(config.enable_repeat_frame_marking);
 	CHECK_FALSE(config.enable_debug_output);
 	CHECK(config.enable_post_merge);
 	CHECK_FALSE(config.keep_intermediate_files);
-	CHECK(config.ffmpeg_path == "ffmpeg");
 	CHECK(writer->get_comprehensive_debug_info().contains("Uninitialized"));
 	CHECK_FALSE(writer->get_comprehensive_debug_info().contains("Video Recorder Info"));
 	CHECK_FALSE(writer->get_comprehensive_debug_info().contains("Audio Recorder Info"));
@@ -1714,7 +1742,6 @@ TEST_CASE("[SPX] AVI parser rejects incomplete duplicated and out-of-order conta
 	REQUIRE(index > 0);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
 	for (int damage = 0; damage < 17; ++damage) {
 		INFO("Container damage: ", damage);
@@ -1831,7 +1858,6 @@ TEST_CASE("[SPX] AVI merge accepts compressed-video chunk tags and optional unkn
 	write_avi(video, bytes);
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
-	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	config.keep_intermediate_files = true;
 	processor.set_config(config);
 	const auto result = processor.merge_files(video, audio, files.file("merged.avi"));

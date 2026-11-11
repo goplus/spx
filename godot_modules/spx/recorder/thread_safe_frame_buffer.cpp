@@ -7,67 +7,32 @@
 /**************************************************************************/
 
 #include "thread_safe_frame_buffer.h"
-#include "core/os/os.h"
 
-ThreadSafeFrameBuffer::ThreadSafeFrameBuffer() {
-	has_new_data.store(false);
-	last_sequence.store(0);
-	total_updates.store(0);
-	buffer_switches.store(0);
-}
-
-ThreadSafeFrameBuffer::~ThreadSafeFrameBuffer() {
-	reset();
-}
-
-void ThreadSafeFrameBuffer::update_frame(const Ref<Image> &new_frame, uint64_t timestamp, uint32_t sequence) {
+void ThreadSafeFrameBuffer::update_frame(const Ref<Image> &new_frame, uint32_t sequence) {
 	if (new_frame.is_null()) {
 		return;
 	}
 
-	total_updates.fetch_add(1);
-
-	// Fast path: get a reference to the write buffer without locking
-	FrameData *write_buffer = writing_to_a ? &buffer_a : &buffer_b;
-
-	// Update write buffer (non-critical section)
-	write_buffer->image = new_frame;
-	write_buffer->game_timestamp = timestamp;
-	write_buffer->frame_sequence = sequence;
-	write_buffer->is_new_frame = true;
-
-	// Critical section: switch buffer pointers
-	{
-		MutexLock lock(buffer_mutex);
-		writing_to_a = !writing_to_a;
-		buffer_switches.fetch_add(1);
-	}
-
-	has_new_data.store(true);
-	last_sequence.store(sequence);
+	MutexLock lock(buffer_mutex);
+	current_frame.image = new_frame;
+	current_frame.frame_sequence = sequence;
+	total_updates++;
 }
 
 ThreadSafeFrameBuffer::FrameData ThreadSafeFrameBuffer::get_current_frame() const {
 	MutexLock lock(buffer_mutex);
 
-	// Get the stable read buffer (not the write buffer)
-	const FrameData *read_buffer = writing_to_a ? &buffer_b : &buffer_a;
+	return current_frame;
+}
 
-	// Copy data (within the lock to ensure consistency)
-	FrameData result = *read_buffer;
-
-	return result;
+uint64_t ThreadSafeFrameBuffer::get_total_updates() const {
+	MutexLock lock(buffer_mutex);
+	return total_updates;
 }
 
 void ThreadSafeFrameBuffer::reset() {
 	MutexLock lock(buffer_mutex);
 
-	buffer_a = FrameData();
-	buffer_b = FrameData();
-	writing_to_a = true;
-
-	has_new_data.store(false);
-	last_sequence.store(0);
-	total_updates.store(0);
-	buffer_switches.store(0);
+	current_frame = FrameData();
+	total_updates = 0;
 }

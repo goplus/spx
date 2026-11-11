@@ -17,12 +17,7 @@ class SimpleAudioWriter : public RefCounted {
 
 private:
 	Ref<FileAccess> f;
-	String base_path;
-
-	uint32_t mix_rate;
 	uint32_t channels;
-	uint32_t audio_chunk_count = 0;
-	uint32_t audio_block_size;
 
 	uint64_t total_audio_frames_ofs;
 	uint64_t movi_data_ofs;
@@ -30,14 +25,13 @@ private:
 	Vector<uint32_t> audio_chunk_sizes;
 
 public:
-	SimpleAudioWriter();
 	~SimpleAudioWriter();
 
 	Error open(const String &p_path, uint32_t p_sample_rate, uint32_t p_channels);
 	Error write_audio_chunk(const int32_t *p_audio_data, int p_frame_count);
 	void close();
 
-	uint32_t get_chunk_count() const { return audio_chunk_count; }
+	uint32_t get_chunk_count() const { return audio_chunk_sizes.size(); }
 };
 
 #endif // SPX_SIMPLE_AUDIO_WRITER_H

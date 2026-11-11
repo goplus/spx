@@ -14,7 +14,7 @@
 
 SpxRealtimeRecorder *MovieRecorderManager::instance = nullptr;
 MovieRecorderManager::InstanceState MovieRecorderManager::state = NONE;
-MovieRecorderManager::RecordingConfig MovieRecorderManager::current_config;
+String MovieRecorderManager::current_output_path;
 Size2i MovieRecorderManager::default_movie_size;
 uint32_t MovieRecorderManager::default_fps = 60;
 uint64_t MovieRecorderManager::recording_start_time = 0;
@@ -76,8 +76,7 @@ Error MovieRecorderManager::_begin(const Size2i &p_movie_size, uint32_t p_fps, c
 		return err;
 	}
 
-	current_config.output_path = p_path;
-	current_config.video_fps = p_fps;
+	current_output_path = p_path;
 	state = STARTED;
 	command_line_recording = p_command_line;
 	recording_start_time = Time::get_singleton()->get_ticks_usec();
@@ -89,7 +88,7 @@ Error MovieRecorderManager::start_recording(const RecordingConfig &p_config) {
 		return ERR_ALREADY_IN_USE;
 	}
 	ERR_FAIL_COND_V(p_config.output_path.is_empty(), ERR_INVALID_PARAMETER);
-	current_config = p_config;
+	current_output_path = p_config.output_path;
 
 #ifdef WEB_ENABLED
 	// The public Web API starts MediaRecorder in JavaScript. C++ only owns its
@@ -126,14 +125,6 @@ Error MovieRecorderManager::stop_recording() {
 	return OK;
 }
 
-Error MovieRecorderManager::pause_recording() {
-	return ERR_UNAVAILABLE;
-}
-
-Error MovieRecorderManager::resume_recording() {
-	return ERR_UNAVAILABLE;
-}
-
 bool MovieRecorderManager::is_recording() {
 	return state == STARTED;
 }
@@ -147,7 +138,7 @@ bool MovieRecorderManager::has_active_instance() {
 }
 
 String MovieRecorderManager::get_current_output_path() {
-	return current_config.output_path;
+	return current_output_path;
 }
 
 float MovieRecorderManager::get_recording_duration() {

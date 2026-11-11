@@ -38,16 +38,10 @@ const int PEN_PROPERTY_SATURATION = 0;
 const int PEN_PROPERTY_BRIGHTNESS = 1;
 const int PEN_PROPERTY_TRANSPARENCY = 2;
 
-GdObj SpxPen::get_id() {
-	return id;
-}
-
-void SpxPen::on_create(GdInt p_id, Node *p_root) {
-	id = p_id;
+void SpxPen::on_create(GdInt, Node *p_root) {
 	surface = static_cast<SpxPenSurface *>(p_root);
 	is_pen_down = false;
 	needs_start_cap = true;
-	min_draw_distance = 1.0f;
 	pen_properties.transparency = 1.0f;
 	stamp_texture_path = String();
 }
@@ -87,7 +81,8 @@ void SpxPen::_append_current_point_if_needed(GdVec2 position) {
 	const Vector2 draw_position = _get_draw_position(current_pen_pos, pen_properties.size);
 
 	float distance = last_draw_pos.distance_to(draw_position);
-	if (distance < min_draw_distance) {
+	constexpr float MIN_DRAW_DISTANCE = 1.0f;
+	if (distance < MIN_DRAW_DISTANCE) {
 		return;
 	}
 	_draw_line(last_draw_pos, draw_position, pen_properties.size, _get_current_color(), needs_start_cap);

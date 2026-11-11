@@ -39,7 +39,6 @@
 Mutex SpxDebugMgr::lock;
 
 void SpxDebugMgr::on_awake() {
-
 	debug_root = memnew(Node2D);
 	debug_root->set_name("debug_root");
 	debug_root->set_z_index(1000);
@@ -48,15 +47,14 @@ void SpxDebugMgr::on_awake() {
 }
 
 void SpxDebugMgr::on_update(float delta) {
-
 	lock.lock();
-	_clear_debug_shapes();
+	_clear_debug_nodes();
 	lock.unlock();
 }
 
 void SpxDebugMgr::on_destroy() {
 	lock.lock();
-	_clear_debug_shapes();
+	_clear_debug_nodes();
 	if (debug_root) {
 		debug_root->queue_free();
 		debug_root = nullptr;
@@ -65,16 +63,16 @@ void SpxDebugMgr::on_destroy() {
 }
 
 void SpxDebugMgr::on_reset(int reset_code) {
-	_clear_debug_shapes();
+	_clear_debug_nodes();
 }
 
-void SpxDebugMgr::_clear_debug_shapes() {
-	for (const DebugShape &shape : debug_shapes) {
-		if (shape.node && shape.node->is_inside_tree()) {
-			shape.node->queue_free();
-		}
+void SpxDebugMgr::_clear_debug_nodes() {
+	if (!debug_root) {
+		return;
 	}
-	debug_shapes.clear();
+	for (int i = 0; i < debug_root->get_child_count(); ++i) {
+		debug_root->get_child(i)->queue_free();
+	}
 }
 
 void SpxDebugMgr::debug_draw_circle(GdVec2 pos, GdFloat radius, GdColor color) {
@@ -97,14 +95,6 @@ void SpxDebugMgr::debug_draw_circle(GdVec2 pos, GdFloat radius, GdColor color) {
 	circle->set_position(pos);
 
 	debug_root->add_child(circle);
-
-	DebugShape shape;
-	shape.type = DebugShape::CIRCLE;
-	shape.position = pos;
-	shape.radius = radius;
-	shape.color = color;
-	shape.node = circle;
-	debug_shapes.push_back(shape);
 }
 
 void SpxDebugMgr::debug_draw_rect(GdVec2 pos, GdVec2 size, GdColor color) {
@@ -128,14 +118,6 @@ void SpxDebugMgr::debug_draw_rect(GdVec2 pos, GdVec2 size, GdColor color) {
 	rect->set_position(pos);
 
 	debug_root->add_child(rect);
-
-	DebugShape shape;
-	shape.type = DebugShape::RECT;
-	shape.position = pos;
-	shape.size = size;
-	shape.color = color;
-	shape.node = rect;
-	debug_shapes.push_back(shape);
 }
 
 void SpxDebugMgr::debug_draw_line(GdVec2 from, GdVec2 to, GdColor color) {
@@ -157,12 +139,4 @@ void SpxDebugMgr::debug_draw_line(GdVec2 from, GdVec2 to, GdColor color) {
 	line->set_position(from);
 
 	debug_root->add_child(line);
-
-	DebugShape shape;
-	shape.type = DebugShape::LINE;
-	shape.position = from;
-	shape.to_position = to;
-	shape.color = color;
-	shape.node = line;
-	debug_shapes.push_back(shape);
 }

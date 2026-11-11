@@ -31,21 +31,46 @@
 #ifndef TEST_SPX_SPRITE_MGR_H
 #define TEST_SPX_SPRITE_MGR_H
 
-#include "../spx_layer_sorter.h"
 #include "../spx_image_texture.h"
+#include "../spx_layer_sorter.h"
 #include "../spx_physics_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
+#include "core/object/script_language.h"
 #include "scene/2d/visible_on_screen_notifier_2d.h"
 #include "scene/resources/2d/capsule_shape_2d.h"
 #include "scene/resources/2d/circle_shape_2d.h"
 #include "scene/resources/2d/convex_polygon_shape_2d.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
+#include "scene/resources/atlas_texture.h"
 #include "scene/resources/material.h"
 #include "scene/resources/packed_scene.h"
+#include "scene/resources/shader.h"
 #include "spx_test_fixtures.h"
 
 namespace TestSpxSpriteMgr {
+
+struct ScriptLanguageFixture {
+	ScriptLanguage *language = nullptr;
+
+	ScriptLanguageFixture() {
+		// --test skips the language initialization normally performed by Main.
+		for (int i = 0; i < ScriptServer::get_language_count(); ++i) {
+			if (ScriptServer::get_language(i)->get_type() == "GDScript") {
+				language = ScriptServer::get_language(i);
+				language->init();
+				break;
+			}
+		}
+		REQUIRE(language != nullptr);
+	}
+
+	~ScriptLanguageFixture() {
+		if (language) {
+			language->finish();
+		}
+	}
+};
 
 TEST_CASE("[SceneTree][SPX] Sprite manager converts coordinates and owns sprite lifetime") {
 	TestSpx::EngineScene scene;
@@ -392,6 +417,339 @@ TEST_CASE("[SceneTree][SPX] Sprite material parameters affect the attached shade
 	CHECK(Color(material->get_shader_parameter("color")) == Color(1, 0, 0, 1));
 }
 
+TEST_CASE("[SceneTree][SPX] Sprite material access follows replacement and clearing") {
+	TestSpx::TempDirectory files("spx_material_replacement");
+	files.write("sprite.gdshader", "shader_type canvas_item; uniform vec4 color : source_color; uniform float amount; uniform vec4 bounds; uniform vec4 uv_remap;");
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	auto *sprite = manager->get_sprite(id);
+	auto *animation = sprite->get_anim2d();
+	const CharString path = files.file("sprite.gdshader").utf8();
+	manager->set_material_shader(id, path.get_data());
+	Ref<ShaderMaterial> original = animation->get_material();
+	REQUIRE(original.is_valid());
+	manager->set_material_params(id, "amount", 0.25);
+	manager->set_color(id, Color(1, 0, 0));
+
+	Ref<ShaderMaterial> replacement;
+	replacement.instantiate();
+	replacement->set_shader(original->get_shader());
+	replacement->set_shader_parameter("amount", 0.5);
+	replacement->set_shader_parameter("color", Color(0, 1, 0));
+	animation->set_material(replacement);
+	CHECK(manager->get_material_params(id, "amount") == doctest::Approx(0.5));
+	CHECK(Color(manager->get_color(id)) == Color(0, 1, 0));
+	CHECK(TestSpx::take_string(manager->get_material_shader(id)) == files.file("sprite.gdshader"));
+	manager->set_material_params(id, "amount", 0.75);
+	manager->set_material_params_vec4(id, "bounds", Vector4(1, 2, 3, 4));
+	manager->set_material_params_color(id, "color", Color(0, 0, 1));
+	sprite->set_uv_remap(Vector4(0.1, 0.2, 0.3, 0.4));
+	CHECK(double(replacement->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	CHECK(Vector4(manager->get_material_params_vec4(id, "bounds")) == Vector4(1, 2, 3, 4));
+	CHECK(Color(manager->get_material_params_color(id, "color")) == Color(0, 0, 1));
+	CHECK(Vector4(replacement->get_shader_parameter("uv_remap")) == Vector4(0.1, 0.2, 0.3, 0.4));
+	CHECK(double(original->get_shader_parameter("amount")) == doctest::Approx(0.25));
+	CHECK(Color(original->get_shader_parameter("color")) == Color(1, 0, 0));
+	const ObjectID original_id = original->get_instance_id();
+	original.unref();
+	CHECK(ObjectDB::get_instance(original_id) == nullptr);
+
+	animation->set_material(Ref<Material>());
+	const Color tint(0.2, 0.4, 0.6, 0.8);
+	manager->set_color(id, tint);
+	CHECK(animation->get_self_modulate() == tint);
+	CHECK(Color(manager->get_color(id)) == tint);
+	CHECK(manager->get_material_shader(id) == nullptr);
+	manager->set_material_params(id, "amount", 1);
+	CHECK(manager->get_material_params(id, "amount") == 0);
+	CHECK(double(replacement->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	const ObjectID replacement_id = replacement->get_instance_id();
+	replacement.unref();
+	CHECK(ObjectDB::get_instance(replacement_id) == nullptr);
+
+	Ref<CanvasItemMaterial> canvas_material;
+	canvas_material.instantiate();
+	animation->set_material(canvas_material);
+	manager->set_color(id, Color(1, 1, 0));
+	CHECK(Color(manager->get_color(id)) == Color(1, 1, 0));
+	CHECK(animation->get_material() == canvas_material);
+	CHECK(manager->get_material_shader(id) == nullptr);
+	manager->set_material_shader(id, path.get_data());
+	Ref<ShaderMaterial> created = animation->get_material();
+	REQUIRE(created.is_valid());
+	CHECK(TestSpx::take_string(manager->get_material_shader(id)) == files.file("sprite.gdshader"));
+}
+
+TEST_CASE("[SceneTree][SPX] Authored sprite shaders receive current atlas UVs without material setters") {
+	TestSpx::EngineScene scene;
+	const GdObj id = scene.engine->get_sprite()->create_bare_sprite(Vector2());
+	auto *sprite = scene.engine->get_sprite()->get_sprite(id);
+	auto *animation = sprite->get_anim2d();
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(100, 80));
+	Ref<AtlasTexture> atlas;
+	atlas.instantiate();
+	atlas->set_atlas(texture);
+	atlas->set_region(Rect2(25, 20, 50, 40));
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->add_frame("default", atlas);
+	frames->add_frame("default", texture);
+	animation->set_sprite_frames(frames);
+	Ref<Shader> shader;
+	shader.instantiate();
+	shader->set_code("shader_type canvas_item; uniform vec4 atlas_uv_rect2;");
+	Ref<ShaderMaterial> material;
+	material.instantiate();
+	material->set_shader(shader);
+	animation->set_material(material);
+
+	sprite->on_start();
+	CHECK(animation->get_material() == material);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0.25, 0.25, 0.5, 0.5));
+	sprite->set_anim_frame(1);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+	Ref<ShaderMaterial> replacement;
+	replacement.instantiate();
+	replacement->set_shader(shader);
+	animation->set_material(replacement);
+	sprite->set_anim_frame(0);
+	CHECK(Vector4(replacement->get_shader_parameter("atlas_uv_rect2")) == Vector4(0.25, 0.25, 0.5, 0.5));
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+}
+
+TEST_CASE("[SceneTree][SPX] Packed scenes isolate authored shader materials per sprite") {
+	bool retry_start = false;
+	SUBCASE("Complete authored components") {}
+	SUBCASE("Retry after restoring a missing component") {
+		retry_start = true;
+	}
+	TestSpx::TempDirectory files("spx_scene_material");
+	String source = R"([gd_scene load_steps=6 format=3]
+[sub_resource type="PlaceholderTexture2D" id="Texture"]
+size = Vector2(100, 80)
+[sub_resource type="AtlasTexture" id="Atlas"]
+atlas = SubResource("Texture")
+region = Rect2(25, 20, 50, 40)
+[sub_resource type="SpriteFrames" id="Frames"]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas")}, {"duration": 1.0, "texture": SubResource("Texture")}], "loop": true, "name": &"default", "speed": 5.0}]
+[sub_resource type="Shader" id="Shader"]
+code = "shader_type canvas_item; uniform vec4 atlas_uv_rect2; uniform float amount; uniform sampler2D detail;"
+[sub_resource type="ShaderMaterial" id="Material"]
+shader = SubResource("Shader")
+shader_parameter/amount = 0.25
+shader_parameter/atlas_uv_rect2 = Vector4(0, 0, 0, 0)
+shader_parameter/detail = SubResource("Texture")
+[node name="Pair" type="Node2D"]
+)";
+	for (int i = 0; i < 2; ++i) {
+		const String name = i == 0 ? "First" : "Second";
+		source += "[node name=\"" + name + "\" type=\"SpxSprite\" parent=\".\"]\n";
+		source += "[node name=\"RenderRoot\" type=\"Node2D\" parent=\"" + name + "\"]\n";
+		source += "[node name=\"Anim2D\" type=\"AnimatedSprite2D\" parent=\"" + name + "/RenderRoot\"]\n";
+		source += "material = SubResource(\"Material\")\nsprite_frames = SubResource(\"Frames\")\nframe = " + itos(i) + "\n";
+		source += "[node name=\"Collider2D\" type=\"CollisionShape2D\" parent=\"" + name + "\"]\n";
+		source += "[node name=\"Area2D\" type=\"Area2D\" parent=\"" + name + "\"]\n";
+		source += "[node name=\"Trigger2D\" type=\"CollisionShape2D\" parent=\"" + name + "/Area2D\"]\n";
+	}
+	files.write("pair.tscn", source);
+	TestSpx::EngineScene scene;
+	Ref<PackedScene> packed = ResourceLoader::load(files.file("pair.tscn"));
+	REQUIRE(packed.is_valid());
+	SpxSprite *sprites[4];
+	Ref<ShaderMaterial> materials[4];
+	Ref<ShaderMaterial> authored;
+	for (int instance = 0; instance < 2; ++instance) {
+		Node *root = packed->instantiate();
+		REQUIRE(root != nullptr);
+		scene.root->add_child(root);
+		for (int child = 0; child < 2; ++child) {
+			const int index = instance * 2 + child;
+			auto *sprite = Object::cast_to<SpxSprite>(root->get_node(NodePath(child == 0 ? "First" : "Second")));
+			REQUIRE(sprite != nullptr);
+			auto *animation = Object::cast_to<AnimatedSprite2D>(sprite->get_node(NodePath("RenderRoot/Anim2D")));
+			REQUIRE(animation != nullptr);
+			Ref<ShaderMaterial> original = animation->get_material();
+			REQUIRE(original.is_valid());
+			CHECK_FALSE(original->is_local_to_scene());
+			if (authored.is_null()) {
+				authored = original;
+			}
+			CHECK(original == authored);
+			Ref<Material> first_material;
+			if (retry_start) {
+				Node *area = sprite->get_node(NodePath("Area2D"));
+				sprite->remove_child(area);
+				ERR_PRINT_OFF;
+				sprite->on_start();
+				ERR_PRINT_ON;
+				first_material = animation->get_material();
+				CHECK(first_material != authored);
+				sprite->add_child(area);
+			}
+			sprite->on_start();
+			if (retry_start) {
+				CHECK(animation->get_material() == first_material);
+			}
+			sprites[index] = sprite;
+			materials[index] = animation->get_material();
+			REQUIRE(materials[index].is_valid());
+			CHECK(materials[index] != authored);
+			CHECK(materials[index]->get_shader() == authored->get_shader());
+			CHECK(materials[index]->get_shader_parameter("detail") == authored->get_shader_parameter("detail"));
+			CHECK(double(sprite->get_material_params("amount")) == doctest::Approx(0.25));
+		}
+	}
+	const Vector4 atlas_uv(0.25, 0.25, 0.5, 0.5), full_uv(0, 0, 1, 1);
+	for (int i = 0; i < 4; ++i) {
+		CHECK(Vector4(materials[i]->get_shader_parameter("atlas_uv_rect2")) == (i % 2 == 0 ? atlas_uv : full_uv));
+		for (int j = 0; j < i; ++j) {
+			CHECK(materials[i] != materials[j]);
+		}
+	}
+	CHECK(Vector4(authored->get_shader_parameter("atlas_uv_rect2")) == Vector4());
+	sprites[0]->set_anim_frame(1);
+	sprites[1]->set_anim_frame(0);
+	sprites[0]->set_material_params("amount", 0.75);
+	CHECK(Vector4(materials[0]->get_shader_parameter("atlas_uv_rect2")) == full_uv);
+	CHECK(Vector4(materials[1]->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(Vector4(materials[2]->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(Vector4(materials[3]->get_shader_parameter("atlas_uv_rect2")) == full_uv);
+	CHECK(double(materials[0]->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	CHECK(double(materials[2]->get_shader_parameter("amount")) == doctest::Approx(0.25));
+
+	// Explicit sharing after startup, including a repeated start, stays intentional.
+	sprites[0]->get_anim2d()->set_material(materials[2]);
+	sprites[0]->on_start();
+	CHECK(sprites[0]->get_anim2d()->get_material() == materials[2]);
+	CHECK(Vector4(materials[2]->get_shader_parameter("atlas_uv_rect2")) == full_uv);
+	materials[2]->set_shader_parameter("amount", 0.5);
+	CHECK(double(sprites[0]->get_material_params("amount")) == doctest::Approx(0.5));
+	CHECK(double(sprites[2]->get_material_params("amount")) == doctest::Approx(0.5));
+}
+
+TEST_CASE("[SceneTree][SPX] Native sprite clones isolate shader parameters and atlas UVs") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	auto *sprite = manager->get_sprite(id);
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(100, 80));
+	Ref<AtlasTexture> atlas;
+	atlas.instantiate();
+	atlas->set_atlas(texture);
+	atlas->set_region(Rect2(25, 20, 50, 40));
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->add_frame("default", atlas);
+	frames->add_frame("default", texture);
+	sprite->get_anim2d()->set_sprite_frames(frames);
+	Ref<Shader> shader;
+	shader.instantiate();
+	shader->set_code("shader_type canvas_item; uniform vec4 atlas_uv_rect2; uniform float amount; uniform sampler2D detail;");
+	Ref<ShaderMaterial> material;
+	material.instantiate();
+	material->set_shader(shader);
+	material->set_shader_parameter("amount", 0.25);
+	material->set_shader_parameter("detail", texture);
+	sprite->get_anim2d()->set_material(material);
+	sprite->set_anim_frame(0);
+	const Vector4 atlas_uv(0.25, 0.25, 0.5, 0.5);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+
+	const GdObj clone_id = manager->clone_sprite(id);
+	REQUIRE(clone_id != NULL_OBJECT_ID);
+	auto *clone = manager->get_sprite(clone_id);
+	REQUIRE(clone);
+	Ref<ShaderMaterial> cloned_material = clone->get_anim2d()->get_material();
+	REQUIRE(cloned_material.is_valid());
+	CHECK(cloned_material != material);
+	CHECK(material->get_shader_parameter("atlas_uv_rect2").get_type() == Variant::VECTOR4);
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(sprite->get_anim2d()->get_material() == material);
+	CHECK(cloned_material->get_shader() == shader);
+	CHECK(Ref<Texture2D>(cloned_material->get_shader_parameter("detail")) == texture);
+	CHECK(double(cloned_material->get_shader_parameter("amount")) == doctest::Approx(0.25));
+	CHECK(Vector4(cloned_material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	clone->set_anim_frame(1);
+	clone->set_material_params("amount", 0.75);
+	CHECK(Vector4(cloned_material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+	CHECK(double(cloned_material->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(double(material->get_shader_parameter("amount")) == doctest::Approx(0.25));
+
+	// A caller can still explicitly share a material after cloning.
+	clone->get_anim2d()->set_material(material);
+	clone->set_material_params("amount", 0.5);
+	CHECK(double(material->get_shader_parameter("amount")) == doctest::Approx(0.5));
+}
+
+TEST_CASE("[SceneTree][SPX] Native sprite clones tolerate incomplete authored visual components") {
+	TestSpx::TempDirectory files("spx_clone_components");
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	files.write("incomplete.tscn", "[gd_scene format=3]\n[node name=\"Incomplete\" type=\"SpxSprite\"]\n");
+	const CharString path = files.file("incomplete.tscn").utf8();
+	ERR_PRINT_OFF;
+	const GdObj id = manager->create_sprite(path.get_data(), Vector2(3, 4));
+	ERR_PRINT_ON;
+	REQUIRE(id != NULL_OBJECT_ID);
+	ERR_PRINT_OFF;
+	const GdObj clone_id = manager->clone_sprite(id);
+	ERR_PRINT_ON;
+	REQUIRE(clone_id != NULL_OBJECT_ID);
+	auto *clone = manager->get_sprite(clone_id);
+	REQUIRE(clone);
+	CHECK(clone->get_anim2d() == nullptr);
+	CHECK(manager->get_sprite(id)->get_anim2d() == nullptr);
+	CHECK(Vector2(manager->get_position(clone_id)) == Vector2(3, 4));
+	Rect2 bounds;
+	CHECK_FALSE(clone->get_sort_bounds(bounds));
+	CHECK(clone->get_material_shader() == nullptr);
+}
+
+TEST_CASE("[SceneTree][SPX] Authored frame signals before sprite startup preserve the selected frame") {
+	ScriptLanguageFixture language;
+	TestSpx::TempDirectory files("spx_authored_frame_signal");
+	files.write("animation.gd", "extends AnimatedSprite2D\nfunc _ready():\n\tframe = 1\n");
+	files.write("sprite.tscn", R"([gd_scene load_steps=4 format=3]
+[ext_resource type="Script" path="animation.gd" id="1"]
+[sub_resource type="PlaceholderTexture2D" id="Texture"]
+size = Vector2(8, 6)
+[sub_resource type="SpriteFrames" id="Frames"]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Texture")}, {"duration": 1.0, "texture": SubResource("Texture")}], "loop": true, "name": &"default", "speed": 5.0}]
+[node name="Authored" type="SpxSprite"]
+[node name="RenderRoot" type="Node2D" parent="."]
+[node name="Anim2D" type="AnimatedSprite2D" parent="RenderRoot"]
+sprite_frames = SubResource("Frames")
+script = ExtResource("1")
+[node name="Collider2D" type="CollisionShape2D" parent="."]
+[node name="Area2D" type="Area2D" parent="."]
+[node name="Trigger2D" type="CollisionShape2D" parent="Area2D"]
+[connection signal="frame_changed" from="RenderRoot/Anim2D" to="." method="on_sprite_frame_changed"]
+)");
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	static int early_frame_changes;
+	early_frame_changes = 0;
+	scene.engine->get_callbacks()->func_on_sprite_frame_changed = [](GdObj id) {
+		++early_frame_changes;
+		// Authored _ready runs before the manager publishes the sprite.
+		CHECK(SpxEngine::get_singleton()->get_sprite()->get_sprite(id) == nullptr);
+	};
+	const CharString path = files.file("sprite.tscn").utf8();
+	const GdObj id = scene.engine->get_sprite()->create_sprite(path.get_data(), Vector2());
+	REQUIRE(id != NULL_OBJECT_ID);
+	auto *sprite = scene.engine->get_sprite()->get_sprite(id);
+	REQUIRE(sprite->get_anim2d()->get_script_instance() != nullptr);
+	CHECK(early_frame_changes == 1);
+	CHECK(sprite->get_anim_frame() == 1);
+	CHECK(sprite->get_texture() != nullptr);
+	scene.engine->get_callbacks()->func_on_sprite_frame_changed = [](GdObj) {};
+}
+
 TEST_CASE("[SceneTree][SPX] Sprite animation controls update playback and frame transforms") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_sprite();
@@ -581,6 +939,15 @@ TEST_CASE("[SceneTree][SPX] Sprite materials reject missing shaders without chan
 	CHECK(sprite->get_anim2d()->get_material().is_null());
 	CHECK(Color(manager->get_color(id)).is_equal_approx(tint));
 	CHECK(manager->get_material_shader(id) == nullptr);
+
+	Ref<ShaderMaterial> empty_material;
+	empty_material.instantiate();
+	sprite->get_anim2d()->set_material(empty_material);
+	const Color fallback(0.8, 0.6, 0.4, 0.2);
+	manager->set_color(id, fallback);
+	CHECK(Color(manager->get_color(id)).is_equal_approx(fallback));
+	CHECK(sprite->get_anim2d()->get_self_modulate().is_equal_approx(fallback));
+	CHECK(manager->get_material_shader(id) == nullptr);
 }
 
 TEST_CASE("[SceneTree][SPX] Point collision falls back to trigger geometry without readable pixels") {
@@ -747,15 +1114,32 @@ TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow autho
 	animation->set_sprite_frames(frames);
 	CHECK(sprite->get_texture() == nullptr);
 	CHECK(sprite->get_rect() == Rect2(0, 0, 1, 1));
+	Rect2 bounds;
+	CHECK_FALSE(sprite->get_sort_bounds(bounds));
 	Ref<PlaceholderTexture2D> texture;
 	texture.instantiate();
 	texture->set_size(Vector2(8, 6));
 	frames->set_frame("default", 0, texture);
 	CHECK(sprite->get_rect() == Rect2(6.25, 17.25, 8, 6));
+	REQUIRE(sprite->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(6.25, 17.25, 8, 6));
+	animation->set_scale(Vector2(2, 3));
+	REQUIRE(sprite->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(2.25, 11.25, 16, 18));
+	animation->set_scale(Vector2(1, 1));
+	auto *extra_visual = memnew(Sprite2D);
+	animation->add_child(extra_visual, false, Node::INTERNAL_MODE_BACK);
+	CHECK_FALSE(sprite->get_sort_bounds(bounds));
+	memdelete(extra_visual);
+
 	auto *viewport = sprite->get_viewport();
 	const bool snap = viewport->is_snap_2d_transforms_to_pixel_enabled();
 	viewport->set_snap_2d_transforms_to_pixel(true);
 	CHECK(sprite->get_rect() == Rect2(6, 17, 8, 6));
+	animation->set_offset(Vector2(0.2, 0.3));
+	REQUIRE(sprite->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(6.25, 17.25, 8, 6));
+	animation->set_offset(Vector2());
 	viewport->set_snap_2d_transforms_to_pixel(snap);
 	Ref<ImageTexture> empty;
 	empty.instantiate();
@@ -774,7 +1158,57 @@ TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow autho
 	sprite->on_start();
 	Ref<ShaderMaterial> material = animation->get_material();
 	REQUIRE(material.is_valid());
-	CHECK(Rect2(material->get_shader_parameter("atlas_uv_rect2")) == Rect2(0, 0, 1, 1));
+	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+}
+
+TEST_CASE("[SceneTree][SPX] Sort bounds conservatively retain scripted and extra visuals") {
+	ScriptLanguageFixture language;
+	TestSpx::TempDirectory files("spx_scripted_sort_bounds");
+	files.write("draw.gd", "extends Node2D\nfunc _draw():\n\tdraw_rect(Rect2(-100, -100, 200, 200), Color.RED)\n");
+	Ref<Script> script = ResourceLoader::load(files.file("draw.gd"));
+	REQUIRE(script.is_valid());
+	REQUIRE(script->is_valid());
+	TestSpx::EngineScene scene;
+	auto *rendered = memnew(SpxRenderSprite);
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(8, 6));
+	rendered->set_texture(texture);
+	scene.root->add_child(rendered);
+	Rect2 bounds;
+	REQUIRE(rendered->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(-4, -3, 8, 6));
+	SUBCASE("Script on the sprite can draw outside the texture") {
+		rendered->set_script(script);
+		REQUIRE(rendered->get_script_instance() != nullptr);
+		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+		CHECK(rendered->is_sort_visible());
+		rendered->hide();
+		CHECK_FALSE(rendered->is_sort_visible());
+		rendered->show();
+		CHECK(rendered->is_sort_visible());
+	}
+	SUBCASE("Logic children do not expand bounds but scripted descendants can") {
+		auto *logic = memnew(Node);
+		rendered->add_child(logic);
+		auto *custom = memnew(Node2D);
+		logic->add_child(custom);
+		CHECK(rendered->get_sort_bounds(bounds));
+		custom->set_script(script);
+		REQUIRE(custom->get_script_instance() != nullptr);
+		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	}
+	SUBCASE("Hidden visuals do not expand bounds until shown") {
+		auto *extra = memnew(Sprite2D);
+		extra->set_texture(texture);
+		extra->set_position(Vector2(100, 100));
+		extra->hide();
+		rendered->add_child(extra, false, Node::INTERNAL_MODE_BACK);
+		CHECK(rendered->get_sort_bounds(bounds));
+		CHECK(bounds == Rect2(-4, -3, 8, 6));
+		extra->show();
+		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	}
 }
 
 TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and tree lifetime") {
@@ -805,6 +1239,26 @@ TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and
 		CHECK(sortable->get_sort_z_index() == -5);
 		CHECK(node->get_z_index() == -5);
 	}
+	Rect2 bounds;
+	CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	CHECK_FALSE(body->get_sort_bounds(bounds));
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(8, 6));
+	rendered->set_texture(texture);
+	auto *visual = memnew(Sprite2D);
+	body->add_child(memnew(CollisionShape2D));
+	body->add_child(visual);
+	CHECK_FALSE(body->get_sort_bounds(bounds));
+	visual->set_texture(texture);
+	CHECK(rendered->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(11, 23, 8, 6));
+	CHECK(body->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(11, 23, 8, 6));
+	auto *extra_visual = memnew(Sprite2D);
+	body->add_child(extra_visual);
+	CHECK_FALSE(body->get_sort_bounds(bounds));
+	memdelete(extra_visual);
 	CHECK(rendered->get_sort_id() == 7);
 	CHECK(body->get_sort_id() == 8);
 }

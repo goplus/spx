@@ -35,27 +35,11 @@
 #include "scene/2d/node_2d.h"
 #include "spx_manager.h"
 
-struct DebugShape {
-	enum Type {
-		CIRCLE,
-		RECT,
-		LINE
-	};
-	Type type;
-	GdVec2 position;
-	GdVec2 size;
-	GdFloat radius;
-	GdVec2 to_position;
-	GdColor color;
-	Node2D *node;
-};
-
 class SpxDebugMgr : public SpxManager {
 private:
-	Vector<DebugShape> debug_shapes;
-	Node2D *debug_root;
+	Node2D *debug_root = nullptr;
 
-	void _clear_debug_shapes();
+	void _clear_debug_nodes();
 	static Mutex lock;
 
 public:

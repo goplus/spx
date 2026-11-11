@@ -56,7 +56,7 @@ TEST_CASE("[SPX] SVG loading keeps unpremultiplied RGBA data") {
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"3\"><rect width=\"2\" height=\"3\" fill=\"#ff000080\"/></svg>";
 	const ScalableImageMemLoadFunc global_svg_loader = Image::_svg_scalable_mem_loader_func;
 
-	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 2.0f, HashMap<Color, Color>()) == OK);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 2.0f) == OK);
 	CHECK(Image::_svg_scalable_mem_loader_func == global_svg_loader);
 	CHECK(image->get_width() == 4);
 	CHECK(image->get_height() == 6);
@@ -73,40 +73,27 @@ TEST_CASE("[SPX] SVG loading turns a zero-sized costume into a transparent textu
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0\" height=\"0\" viewBox=\"0 0 0 0\"><g fill=\"none\"/></svg>";
 
 	Vector2 logical_size;
-	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1.0f, HashMap<Color, Color>(), &logical_size) == OK);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1.0f, &logical_size) == OK);
 	CHECK(logical_size == Vector2(1, 1));
 	CHECK(image->get_width() == 1);
 	CHECK(image->get_height() == 1);
 	CHECK(image->get_pixel(0, 0).a == 0.0f);
 }
 
-TEST_CASE("[SPX] SVG file loading applies optional palette conversion and linear color space") {
-	TestSpx::TempDirectory files("spx_svg_palette");
-	files.write("palette.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"6\" height=\"2\">"
-							   "<defs><linearGradient id=\"g\"><stop stop-color=\"#f00\"/><stop offset=\"1\" stop-color=\"red\"/></linearGradient></defs>"
-							   "<rect width=\"2\" height=\"2\" fill=\"red\" stroke=\"none\"/>"
-							   "<rect x=\"2\" width=\"2\" height=\"2\" fill=\"none\" stroke=\"#ff0000\" stroke-width=\"2\"/>"
-							   "<rect x=\"4\" width=\"2\" height=\"2\" fill=\"url(#g)\"/></svg>");
-	struct ResetPalette {
-		~ResetPalette() { SpxImageLoaderSVG::set_forced_color_map({}); }
-	} reset;
-	const Color replacement(0.5, 0.25, 0.75);
-	HashMap<Color, Color> palette;
-	palette.insert(Color(1, 0, 0), replacement);
-	SpxImageLoaderSVG::set_forced_color_map(palette);
+TEST_CASE("[SPX] SVG file loading preserves colors and rejects invalid input") {
+	TestSpx::TempDirectory files("spx_svg_load");
+	files.write("colors.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"6\" height=\"2\">"
+							  "<defs><linearGradient id=\"g\"><stop stop-color=\"#f00\"/><stop offset=\"1\" stop-color=\"red\"/></linearGradient></defs>"
+							  "<rect width=\"2\" height=\"2\" fill=\"red\" stroke=\"none\"/>"
+							  "<rect x=\"2\" width=\"2\" height=\"2\" fill=\"none\" stroke=\"#ff0000\" stroke-width=\"2\"/>"
+							  "<rect x=\"4\" width=\"2\" height=\"2\" fill=\"url(#g)\"/></svg>");
 	Ref<Image> image;
 	image.instantiate();
-	REQUIRE(SpxImageLoaderSVG::load_image(files.file("palette.svg"), image) == OK);
+	REQUIRE(SpxImageLoaderSVG::load_image(files.file("colors.svg"), image) == OK);
 	CHECK(image->get_pixel(0, 0).is_equal_approx(Color(1, 0, 0)));
-	REQUIRE(SpxImageLoaderSVG::load_image(files.file("palette.svg"), image, ImageFormatLoader::FLAG_CONVERT_COLORS) == OK);
 	for (int x : { 0, 3, 5 }) {
-		Color pixel = image->get_pixel(x, 1);
-		CHECK(pixel.r == doctest::Approx(replacement.r).epsilon(0.01));
-		CHECK(pixel.g == doctest::Approx(replacement.g).epsilon(0.01));
-		CHECK(pixel.b == doctest::Approx(replacement.b).epsilon(0.01));
+		CHECK(image->get_pixel(x, 1).is_equal_approx(Color(1, 0, 0)));
 	}
-	REQUIRE(SpxImageLoaderSVG::load_image(files.file("palette.svg"), image, ImageFormatLoader::FLAG_CONVERT_COLORS | ImageFormatLoader::FLAG_FORCE_LINEAR) == OK);
-	CHECK(image->get_pixel(0, 0).r == doctest::Approx(replacement.srgb_to_linear().r).epsilon(0.02));
 	files.write("invalid.svg", "not SVG");
 	Ref<FileAccess> invalid = FileAccess::open(files.file("invalid_utf8.svg"), FileAccess::WRITE);
 	REQUIRE(invalid.is_valid());
@@ -116,7 +103,7 @@ TEST_CASE("[SPX] SVG file loading applies optional palette conversion and linear
 	CHECK(SpxImageLoaderSVG::load_image(files.file("missing.svg"), image) == ERR_CANT_OPEN);
 	CHECK(SpxImageLoaderSVG::load_image(files.file("invalid.svg"), image) == ERR_INVALID_DATA);
 	CHECK(SpxImageLoaderSVG::load_image(files.file("invalid_utf8.svg"), image) != OK);
-	CHECK(SpxImageLoaderSVG::rasterize(image, "<svg fill=\"red", 1, palette) == ERR_INVALID_DATA);
+	CHECK(SpxImageLoaderSVG::rasterize(image, "<svg fill=\"red", 1) == ERR_INVALID_DATA);
 	ERR_PRINT_ON;
 }
 
@@ -125,38 +112,36 @@ TEST_CASE("[SPX] SVG loading rejects oversized rasterization") {
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20000\" height=\"20000\"><rect width=\"20000\" height=\"20000\" fill=\"#000\"/></svg>";
 
 	ERR_PRINT_OFF;
-	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1.0f, HashMap<Color, Color>()) == ERR_INVALID_DATA);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1.0f) == ERR_INVALID_DATA);
 	ERR_PRINT_ON;
 }
 
-TEST_CASE("[SPX] SVG rasterization validates scale and preserves colors absent from the palette") {
+TEST_CASE("[SPX] SVG rasterization validates scale and preserves the image on invalid input") {
 	Ref<Image> image;
 	image.instantiate();
 	const String valid = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"2\"><rect width=\"2\" height=\"2\" fill=\"green\"/></svg>";
-	HashMap<Color, Color> palette;
-	palette.insert(Color(1, 0, 0), Color(0, 0, 1));
-	REQUIRE(SpxImageLoaderSVG::rasterize(image, valid, 1, palette) == OK);
+	REQUIRE(SpxImageLoaderSVG::rasterize(image, valid, 1) == OK);
 	CHECK(image->get_pixel(0, 0).g > 0.49);
 	ERR_PRINT_OFF;
 	for (float scale : { 0.0f, -1.0f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN() }) {
-		CHECK(SpxImageLoaderSVG::rasterize(image, valid, scale, {}) == ERR_INVALID_PARAMETER);
+		CHECK(SpxImageLoaderSVG::rasterize(image, valid, scale) == ERR_INVALID_PARAMETER);
 	}
 	// LunaSVG stores dimensions as float; at the 2^24 image limit, +1 rounds back to the limit.
 	for (Vector2i size : { Vector2i(Image::MAX_WIDTH + 2, 1), Vector2i(1, Image::MAX_HEIGHT + 2) }) {
 		String svg = vformat("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\"/>", size.x, size.y);
-		CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == ERR_INVALID_DATA);
+		CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1) == ERR_INVALID_DATA);
 	}
 	// Converting a finite length in inches to pixels can overflow LunaSVG's float dimensions.
 	for (const char *dimensions : { "width=\"3e38in\" height=\"1\"", "width=\"1\" height=\"3e38in\"" }) {
 		const String svg = String("<svg xmlns=\"http://www.w3.org/2000/svg\" ") + dimensions + "/>";
-		CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == ERR_INVALID_DATA);
+		CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1) == ERR_INVALID_DATA);
 	}
 	ERR_PRINT_ON;
 	CHECK(image->get_size() == Vector2i(2, 2));
 	CHECK(image->get_pixel(0, 0).g > 0.49);
 	for (Vector2i size : { Vector2i(0, 2), Vector2i(2, 0) }) {
 		String svg = vformat("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\"/>", size.x, size.y);
-		REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == OK);
+		REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1) == OK);
 		CHECK(image->get_size() == Vector2i(1, 1));
 		CHECK(image->get_pixel(0, 0).a == 0);
 	}
@@ -181,7 +166,7 @@ TEST_CASE("[SPX] SVG logical dimensions are independent of raster rounding") {
 		for (float scale : { 1.0f, 2.0f, 8.0f }) {
 			Ref<Image> image = memnew(Image());
 			Vector2 logical_size;
-			REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, scale, {}, &logical_size) == OK);
+			REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, scale, &logical_size) == OK);
 			CHECK(logical_size.is_equal_approx(entry.size * scale));
 			CHECK(image->get_width() == Math::ceil(entry.size.x * scale));
 			CHECK(image->get_height() == Math::ceil(entry.size.y * scale));
@@ -246,7 +231,7 @@ TEST_CASE("[SPX] SVG font setters ignore invalid buffers without changing publis
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"120\" height=\"40\"><text x=\"2\" y=\"30\" font-family=\"Project\" font-size=\"24\">Registry</text></svg>";
 	Ref<Image> before;
 	before.instantiate();
-	REQUIRE(SpxImageLoaderSVG::rasterize(before, svg, 1, {}) == OK);
+	REQUIRE(SpxImageLoaderSVG::rasterize(before, svg, 1) == OK);
 	REQUIRE(before->get_used_rect().has_area());
 	SpxSvgUtils::set_default_font(nullptr, font.size());
 	SpxSvgUtils::add_font_face("Project", nullptr, font.size());
@@ -258,7 +243,7 @@ TEST_CASE("[SPX] SVG font setters ignore invalid buffers without changing publis
 	REQUIRE(SpxSvgUtils::ensure_font_faces_registered());
 	Ref<Image> after;
 	after.instantiate();
-	REQUIRE(SpxImageLoaderSVG::rasterize(after, svg, 1, {}) == OK);
+	REQUIRE(SpxImageLoaderSVG::rasterize(after, svg, 1) == OK);
 	CHECK(after->get_data() == before->get_data());
 }
 
@@ -276,7 +261,7 @@ TEST_CASE("[SPX] SVG font snapshots reject unusable data and recover after repla
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"120\" height=\"40\"><text x=\"2\" y=\"30\" font-family=\"Project\" font-size=\"24\">Registry</text></svg>";
 	Ref<Image> image;
 	image.instantiate();
-	REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == OK);
+	REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1) == OK);
 	const PackedByteArray published = image->get_data();
 	REQUIRE(image->get_used_rect().has_area());
 
@@ -292,12 +277,12 @@ TEST_CASE("[SPX] SVG font snapshots reject unusable data and recover after repla
 	CHECK_FALSE(SpxSvgUtils::ensure_font_faces_registered());
 	CHECK_FALSE(SpxSvgUtils::ensure_font_faces_registered());
 	ERR_PRINT_OFF;
-	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == ERR_CANT_CREATE);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1) == ERR_CANT_CREATE);
 	ERR_PRINT_ON;
 	CHECK(image->get_data() == published);
 	SpxSvgUtils::apply_font_registry(font, { { "Project", font } }, { "Project", "default" });
 	REQUIRE(SpxSvgUtils::ensure_font_faces_registered());
-	REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1, {}) == OK);
+	REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, 1) == OK);
 	CHECK(image->get_data() == published);
 }
 

@@ -37,45 +37,7 @@
 
 #include <cstring>
 
-HashMap<Color, Color> SpxImageLoaderSVG::forced_color_map = HashMap<Color, Color>();
-
-void SpxImageLoaderSVG::set_forced_color_map(const HashMap<Color, Color> &p_color_map) {
-	forced_color_map = p_color_map;
-}
-
-void SpxImageLoaderSVG::_replace_color_property(const HashMap<Color, Color> &p_color_map, const String &p_prefix, String &r_string) {
-	// Replace colors in the SVG based on what is passed in `p_color_map`.
-	// Used to change the colors of editor icons based on the used theme.
-	// The strings being replaced are typically of the form:
-	//   fill="#5abbef"
-	// But can also be 3-letter codes, include alpha, be "none" or a named color
-	// string ("blue"). So we convert to Godot Color to compare with `p_color_map`.
-
-	const int prefix_len = p_prefix.length();
-	int pos = r_string.find(p_prefix);
-	while (pos != -1) {
-		pos += prefix_len; // Skip prefix.
-		int end_pos = r_string.find_char('"', pos);
-		ERR_FAIL_COND_MSG(end_pos == -1, vformat("Malformed SVG string after property \"%s\".", p_prefix));
-		const String color_code = r_string.substr(pos, end_pos - pos);
-		if (color_code != "none" && !color_code.begins_with("url(")) {
-			const Color color = Color(color_code); // Handles both HTML codes and named colors.
-			if (p_color_map.has(color)) {
-				r_string = r_string.left(pos) + "#" + p_color_map[color].to_html(false) + r_string.substr(end_pos);
-			}
-		}
-		// Search for other occurrences.
-		pos = r_string.find(p_prefix, pos);
-	}
-}
-
-Error SpxImageLoaderSVG::rasterize(Ref<Image> p_image, String p_svg, float p_raster_scale, const HashMap<Color, Color> &p_color_map, Vector2 *r_logical_size) {
-	if (!p_color_map.is_empty()) {
-		_replace_color_property(p_color_map, "stop-color=\"", p_svg);
-		_replace_color_property(p_color_map, "fill=\"", p_svg);
-		_replace_color_property(p_color_map, "stroke=\"", p_svg);
-	}
-
+Error SpxImageLoaderSVG::rasterize(Ref<Image> p_image, const String &p_svg, float p_raster_scale, Vector2 *r_logical_size) {
 	ERR_FAIL_COND_V_MSG(Math::is_zero_approx(p_raster_scale), ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Can't load SVG with a scale of 0.");
 	ERR_FAIL_COND_V_MSG(!Math::is_finite(p_raster_scale) || p_raster_scale < 0.0f, ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Scale must be finite and positive.");
 
@@ -148,7 +110,7 @@ Error SpxImageLoaderSVG::rasterize(Ref<Image> p_image, String p_svg, float p_ras
 	return OK;
 }
 
-Error SpxImageLoaderSVG::load_image(const String &p_path, Ref<Image> p_image, BitField<ImageFormatLoader::LoaderFlags> p_flags, float p_raster_scale, Vector2 *r_logical_size) {
+Error SpxImageLoaderSVG::load_image(const String &p_path, Ref<Image> p_image, float p_raster_scale, Vector2 *r_logical_size) {
 	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(file.is_null(), ERR_CANT_OPEN, "SpxImageLoaderSVG: Cannot open SVG file: " + p_path);
 	Vector<uint8_t> buffer;
@@ -161,9 +123,7 @@ Error SpxImageLoaderSVG::load_image(const String &p_path, Ref<Image> p_image, Bi
 		return err;
 	}
 
-	const HashMap<Color, Color> empty_color_map;
-	const HashMap<Color, Color> &color_map = p_flags & ImageFormatLoader::FLAG_CONVERT_COLORS ? forced_color_map : empty_color_map;
-	err = rasterize(p_image, svg, p_raster_scale, color_map, r_logical_size);
+	err = rasterize(p_image, svg, p_raster_scale, r_logical_size);
 	if (err != OK) {
 		return err;
 	}
@@ -171,8 +131,5 @@ Error SpxImageLoaderSVG::load_image(const String &p_path, Ref<Image> p_image, Bi
 		return ERR_INVALID_DATA;
 	}
 
-	if (p_flags & ImageFormatLoader::FLAG_FORCE_LINEAR) {
-		p_image->srgb_to_linear();
-	}
 	return OK;
 }

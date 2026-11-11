@@ -35,14 +35,40 @@
 #include "scene/2d/physics/area_2d.h"
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "scene/2d/visible_on_screen_notifier_2d.h"
+#include "scene/main/viewport.h"
+#include "scene/resources/material.h"
 
 #include "spx.h"
 #include "spx_collision_debug_overlay.h"
 #include "spx_engine.h"
+#include "spx_pixel_query.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_mgr.h"
 
 namespace {
+
+// Only cull standard sprite trees. Custom drawing/visual children have unknown bounds.
+bool has_only_sort_visual(const Node *node, const CanvasItem *visual) {
+	if (node->get_script_instance()) {
+		return false;
+	}
+	for (int i = 0; i < node->get_child_count(true); ++i) {
+		const Node *child = node->get_child(i, true);
+		const CanvasItem *item = Object::cast_to<CanvasItem>(child);
+		if (item && !item->is_visible()) {
+			continue;
+		}
+		if (child != visual && item &&
+				child->get_class() != "Node2D" && child->get_class() != "Area2D" &&
+				child->get_class() != "CollisionShape2D" && child->get_class() != "VisibleOnScreenNotifier2D") {
+			return false;
+		}
+		if (!has_only_sort_visual(child, visual)) {
+			return false;
+		}
+	}
+	return true;
+}
 
 void connect_signal_once(Object *source, const StringName &signal_name, Object *target, const StringName &method_name) {
 	if (source == nullptr || target == nullptr) {
@@ -66,11 +92,44 @@ T *get_named_child(Node *owner, const char *child_name) {
 
 } // namespace
 
+bool SpxRenderSprite::get_sort_bounds(Rect2 &r_bounds) const {
+	if (get_texture().is_null() || !has_only_sort_visual(this, this)) {
+		return false;
+	}
+	r_bounds = get_global_transform().xform(get_rect());
+	return true;
+}
+
+bool SpxStaticSprite::get_sort_bounds(Rect2 &r_bounds) const {
+	// Generated static bodies have one Sprite2D child and a collision shape.
+	for (int i = 0; i < get_child_count(); ++i) {
+		const Sprite2D *sprite = Object::cast_to<Sprite2D>(get_child(i));
+		if (sprite && sprite->get_texture().is_valid() && has_only_sort_visual(this, sprite)) {
+			r_bounds = sprite->get_global_transform().xform(sprite->get_rect());
+			return true;
+		}
+	}
+	return false;
+}
+
 void SpxStaticSprite::set_collider(CollisionShape2D *p_collider) {
 	collider2d = p_collider;
 	if (collider2d != nullptr) {
 		spx_ensure_collision_debug_overlay(collider2d, Color(0, 0, 1, 0.2), true);
 	}
+}
+
+bool SpxSprite::get_sort_bounds(Rect2 &r_bounds) const {
+	const Ref<Texture2D> texture = SpxPixelQuery::frame_texture(anim2d);
+	if (texture.is_null() || !has_only_sort_visual(this, anim2d)) {
+		return false;
+	}
+	Rect2 local = SpxPixelQuery::local_rect(anim2d, texture->get_size());
+	if (get_viewport() && get_viewport()->is_snap_2d_transforms_to_pixel_enabled()) {
+		local.position = (local.position + Point2(0.5, 0.5)).floor();
+	}
+	r_bounds = anim2d->get_global_transform().xform(local);
+	return true;
 }
 
 void SpxSprite::_set_use_default_frames(bool p_enabled) {
@@ -244,7 +303,17 @@ void SpxSprite::_connect_runtime_signals() {
 }
 
 void SpxSprite::on_start() {
+	const bool first_start = anim2d == nullptr;
 	_resolve_runtime_components();
+
+	// Isolate authored parameters even if a missing component prevents startup.
+	// Later retries and explicit material replacements must keep their identity.
+	if (first_start && anim2d != nullptr) {
+		Ref<ShaderMaterial> material = anim2d->get_material();
+		if (material.is_valid()) {
+			anim2d->set_material(material->duplicate());
+		}
+	}
 
 	ERR_FAIL_NULL_MSG(collider2d, "SpxSprite: CollisionShape2D component is missing.");
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");

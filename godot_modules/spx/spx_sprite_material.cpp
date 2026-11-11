@@ -44,11 +44,12 @@ void SpxSprite::set_material_shader(GdString p_path) {
 		return;
 	}
 
-	if (!_ensure_material_ready("set_material_shader", true)) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__, true);
+	if (material.is_null()) {
 		return;
 	}
 
-	default_material->set_shader(shader);
+	material->set_shader(shader);
 	anim2d->set_texture_repeat(TEXTURE_REPEAT_ENABLED);
 }
 
@@ -57,14 +58,12 @@ GdString SpxSprite::get_material_shader() {
 		return nullptr;
 	}
 
-	if (default_material.is_null()) {
-		default_material = anim2d->get_material();
-	}
-	if (default_material.is_null() || default_material->get_shader().is_null()) {
+	Ref<ShaderMaterial> material = anim2d->get_material();
+	if (material.is_null() || material->get_shader().is_null()) {
 		return nullptr;
 	}
 
-	return SpxReturnStr(default_material->get_shader()->get_path());
+	return SpxReturnStr(material->get_shader()->get_path());
 }
 
 void SpxSprite::set_color(GdColor p_color) {
@@ -72,11 +71,9 @@ void SpxSprite::set_color(GdColor p_color) {
 		return;
 	}
 
-	if (default_material.is_null()) {
-		default_material = anim2d->get_material();
-	}
-	if (default_material.is_valid() && default_material->get_shader().is_valid()) {
-		default_material->set_shader_parameter("color", p_color);
+	Ref<ShaderMaterial> material = anim2d->get_material();
+	if (material.is_valid() && material->get_shader().is_valid()) {
+		material->set_shader_parameter("color", p_color);
 		return;
 	}
 
@@ -88,90 +85,93 @@ GdColor SpxSprite::get_color() {
 		return GdColor();
 	}
 
-	if (default_material.is_null()) {
-		default_material = anim2d->get_material();
-	}
-	if (default_material.is_valid() && default_material->get_shader().is_valid()) {
-		return default_material->get_shader_parameter("color");
+	Ref<ShaderMaterial> material = anim2d->get_material();
+	if (material.is_valid() && material->get_shader().is_valid()) {
+		return material->get_shader_parameter("color");
 	}
 
 	return anim2d->get_self_modulate();
 }
 
 void SpxSprite::set_material_params(GdString p_effect, GdFloat p_amount) {
-	if (!_ensure_material_ready("set_material_params")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return;
 	}
 
-	default_material->set_shader_parameter(SpxStr(p_effect), p_amount);
+	material->set_shader_parameter(SpxStr(p_effect), p_amount);
 }
 
 GdFloat SpxSprite::get_material_params(GdString p_effect) {
-	if (!_ensure_material_ready("get_material_params")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return 0;
 	}
 
-	return default_material->get_shader_parameter(SpxStr(p_effect));
+	return material->get_shader_parameter(SpxStr(p_effect));
 }
 
 void SpxSprite::set_material_params_vec4(GdString p_effect, GdVec4 p_vec4) {
-	if (!_ensure_material_ready("set_material_params_vec4")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return;
 	}
 
-	default_material->set_shader_parameter(SpxStr(p_effect), p_vec4);
+	material->set_shader_parameter(SpxStr(p_effect), p_vec4);
 }
 
 void SpxSprite::set_uv_remap(const GdVec4 &p_uv_remap) {
-	if (!_ensure_material_ready("set_uv_remap")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return;
 	}
 
-	default_material->set_shader_parameter(SNAME("uv_remap"), p_uv_remap);
+	material->set_shader_parameter(SNAME("uv_remap"), p_uv_remap);
 }
 
 GdVec4 SpxSprite::get_material_params_vec4(GdString p_effect) {
-	if (!_ensure_material_ready("get_material_params_vec4")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return GdVec4();
 	}
 
-	return default_material->get_shader_parameter(SpxStr(p_effect));
+	return material->get_shader_parameter(SpxStr(p_effect));
 }
 
 void SpxSprite::set_material_params_color(GdString p_effect, GdColor p_color) {
-	if (!_ensure_material_ready("set_material_params_color")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return;
 	}
 
-	default_material->set_shader_parameter(SpxStr(p_effect), p_color);
+	material->set_shader_parameter(SpxStr(p_effect), p_color);
 }
 
 GdColor SpxSprite::get_material_params_color(GdString p_effect) {
-	if (!_ensure_material_ready("get_material_params_color")) {
+	Ref<ShaderMaterial> material = _get_shader_material(__func__);
+	if (material.is_null()) {
 		return GdColor();
 	}
 
-	return default_material->get_shader_parameter(SpxStr(p_effect));
+	return material->get_shader_parameter(SpxStr(p_effect));
 }
 
-bool SpxSprite::_ensure_material_ready(const char *p_context, GdBool p_create_if_missing) {
+Ref<ShaderMaterial> SpxSprite::_get_shader_material(const char *p_context, bool p_create_if_missing) {
 	if (anim2d == nullptr) {
 		print_line(String(p_context) + " failed, AnimatedSprite2D is missing.");
-		return false;
+		return Ref<ShaderMaterial>();
 	}
 
-	if (default_material.is_null()) {
-		default_material = anim2d->get_material();
-	}
-	if (default_material.is_null() && p_create_if_missing) {
-		default_material.instantiate();
-		anim2d->set_material(default_material);
+	Ref<ShaderMaterial> material = anim2d->get_material();
+	if (material.is_null() && p_create_if_missing) {
+		material.instantiate();
+		anim2d->set_material(material);
 	}
 
-	if (default_material.is_null()) {
+	if (material.is_null()) {
 		print_line(String(p_context) + " failed, the material and shader have not been set, please initialize the shader first!");
-		return false;
+		return Ref<ShaderMaterial>();
 	}
 
-	return true;
+	return material;
 }

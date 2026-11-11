@@ -32,14 +32,12 @@ public:
 		uint32_t channels; // Number of channels
 		uint32_t chunk_size; // Number of samples to process at a time (10ms at 48kHz)
 		uint32_t buffer_size_seconds; // Ring buffer size in seconds
-		bool enable_audio_monitoring; // Enable audio monitoring
 
 		AudioConfig() :
 				sample_rate(48000),
 				channels(2),
 				chunk_size(480),
-				buffer_size_seconds(2),
-				enable_audio_monitoring(false) {}
+				buffer_size_seconds(2) {}
 	};
 
 	// Audio statistics
@@ -123,11 +121,6 @@ public:
 	 */
 	bool is_recording() const { return recording_active.load(); }
 	bool is_thread_running() const { return thread_started.load(); }
-
-	/**
-	 * Mark recording as inactive (for external cleanup)
-	 */
-	void mark_inactive() { recording_active.store(false); }
 
 	/**
 	 * Audio data input interface (called by HybridAudioDriver)

@@ -193,6 +193,34 @@ TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and d
 	CHECK(finder->get_size() == Vector2i());
 }
 
+TEST_CASE("[SceneTree][SPX] Navigation debug drawer survives replacement and external deletion") {
+	TestSpx::EngineScene scene;
+	Ref<SpxPathFinder> finder;
+	finder.instantiate();
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	Node *old = scene.root->get_child(-1);
+	REQUIRE(Object::cast_to<PathDebugDrawer>(old));
+	old->queue_free(); // Setup must replace a drawer queued externally before it is freed.
+	CHECK(old->is_queued_for_deletion());
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	Node *replacement = scene.root->get_child(-1);
+	REQUIRE(replacement != old);
+	memdelete(old);
+	const int children = scene.root->get_child_count();
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	CHECK(scene.root->get_child_count() == children);
+	finder->reset();
+	CHECK(replacement->is_queued_for_deletion());
+	memdelete(replacement);
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	Node *external = scene.root->get_child(-1);
+	memdelete(external);
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	CHECK(scene.root->get_child_count() == children);
+	finder->reset();
+	CHECK(scene.root->get_child(-1)->is_queued_for_deletion());
+}
+
 TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported, missing, and disabled obstacle geometry") {
 	TestSpx::EngineScene scene;
 	auto *body = memnew(StaticBody2D);

@@ -31,21 +31,19 @@
 #ifndef SPX_LAYER_SORTER_H
 #define SPX_LAYER_SORTER_H
 
-#include "core/object/object.h"
+#include "core/object/object_id.h"
+#include "gdextension_spx_ext.h"
 #include "scene/2d/node_2d.h"
-#include "spx_sprite.h"
-#include <algorithm>
-#include <unordered_set>
 #include <vector>
 
 class ISortableSprite;
-class LayerSorterDebugDrawer;
 class Font;
 
+// Values from the latest sort; no scene object outlives the update through this snapshot.
 struct SortInfo {
 	GdObj id;
 	Point2 pos;
-	ISortableSprite *sortable;
+	bool is_static;
 };
 
 enum class LayerSortMode {
@@ -54,6 +52,15 @@ enum class LayerSortMode {
 };
 
 class SpxLayerSorter {
+	ObjectID drawer_id;
+	LayerSortMode sort_mode = LayerSortMode::NONE;
+
+	void _clear_drawer();
+	SpxLayerSorter() = default;
+	~SpxLayerSorter();
+	SpxLayerSorter(const SpxLayerSorter &) = delete;
+	SpxLayerSorter &operator=(const SpxLayerSorter &) = delete;
+
 public:
 	static SpxLayerSorter &instance() {
 		static SpxLayerSorter inst;
@@ -63,100 +70,23 @@ public:
 	void set_mode(LayerSortMode mode);
 	bool is_enabled() const { return sort_mode != LayerSortMode::NONE; }
 	void update(const Vector<ISortableSprite *> &sortables);
-
-	void add_static_sprite(ISortableSprite *sp);
-	void remove_static_sprite(ISortableSprite *sp);
-
-	_FORCE_INLINE_ void reset() {
-		static_sorted.clear();
-		dynamic_sorted.clear();
-		dynamic_dirty.clear();
-		dynamic_dirty_ids.clear();
-		_clear_drawer();
-	}
-	_FORCE_INLINE_ void set_screen_rect(const Rect2 &rect) {
-		screen_rect = rect;
-	}
-
-private:
-	std::vector<SortInfo> static_sorted; // never frequently re-sorted
-	std::vector<SortInfo> dynamic_sorted; // updated incrementally
-	std::vector<SortInfo> dynamic_dirty;
-	std::unordered_set<GdObj> dynamic_dirty_ids;
-
-	Rect2 screen_rect;
-
-	LayerSorterDebugDrawer *drawer = nullptr;
-
-	static inline LayerSortMode sort_mode = LayerSortMode::NONE;
-
-	static inline float full_sort_ratio = 0.3f;
-	static inline bool static_initialized = false;
-	static inline bool sprite_cmp(const SortInfo &a, const SortInfo &b) {
-		if (a.pos.y == b.pos.y) {
-			return a.pos.x > b.pos.x;
-		}
-		return a.pos.y < b.pos.y;
-	}
-
-	void _mark_dirty(ISortableSprite *sp);
-	void _collect_sprites(const Vector<ISortableSprite *> &sortables);
-	void _incremental_sort_dynamic();
-	void _full_sort_dynamic();
-	void _apply_z_index_merged();
-
-	void _create_drawer();
-	void _clear_drawer();
-
-private:
-	SpxLayerSorter() {
-		reset();
-	}
-	~SpxLayerSorter();
-
-	SpxLayerSorter(const SpxLayerSorter &) = delete;
-	SpxLayerSorter &operator=(const SpxLayerSorter &) = delete;
-
-public:
-	_FORCE_INLINE_ const Rect2 &get_screen_rect() const {
-		return screen_rect;
-	}
-	_FORCE_INLINE_ const std::vector<SortInfo> &get_static_sorted() const {
-		return static_sorted;
-	}
-	_FORCE_INLINE_ const std::vector<SortInfo> &get_dynamic_sorted() const {
-		return dynamic_sorted;
-	}
-	_FORCE_INLINE_ void unlink_drawer() {
-		drawer = nullptr;
-	}
+	void reset();
 };
 
 class LayerSorterDebugDrawer : public Node2D {
 	GDCLASS(LayerSorterDebugDrawer, Node2D);
 
-private:
-	SpxLayerSorter *sorter = nullptr;
+	std::vector<SortInfo> sorted;
+	Rect2 screen_rect;
 	Ref<Font> font;
 
 protected:
-	LayerSorterDebugDrawer() = default;
-	~LayerSorterDebugDrawer() = default;
-
 	static void _bind_methods();
 	void _notification(int p_what);
-	void _ready();
 	void _draw();
-	void _exit_tree();
 
 public:
-	explicit LayerSorterDebugDrawer(SpxLayerSorter *p_sorter) {
-		sorter = p_sorter;
-	}
-
-	_FORCE_INLINE_ void update() {
-		queue_redraw();
-	}
+	void update(const std::vector<SortInfo> &p_sorted, const Rect2 &p_screen_rect);
 };
 
-#endif //SPX_LAYER_SORTER_H
+#endif // SPX_LAYER_SORTER_H

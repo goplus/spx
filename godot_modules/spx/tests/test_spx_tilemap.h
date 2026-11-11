@@ -34,9 +34,9 @@
 #include "../spx_res_mgr.h"
 #include "../spx_tilemap_types.h"
 #include "../spx_tilemapparser_mgr.h"
-#include "core/core_bind.h"
 #include "core/io/json.h"
 #include "scene/2d/tile_map_layer.h"
+#include "spx_test_data.h"
 #include "spx_test_fixtures.h"
 
 namespace TestSpxTilemap {
@@ -60,8 +60,10 @@ static Dictionary map_document() {
 }
 
 TEST_CASE("[SPX] Tilemap JSON preserves nested atlas physics and layer properties") {
+	TestSpx::TempDirectory files("spx_tilemap");
+	files.write("map.json", JSON::stringify(map_document()));
 	SpxTileMapData map;
-	REQUIRE(map.from_json(map_document()));
+	REQUIRE(SpxTileMapData::parse_from_file(files.file("map.json"), map));
 	CHECK(map.version == 1);
 	CHECK(map.name == "meadow");
 	CHECK(map.node_offset == Vector2(-16, 8.5));
@@ -92,19 +94,14 @@ TEST_CASE("[SPX] Tilemap JSON preserves nested atlas physics and layer propertie
 	CHECK(map.layers[0].enabled);
 	CHECK_FALSE(map.layers[1].enabled);
 
-	TestSpx::TempDirectory files("spx_tilemap");
-	REQUIRE(map.save_to_file(files.file("map.json")));
-	SpxTileMapData restored;
-	REQUIRE(SpxTileMapData::parse_from_file(files.file("map.json"), restored));
-	CHECK(JSON::stringify(restored.to_json()) == JSON::stringify(map.to_json()));
-	CHECK(restored.from_json(map_document()));
-	CHECK(restored.tileset.sources.size() == 1);
-	CHECK(restored.layers.size() == 2);
+	map.from_json(map_document());
+	CHECK(map.tileset.sources.size() == 1);
+	CHECK(map.layers.size() == 2);
 }
 
 TEST_CASE("[SPX] Tilemap defaults and empty collections reset optional data") {
 	SpxTileMapData map;
-	REQUIRE(map.from_json(Dictionary()));
+	map.from_json(Dictionary());
 	CHECK(map.version == 1);
 	CHECK(map.tileset.tile_size == Vector2i(16, 16));
 	CHECK(map.layers.is_empty());
@@ -115,7 +112,7 @@ TEST_CASE("[SPX] Tilemap defaults and empty collections reset optional data") {
 	SpxTileData tile;
 	tile.from_json(Dictionary());
 	CHECK(tile.size_in_atlas == Vector2i(1, 1));
-	CHECK_FALSE(tile.to_json().has("physics"));
+	CHECK(tile.physics.is_empty());
 	Dictionary short_vectors = JSON::parse_string(R"({"atlas_coords":[3],"size_in_atlas":[]})");
 	tile.from_json(short_vectors);
 	CHECK(tile.atlas_coords == Vector2i());
@@ -145,7 +142,6 @@ TEST_CASE("[SPX] Tilemap files reject missing malformed and empty documents") {
 	map.name = "unchanged";
 	ERR_PRINT_OFF;
 	CHECK_FALSE(SpxTileMapData::parse_from_file(files.file("missing.json"), map));
-	CHECK_FALSE(map.save_to_file(files.file("missing/map.json")));
 	ERR_PRINT_ON;
 	for (const String &contents : { String("{"), String(""), String("{}") }) {
 		files.write("invalid.json", contents);
@@ -156,27 +152,22 @@ TEST_CASE("[SPX] Tilemap files reject missing malformed and empty documents") {
 	}
 }
 
-TEST_CASE("[SceneTree][SPX] Tilemap loader creates atlas collisions cells and owned layers") {
+TEST_CASE("[SceneTree][SPX] Tilemap loader consumes the editor export and owns its layers") {
 	TestSpx::TempDirectory files("spx_tilemap_loader");
-	files.write_png("atlas.png", Vector2i(16, 16), Color(1, 0, 0));
-	SpxTileMapData map;
-	REQUIRE(map.from_json(map_document()));
-	TileMapLayer *encoded = memnew(TileMapLayer);
-	encoded->set_cell(Vector2i(2, -1), 3, Vector2i());
-	map.layers.write[0].tile_map_data_base64 = core_bind::Marshalls::get_singleton()->raw_to_base64(encoded->get_tile_map_data_as_array());
-	memdelete(encoded);
-	REQUIRE(map.save_to_file(files.file("map.json")));
+	REQUIRE(DirAccess::make_dir_recursive_absolute(files.file("textures")) == OK);
+	files.write_png("textures/atlas.png", Vector2i(16, 16), Color(1, 0, 0));
+	files.write("map.json", FileAccess::get_file_as_string(TestSpxData::get_path("tilemap/exported.json")));
 	TestSpx::EngineScene scene;
 	auto *loader = scene.engine->get_tilemapparser();
 	const CharString path = files.file("map.json").utf8();
-	CHECK_FALSE(loader->has_tilemap("meadow"));
-	CHECK(loader->get_tilemap_layer_count("meadow") == 0);
+	CHECK_FALSE(loader->has_tilemap("exported"));
+	CHECK(loader->get_tilemap_layer_count("exported") == 0);
 	loader->load_tilemap(path.get_data());
-	REQUIRE(loader->has_tilemap("meadow"));
-	CHECK(loader->get_tilemap_layer_count("meadow") == 2);
+	REQUIRE(loader->has_tilemap("exported"));
+	CHECK(loader->get_tilemap_layer_count("exported") == 2);
 	auto *ground = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("ground")));
 	REQUIRE(ground != nullptr);
-	CHECK(ground->get_position() == Vector2(-13.5, 5.5));
+	CHECK(ground->get_position() == Vector2(-13.5, 13));
 	CHECK(ground->get_z_index() == -2);
 	CHECK(ground->get_cell_source_id(Vector2i(2, -1)) == 3);
 	Ref<TileSet> tileset = ground->get_tile_set();
@@ -192,15 +183,15 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader creates atlas collisions cells and ow
 	REQUIRE(tile != nullptr);
 	CHECK(tile->get_collision_polygons_count(0) == 1);
 	CHECK(tile->get_collision_polygon_points(0, 0) == Vector<Vector2>({ Vector2(-4, -4), Vector2(4, -4), Vector2(0, 4) }));
-	auto *disabled = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("layer")));
+	auto *disabled = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("background")));
 	REQUIRE(disabled != nullptr);
 	CHECK_FALSE(disabled->is_enabled());
 	const int child_count = scene.root->get_child_count();
 	loader->load_tilemap(path.get_data());
 	CHECK(scene.root->get_child_count() == child_count);
 	SUBCASE("Unload is idempotent") {
-		loader->unload_tilemap("meadow");
-		loader->unload_tilemap("meadow");
+		loader->unload_tilemap("exported");
+		loader->unload_tilemap("exported");
 	}
 	SUBCASE("Reset releases every map") {
 		loader->on_reset(0);
@@ -208,27 +199,63 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader creates atlas collisions cells and ow
 	SUBCASE("Destroy releases every map") {
 		loader->destroy_all_tilemaps();
 	}
-	CHECK_FALSE(loader->has_tilemap("meadow"));
-	CHECK(loader->get_tilemap_layer_count("meadow") == 0);
+	CHECK_FALSE(loader->has_tilemap("exported"));
+	CHECK(loader->get_tilemap_layer_count("exported") == 0);
 	CHECK(ground->is_queued_for_deletion());
 	CHECK(disabled->is_queued_for_deletion());
+}
+
+TEST_CASE("[SceneTree][SPX] Tilemap indices tolerate externally removed layers and reload") {
+	TestSpx::TempDirectory files("spx_tilemap_lifetime");
+	files.write_png("atlas.png", Vector2i(16, 16), Color(1, 0, 0));
+	files.write("map.json", JSON::stringify(map_document()));
+	const CharString path = files.file("map.json").utf8();
+	TestSpx::EngineScene scene;
+	auto *loader = scene.engine->get_tilemapparser();
+	loader->load_tilemap(path.get_data());
+	auto *deleted = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("ground")));
+	auto *detached = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("layer")));
+	REQUIRE(deleted);
+	REQUIRE(detached);
+	memdelete(deleted);
+	scene.root->remove_child(detached);
+	// The queries report the loaded map registration until it is unloaded.
+	CHECK(loader->has_tilemap("meadow"));
+	CHECK(loader->get_tilemap_layer_count("meadow") == 2);
+	SUBCASE("Unload skips removed layers") {
+		loader->unload_tilemap("meadow");
+	}
+	SUBCASE("Reset skips removed layers") {
+		loader->on_reset(0);
+	}
+	CHECK_FALSE(loader->has_tilemap("meadow"));
+	CHECK(detached->is_queued_for_deletion());
+	memdelete(detached);
+	loader->load_tilemap(path.get_data());
+	CHECK(loader->get_tilemap_layer_count("meadow") == 2);
+	auto *replacement = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("ground")));
+	REQUIRE(replacement);
+	CHECK_FALSE(replacement->is_queued_for_deletion());
+	loader->unload_tilemap("meadow");
+	CHECK(replacement->is_queued_for_deletion());
 }
 
 TEST_CASE("[SceneTree][SPX] Tilemap loader skips invalid physics layers and preserves valid polygons") {
 	TestSpx::TempDirectory files("spx_tilemap_physics");
 	files.write_png("atlas.png", Vector2i(16, 16), Color(1, 0, 0));
-	SpxTileMapData map;
-	REQUIRE(map.from_json(map_document()));
-	auto &physics = map.tileset.sources.write[0].tiles.write[0].physics;
-	const SpxTilePhysicsData valid = physics[0];
-	physics.clear();
-	for (int layer : { -1, 0, 0, 1 }) {
-		SpxTilePhysicsData entry = valid;
-		entry.layer = layer;
-		physics.push_back(entry);
-	}
-	physics.write[1].polygons.push_back(Vector<float>({ 0, 0, 1, 1 }));
-	REQUIRE(map.save_to_file(files.file("map.json")));
+	Dictionary document = map_document();
+	Dictionary tileset_data = document["tileset"];
+	Array sources = tileset_data["sources"];
+	Dictionary source = sources[0];
+	Array tiles = source["tiles"];
+	Dictionary tile_data = tiles[0];
+	tile_data["physics"] = JSON::parse_string(R"([
+		{"layer": -1, "polygons": [[-4, -4, 4, -4, 0, 4]]},
+		{"layer": 0, "polygons": [[-4, -4, 4, -4, 0, 4], [0, 0, 1, 1]]},
+		{"layer": 0, "polygons": [[-4, -4, 4, -4, 0, 4]]},
+		{"layer": 1, "polygons": [[-4, -4, 4, -4, 0, 4]]}
+	])");
+	files.write("map.json", JSON::stringify(document));
 	TestSpx::EngineScene scene;
 	const CharString path = files.file("map.json").utf8();
 	ERR_PRINT_OFF;
@@ -247,10 +274,9 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader skips invalid physics layers and pres
 
 TEST_CASE("[SceneTree][SPX] Tilemap names derive from paths and unsupported sources do not create atlases") {
 	TestSpx::TempDirectory files("spx_tilemap_names");
-	SpxTileMapData map;
-	REQUIRE(map.from_json(JSON::parse_string(R"({"tileset":{"sources":[{"id":1,"type":"collection"},{"id":2,"type":"atlas","texture":""},{"id":3,"type":"atlas","texture":"missing.png"}]},"layers":[{"name":"empty","tile_map_data":"!!!"}]})")));
-	REQUIRE(map.save_to_file(files.file("map.json")));
-	REQUIRE(map.save_to_file(files.file("bare.json")));
+	const String document = R"({"tileset":{"sources":[{"id":1,"type":"collection"},{"id":2,"type":"atlas","texture":""},{"id":3,"type":"atlas","texture":"missing.png"}]},"layers":[{"name":"empty","tile_map_data":"!!!"}]})";
+	files.write("map.json", document);
+	files.write("bare.json", document);
 	TestSpx::EngineScene scene;
 	auto *loader = scene.engine->get_tilemapparser();
 	const int children = scene.root->get_child_count();

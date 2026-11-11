@@ -31,10 +31,10 @@
 #ifndef SPX_ENGINE_H
 #define SPX_ENGINE_H
 
-#include "core/variant/callable.h"
 #include "core/string/print_string.h"
-#include "scene/main/scene_tree.h"
+#include "core/variant/callable.h"
 #include "gdextension_spx_ext.h"
+#include "scene/main/scene_tree.h"
 #include "spx_manager.h"
 
 class SceneTree;
@@ -144,8 +144,6 @@ private:
 	}
 
 	CanvasLayer *freeze_layer = nullptr;
-	TextureRect *freeze_screen = nullptr;
-	bool is_frozen_frame = false;
 
 	Ref<SceneTreeTimer> reset_timer;
 	Callable on_timeout_callable;
@@ -202,7 +200,6 @@ private:
 
 	Ref<Image> _get_viewport_image() const;
 	TextureRect *_create_freeze_texture(const Ref<Image> &img) const;
-	void _attach_freeze_node(TextureRect *screen);
 
 	void _initialize_managers();
 	template <typename... Args>

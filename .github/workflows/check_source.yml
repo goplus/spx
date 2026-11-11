@@ -52,6 +52,9 @@ jobs:
       - name: Test Web bridge
         run: node --test cmd/ispx/tests/*.test.cjs godot_modules/spx/web/tests/*.test.cjs
 
+      - name: Test Web recorder C++ lifecycle
+        run: python3 godot_modules/spx/tests/standalone/run_web_recorder_test.py
+
       - name: Test Go Web packages
         id: web-tests
         shell: bash
@@ -71,6 +74,11 @@ jobs:
         env:
           GDSPX_SANITIZERS: address,undefined
         run: bash godot_modules/spx/web/tests/run_string_abi_test.sh
+
+      - name: Test native ABI memory ownership
+        env:
+          SPX_ABI_SANITIZERS: address,undefined
+        run: bash godot_modules/spx/tests/run_abi_test.sh
 
       - name: Test CI tooling
         id: tool-tests
