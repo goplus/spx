@@ -93,6 +93,12 @@ func (p *baseObj) markDestroyed() {
 // initSpriteCostumes creates costumes from a layout prepared before any engine
 // state is mutated.
 func (p *baseObj) initSpriteCostumes(sprite *coreproject.SpriteConfig, layout *coreproject.CostumeLayout) {
+	if sprite.SpineAnim != nil {
+		// Keep costume-based geometry helpers safe without loading a frame texture.
+		// The setup-pose bounds replace this size when the skeleton is loaded.
+		p.initWithSize(1, 1)
+		return
+	}
 	if sprite.Costumes != nil {
 		p.init(sprite.Costumes, sprite.GetCostumeIndex())
 		return

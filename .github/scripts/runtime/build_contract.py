@@ -58,6 +58,7 @@ ORCHESTRATION_KEYS = {
     "linker",
     "platform",
     "proxy_to_pthread",
+    "spx_spine",
     "target",
     "tests",
     "threads",

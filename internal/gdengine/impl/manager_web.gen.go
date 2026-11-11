@@ -1123,6 +1123,32 @@ func (s *spriteMgr) GetCurrentAnimName(obj Object) string {
 	_result := API.SpxSpriteGetCurrentAnimName.Invoke(arg0Low, arg0High)
 	return JSToGdString(_result)
 }
+func (s *spriteMgr) IsSpineSupported() bool {
+	_result := API.SpxSpriteIsSpineSupported.Invoke()
+	return JSToGdBool(_result)
+}
+func (s *spriteMgr) SetSpineSkeleton(obj Object, atlas_path string, skeleton_path string, default_mix float64) bool {
+	arg0Low, arg0High := JSSplitGdObj(obj)
+	arg1 := JSFromGdString(atlas_path)
+	arg2 := JSFromGdString(skeleton_path)
+	_result := API.SpxSpriteSetSpineSkeleton.Invoke(arg0Low, arg0High, arg1, arg2, float32(default_mix))
+	return JSToGdBool(_result)
+}
+func (s *spriteMgr) ClearSpineSkeleton(obj Object) {
+	arg0Low, arg0High := JSSplitGdObj(obj)
+	API.SpxSpriteClearSpineSkeleton.Invoke(arg0Low, arg0High)
+}
+func (s *spriteMgr) GetSpineBounds(obj Object) Rect2 {
+	arg0Low, arg0High := JSSplitGdObj(obj)
+	_result := API.SpxSpriteGetSpineBounds.Invoke(arg0Low, arg0High)
+	return JSToGdRect2(_result)
+}
+func (s *spriteMgr) HasSpineAnimation(obj Object, name string) bool {
+	arg0Low, arg0High := JSSplitGdObj(obj)
+	arg1 := JSFromGdString(name)
+	_result := API.SpxSpriteHasSpineAnimation.Invoke(arg0Low, arg0High, arg1)
+	return JSToGdBool(_result)
+}
 func (s *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
 	arg0Low, arg0High := JSSplitGdObj(obj)
 	arg1 := JSFromGdVec2(velocity)

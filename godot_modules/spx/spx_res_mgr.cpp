@@ -63,6 +63,10 @@ void SpxResMgr::on_awake() {
 
 void SpxResMgr::on_reset(int reset_code) {
 	svg_cache.clear();
+#ifdef SPX_SPINE_ENABLED
+	spine_atlases.clear();
+	spine_files.clear();
+#endif
 	animation_clips.clear();
 	display_fonts.clear();
 	if (initial_theme_fonts_saved) {
@@ -362,6 +366,14 @@ void SpxResMgr::set_game_datas(String path, Vector<String> files) {
 }
 
 void SpxResMgr::update_caches(const Vector<String> &files) {
+#ifdef SPX_SPINE_ENABLED
+	// Atlas pages can reference any updated texture. Drop cached source resources;
+	// existing sprites retain their references until explicitly reloaded.
+	if (!files.is_empty()) {
+		spine_atlases.clear();
+		spine_files.clear();
+	}
+#endif
 	for (auto &file : files) {
 		auto path = _to_engine_path(file);
 		cached_texture.erase(path);
@@ -630,3 +642,47 @@ Vector2 SpxResMgr::get_animation_frame_offset(String anim_key, int frame_index) 
 	}
 	return Vector2();
 }
+
+#ifdef SPX_SPINE_ENABLED
+Ref<SpineSkeletonDataResource> SpxResMgr::load_spine_data(const String &p_atlas, const String &p_skeleton, float p_mix) {
+	ERR_FAIL_COND_V(!Math::is_finite(p_mix) || p_mix < 0, Ref<SpineSkeletonDataResource>());
+	const String atlas_path = _to_engine_path(p_atlas);
+	const String skeleton_path = _to_engine_path(p_skeleton);
+	Ref<SpineAtlasResource> atlas;
+	if (spine_atlases.has(atlas_path)) {
+		atlas = spine_atlases[atlas_path];
+	} else {
+		if (FileAccess::exists(atlas_path)) {
+			atlas.instantiate();
+			ERR_FAIL_COND_V(atlas->load_from_atlas_file(atlas_path) != OK, Ref<SpineSkeletonDataResource>());
+		} else {
+			// Exported projects keep the imported .spatlas and texture remaps,
+			// not necessarily the original atlas text or PNG files.
+			atlas = ResourceLoader::load(atlas_path, "SpineAtlasResource", ResourceFormatLoader::CACHE_MODE_IGNORE);
+			ERR_FAIL_COND_V(atlas.is_null() || atlas->get_spine_atlas() == nullptr, Ref<SpineSkeletonDataResource>());
+		}
+		spine_atlases[atlas_path] = atlas;
+	}
+	Ref<SpineSkeletonFileResource> file;
+	if (spine_files.has(skeleton_path)) {
+		file = spine_files[skeleton_path];
+	} else {
+		if (FileAccess::exists(skeleton_path)) {
+			file.instantiate();
+			ERR_FAIL_COND_V(file->load_from_file(skeleton_path) != OK, Ref<SpineSkeletonDataResource>());
+		} else {
+			file = ResourceLoader::load(skeleton_path, "SpineSkeletonFileResource", ResourceFormatLoader::CACHE_MODE_IGNORE);
+			ERR_FAIL_COND_V(file.is_null(), Ref<SpineSkeletonDataResource>());
+		}
+		spine_files[skeleton_path] = file;
+	}
+	Ref<SpineSkeletonDataResource> data;
+	data.instantiate();
+	data->set_default_mix(p_mix);
+	data->set_atlas_res(atlas);
+	data->set_skeleton_file_res(file);
+	ERR_FAIL_COND_V(!data->is_skeleton_data_loaded(), Ref<SpineSkeletonDataResource>());
+	return data;
+}
+
+#endif

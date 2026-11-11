@@ -2048,6 +2048,63 @@ gdspx_sprite_get_current_anim_name(obj_low,obj_high) {
 		if (_resultPtr) FreeGdString(_resultPtr);
 	}
 }
+gdspx_sprite_is_spine_supported() {
+	var _call = Module['_gdspx_sprite_is_spine_supported'];
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdBool();
+		_call(_resultPtr);
+		return ToJsBool(_resultPtr);
+	} finally {
+		if (_resultPtr) FreeGdBool(_resultPtr);
+	}
+}
+gdspx_sprite_set_spine_skeleton(obj_low,obj_high,atlas_path,skeleton_path,default_mix) {
+	var _call = Module['_gdspx_sprite_set_spine_skeleton'];
+	var _arg1;
+	var _arg2;
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdBool();
+		_arg1 = ToGdString(atlas_path);
+		_arg2 = ToGdString(skeleton_path);
+		_call(GdInt64FromParts(obj_low, obj_high), _arg1, _arg2, default_mix, _resultPtr);
+		return ToJsBool(_resultPtr);
+	} finally {
+		if (_arg1) FreeGdString(_arg1);
+		if (_arg2) FreeGdString(_arg2);
+		if (_resultPtr) FreeGdBool(_resultPtr);
+	}
+}
+gdspx_sprite_clear_spine_skeleton(obj_low,obj_high) {
+	var _call = Module['_gdspx_sprite_clear_spine_skeleton'];
+	_call(GdInt64FromParts(obj_low, obj_high));
+}
+gdspx_sprite_get_spine_bounds(obj_low,obj_high) {
+	var _call = Module['_gdspx_sprite_get_spine_bounds'];
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdRect2();
+		_call(GdInt64FromParts(obj_low, obj_high), _resultPtr);
+		return ToJsRect2(_resultPtr);
+	} finally {
+		if (_resultPtr) FreeGdRect2(_resultPtr);
+	}
+}
+gdspx_sprite_has_spine_animation(obj_low,obj_high,name) {
+	var _call = Module['_gdspx_sprite_has_spine_animation'];
+	var _arg1;
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdBool();
+		_arg1 = ToGdString(name);
+		_call(GdInt64FromParts(obj_low, obj_high), _arg1, _resultPtr);
+		return ToJsBool(_resultPtr);
+	} finally {
+		if (_arg1) FreeGdString(_arg1);
+		if (_resultPtr) FreeGdBool(_resultPtr);
+	}
+}
 gdspx_sprite_set_velocity(obj_low,obj_high,velocity) {
 	var _call = Module['_gdspx_sprite_set_velocity'];
 	var _arg1;
@@ -3526,6 +3583,11 @@ GdspxFuncs.prototype['gdspx_sprite_is_anim_flipped_h'] = GdspxFuncs.prototype.gd
 GdspxFuncs.prototype['gdspx_sprite_set_anim_flip_v'] = GdspxFuncs.prototype.gdspx_sprite_set_anim_flip_v;
 GdspxFuncs.prototype['gdspx_sprite_is_anim_flipped_v'] = GdspxFuncs.prototype.gdspx_sprite_is_anim_flipped_v;
 GdspxFuncs.prototype['gdspx_sprite_get_current_anim_name'] = GdspxFuncs.prototype.gdspx_sprite_get_current_anim_name;
+GdspxFuncs.prototype['gdspx_sprite_is_spine_supported'] = GdspxFuncs.prototype.gdspx_sprite_is_spine_supported;
+GdspxFuncs.prototype['gdspx_sprite_set_spine_skeleton'] = GdspxFuncs.prototype.gdspx_sprite_set_spine_skeleton;
+GdspxFuncs.prototype['gdspx_sprite_clear_spine_skeleton'] = GdspxFuncs.prototype.gdspx_sprite_clear_spine_skeleton;
+GdspxFuncs.prototype['gdspx_sprite_get_spine_bounds'] = GdspxFuncs.prototype.gdspx_sprite_get_spine_bounds;
+GdspxFuncs.prototype['gdspx_sprite_has_spine_animation'] = GdspxFuncs.prototype.gdspx_sprite_has_spine_animation;
 GdspxFuncs.prototype['gdspx_sprite_set_velocity'] = GdspxFuncs.prototype.gdspx_sprite_set_velocity;
 GdspxFuncs.prototype['gdspx_sprite_get_velocity'] = GdspxFuncs.prototype.gdspx_sprite_get_velocity;
 GdspxFuncs.prototype['gdspx_sprite_is_on_floor'] = GdspxFuncs.prototype.gdspx_sprite_is_on_floor;

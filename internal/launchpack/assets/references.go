@@ -23,6 +23,9 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strings"
+
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 type resolver struct {
@@ -57,6 +60,11 @@ func (r *resolver) collectSprites(packed map[string]spriteConfig) error {
 }
 
 func (r *resolver) addSpriteReferences(source, base string, config spriteConfig) error {
+	if config.SpineAnim != nil {
+		if err := r.addSpineReferences(source, base, config.SpineAnim); err != nil {
+			return err
+		}
+	}
 	for _, costume := range config.Costumes {
 		if costume != nil {
 			if err := r.addReference(source, base, costume.Path); err != nil {
@@ -145,6 +153,36 @@ func collectSourceSection[T any](r *resolver, section string, packed map[string]
 func forEachSorted[T any](values map[string]T, visit func(string, T) error) error {
 	for _, name := range slices.Sorted(maps.Keys(values)) {
 		if err := visit(name, values[name]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Spine pages are relative to the atlas, not the sprite configuration. Blank
+// lines separate pages; nonblank lines within a page describe its regions.
+func (r *resolver) addSpineReferences(source, base string, config *spineConfig) error {
+	if config.Atlas == "" || config.Skeleton == "" {
+		return fmt.Errorf("projectassets: config %q spineAnim requires atlas and skeleton", source)
+	}
+	for _, reference := range []string{config.Atlas, config.Skeleton} {
+		if err := r.addReference(source, base, reference); err != nil {
+			return err
+		}
+	}
+	atlas := path.Join(base, config.Atlas)
+	if strings.HasPrefix(config.Atlas, "res://") {
+		atlas = path.Clean(strings.TrimPrefix(config.Atlas, "res://"))
+	}
+	data, _, err := readPinnedFile(r.root, atlas)
+	if err != nil {
+		return err
+	}
+	for _, page := range coreproject.SpineAtlasPages(string(data)) {
+		if !coreproject.ValidSpineAtlasPage(page) {
+			return fmt.Errorf("Spine atlas %s has unsafe page %q", atlas, page)
+		}
+		if err := r.addReference(atlas, path.Dir(atlas), page); err != nil {
 			return err
 		}
 	}

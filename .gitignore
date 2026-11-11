@@ -50,3 +50,5 @@ tutorial/**/.gdspx_web_server*.pid
 test/**/.temp/
 test/**/project/
 test/**/.gdspx_web_server*.pid
+
+/godot_modules/spx/spx_build_config.gen.h

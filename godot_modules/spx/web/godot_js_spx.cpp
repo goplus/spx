@@ -1222,6 +1222,38 @@ void gdspx_sprite_get_current_anim_name(GdObj obj, GdString *ret_val) {
 	}
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_is_spine_supported(GdBool *ret_val) {
+	*ret_val = SpxSpriteMgr::is_spine_supported();
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_set_spine_skeleton(GdObj obj, GdString *atlas_path, GdString *skeleton_path, GdFloat default_mix, GdBool *ret_val) {
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(atlas_path, &gdspx_string_arg_1)) {
+		return;
+	}
+	GdString gdspx_string_arg_2 = nullptr;
+	if (!gdspx_get_string_value(skeleton_path, &gdspx_string_arg_2)) {
+		return;
+	}
+	*ret_val = spriteMgr->set_spine_skeleton(obj, gdspx_string_arg_1, gdspx_string_arg_2, default_mix);
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_clear_spine_skeleton(GdObj obj) {
+	 spriteMgr->clear_spine_skeleton(obj);
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_get_spine_bounds(GdObj obj, GdRect2 *ret_val) {
+	*ret_val = spriteMgr->get_spine_bounds(obj);
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_has_spine_animation(GdObj obj, GdString *name, GdBool *ret_val) {
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(name, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = spriteMgr->has_spine_animation(obj, gdspx_string_arg_1);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_velocity(GdObj obj, GdVec2 *velocity) {
 	 spriteMgr->set_velocity(obj, *velocity);
 }

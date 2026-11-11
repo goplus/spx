@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
 const PcExportName = "gdexport"
@@ -72,6 +73,9 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	}
 	paths := filepath.SplitList(gopath)
 	cmd.GoBinPath, _ = filepath.Abs(filepath.Join(paths[0], "bin"))
+	if _, _, err := runtimevariant.LocalSpineBin(os.Environ(), cmd.GoBinPath); err != nil {
+		return err
+	}
 
 	cmd.Args = ExtraArgs{}
 	help := cmd.initializeFlags()

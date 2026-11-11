@@ -124,7 +124,14 @@ func (p *SpriteImpl) renderBounds() (mathf.Rect2, bool) {
 	centerX += offsetX
 	centerY += offsetY
 
-	rotation, _, _ := getRenderRotationAndScale(p)
+	rotation, scaleX, scaleY := getRenderRotationAndScale(p)
+	if p.isSpineMode() {
+		center, _ := getCostumeBoundByAlpha(p)
+		center = center.Mulf(p.runtimeState.scale)
+		sin, cos := math.Sincos(-engine.DegToRad(rotation))
+		centerX += center.X*scaleX*cos - center.Y*scaleY*sin
+		centerY += center.X*scaleX*sin + center.Y*scaleY*cos
+	}
 	sin, cos := math.Sincos(toRadian(rotation))
 	aabbWidth := math.Abs(cos)*width + math.Abs(sin)*height
 	aabbHeight := math.Abs(sin)*width + math.Abs(cos)*height

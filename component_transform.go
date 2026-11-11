@@ -243,6 +243,9 @@ func (t *transformComponent) distanceToTarget(target Target) float64 {
 
 // clampSpriteScale follows Scratch's sprite size limits.
 func (t *transformComponent) clampSpriteScale(size float64) float64 {
+	if t.sprite.isSpineMode() {
+		return size
+	}
 	if len(t.sprite.costumes) == 0 || t.sprite.costumeIndex < 0 || t.sprite.costumeIndex >= len(t.sprite.costumes) {
 		return size
 	}

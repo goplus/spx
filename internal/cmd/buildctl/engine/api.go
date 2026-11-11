@@ -16,6 +16,12 @@
 
 package engine
 
+import (
+	"fmt"
+
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+)
+
 type DownloadConfig struct {
 	Runtime          bool
 	SkipRuntimePack  bool
@@ -37,6 +43,11 @@ func ShouldRefreshPreparedAssets() bool {
 }
 
 func PrepareHostEditorAsset(repoRoot, assetDir string) error {
+	if enabled, err := shared.SpineEnabled(); err != nil {
+		return err
+	} else if enabled {
+		return fmt.Errorf("published editor downloads do not support SPX_SPINE=1; build the local editor with make build-editor")
+	}
 	env, err := prepareEngineDownloadEnv(repoRoot, "", assetDir, true)
 	if err != nil {
 		return err

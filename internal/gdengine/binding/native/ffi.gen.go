@@ -245,6 +245,11 @@ type GDExtensionInterface struct {
 	SpxSpriteSetAnimFlipV                       GDExtensionSpxSpriteSetAnimFlipV
 	SpxSpriteIsAnimFlippedV                     GDExtensionSpxSpriteIsAnimFlippedV
 	SpxSpriteGetCurrentAnimName                 GDExtensionSpxSpriteGetCurrentAnimName
+	SpxSpriteIsSpineSupported                   GDExtensionSpxSpriteIsSpineSupported
+	SpxSpriteSetSpineSkeleton                   GDExtensionSpxSpriteSetSpineSkeleton
+	SpxSpriteClearSpineSkeleton                 GDExtensionSpxSpriteClearSpineSkeleton
+	SpxSpriteGetSpineBounds                     GDExtensionSpxSpriteGetSpineBounds
+	SpxSpriteHasSpineAnimation                  GDExtensionSpxSpriteHasSpineAnimation
 	SpxSpriteSetVelocity                        GDExtensionSpxSpriteSetVelocity
 	SpxSpriteGetVelocity                        GDExtensionSpxSpriteGetVelocity
 	SpxSpriteIsOnFloor                          GDExtensionSpxSpriteIsOnFloor
@@ -586,6 +591,11 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteSetAnimFlipV = (GDExtensionSpxSpriteSetAnimFlipV)(resolveCFunc("spx_sprite_set_anim_flip_v"))
 	x.SpxSpriteIsAnimFlippedV = (GDExtensionSpxSpriteIsAnimFlippedV)(resolveCFunc("spx_sprite_is_anim_flipped_v"))
 	x.SpxSpriteGetCurrentAnimName = (GDExtensionSpxSpriteGetCurrentAnimName)(resolveCFunc("spx_sprite_get_current_anim_name"))
+	x.SpxSpriteIsSpineSupported = (GDExtensionSpxSpriteIsSpineSupported)(resolveCFunc("spx_sprite_is_spine_supported"))
+	x.SpxSpriteSetSpineSkeleton = (GDExtensionSpxSpriteSetSpineSkeleton)(resolveCFunc("spx_sprite_set_spine_skeleton"))
+	x.SpxSpriteClearSpineSkeleton = (GDExtensionSpxSpriteClearSpineSkeleton)(resolveCFunc("spx_sprite_clear_spine_skeleton"))
+	x.SpxSpriteGetSpineBounds = (GDExtensionSpxSpriteGetSpineBounds)(resolveCFunc("spx_sprite_get_spine_bounds"))
+	x.SpxSpriteHasSpineAnimation = (GDExtensionSpxSpriteHasSpineAnimation)(resolveCFunc("spx_sprite_has_spine_animation"))
 	x.SpxSpriteSetVelocity = (GDExtensionSpxSpriteSetVelocity)(resolveCFunc("spx_sprite_set_velocity"))
 	x.SpxSpriteGetVelocity = (GDExtensionSpxSpriteGetVelocity)(resolveCFunc("spx_sprite_get_velocity"))
 	x.SpxSpriteIsOnFloor = (GDExtensionSpxSpriteIsOnFloor)(resolveCFunc("spx_sprite_is_on_floor"))

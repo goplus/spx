@@ -19,10 +19,12 @@ package pack
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	spxfs "github.com/goplus/spx/v4/fs"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
@@ -36,8 +38,9 @@ const (
 )
 
 type assetPathRef struct {
-	configDir string
-	path      string
+	spineAtlas bool
+	configDir  string
+	path       string
 }
 
 func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]struct{}, extAssetDir string) (extraPaths []dirInfo, err error) {
@@ -66,13 +69,42 @@ func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]st
 	compatibilityRoot := sharedAssetCompatibilityRoot(assetRoot)
 	var externalRoot *os.Root
 	defer func() {
-		if err != nil && externalRoot != nil {
+		if (err != nil || len(extraPaths) == 0) && externalRoot != nil {
 			_ = externalRoot.Close()
 		}
 	}()
 
-	for _, ref := range refs {
+	for i := 0; i < len(refs); i++ {
+		ref := refs[i]
 		normalized := coreproject.NormalizeConfigPath(ref.configDir, ref.path)
+		// Validate local and shared atlases before collecting their page textures.
+		if ref.spineAtlas && !strings.Contains(normalized, ":") && !path.IsAbs(normalized) {
+			if externalRoot == nil {
+				externalRoot, err = openPackRoot(compatibilityRoot)
+				if err != nil {
+					return nil, err
+				}
+			}
+			sourcePath := cleanFilesystemPath(filepath.Join(assetRoot, filepath.FromSlash(normalized)))
+			info, rootPath, err := inspectExternalAssetPath(externalRoot, compatibilityRoot, sourcePath)
+			if err != nil {
+				return nil, fmt.Errorf("stat Spine atlas %s: %w", sourcePath, err)
+			}
+			data, _, err := (fileutil.StableReader{MaxBytes: maxPackJSONSize, Expected: info, Lstat: externalRoot.Lstat, Open: externalRoot.Open}).Read(rootPath)
+			if err != nil {
+				return nil, fmt.Errorf("read Spine atlas %s: %w", sourcePath, err)
+			}
+			for _, page := range coreproject.SpineAtlasPages(string(data)) {
+				if !coreproject.ValidSpineAtlasPage(page) {
+					return nil, fmt.Errorf("Spine atlas %s has unsafe page %q", sourcePath, page)
+				}
+				pageFile := filepath.Join(filepath.Dir(sourcePath), filepath.FromSlash(page))
+				if _, _, err := inspectExternalAssetPath(externalRoot, compatibilityRoot, pageFile); err != nil {
+					return nil, fmt.Errorf("Spine atlas %s page %q: %w", sourcePath, page, err)
+				}
+				refs = appendAssetPathRef(refs, path.Dir(normalized), page)
+			}
+		}
 		sourcePath, zipPath, ok := resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, normalized)
 		if !ok {
 			continue

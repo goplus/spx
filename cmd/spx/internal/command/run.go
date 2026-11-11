@@ -33,6 +33,7 @@ import (
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
 	"github.com/goplus/spx/v4/internal/interpruntime"
 	"github.com/goplus/spx/v4/internal/launchpack"
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 	"github.com/goplus/spx/v4/internal/webserver"
 )
 
@@ -102,13 +103,19 @@ func (cmd *CmdTool) resolveInterpretedRuntimeAssets() (launchpack.Assets, error)
 	if err != nil {
 		return launchpack.Assets{}, err
 	}
-	embeddedDir, embedded, err := runtimeasset.Prepare(cmd.Version, names.Engine, names.Pack, names.Bridge)
+	_, spine, err := runtimevariant.LocalSpineBin(os.Environ(), cmd.GoBinPath)
 	if err != nil {
-		return launchpack.Assets{}, fmt.Errorf("prepare embedded runtime assets: %w", err)
+		return launchpack.Assets{}, err
 	}
-	directories := []string{embeddedDir}
-	if !embedded {
-		directories = cmd.runtimeSearchDirs()
+	directories := cmd.runtimeSearchDirs()
+	if !spine {
+		embeddedDir, embedded, err := runtimeasset.Prepare(cmd.Version, names.Engine, names.Pack, names.Bridge)
+		if err != nil {
+			return launchpack.Assets{}, fmt.Errorf("prepare embedded runtime assets: %w", err)
+		}
+		if embedded {
+			directories = []string{embeddedDir}
+		}
 	}
 	assets, err := launchpack.ResolveInstalledRuntime(directories, names)
 	if err != nil {
@@ -146,6 +153,9 @@ func (cmd *CmdTool) runtimeSearchDirs() []string {
 	}
 
 	appendDir(cmd.GoBinPath)
+	if _, spine, err := runtimevariant.LocalSpineBin(os.Environ(), cmd.GoBinPath); spine || err != nil {
+		return dirs
+	}
 
 	exePath, err := os.Executable()
 	if err == nil {
@@ -248,8 +258,15 @@ func (cmd *CmdTool) stopOrphanedWebServerByPort(processes webServerProcesses) er
 }
 
 func (cmd *CmdTool) installRepoWebRuntime(mode string) error {
+	_, spine, err := runtimevariant.LocalSpineBin(os.Environ(), cmd.GoBinPath)
+	if err != nil {
+		return err
+	}
 	if cmd.hasInstalledWebRuntimeAssets(mode) {
 		return nil
+	}
+	if spine {
+		return fmt.Errorf("Spine Web runtime unavailable; run SPX_SPINE=1 make dev MODE=%s in the dedicated GOPATH", mode)
 	}
 	spxRoot := cmd.findSpxRoot()
 	if spxRoot == "" {

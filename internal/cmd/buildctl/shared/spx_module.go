@@ -29,6 +29,7 @@ import (
 type SPXModule struct {
 	source  string
 	profile sconsProfile
+	spine   bool
 }
 
 // ResolveSPXModule resolves SPX_MODULE_SRC once and validates the external
@@ -71,7 +72,11 @@ func LoadSPXModule(source string) (SPXModule, error) {
 	if err != nil {
 		return SPXModule{}, err
 	}
-	return SPXModule{source: source, profile: profile}, nil
+	spine, err := SpineEnabled()
+	if err != nil {
+		return SPXModule{}, err
+	}
+	return SPXModule{source: source, profile: profile, spine: spine}, nil
 }
 
 // Source returns the validated host path to the module.
@@ -82,7 +87,7 @@ func (m SPXModule) Source() string {
 // EditorBuildArgs composes module-owned flags, editor axes, and the resolved
 // custom_modules path without mutating the parsed profile.
 func (m SPXModule) EditorBuildArgs(buildArgs ...string) []string {
-	return composeSConsBuildArgs(m.source, buildArgs, m.profile.Common, m.profile.EditorRelease)
+	return composeSConsBuildArgs(m.source, m.featureBuildArgs(buildArgs), m.profile.Common, m.profile.EditorRelease)
 }
 
 // TemplateBuildArgs composes module-owned flags, template axes, and the
@@ -94,5 +99,14 @@ func (m SPXModule) TemplateBuildArgs(buildArgs ...string) []string {
 // TemplateBuildArgsAt composes template arguments for an alternate mounted
 // module path, such as the path visible inside a build container.
 func (m SPXModule) TemplateBuildArgsAt(moduleSource string, buildArgs ...string) []string {
-	return composeSConsBuildArgs(moduleSource, buildArgs, m.profile.Common, m.profile.TemplateRelease)
+	return composeSConsBuildArgs(moduleSource, m.featureBuildArgs(buildArgs), m.profile.Common, m.profile.TemplateRelease)
+}
+
+func (m SPXModule) featureBuildArgs(buildArgs []string) []string {
+	args := append([]string(nil), buildArgs...)
+	value := "no"
+	if m.spine {
+		value = "yes"
+	}
+	return append(args, "spx_spine="+value)
 }

@@ -43,6 +43,7 @@ var orchestrationSConsKeys = map[string]struct{}{
 	"platform":         {},
 	"proxy_to_pthread": {},
 	"target":           {},
+	"spx_spine":        {},
 	"tests":            {},
 	"threads":          {},
 	"use_llvm":         {},

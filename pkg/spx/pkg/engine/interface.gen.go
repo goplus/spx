@@ -291,6 +291,11 @@ type ISpriteMgr interface {
 	SetAnimFlipV(obj Object, p_flip bool)
 	IsAnimFlippedV(obj Object) bool
 	GetCurrentAnimName(obj Object) string
+	IsSpineSupported() bool
+	SetSpineSkeleton(obj Object, atlas_path string, skeleton_path string, default_mix float64) bool
+	ClearSpineSkeleton(obj Object)
+	GetSpineBounds(obj Object) Rect2
+	HasSpineAnimation(obj Object, name string) bool
 	SetVelocity(obj Object, velocity Vec2)
 	GetVelocity(obj Object) Vec2
 	IsOnFloor(obj Object) bool

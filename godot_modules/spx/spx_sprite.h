@@ -38,6 +38,7 @@
 #include "scene/2d/physics/static_body_2d.h"
 #include "scene/2d/sprite_2d.h"
 #include "spx.h"
+#include "spx_build_config.gen.h"
 
 class SpriteFrames;
 class AnimatedSprite2D;
@@ -46,6 +47,9 @@ class CollisionShape2D;
 class ShaderMaterial;
 class Texture2D;
 class VisibleOnScreenNotifier2D;
+class SpineSprite;
+class SpineAnimationState;
+class SpineTrackEntry;
 
 // Interface for sortable sprites
 class ISortableSprite {
@@ -178,6 +182,12 @@ public:
 	Rect2 get_rect() const;
 	GdString get_current_anim_name();
 	void on_set_visible(GdBool p_visible);
+
+	GdBool set_spine_skeleton(GdString p_atlas, GdString p_skeleton, GdFloat p_mix);
+	void clear_spine_skeleton();
+	Rect2 get_spine_bounds() const { return spine_bounds; }
+	bool is_spine_mode() const { return spine_child != nullptr; }
+	GdBool has_spine_animation(GdString p_name) const;
 
 	// Animation
 	void play_anim(GdString p_name, GdFloat p_speed = 1.0, GdBool p_is_loop = false, GdBool p_from_end = false);
@@ -342,6 +352,20 @@ private:
 	void _update_frame_transform();
 	void _update_current_frame_shader_uv_rect();
 	int _get_required_raster_scale();
+
+	void _play_spine_animation(const String &p_name, float p_speed, bool p_loop, bool p_from_end);
+	void _update_spine_transform();
+	void _update_spine_speed();
+	void _stop_spine_animation();
+	Rect2 _get_spine_rect() const;
+	void _set_spine_color(const Color &p_color);
+	void _on_spine_started(SpineSprite *p_sprite, Ref<SpineAnimationState> p_state, Ref<SpineTrackEntry> p_entry);
+	void _on_spine_completed(SpineSprite *p_sprite, Ref<SpineAnimationState> p_state, Ref<SpineTrackEntry> p_entry);
+	SpineSprite *spine_child = nullptr;
+	Rect2 spine_bounds;
+	String spine_animation;
+	float spine_speed_scale = 1.0f;
+	bool spine_playing = false;
 
 	// State
 	GdObj gid = 0;

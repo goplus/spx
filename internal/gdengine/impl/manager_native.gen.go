@@ -1329,6 +1329,39 @@ func (s *spriteMgr) GetCurrentAnimName(obj Object) string {
 	retValue := CallSpriteGetCurrentAnimName(arg0)
 	return ToString(retValue)
 }
+func (s *spriteMgr) IsSpineSupported() bool {
+	retValue := CallSpriteIsSpineSupported()
+	return ToBool(retValue)
+}
+func (s *spriteMgr) SetSpineSkeleton(obj Object, atlas_path string, skeleton_path string, default_mix float64) bool {
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(atlas_path)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	arg2Str := C.CString(skeleton_path)
+	arg2 := (GdString)(arg2Str)
+	defer C.free(unsafe.Pointer(arg2Str))
+	arg3 := ToGdFloat(default_mix)
+	retValue := CallSpriteSetSpineSkeleton(arg0, arg1, arg2, arg3)
+	return ToBool(retValue)
+}
+func (s *spriteMgr) ClearSpineSkeleton(obj Object) {
+	arg0 := ToGdObj(obj)
+	CallSpriteClearSpineSkeleton(arg0)
+}
+func (s *spriteMgr) GetSpineBounds(obj Object) Rect2 {
+	arg0 := ToGdObj(obj)
+	retValue := CallSpriteGetSpineBounds(arg0)
+	return ToRect2(retValue)
+}
+func (s *spriteMgr) HasSpineAnimation(obj Object, name string) bool {
+	arg0 := ToGdObj(obj)
+	arg1Str := C.CString(name)
+	arg1 := (GdString)(arg1Str)
+	defer C.free(unsafe.Pointer(arg1Str))
+	retValue := CallSpriteHasSpineAnimation(arg0, arg1)
+	return ToBool(retValue)
+}
 func (s *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdVec2(velocity)

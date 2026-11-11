@@ -16,9 +16,15 @@
 
 package main
 
-import "github.com/goplus/spx/v4/internal/cmd/buildctl/runtimecmd"
+import (
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+)
 
 func run(args []string) error {
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		return err
+	}
 	if len(args) != 0 && args[0] == "runtime" {
 		return runtimecmd.Run(args[1:])
 	}

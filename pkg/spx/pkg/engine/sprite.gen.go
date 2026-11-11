@@ -78,6 +78,10 @@ func (s *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64,
 	return SpriteMgr.CheckCollisionWithSprite(s.Id, obj_b, alpha_threshold, use_pixel_perfect)
 }
 
+func (s *Sprite) ClearSpineSkeleton() {
+	SpriteMgr.ClearSpineSkeleton(s.Id)
+}
+
 func (s *Sprite) CloneSprite() Object {
 	return SpriteMgr.CloneSprite(s.Id)
 }
@@ -226,6 +230,10 @@ func (s *Sprite) GetScale() Vec2 {
 	return SpriteMgr.GetScale(s.Id)
 }
 
+func (s *Sprite) GetSpineBounds() Rect2 {
+	return SpriteMgr.GetSpineBounds(s.Id)
+}
+
 func (s *Sprite) GetTexture() string {
 	return SpriteMgr.GetTexture(s.Id)
 }
@@ -252,6 +260,10 @@ func (s *Sprite) GetWallNormal() Vec2 {
 
 func (s *Sprite) GetZIndex() int64 {
 	return SpriteMgr.GetZIndex(s.Id)
+}
+
+func (s *Sprite) HasSpineAnimation(name string) bool {
+	return SpriteMgr.HasSpineAnimation(s.Id, name)
 }
 
 func (s *Sprite) IsAnimCentered() bool {
@@ -300,6 +312,10 @@ func (s *Sprite) IsOnWallOnly() bool {
 
 func (s *Sprite) IsPlayingAnim() bool {
 	return SpriteMgr.IsPlayingAnim(s.Id)
+}
+
+func (s *Sprite) IsSpineSupported() bool {
+	return SpriteMgr.IsSpineSupported()
 }
 
 func (s *Sprite) IsSpriteAlive() bool {
@@ -484,6 +500,10 @@ func (s *Sprite) SetRotation(rot float64) {
 
 func (s *Sprite) SetScale(scale Vec2) {
 	SpriteMgr.SetScale(s.Id, scale)
+}
+
+func (s *Sprite) SetSpineSkeleton(atlas_path string, skeleton_path string, default_mix float64) bool {
+	return SpriteMgr.SetSpineSkeleton(s.Id, atlas_path, skeleton_path, default_mix)
 }
 
 func (s *Sprite) SetTexture(path string) {

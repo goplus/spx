@@ -1026,3 +1026,72 @@ func assertRuntimeWorkspacesCleaned(t *testing.T, repoRoot string) {
 		t.Fatalf("runtime workspaces remain: %v, %v", entries, err)
 	}
 }
+
+func TestExportPackSpineRejectsReleaseEngineAssetsBeforeWrites(t *testing.T) {
+	t.Setenv("SPX_SPINE", "1")
+	root := t.TempDir()
+	goPath := filepath.Join(root, "spine-gopath")
+	t.Setenv("GOPATH", goPath)
+	runner := &recordingRunner{repoRoot: root}
+	err := exportPackRuntime(runtimeExportPackConfig{engineAssetDir: filepath.Join(root, "release-assets")}, runner)
+	if err == nil || !strings.Contains(err.Error(), "SPX_SPINE=1") {
+		t.Fatalf("release asset bypass was not rejected: %v", err)
+	}
+	if len(runner.commands) != 0 || len(runner.calls) != 0 {
+		t.Fatal("export commands ran after rejected release assets")
+	}
+	if _, err := os.Stat(goPath); !os.IsNotExist(err) {
+		t.Fatalf("runtime installation wrote GOPATH before rejecting: %v", err)
+	}
+}
+
+func TestSpineExportPreservesDefaultLocalRuntimeManifest(t *testing.T) {
+	t.Setenv("SPX_SPINE", "0")
+	runner := newRuntimeFixtureRunner(t)
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(os.Getenv("GOPATH"), "bin")
+	mustWriteFile(t, filepath.Join(bin, spec.RuntimeName), []byte("default-engine"))
+	if err := ExportPackRuntime(runner); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath, err := release.LocalRuntimeManifestPath(runner.repoRoot, lock, spec.GOOS, spec.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() map[string]string {
+		t.Helper()
+		entries, err := os.ReadDir(filepath.Dir(manifestPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(map[string]string)
+		for _, entry := range entries {
+			data, err := os.ReadFile(filepath.Join(filepath.Dir(manifestPath), entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			result[entry.Name()] = string(data)
+		}
+		return result
+	}
+	before := snapshot()
+	t.Setenv("SPX_SPINE", "1")
+	mustWriteFile(t, filepath.Join(bin, spec.RuntimeName), []byte("spine-engine"))
+	if err := ExportPackRuntime(runner); err != nil {
+		t.Fatal(err)
+	}
+	if after := snapshot(); !reflect.DeepEqual(before, after) {
+		t.Fatal("Spine export changed the default source-tree manifest or assets")
+	}
+	freshRoot := t.TempDir()
+	if err := writeLocalRuntimeManifestIfComplete(freshRoot, bin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(freshRoot, ".spx")); !os.IsNotExist(err) {
+		t.Fatalf("Spine export created default cache: %v", err)
+	}
+}

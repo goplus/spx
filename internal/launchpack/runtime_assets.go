@@ -27,6 +27,7 @@ import (
 
 	"github.com/goplus/spx/v4/internal/release"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
 const (
@@ -92,6 +93,35 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 	cacheRoot, err := resolveRuntimeCacheRoot(env, cacheDefault)
 	if err != nil {
 		return Assets{}, err
+	}
+	spineBin, spine, err := runtimevariant.LocalSpineBin(env, "")
+	if err != nil {
+		return Assets{}, err
+	}
+	if spine {
+		if _, found, _ := environmentValue(env, runtimeAssetDirEnv); found {
+			return Assets{}, fmt.Errorf("published runtime asset directories are not supported for Spine; use the dedicated GOPATH/bin")
+		}
+		// Do not consult source-tree manifests or the published cache: neither has
+		// a Spine feature axis. Pair only artifacts from the dedicated local bin.
+		if local, found, err := findExplicitLocalRuntimeManifest(env, lock, spec); err != nil {
+			return Assets{}, err
+		} else if found {
+			if filepath.Dir(local.enginePath) != spineBin || filepath.Dir(local.packPath) != spineBin {
+				return Assets{}, fmt.Errorf("Spine local manifest must reference the dedicated GOPATH/bin")
+			}
+			return materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
+		}
+		enginePath, packPath := filepath.Join(spineBin, spec.RuntimeName), filepath.Join(spineBin, spec.PackName)
+		manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
+		if err != nil {
+			return Assets{}, fmt.Errorf("Spine local runtime unavailable; run SPX_SPINE=1 make dev: %w", err)
+		}
+		data, err := manifest.JSON()
+		if err != nil {
+			return Assets{}, err
+		}
+		return materializeLocalRuntime(ctx, cacheRoot, lock, spec, localRuntimeSource{manifest: manifest, bytes: data, enginePath: enginePath, packPath: packPath})
 	}
 	offline, err := runtimeOffline(env)
 	if err != nil {

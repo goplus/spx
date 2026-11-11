@@ -41,6 +41,7 @@ func TestSPXModuleBuildArgsPreserveContractOrder(t *testing.T) {
 		"vulkan=false",
 		"debug_symbols=true",
 		"target=editor",
+		"spx_spine=no",
 		"custom_modules=" + moduleSource,
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("editor build args = %#v, want %#v", got, want)
@@ -52,6 +53,7 @@ func TestSPXModuleBuildArgsPreserveContractOrder(t *testing.T) {
 		"disable_3d=true",
 		"platform=web",
 		"target=template_release",
+		"spx_spine=no",
 		"custom_modules=" + moduleSource,
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("template build args = %#v, want %#v", got, want)
@@ -63,6 +65,7 @@ func TestSPXModuleBuildArgsPreserveContractOrder(t *testing.T) {
 		"disable_3d=true",
 		"platform=linux",
 		"target=template_release",
+		"spx_spine=no",
 		"custom_modules=/root/spx-module",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("mounted template build args = %#v, want %#v", got, want)

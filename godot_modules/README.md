@@ -18,3 +18,10 @@ recursive custom-module discovery because `custom_modules` points directly at
 The `spx` module, its private third-party dependencies, Web bridge, recorder,
 and module tests are stored under `godot_modules/spx`. Keep generated bindings
 in that module and run `make generate` after changing manager declarations.
+
+The Spine 4.2 runtime is disabled by default. With `spx_spine=yes`, it is
+compiled as a private dependency of `spx` from
+`spx/thirdparty/spine_godot`; no sibling custom module or Godot checkout patch
+is required. Its separate Spine Runtimes License and redistribution notice are
+included in that directory. See the [Spine integration guide](../docs/en/dev/engine/spine.md)
+for asset formats and licensing requirements.

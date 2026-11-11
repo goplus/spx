@@ -98,6 +98,9 @@ GdString SpxSprite::get_texture() {
 }
 
 Rect2 SpxSprite::get_rect() const {
+	if (spine_child) {
+		return _get_spine_rect();
+	}
 	Ref<SpriteFrames> frames = anim2d != nullptr ? anim2d->get_sprite_frames() : Ref<SpriteFrames>();
 	if (frames.is_null() || !frames->has_animation(SpxSpriteMgr::default_texture_anim) || frames->get_frame_count(SpxSpriteMgr::default_texture_anim) == 0) {
 		return Rect2(0, 0, 1, 1);

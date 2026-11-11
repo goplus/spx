@@ -181,16 +181,17 @@ class RuntimeBuildContractTest(unittest.TestCase):
         )
 
     def test_profile_rejects_orchestration_flags(self):
-        profile = {
-            "schema": 1,
-            "common": ["platform=linux"],
-            "editor_release": [],
-            "template_release": [],
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            path = self.write_json(directory, "profile.json", profile)
-            with self.assertRaisesRegex(contract.ContractError, "orchestration-owned"):
-                contract.load_scons_profile(path)
+        for flag in ("platform=linux", "spx_spine=yes"):
+            with self.subTest(flag=flag), tempfile.TemporaryDirectory() as directory:
+                profile = {
+                    "schema": 1,
+                    "common": [flag],
+                    "editor_release": [],
+                    "template_release": [],
+                }
+                path = self.write_json(directory, "profile.json", profile)
+                with self.assertRaisesRegex(contract.ContractError, "orchestration-owned"):
+                    contract.load_scons_profile(path)
 
     def test_profile_rejects_malformed_tokens_and_duplicate_keys(self):
         cases = (

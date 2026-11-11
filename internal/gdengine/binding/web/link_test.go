@@ -15,6 +15,22 @@ import (
 //go:embed ffi.gen.go
 var generatedResolver string
 
+func TestLinkOlderHostWithoutSpine(t *testing.T) {
+	installLinkHost(t)
+	for _, name := range []string{
+		"gdspx_sprite_is_spine_supported", "gdspx_sprite_set_spine_skeleton",
+		"gdspx_sprite_clear_spine_skeleton", "gdspx_sprite_get_spine_bounds",
+		"gdspx_sprite_has_spine_animation",
+	} {
+		js.Global().Delete(name)
+	}
+	session, _ := Link()
+	defer session.Unlink()
+	if API.SpxSpriteIsSpineSupported.Invoke().Bool() {
+		t.Fatal("older host reported Spine support")
+	}
+}
+
 func installLinkHost(t *testing.T) {
 	t.Helper()
 	names := regexp.MustCompile(`resolveJSFunc\("([^"]+)"\)`).FindAllStringSubmatch(generatedResolver, -1)
