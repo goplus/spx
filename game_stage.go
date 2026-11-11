@@ -74,8 +74,8 @@ func (p *Game) BackdropIndex() int {
 	return p.getCostumeIndex()
 }
 
-func (p *Game) SetBackdrop__0(backdrop BackdropName) {
-	p.setBackdrop(backdrop, false)
+func (p *Game) SetBackdrop__0(name BackdropName) {
+	p.setBackdrop(name, false)
 }
 
 func (p *Game) SetBackdrop__1(index float64) {
@@ -90,8 +90,8 @@ func (p *Game) SetBackdrop__3(action switchAction) {
 	p.setBackdrop(action, false)
 }
 
-func (p *Game) SetBackdropAndWait__0(backdrop BackdropName) {
-	p.setBackdrop(backdrop, true)
+func (p *Game) SetBackdropAndWait__0(name BackdropName) {
+	p.setBackdrop(name, true)
 }
 
 func (p *Game) SetBackdropAndWait__1(index float64) {
@@ -115,14 +115,14 @@ func (p *Game) EraseAll() {
 	p.penCommandBarrier(engine.Managers().PenMgr.DestroyAllPens)
 }
 
-func (p *Game) SetGraphicEffect(kind EffectKind, val float64) {
+func (p *Game) SetGraphicEffect(kind EffectKind, value float64) {
 	engine.RequestRedraw()
-	p.baseObj.setGraphicEffect(kind, val)
+	p.baseObj.setGraphicEffect(kind, value)
 }
 
-func (p *Game) ChangeGraphicEffect(kind EffectKind, delta float64) {
+func (p *Game) ChangeGraphicEffect(kind EffectKind, value float64) {
 	engine.RequestRedraw()
-	p.baseObj.changeGraphicEffect(kind, delta)
+	p.baseObj.changeGraphicEffect(kind, value)
 }
 
 func (p *Game) ClearGraphicEffects() {
@@ -157,8 +157,8 @@ func (p *Game) WaitNextFrame() Seconds {
 	return engine.WaitNextFrame()
 }
 
-func (p *Game) Wait(secs Seconds) {
-	engine.Wait(secs)
+func (p *Game) Wait(seconds Seconds) {
+	engine.Wait(seconds)
 }
 
 func (p *Game) Timer() Seconds {
@@ -181,8 +181,8 @@ func (p *Game) Dayssince2000() float64 {
 // -----------------------------------------------------------------------------
 // Dialog
 // -----------------------------------------------------------------------------
-func (p *Game) Ask(msg any) {
-	msgStr := dialogText(msg)
+func (p *Game) Ask(question any) {
+	msgStr := dialogText(question)
 	p.ask(true, msgStr, func(answer string) {})
 }
 
@@ -237,20 +237,20 @@ func (p *Game) SetupPathFinder__1(xGridSize, yGridSize, xCellSize, yCellSize flo
 	)
 }
 
-func (p *Game) FindPath__0(xFrom, yFrom, xTo, yTo float64) []float64 {
-	return p.FindPath__2(xFrom, yFrom, xTo, yTo, false, true)
+func (p *Game) FindPath__0(fromX, fromY, toX, toY float64) []float64 {
+	return p.FindPath__2(fromX, fromY, toX, toY, false, true)
 }
 
-func (p *Game) FindPath__1(xFrom, yFrom, xTo, yTo float64, withDebug bool) []float64 {
-	return p.FindPath__2(xFrom, yFrom, xTo, yTo, withDebug, true)
+func (p *Game) FindPath__1(fromX, fromY, toX, toY float64, withDebug bool) []float64 {
+	return p.FindPath__2(fromX, fromY, toX, toY, withDebug, true)
 }
 
-func (p *Game) FindPath__2(xFrom, yFrom, xTo, yTo float64, withDebug, withJump bool) []float64 {
+func (p *Game) FindPath__2(fromX, fromY, toX, toY float64, withDebug, withJump bool) []float64 {
 	p.lifecycleState.OncePathFinder.Do(func() {
 		p.setupPathFinder(withJump, withDebug)
 	})
 
-	arr := engine.Managers().NavigationMgr.FindPath(mathf.NewVec2(xFrom, yFrom), mathf.NewVec2(xTo, yTo), withJump)
+	arr := engine.Managers().NavigationMgr.FindPath(mathf.NewVec2(fromX, fromY), mathf.NewVec2(toX, toY), withJump)
 	result := arr.([]float32)
 	return numeric.ConvertFloatSlice[float64](result)
 }

@@ -33,14 +33,14 @@ const (
 
 type Camera interface {
 	ViewportRect() (float64, float64, float64, float64)
-	SetZoom(scale float64)
+	SetZoom(value float64)
 	Zoom() float64
 	Xpos() float64
 	Ypos() float64
 	SetXYpos(x float64, y float64)
 	ChangeXYpos(x float64, y float64)
 	Follow__0(sprite Sprite)
-	Follow__1(sprite SpriteName)
+	Follow__1(spriteName SpriteName)
 }
 
 type cameraImpl struct {
@@ -56,10 +56,10 @@ func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
 	return rect.Position.X, rect.Position.Y, rect.Size.X, rect.Size.Y
 }
 
-func (c *cameraImpl) SetZoom(scale float64) {
+func (c *cameraImpl) SetZoom(value float64) {
 	c.setDirtyFlag(true)
-	scale *= c.g.displayState.WindowScale
-	engine.Managers().CameraMgr.SetCameraZoom(engine.UniformVec2(scale))
+	value *= c.g.displayState.WindowScale
+	engine.Managers().CameraMgr.SetCameraZoom(engine.UniformVec2(value))
 }
 
 func (c *cameraImpl) Zoom() float64 {
@@ -93,8 +93,8 @@ func (c *cameraImpl) Follow__0(sprite Sprite) {
 	c.follow(sprite)
 }
 
-func (c *cameraImpl) Follow__1(sprite SpriteName) {
-	c.follow(sprite)
+func (c *cameraImpl) Follow__1(spriteName SpriteName) {
+	c.follow(spriteName)
 }
 
 func (c *cameraImpl) init(g *Game) {

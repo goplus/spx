@@ -33,31 +33,31 @@ func (p *SpriteImpl) OnCloned__1(onCloned func(data any)) {
 	p.register(coreevent.BucketCloned, onCloned)
 }
 
-func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func()) {
-	p.OnTouchStart__1(sprite, coreevent.Ignore1[Sprite](onTouchStart))
+func (p *SpriteImpl) OnTouchStart__0(name SpriteName, onTouchStart func()) {
+	p.OnTouchStart__1(name, coreevent.Ignore1[Sprite](onTouchStart))
 }
 
-func (p *SpriteImpl) OnTouchStart__1(sprite SpriteName, onTouchStart func(Sprite)) {
-	p.physics().addCollisionTarget(sprite)
+func (p *SpriteImpl) OnTouchStart__1(name SpriteName, onTouchStart func(Sprite)) {
+	p.physics().addCollisionTarget(name)
 	p.addTouchStartHandler(func(s Sprite) {
 		impl := spriteOf(s)
-		if impl != nil && impl.name == sprite {
+		if impl != nil && impl.name == name {
 			onTouchStart(s)
 		}
 	})
 }
 
-func (p *SpriteImpl) OnTouchStart__2(sprites []SpriteName, onTouchStart func()) {
-	p.OnTouchStart__3(sprites, coreevent.Ignore1[Sprite](onTouchStart))
+func (p *SpriteImpl) OnTouchStart__2(names []SpriteName, onTouchStart func()) {
+	p.OnTouchStart__3(names, coreevent.Ignore1[Sprite](onTouchStart))
 }
 
-func (p *SpriteImpl) OnTouchStart__3(sprites []SpriteName, onTouchStart func(Sprite)) {
-	for _, sprite := range sprites {
+func (p *SpriteImpl) OnTouchStart__3(names []SpriteName, onTouchStart func(Sprite)) {
+	for _, sprite := range names {
 		p.physics().addCollisionTarget(sprite)
 	}
 	p.addTouchStartHandler(func(s Sprite) {
 		impl := spriteOf(s)
-		if impl != nil && slices.Contains(sprites, impl.name) {
+		if impl != nil && slices.Contains(names, impl.name) {
 			onTouchStart(s)
 		}
 	})

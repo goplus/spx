@@ -36,8 +36,8 @@ func (p Value) Raw() any {
 	return p.data
 }
 
-func (p Value) Equal(v any) bool {
-	return Equal(p.data, v)
+func (p Value) Equal(otherValue any) bool {
+	return Equal(p.data, otherValue)
 }
 
 func (p Value) String() string {
