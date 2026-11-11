@@ -58,8 +58,8 @@ case "${1:-}" in
       ./internal/runtimebundle
     ;;
   web)
-    covered_web_test coverage-web.out \
-      ./internal/gdengine/binding/web ./internal/gdengine/impl ./internal/engine/wrap ./pkg/ispx ./internal/engine/coroutine
+    covered_web_test coverage-web.out -timeout=1m \
+      ./internal/core/project ./internal/gdengine/binding/web ./internal/gdengine/impl ./internal/engine/wrap ./pkg/ispx ./internal/engine/coroutine
     # These lifecycle tests run without the Godot host required by engine Main tests.
     covered_web_test coverage-web-engine.out \
       -run '^Test(RequestExitStopsManagedCallerOnWeb|ResetWebRuntime.*|DrainAndReleaseGame.*)$' \

@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"reflect"
 	"regexp"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -265,7 +266,8 @@ func TestResolveMemberEvalEmbeddedRootIgnoresTopLevelFrom(t *testing.T) {
 }
 
 func TestResolveMemberEvalCyclicEmbeddings(t *testing.T) {
-	if os.Getenv("SPX_TEST_MEMBER_CYCLES") != "1" {
+	// Web cannot start subprocesses; its runner timeout bounds cyclic regressions.
+	if runtime.GOOS != "js" && os.Getenv("SPX_TEST_MEMBER_CYCLES") != "1" {
 		executable, err := os.Executable()
 		if err != nil {
 			t.Fatal(err)
