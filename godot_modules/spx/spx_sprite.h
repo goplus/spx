@@ -57,6 +57,8 @@ public:
 	virtual int get_sort_z_index() const = 0;
 	virtual bool is_node_valid() const = 0;
 	virtual bool is_sort_static() const { return false; }
+	// Unknown bounds must remain eligible for sorting.
+	virtual bool get_sort_bounds(Rect2 &r_bounds) const { return false; }
 };
 
 // SpxRenderSprite - Wrapper for Sprite2D with sortable interface
@@ -79,6 +81,7 @@ public:
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
 	bool is_sort_static() const override { return true; }
+	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
 private:
 	GdObj sort_id = 0;
@@ -104,6 +107,7 @@ public:
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
 	bool is_sort_static() const override { return true; }
+	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
 private:
 	GdObj sort_id = 0;
@@ -243,6 +247,7 @@ public:
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
 	bool is_sort_static() const override { return get_physics_mode() == PhysicsMode::STATIC; }
+	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
 protected:
 	void _notification(int p_what);

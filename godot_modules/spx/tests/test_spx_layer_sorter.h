@@ -35,6 +35,8 @@
 #include "../spx_camera_mgr.h"
 #include "../spx_engine.h"
 #include "../spx_layer_sorter.h"
+#include "../spx_image_texture.h"
+#include "servers/rendering_server.h"
 #include "../spx_sprite.h"
 #include "scene/2d/camera_2d.h"
 #include "scene/main/viewport.h"
@@ -159,6 +161,70 @@ TEST_CASE("[SceneTree][SPX] Layer sorter keeps offscreen anchors ordered as view
 	fixture.sorter.update(sprites);
 	CHECK_EQ(left.z_index, 2);
 	CHECK_EQ(right.z_index, 3);
+}
+
+TEST_CASE("[SceneTree][SPX] Layer sorting reserves z slots for rendered bounds under capacity pressure") {
+	SorterFixture fixture;
+	const Ref<Image> image = Image::create_empty(32, 32, false, Image::FORMAT_RGBA8);
+	const Ref<Texture2D> texture = SpxImageTexture::create_from_image(image);
+	Vector<ISortableSprite *> sprites;
+	for (int i = 0; i < RS::CANVAS_ITEM_Z_MAX; ++i) {
+		auto *sprite = memnew(SpxRenderSprite);
+		sprite->set_sort_id(i + 1);
+		sprite->set_texture(texture);
+		sprite->set_position(Point2(-1000, -1000));
+		fixture.viewport->add_child(sprite);
+		sprites.push_back(sprite);
+	}
+	auto *large = memnew(SpxRenderSprite);
+	large->set_sort_id(RS::CANVAS_ITEM_Z_MAX + 1);
+	large->set_texture(texture);
+	large->set_position(Point2(-20, 50));
+	large->set_scale(Vector2(4, 2));
+	large->set_rotation(Math_PI / 4);
+	fixture.viewport->add_child(large);
+	sprites.push_back(large);
+	auto *front = memnew(SpxRenderSprite);
+	front->set_sort_id(RS::CANVAS_ITEM_Z_MAX + 2);
+	front->set_texture(texture);
+	front->set_position(Point2(20, 70));
+	fixture.viewport->add_child(front);
+	sprites.push_back(front);
+
+	const Rect2 screen = SpxEngine::get_singleton()->get_camera()->get_global_camera_rect();
+	CHECK_FALSE(screen.has_point(large->get_sort_position()));
+	Rect2 bounds;
+	REQUIRE(large->get_sort_bounds(bounds));
+	CHECK(screen.intersects(bounds));
+	fixture.sorter.update(sprites);
+	CHECK_EQ(large->get_z_index(), 1);
+	CHECK_EQ(front->get_z_index(), 2);
+
+	// A newly visible object receives an order immediately; no offscreen cache is retained.
+	auto *returning = static_cast<SpxRenderSprite *>(sprites[0]);
+	returning->set_position(Point2(20, 10));
+	fixture.sorter.update(sprites);
+	CHECK_EQ(returning->get_z_index(), 1);
+	CHECK_EQ(large->get_z_index(), 2);
+	CHECK_EQ(front->get_z_index(), 3);
+
+	// A genuinely over-capacity batch must not be partly applied.
+	SUBCASE("All bounds intersect the viewport") {
+		for (ISortableSprite *sprite : sprites) {
+			static_cast<SpxRenderSprite *>(sprite)->set_position(Point2(20, 20));
+		}
+	}
+	SUBCASE("Unknown bounds remain eligible") {
+		for (ISortableSprite *sprite : sprites) {
+			static_cast<SpxRenderSprite *>(sprite)->set_texture(Ref<Texture2D>());
+		}
+	}
+	ERR_PRINT_OFF;
+	fixture.sorter.update(sprites);
+	ERR_PRINT_ON;
+	CHECK_EQ(returning->get_z_index(), 1);
+	CHECK_EQ(large->get_z_index(), 2);
+	CHECK_EQ(front->get_z_index(), 3);
 }
 
 TEST_CASE("[SceneTree][SPX] Static-only layers update z-order when members disappear") {

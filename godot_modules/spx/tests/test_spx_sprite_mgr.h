@@ -922,10 +922,26 @@ TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow autho
 	texture->set_size(Vector2(8, 6));
 	frames->set_frame("default", 0, texture);
 	CHECK(sprite->get_rect() == Rect2(6.25, 17.25, 8, 6));
+	Rect2 bounds;
+	REQUIRE(sprite->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(6.25, 17.25, 8, 6));
+	animation->set_scale(Vector2(2, 3));
+	REQUIRE(sprite->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(2.25, 11.25, 16, 18));
+	animation->set_scale(Vector2(1, 1));
+	auto *extra_visual = memnew(Sprite2D);
+	animation->add_child(extra_visual, false, Node::INTERNAL_MODE_BACK);
+	CHECK_FALSE(sprite->get_sort_bounds(bounds));
+	memdelete(extra_visual);
+
 	auto *viewport = sprite->get_viewport();
 	const bool snap = viewport->is_snap_2d_transforms_to_pixel_enabled();
 	viewport->set_snap_2d_transforms_to_pixel(true);
 	CHECK(sprite->get_rect() == Rect2(6, 17, 8, 6));
+	animation->set_offset(Vector2(0.2, 0.3));
+	REQUIRE(sprite->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(6.25, 17.25, 8, 6));
+	animation->set_offset(Vector2());
 	viewport->set_snap_2d_transforms_to_pixel(snap);
 	Ref<ImageTexture> empty;
 	empty.instantiate();
@@ -975,6 +991,24 @@ TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and
 		CHECK(sortable->get_sort_z_index() == -5);
 		CHECK(node->get_z_index() == -5);
 	}
+	Rect2 bounds;
+	CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	CHECK_FALSE(body->get_sort_bounds(bounds));
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(8, 6));
+	rendered->set_texture(texture);
+	auto *visual = memnew(Sprite2D);
+	visual->set_texture(texture);
+	body->add_child(visual);
+	CHECK(rendered->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(11, 23, 8, 6));
+	CHECK(body->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(11, 23, 8, 6));
+	auto *extra_visual = memnew(Sprite2D);
+	body->add_child(extra_visual);
+	CHECK_FALSE(body->get_sort_bounds(bounds));
+	memdelete(extra_visual);
 	CHECK(rendered->get_sort_id() == 7);
 	CHECK(body->get_sort_id() == 8);
 }

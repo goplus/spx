@@ -572,11 +572,6 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 		return ERR_FILE_CANT_OPEN;
 	}
 
-	Vector<TimestampedChunk> all_chunks;
-	calculate_chunk_timestamps(video_info.index_entries, video_info, true, all_chunks);
-	calculate_chunk_timestamps(audio_info.index_entries, audio_info, false, all_chunks);
-	all_chunks.sort();
-
 	// Write movi list header
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
 	uint64_t movi_size_pos = output_file->get_position();
@@ -587,11 +582,25 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 	Vector<AviFileInfo::IndexEntry> merged_index;
 
 	uint32_t chunk_offset = 4; // Relative to movi data start
-	for (const TimestampedChunk &chunk : all_chunks) {
-		const bool is_video = chunk.type == TimestampedChunk::VIDEO_CHUNK;
-		Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
+	const AviFileInfo::StreamInfo &audio_stream = audio_info.streams_info[0];
+	const uint32_t sample_rate = audio_stream.rate / audio_stream.scale;
+	int video_index = 0;
+	int audio_index = 0;
+	uint64_t audio_samples = 0;
+	while (video_index < video_info.index_entries.size() || audio_index < audio_info.index_entries.size()) {
+		// Both streams are already ordered; video wins equal timestamps.
+		const bool is_video = audio_index == audio_info.index_entries.size() ||
+				(video_index < video_info.index_entries.size() &&
+						uint64_t(video_index) * video_info.microsec_per_frame <= audio_samples * 1000000 / sample_rate);
+		const AviFileInfo &info = is_video ? video_info : audio_info;
+		const AviFileInfo::IndexEntry &chunk = info.index_entries[is_video ? video_index++ : audio_index++];
+		Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file,
+				info.movi_data_offset + chunk.chunk_offset, chunk, is_video, chunk_offset, merged_index);
 		if (error != OK) {
 			return error;
+		}
+		if (!is_video) {
+			audio_samples += chunk.chunk_size / audio_stream.sample_size;
 		}
 	}
 
@@ -661,51 +670,13 @@ Error PostMergeProcessor::write_merged_avi_index(Ref<FileAccess> output_file, co
 	return OK;
 }
 
-void PostMergeProcessor::calculate_chunk_timestamps(const Vector<AviFileInfo::IndexEntry> &chunks, const AviFileInfo &info, bool is_video, Vector<TimestampedChunk> &timestamped_chunks) {
-	if (is_video) {
-		// Video timestamp calculation
-		uint64_t frame_duration_us = info.microsec_per_frame;
-
-		for (int i = 0; i < chunks.size(); i++) {
-			TimestampedChunk tc;
-			tc.type = TimestampedChunk::VIDEO_CHUNK;
-			tc.timestamp_us = i * frame_duration_us;
-			tc.file_offset = info.movi_data_offset + chunks[i].chunk_offset;
-			tc.chunk_size = chunks[i].chunk_size;
-			timestamped_chunks.push_back(tc);
-		}
-
-	} else {
-		const AviFileInfo::StreamInfo &audio_stream = info.streams_info[0];
-		const uint32_t sample_rate = audio_stream.rate / audio_stream.scale;
-
-		// Calculate timestamp for each audio chunk
-		uint64_t cumulative_samples = 0;
-
-		for (int i = 0; i < chunks.size(); i++) {
-			TimestampedChunk tc;
-			tc.type = TimestampedChunk::AUDIO_CHUNK;
-
-			// Calculate timestamp based on cumulative samples
-			tc.timestamp_us = (cumulative_samples * 1000000) / sample_rate;
-			tc.file_offset = info.movi_data_offset + chunks[i].chunk_offset;
-			tc.chunk_size = chunks[i].chunk_size;
-			timestamped_chunks.push_back(tc);
-
-			// Update cumulative samples
-			uint32_t samples_in_chunk = chunks[i].chunk_size / audio_stream.sample_size;
-			cumulative_samples += samples_in_chunk;
-		}
-	}
-}
-
 Error PostMergeProcessor::write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file,
-		const TimestampedChunk &chunk, bool is_video,
+		uint64_t file_offset, const AviFileInfo::IndexEntry &chunk, bool is_video,
 		uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index) {
 	// Input files are reopened after parsing; check again before copying a payload.
 	const uint64_t file_size = input_file->get_length();
-	ERR_FAIL_COND_V(chunk.file_offset > file_size || file_size - chunk.file_offset < 8, ERR_FILE_CORRUPT);
-	input_file->seek(chunk.file_offset);
+	ERR_FAIL_COND_V(file_offset > file_size || file_size - file_offset < 8, ERR_FILE_CORRUPT);
+	input_file->seek(file_offset);
 
 	// Read chunk header
 	char fourcc[4];

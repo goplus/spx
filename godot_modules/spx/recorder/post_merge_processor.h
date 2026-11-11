@@ -41,24 +41,6 @@ private:
 	// AVI merge implementation
 	Error merge_avi(const String &video_path, const String &audio_path, const String &output_path, MergeResult &result);
 
-	// Timestamped chunk for interleaving
-	struct TimestampedChunk {
-		enum ChunkType {
-			VIDEO_CHUNK,
-			AUDIO_CHUNK
-		};
-
-		ChunkType type;
-		uint64_t timestamp_us; // Timestamp in microseconds
-		uint64_t file_offset; // Offset in source file
-		uint32_t chunk_size; // Size of chunk data
-
-		// For sorting by timestamp
-		bool operator<(const TimestampedChunk &other) const {
-			return timestamp_us < other.timestamp_us;
-		}
-	};
-
 	// AVI file parsing structures
 	struct AviFileInfo {
 		// Main AVI header
@@ -117,9 +99,7 @@ private:
 	Error interleave_avi_data(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info);
 	Error write_merged_avi_index(Ref<FileAccess> output_file, const Vector<AviFileInfo::IndexEntry> &merged_index);
 
-	// Helper methods for timestamp-based interleaving
-	void calculate_chunk_timestamps(const Vector<AviFileInfo::IndexEntry> &chunks, const AviFileInfo &info, bool is_video, Vector<TimestampedChunk> &timestamped_chunks);
-	Error write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file, const TimestampedChunk &chunk, bool is_video, uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index);
+	Error write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file, uint64_t file_offset, const AviFileInfo::IndexEntry &chunk, bool is_video, uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index);
 
 	// Utility methods
 	bool file_exists(const String &path);

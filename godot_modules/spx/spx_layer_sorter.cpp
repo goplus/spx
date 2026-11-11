@@ -31,7 +31,10 @@
 #include "spx_layer_sorter.h"
 
 #include "core/templates/hash_map.h"
+#include "scene/2d/camera_2d.h"
+#include "scene/main/viewport.h"
 #include "scene/theme/theme_db.h"
+#include "servers/rendering_server.h"
 #include "spx.h"
 #include "spx_camera_mgr.h"
 #include "spx_engine.h"
@@ -65,6 +68,20 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 		sprites.insert(id, sprite);
 		sorted.push_back({ id, pos, sprite->is_sort_static() });
 	}
+	// Only visible members need a unique z slot when the full scene exceeds
+	// Godot's positive z range. Use rendered bounds, never the sort anchor.
+	if (sorted.size() > RS::CANVAS_ITEM_Z_MAX) {
+		const Camera2D *camera = SpxEngine::get_singleton()->get_camera()->get_camera();
+		const Viewport *viewport = camera ? camera->get_viewport() : nullptr;
+		const Rect2 screen = viewport ? viewport->get_canvas_transform().affine_inverse().xform(viewport->get_visible_rect()) : Rect2();
+		sorted.erase(std::remove_if(sorted.begin(), sorted.end(), [&](const SortInfo &info) {
+			Rect2 bounds;
+			return viewport && sprites[info.id]->get_sort_bounds(bounds) && !screen.intersects(bounds, true);
+		}), sorted.end());
+	}
+	ERR_FAIL_COND_MSG(sorted.size() > RS::CANVAS_ITEM_Z_MAX,
+			"Layer sorting exceeds Godot's 4096 visible sprite limit; no z indices were changed.");
+
 	std::sort(sorted.begin(), sorted.end(), [](const SortInfo &a, const SortInfo &b) {
 		if (a.pos.y != b.pos.y) {
 			return a.pos.y < b.pos.y;

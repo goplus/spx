@@ -43,6 +43,7 @@
 #include "../recorder/simple_video_writer.h"
 #include "../recorder/thread_safe_frame_buffer.h"
 #include "core/io/marshalls.h"
+#include "core/os/semaphore.h"
 #include "main/main_loop_phase_callback_bus.h"
 #include "servers/audio/effects/audio_effect_amplify.h"
 #include "servers/rendering_server.h"
@@ -90,6 +91,8 @@ TEST_CASE("[SPX] Recording buffer publishes coherent image and sequence snapshot
 		ThreadSafeFrameBuffer *buffer;
 		Ref<Image> odd = Image::create_empty(2, 2, false, Image::FORMAT_RGB8);
 		Ref<Image> even = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+		Semaphore first_published;
+		Semaphore reader_ready;
 		std::atomic<bool> done{ false };
 	} publisher{ &buffer };
 	Thread producer;
@@ -97,6 +100,10 @@ TEST_CASE("[SPX] Recording buffer publishes coherent image and sequence snapshot
 		auto &state = *static_cast<Publisher *>(userdata);
 		for (uint32_t sequence = 1; sequence <= 2000; sequence++) {
 			state.buffer->update_frame(sequence % 2 ? state.odd : state.even, sequence);
+			if (sequence == 1) {
+				state.first_published.post();
+				state.reader_ready.wait();
+			}
 		}
 		state.done.store(true);
 	},
@@ -104,6 +111,9 @@ TEST_CASE("[SPX] Recording buffer publishes coherent image and sequence snapshot
 	bool coherent = true;
 	const bool started = producer.is_started();
 	if (started) {
+		publisher.first_published.wait();
+		CHECK(buffer.get_current_frame().frame_sequence == 1);
+		publisher.reader_ready.post();
 		do {
 			const auto snapshot = buffer.get_current_frame();
 			if (snapshot.image.is_valid()) {
@@ -528,21 +538,22 @@ static void check_avi_index(const PackedByteArray &bytes, int expected_count) {
 }
 
 // One video frame and one stereo PCM chunk represent the same 1/30-second interval.
-static void write_avi_pair(const String &video, const String &audio, int frame_count = 2) {
+static void write_avi_pair(const String &video, const String &audio, int frame_count = 2, int fps = 30, int sample_rate = 48000) {
 	Ref<SimpleVideoWriter> video_writer;
 	video_writer.instantiate();
 	Ref<SimpleAudioWriter> audio_writer;
 	audio_writer.instantiate();
-	REQUIRE(video_writer->open(video, Size2i(4, 4), 30, 0.85) == OK);
-	REQUIRE(audio_writer->open(audio, 48000, 2) == OK);
+	REQUIRE(video_writer->open(video, Size2i(4, 4), fps, 0.85) == OK);
+	REQUIRE(audio_writer->open(audio, sample_rate, 2) == OK);
 	auto image = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 	image->fill(Color(1, 0, 0));
 	Vector<int32_t> pcm;
-	pcm.resize(1600 * 2);
+	const int samples_per_frame = sample_rate / fps;
+	pcm.resize(samples_per_frame * 2);
 	pcm.fill(0x12340000);
 	for (int i = 0; i < frame_count; ++i) {
 		REQUIRE(video_writer->write_frame(image) == OK);
-		REQUIRE(audio_writer->write_audio_chunk(pcm.ptr(), 1600) == OK);
+		REQUIRE(audio_writer->write_audio_chunk(pcm.ptr(), samples_per_frame) == OK);
 	}
 	video_writer->close();
 	audio_writer->close();
@@ -594,55 +605,78 @@ TEST_CASE("[SPX] AVI merger preserves frame payloads and converts PCM with valid
 }
 
 TEST_CASE("[SPX] AVI interleaving preserves unequal streams in timestamp order") {
-	TestSpx::TempDirectory files("spx_interleave_order");
-	const String video = files.file("video.avi"), audio = files.file("audio.avi");
-	write_avi_pair(video, audio); // Video frames occur at 0 and 33,333 microseconds.
-	SimpleAudioWriter writer;
-	REQUIRE(writer.open(audio, 48000, 2) == OK);
-	Vector<int32_t> pcm;
-	pcm.resize(480 * 2);
-	for (int i = 0; i < 3; ++i) {
-		pcm.fill((i + 1) * 0x10000000);
-		REQUIRE(writer.write_audio_chunk(pcm.ptr(), 480) == OK); // 0, 10,000, 20,000 microseconds.
-	}
-	writer.close();
-	const auto original_video = read_avi(video), original_audio = read_avi(audio);
-	PostMergeProcessor processor;
-	PostMergeProcessor::MergeConfig config;
-	config.keep_intermediate_files = true;
-	processor.set_config(config);
-	const String output = files.file("merged.avi");
-	REQUIRE(processor.merge_files(video, audio, output).error_code == OK);
-	const auto bytes = read_avi(output);
-	check_avi_index(bytes, 5);
-	const int index = find_tag(bytes, "idx1"), movi = find_tag(bytes, "movi"), stream = find_tag(bytes, "auds");
-	REQUIRE(stream > 0);
-	CHECK(decode_uint32(bytes.ptr() + stream + 32) == 1440);
-	bool is_video[5] = {};
-	int audio_chunks = 0;
-	for (int i = 0; i < 5; ++i) {
-		const uint8_t *entry = bytes.ptr() + index + 8 + i * 16;
-		is_video[i] = memcmp(entry, "00db", 4) == 0;
-		if (!is_video[i]) {
-			CHECK(memcmp(entry, "01wb", 4) == 0);
-			REQUIRE(decode_uint32(entry + 12) == 480 * 2 * 2);
-			const uint32_t chunk = movi + decode_uint32(entry + 8);
-			++audio_chunks;
-			PackedByteArray expected_pcm;
-			expected_pcm.resize(480 * 2 * 2);
-			for (int sample = 0; sample < 480 * 2; ++sample) {
-				encode_uint16(audio_chunks * 0x1000, expected_pcm.ptrw() + sample * 2);
-			}
-			CHECK(memcmp(bytes.ptr() + chunk + 8, expected_pcm.ptr(), expected_pcm.size()) == 0);
+	struct Case {
+		int fps;
+		int sample_rate;
+		int audio_chunks;
+	};
+	for (const Case &test : { Case{ 30, 48000, 3 }, Case{ 30, 44100, 7 }, Case{ 60, 48000, 7 }, Case{ 25, 44100, 7 } }) {
+		INFO(test.fps, " fps, ", test.sample_rate, " Hz, ", test.audio_chunks, " audio chunks");
+		TestSpx::TempDirectory files("spx_interleave_order");
+		const String video = files.file("video.avi"), audio = files.file("audio.avi");
+		write_avi_pair(video, audio, 2, test.fps, test.sample_rate);
+		SimpleAudioWriter writer;
+		REQUIRE(writer.open(audio, test.sample_rate, 2) == OK);
+		const int samples_per_chunk = test.sample_rate / 100; // 10 ms chunks.
+		Vector<int32_t> pcm;
+		pcm.resize(samples_per_chunk * 2);
+		for (int i = 0; i < test.audio_chunks; ++i) {
+			pcm.fill((i + 1) * 0x10000000);
+			REQUIRE(writer.write_audio_chunk(pcm.ptr(), samples_per_chunk) == OK);
 		}
+		writer.close();
+		const auto original_video = read_avi(video), original_audio = read_avi(audio);
+		PostMergeProcessor processor;
+		PostMergeProcessor::MergeConfig config;
+		config.keep_intermediate_files = true;
+		processor.set_config(config);
+		const String output = files.file("merged.avi");
+		REQUIRE(processor.merge_files(video, audio, output).error_code == OK);
+		const auto bytes = read_avi(output);
+		check_avi_index(bytes, 2 + test.audio_chunks);
+		const int index = find_tag(bytes, "idx1"), movi = find_tag(bytes, "movi"), stream = find_tag(bytes, "auds");
+		REQUIRE(stream > 0);
+		CHECK(decode_uint32(bytes.ptr() + stream + 32) == test.audio_chunks * samples_per_chunk);
+		int video_chunks = 0;
+		int audio_chunks = 0;
+		uint64_t previous_time = 0;
+		bool previous_video = true;
+		for (int i = 0; i < 2 + test.audio_chunks; ++i) {
+			const uint8_t *entry = bytes.ptr() + index + 8 + i * 16;
+			const bool is_video = memcmp(entry, "00db", 4) == 0;
+			const uint64_t time = is_video ? uint64_t(video_chunks++) * (1000000 / test.fps) : uint64_t(audio_chunks) * 10000;
+			CHECK(time >= previous_time);
+			if (i > 0 && time == previous_time) {
+				CHECK(previous_video); // Video precedes audio at equal timestamps, including 0.
+				CHECK_FALSE(is_video);
+			}
+			previous_time = time;
+			previous_video = is_video;
+			if (is_video) {
+				const uint8_t *source_entry = original_video.ptr() + find_tag(original_video, "idx1") + 8 + (video_chunks - 1) * 16;
+				const uint32_t size = decode_uint32(source_entry + 12);
+				REQUIRE(decode_uint32(entry + 12) == size);
+				const uint32_t source = find_tag(original_video, "movi") + decode_uint32(source_entry + 8);
+				const uint32_t target = movi + decode_uint32(entry + 8);
+				CHECK(memcmp(bytes.ptr() + target + 8, original_video.ptr() + source + 8, size) == 0);
+			} else {
+				CHECK(memcmp(entry, "01wb", 4) == 0);
+				REQUIRE(decode_uint32(entry + 12) == samples_per_chunk * 2 * 2);
+				const uint32_t chunk = movi + decode_uint32(entry + 8);
+				++audio_chunks;
+				PackedByteArray expected_pcm;
+				expected_pcm.resize(samples_per_chunk * 2 * 2);
+				for (int sample = 0; sample < samples_per_chunk * 2; ++sample) {
+					encode_uint16(audio_chunks * 0x1000, expected_pcm.ptrw() + sample * 2);
+				}
+				CHECK(memcmp(bytes.ptr() + chunk + 8, expected_pcm.ptr(), expected_pcm.size()) == 0);
+			}
+		}
+		CHECK(video_chunks == 2);
+		CHECK(audio_chunks == test.audio_chunks);
+		CHECK(FileAccess::get_file_as_bytes(video) == original_video);
+		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
 	}
-	CHECK(audio_chunks == 3);
-	CHECK(is_video[0] != is_video[1]); // Equal timestamps need not have a stable tie order.
-	CHECK_FALSE(is_video[2]);
-	CHECK_FALSE(is_video[3]);
-	CHECK(is_video[4]);
-	CHECK(FileAccess::get_file_as_bytes(video) == original_video);
-	CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
 }
 
 class RealtimeWriter : public ObsStyleMovieWriter {
