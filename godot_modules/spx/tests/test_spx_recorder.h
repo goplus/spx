@@ -210,6 +210,8 @@ TEST_CASE("[SPX] Video recorder encodes frames without mutating caller images") 
 		ERR_PRINT_OFF;
 		CHECK(writer.write_frame(image) == ERR_UNCONFIGURED);
 		CHECK(writer.open(files.file("missing/video.avi"), Size2i(8, 6), 30) == ERR_CANT_OPEN);
+		CHECK(writer.open(files.file("zero_fps.avi"), Size2i(8, 6), 0) == ERR_INVALID_PARAMETER);
+		CHECK_FALSE(FileAccess::exists(files.file("zero_fps.avi")));
 		ERR_PRINT_ON;
 		REQUIRE(writer.open(files.file("video.avi"), Size2i(8, 6), 30) == OK);
 		ERR_PRINT_OFF;
@@ -294,6 +296,23 @@ static bool wait_for(Predicate ready) {
 	return ready();
 }
 
+TEST_CASE("[SPX] Video session deadlines follow its configured AVI frame rate without drift") {
+	IndependentVideoRecorder::RecordingConfig config;
+	for (uint32_t fps : { 1, 24, 30, 60, 120 }) {
+		INFO("FPS: ", fps);
+		config.target_fps = fps;
+		CHECK(config.frame_time_usec(0) == 0);
+		CHECK(config.frame_time_usec(1) == 1000000 / fps);
+		CHECK(config.frame_time_usec(fps) == 1000000);
+		CHECK(config.frame_time_usec(uint64_t(fps) * 3600) == uint64_t(3600000000));
+		for (uint32_t frame = 0; frame < fps * 2; ++frame) {
+			const uint64_t time = config.frame_time_usec(frame);
+			CHECK(time * fps <= uint64_t(frame) * 1000000);
+			CHECK((time + 1) * fps > uint64_t(frame) * 1000000);
+		}
+	}
+}
+
 TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its worker") {
 	TestSpx::TempDirectory files("spx_video_thread");
 	ThreadSafeFrameBuffer buffer;
@@ -305,17 +324,29 @@ TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its wor
 	CHECK(recorder.initialize(nullptr, files.file("video.avi")) == ERR_INVALID_PARAMETER);
 	CHECK(recorder.initialize(&buffer, "") == ERR_INVALID_PARAMETER);
 	CHECK(recorder.initialize(&buffer, files.file("missing/video.avi")) == ERR_CANT_OPEN);
+	CHECK(recorder.start_recording() == ERR_UNCONFIGURED);
 	ERR_PRINT_ON;
 	IndependentVideoRecorder::RecordingConfig config;
 	config.video_width = 4;
 	config.video_height = 4;
 	config.jpeg_quality = 0.9;
-	recorder.update_config(config);
+	ERR_PRINT_OFF;
+	for (uint32_t invalid_fps : { 0, 121 }) {
+		config.target_fps = invalid_fps;
+		CHECK(recorder.initialize(&buffer, files.file("invalid.avi"), config) == ERR_INVALID_PARAMETER);
+		CHECK_FALSE(FileAccess::exists(files.file("invalid.avi")));
+	}
+	ERR_PRINT_ON;
+	config.target_fps = 10;
 	REQUIRE(recorder.initialize(&buffer, files.file("video.avi"), config) == OK);
 	REQUIRE(recorder.start_recording() == OK);
 	CHECK(recorder.is_thread_running());
 	ERR_PRINT_OFF;
 	CHECK(recorder.start_recording() == ERR_ALREADY_IN_USE);
+	auto changed = config;
+	changed.target_fps = 24;
+	CHECK(recorder.initialize(&buffer, files.file("changed.avi"), changed) == ERR_ALREADY_IN_USE);
+	CHECK_FALSE(FileAccess::exists(files.file("changed.avi")));
 	ERR_PRINT_ON;
 	Ref<Image> frame = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 	frame->fill(Color(1, 0, 0));
@@ -325,6 +356,10 @@ TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its wor
 	second->fill(Color(0, 1, 0));
 	buffer.update_frame(second, 2);
 	REQUIRE(wait_for([&] { return recorder.get_statistics().new_frames_count == 2; }));
+	ERR_PRINT_OFF;
+	recorder.reset_statistics();
+	ERR_PRINT_ON;
+	CHECK(recorder.get_statistics().new_frames_count == 2);
 	recorder.stop_recording();
 	recorder.stop_recording();
 	CHECK_FALSE(recorder.is_recording());
@@ -332,13 +367,42 @@ TEST_CASE("[SPX] Video recorder writes new and repeated frames and joins its wor
 	auto stats = recorder.get_statistics();
 	CHECK(stats.total_recorded_frames == stats.new_frames_count + stats.repeated_frames_count);
 	CHECK(stats.last_game_frame_sequence == 2);
-	CHECK(stats.recording_duration_us > 0);
+	REQUIRE(stats.total_recorded_frames > 0);
+	// A 30 FPS worker would emit these frames before the configured 10 FPS deadlines.
+	// Only enforce a lower bound: slow CI scheduling must not make this test flaky.
+	CHECK(stats.recording_duration_us >= config.frame_time_usec(stats.total_recorded_frames - 1));
 	CHECK(recorder.get_repeat_frame_ratio() == doctest::Approx(double(stats.repeated_frames_count) / stats.total_recorded_frames));
 	PackedByteArray bytes = read_avi(files.file("video.avi"));
 	const int avih = find_tag(bytes, "avih");
 	REQUIRE(avih >= 0);
 	CHECK(decode_uint32(bytes.ptr() + avih + 24) == stats.total_recorded_frames);
+	CHECK(decode_uint32(bytes.ptr() + avih + 8) == config.frame_time_usec(1));
+	const int stream = find_tag(bytes, "vids");
+	REQUIRE(stream >= 0);
+	CHECK(decode_uint32(bytes.ptr() + stream + 20) == 1);
+	CHECK(decode_uint32(bytes.ptr() + stream + 24) == config.target_fps);
 	CHECK(recorder.get_debug_info().contains("Stopped"));
+	ERR_PRINT_OFF;
+	CHECK(recorder.start_recording() == ERR_UNCONFIGURED);
+	ERR_PRINT_ON;
+	// A new session must reopen the file and reset both the clock and frame identity.
+	config.target_fps = 1;
+	REQUIRE(recorder.initialize(&buffer, files.file("restarted.avi"), config) == OK);
+	CHECK(recorder.get_statistics().total_recorded_frames == 0);
+	const uint64_t restart_start = OS::get_singleton()->get_ticks_usec();
+	REQUIRE(recorder.start_recording() == OK);
+	REQUIRE(wait_for([&] { return recorder.get_statistics().total_recorded_frames >= 1; }));
+	recorder.stop_recording();
+	// Include startup and polling so a late observation cannot hide a full-frame sleep.
+	// Half a second leaves ample scheduling slack without accepting the old one-second wait.
+	CHECK(OS::get_singleton()->get_ticks_usec() - restart_start < 500000);
+	CHECK_FALSE(recorder.is_thread_running());
+	CHECK(recorder.get_statistics().new_frames_count == 1);
+	const auto restarted = read_avi(files.file("restarted.avi"));
+	const int restarted_stream = find_tag(restarted, "vids");
+	REQUIRE(restarted_stream >= 0);
+	CHECK(decode_uint32(restarted.ptr() + restarted_stream + 24) == config.target_fps);
+	CHECK(decode_uint32(restarted.ptr() + restarted_stream + 32) >= 1);
 	recorder.reset_statistics();
 	CHECK(recorder.get_statistics().total_recorded_frames == 0);
 }
@@ -726,8 +790,9 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
 	ObsStyleMovieWriter::ObsRecordingConfig config;
 	config.jpeg_quality = 0.75f;
-	config.audio_sample_rate = 44100;
 	config.audio_buffer_seconds = 1;
+	// A different preference must not relabel PCM captured at the server's live rate.
+	config.audio_sample_rate = AudioServer::get_singleton()->get_mix_rate() == 48000 ? 44100 : 48000;
 	config.enable_post_merge = false;
 	writer->set_recording_config(config);
 	CHECK(writer->get_audio_mix_rate() == config.audio_sample_rate);
@@ -744,11 +809,13 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 	frame->fill(Color(1, 0, 0));
 	for (int run = 0; run < 2; ++run) {
 		config.enable_post_merge = (run == 1);
+		config.video_fps = run == 0 ? 24 : 60;
+		const uint32_t caller_fps = run == 0 ? 60 : 0;
 		config.keep_intermediate_files = true;
 		config.enable_debug_output = (run == 1);
 		writer->set_recording_config(config);
 		const String path = files.file("capture_" + itos(run) + ".avi");
-		REQUIRE(writer->begin_realtime(Size2i(4, 4), 30, path) == OK);
+		REQUIRE(writer->begin_realtime(Size2i(4, 4), caller_fps, path) == OK);
 		CHECK(writer->is_recording_active());
 		CHECK(writer->get_state_name() == "Recording");
 		REQUIRE(writer->write_frame(Ref<Image>(), nullptr) == OK);
@@ -757,10 +824,10 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 		ERR_PRINT_OFF;
 		CHECK(writer->begin_realtime(Size2i(4, 4), 30, path) == ERR_INVALID_PARAMETER);
 		auto changed = config;
-		changed.video_fps = 60;
+		changed.video_fps = 120;
 		writer->set_recording_config(changed);
 		ERR_PRINT_ON;
-		CHECK(writer->get_recording_config().video_fps == 30);
+		CHECK(writer->get_recording_config().video_fps == config.video_fps);
 		if (run == 1) {
 			auto effect = AudioServer::get_singleton()->get_bus_effect(0, effects)->instantiate();
 			Vector<AudioFrame> input, output;
@@ -783,10 +850,18 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 		auto video = read_avi(path + "_video.avi");
 		const int header = find_tag(video, "avih");
 		REQUIRE(header >= 0);
+		CHECK(decode_uint32(video.ptr() + header + 8) == 1000000 / config.video_fps);
+		const int stream = find_tag(video, "vids");
+		REQUIRE(stream >= 0);
+		CHECK(decode_uint32(video.ptr() + stream + 24) == config.video_fps);
 		const uint32_t frames = decode_uint32(video.ptr() + header + 24);
 		CHECK(frames >= stats.video_stats.total_recorded_frames);
 		check_avi_index(video, frames);
-		CHECK(FileAccess::exists(path + "_audio.avi"));
+		const auto audio = read_avi(path + "_audio.avi");
+		const int audio_format = find_tag(audio, "strf");
+		REQUIRE(audio_format >= 0);
+		// Live capture is not resampled to the configured preference.
+		CHECK(decode_uint32(audio.ptr() + audio_format + 12) == AudioServer::get_singleton()->get_mix_rate());
 		if (run == 1) {
 			auto merged = read_avi(path + "_merged.avi");
 			CHECK(find_tag(merged, "00db") >= 0);
@@ -1611,7 +1686,6 @@ TEST_CASE("[SceneTree][SPX] Recording workers finalize their files when destroye
 		video_config.video_width = 4;
 		video_config.video_height = 4;
 		REQUIRE(video.initialize(&buffer, files.file("video.avi"), video_config) == OK);
-		video.update_config(video_config);
 		REQUIRE(video.start_recording() == OK);
 		auto frame = Image::create_empty(4, 4, false, Image::FORMAT_RGB8);
 		frame->fill(Color(0.5, 0.25, 0));
