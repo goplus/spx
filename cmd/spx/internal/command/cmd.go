@@ -79,7 +79,7 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		logErrorf("%v", err)
 		return err
 	}
-	if cmd.Args.Verbose != nil && *cmd.Args.Verbose {
+	if cmd.Args.Verbose {
 		enableDebugLogging()
 	}
 	spec, ok := findCommand(cmd.Args.CmdName)
@@ -132,14 +132,14 @@ func (cmd *CmdTool) resolveProjectPaths(sourceDir, dstRelDir string) error {
 		return fmt.Errorf("failed to resolve target directory: %w", err)
 	}
 	cmd.TargetDir = targetDir
-	cmd.Args.Path = &cmd.TargetDir
+	cmd.Args.Path = cmd.TargetDir
 	cmd.ProjectDir = filepath.Join(cmd.TargetDir, dstRelDir)
 	return nil
 }
 
 func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 	args := cmd.engineArgs(rootDir)
-	if cmd.Args.Movie != nil && *cmd.Args.Movie {
+	if cmd.Args.Movie {
 		dir, _ := filepath.Abs(filepath.Join(rootDir, "output"))
 		fpath := filepath.Join(dir, "movie.avi")
 		os.MkdirAll(dir, os.ModePerm)
@@ -150,6 +150,6 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 
 func (cmd *CmdTool) engineArgs(rootDir string) []string {
 	args := cmd.Args
-	args.Path = &rootDir
+	args.Path = rootDir
 	return args.String()
 }

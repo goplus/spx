@@ -264,8 +264,7 @@ fi
 					t.Setenv(key, "")
 				}
 
-				target, tags, arch := "", "fixture_tag", runtime.GOARCH
-				install := false
+				tags, arch := "fixture_tag", runtime.GOARCH
 				cmd := &CmdTool{
 					TargetDir:  projectRoot,
 					ProjectDir: filepath.Join(projectRoot, ".generated", "engine"),
@@ -273,16 +272,14 @@ fi
 					LibPath:    filepath.Join(root, "spx-1-"+arch+".so"),
 					CmdPath:    filepath.Join(binDir, "godot"),
 					Args: ExtraArgs{
-						Target:  &target,
-						Tags:    &tags,
-						Arch:    &arch,
-						Install: &install,
+						Tags: tags,
+						Arch: arch,
 					},
 				}
 				switch failure {
 				case "":
 					if build.name == "shared" {
-						cmd.Args.Arch = nil
+						cmd.Args.Arch = ""
 					}
 				case "missing library":
 					cmd.LibPath = ""
@@ -580,7 +577,7 @@ func TestInitCreatesProjectScaffold(t *testing.T) {
 				}
 			}
 			const module = "module example.com/new-game\n\ngo 1.23\n"
-			cmd := &CmdTool{Args: ExtraArgs{Path: &target}, GoModTemplate: module}
+			cmd := &CmdTool{Args: ExtraArgs{Path: target}, GoModTemplate: module}
 			if err := cmd.Init(); err != nil {
 				t.Fatal(err)
 			}
@@ -619,7 +616,7 @@ func TestInitReportsScaffoldWriteFailures(t *testing.T) {
 			} else if err := os.MkdirAll(blocked, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			cmd := &CmdTool{Args: ExtraArgs{Path: &target}, GoModTemplate: "module example.com/new-game\n"}
+			cmd := &CmdTool{Args: ExtraArgs{Path: target}, GoModTemplate: "module example.com/new-game\n"}
 			if err := cmd.Init(); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Init error = %v, want %q", err, tt.want)
 			}
@@ -631,7 +628,7 @@ func TestInitReportsScaffoldWriteFailures(t *testing.T) {
 }
 
 func TestCommandRejectsInvalidPhases(t *testing.T) {
-	cmd := &CmdTool{Args: ExtraArgs{Tags: launcherStringPointer("custom_tag")}}
+	cmd := &CmdTool{Args: ExtraArgs{Tags: "custom_tag"}}
 	if err := cmd.prepareCommand(commandSpec{name: "invalid", setup: 99}, "", ""); err == nil || !strings.Contains(err.Error(), "invalid setup") {
 		t.Fatalf("setup error = %v", err)
 	}
@@ -684,8 +681,8 @@ func TestEngineCommandsUseGeneratedProjectDirectory(t *testing.T) {
 			if got := readTestFile(t, logPath); got != want {
 				t.Fatalf("Engine invocation = %q, want %q", got, want)
 			}
-			if *cmd.Args.Path != root {
-				t.Fatalf("Engine invocation changed source path to %q", *cmd.Args.Path)
+			if cmd.Args.Path != root {
+				t.Fatalf("Engine invocation changed source path to %q", cmd.Args.Path)
 			}
 			assertWorkingDirectory(t, before)
 		})
@@ -700,8 +697,7 @@ func TestBuildRejectsBlockedProjectFiles(t *testing.T) {
 				"go":  `test "$*" = 'mod tidy'`,
 			})
 			root := t.TempDir()
-			target, tags := "", ""
-			cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"), Args: ExtraArgs{Target: &target, Tags: &tags}}
+			cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go")}
 			want := ""
 			switch scenario {
 			case "AI module":
@@ -758,10 +754,7 @@ func TestTinyGoBuildOptions(t *testing.T) {
 			})
 			cmd := &CmdTool{
 				TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"),
-				Args: ExtraArgs{Target: &test.target, Tags: &test.tags},
-			}
-			if test.target == "" {
-				cmd.Args.Tags = nil
+				Args: ExtraArgs{Target: test.target, Tags: test.tags},
 			}
 			if err := cmd.BuildTinyGoLib(); err != nil {
 				t.Fatal(err)
@@ -821,8 +814,7 @@ func TestSharedBuildArchitectureSelection(t *testing.T) {
 		}
 	}
 	if runtime.GOOS != "darwin" {
-		arch := "invalid-architecture"
-		cmd := &CmdTool{ProjectDir: t.TempDir(), Args: ExtraArgs{Arch: &arch}}
+		cmd := &CmdTool{ProjectDir: t.TempDir(), Args: ExtraArgs{Arch: "invalid-architecture"}}
 		if err := cmd.BuildDll(); err == nil || !strings.Contains(err.Error(), "invalid arch") {
 			t.Fatalf("invalid architecture error = %v", err)
 		}
@@ -833,12 +825,11 @@ func TestSharedBuildReportsMissingHostLibrary(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("macOS always builds both supported host architectures")
 	}
-	arch, tags := "all", ""
+	arch := "all"
 	root := t.TempDir()
 	cmd := &CmdTool{
 		TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"),
 		LibPath: filepath.Join(root, "spx-test-"+runtime.GOARCH+".so"),
-		Args:    ExtraArgs{Arch: &arch, Tags: &tags},
 	}
 	supported, err := determineTargetArchs(runtime.GOOS, runtime.GOARCH, arch)
 	if err != nil {
@@ -854,6 +845,7 @@ func TestSharedBuildReportsMissingHostLibrary(t *testing.T) {
 	if arch == "" {
 		t.Skip("platform has no supported cross-build architecture")
 	}
+	cmd.Args.Arch = arch
 	logPath := filepath.Join(root, "architecture.log")
 	t.Setenv("SPX_TEST_ARCH_LOG", logPath)
 	installCommandTestTools(t, map[string]string{

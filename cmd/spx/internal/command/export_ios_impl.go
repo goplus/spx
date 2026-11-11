@@ -255,7 +255,7 @@ func (cmd *CmdTool) exportIos(output iosExportOutput, exportProjectOnly bool) er
 }
 
 func (cmd *CmdTool) installIosIPA(ipaPath string, exportProjectOnly bool) error {
-	if !*cmd.Args.Install {
+	if !cmd.Args.Install {
 		return nil
 	}
 	if exportProjectOnly {

@@ -271,7 +271,7 @@ func TestMobileExportToolWorkflows(t *testing.T) {
 		} {
 			t.Run(platform.name+"/"+scenario.name, func(t *testing.T) {
 				cmd, logPath := newMobileExportFixture(t)
-				*cmd.Args.Install = scenario.install
+				cmd.Args.Install = scenario.install
 				t.Setenv("SPX_MOBILE_FAIL", scenario.failure)
 				if scenario.output != "" {
 					t.Setenv("SPX_MOBILE_OUTPUT", scenario.output)
@@ -494,7 +494,7 @@ func TestAndroidDeviceChecksBeforeInstallation(t *testing.T) {
 	for _, scenario := range []string{"missing adb", "device lookup failure", "no connected device"} {
 		t.Run(scenario, func(t *testing.T) {
 			cmd, logPath := newMobileExportFixture(t)
-			*cmd.Args.Install = true
+			cmd.Args.Install = true
 			var want string
 			switch scenario {
 			case "missing adb":
@@ -647,11 +647,11 @@ esac
 	for _, name := range []string{"GOOS", "GOARCH", "CGO_ENABLED", "CGO_CFLAGS", "CGO_LDFLAGS", "CC"} {
 		t.Setenv(name, "")
 	}
-	arch, tags, install := runtime.GOARCH, "", false
+	arch := runtime.GOARCH
 	cmd := &CmdTool{
 		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
 		GoDir: filepath.Join(root, "project", "go"), LibPath: filepath.Join(root, "spx-test-"+arch+".so"),
-		CmdPath: filepath.Join(binDir, "godot"), Args: ExtraArgs{Arch: &arch, Tags: &tags, Install: &install},
+		CmdPath: filepath.Join(binDir, "godot"), Args: ExtraArgs{Arch: arch},
 	}
 	writeCommandTestFile(t, filepath.Join(root, "assets", "index.json"), "{}")
 	writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "project.godot"), "[application]\n")

@@ -97,7 +97,7 @@ func (cmd *CmdTool) executeExportApk() error {
 	}
 	logInfof("Exported APK successfully: %s", apkPath)
 
-	if !*cmd.Args.Install {
+	if !cmd.Args.Install {
 		return nil
 	}
 

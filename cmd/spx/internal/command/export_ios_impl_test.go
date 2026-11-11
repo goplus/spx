@@ -439,12 +439,11 @@ func TestIosSDKAndArchiveConfiguration(t *testing.T) {
 			t.Errorf("archive environment missing %q: %v", want, build.env)
 		}
 	}
-	install := false
-	cmd := &CmdTool{Args: ExtraArgs{Install: &install}}
+	cmd := &CmdTool{}
 	if err := cmd.installIosIPA("unused.ipa", true); err != nil {
 		t.Fatal(err)
 	}
-	install = true
+	cmd.Args.Install = true
 	if err := cmd.installIosIPA("unused.ipa", true); err == nil || !strings.Contains(err.Error(), "cannot install IPA") {
 		t.Fatalf("project-only install error = %v", err)
 	}

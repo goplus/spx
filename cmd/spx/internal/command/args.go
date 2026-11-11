@@ -23,56 +23,58 @@ import (
 	"strings"
 )
 
+// ExtraArgs stores CLI values. initializeFlags supplies CLI defaults; the zero
+// value represents empty options for direct command callers.
 type ExtraArgs struct {
 	CmdName         string
-	Path            *string
-	ServerAddr      *string
-	ServerMode      *bool
-	ControllerName  *string
-	HeadlessMode    *bool
-	Arch            *string
-	OnlyServer      *bool
-	OnlyClient      *bool
-	Tags            *string
-	Target          *string
-	NoMap           *bool
-	Install         *bool
-	DebugWebService *bool
-	FullScreen      *bool
-	Build           *string
-	Mode            *string
-	Movie           *bool
-	Verbose         *bool
-	Output          *string
+	Path            string
+	ServerAddr      string
+	ServerMode      bool
+	ControllerName  string
+	HeadlessMode    bool
+	Arch            string
+	OnlyServer      bool
+	OnlyClient      bool
+	Tags            string
+	Target          string
+	NoMap           bool
+	Install         bool
+	DebugWebService bool
+	FullScreen      bool
+	Build           string
+	Mode            string
+	Movie           bool
+	Verbose         bool
+	Output          string
 }
 
 func (e *ExtraArgs) String() []string {
 	var args []string
-	if *e.Path != "" {
-		args = append(args, "--path", *e.Path)
+	if e.Path != "" {
+		args = append(args, "--path", e.Path)
 	}
-	if *e.ServerAddr != "" {
-		args = append(args, "-serveraddr", *e.ServerAddr)
+	if e.ServerAddr != "" {
+		args = append(args, "-serveraddr", e.ServerAddr)
 	}
-	if *e.ServerMode {
+	if e.ServerMode {
 		args = append(args, "-servermode")
 	}
-	if *e.ControllerName != "" {
-		args = append(args, "-controller", *e.ControllerName)
+	if e.ControllerName != "" {
+		args = append(args, "-controller", e.ControllerName)
 	}
-	if *e.HeadlessMode {
+	if e.HeadlessMode {
 		args = append(args, "--headless")
 	}
-	if *e.NoMap {
+	if e.NoMap {
 		args = append(args, "--nomap")
 	}
-	if *e.DebugWebService {
+	if e.DebugWebService {
 		args = append(args, "--debugweb")
 	}
-	if *e.FullScreen {
+	if e.FullScreen {
 		args = append(args, "--fullscreen")
 	}
-	if *e.Verbose {
+	if e.Verbose {
 		args = append(args, "-v")
 	}
 	return args
@@ -80,10 +82,10 @@ func (e *ExtraArgs) String() []string {
 
 func (cmd *CmdTool) SafeTagArgs() string {
 	tags := cmd.Args.Tags
-	if tags == nil || *tags == "" {
+	if tags == "" {
 		return ""
 	}
-	return "-tags=" + *tags
+	return "-tags=" + tags
 }
 
 // ShowHelpInfo prints usage.
@@ -127,25 +129,25 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	f := flag.CommandLine
 	help := f.Bool("h", false, "show help information")
 
-	cmd.Args.ServerAddr = f.String("serveraddr", "", "server address")
-	cmd.Args.Path = f.String("path", ".", "project path")
-	cmd.Args.ControllerName = f.String("controller", "", "controller's type name")
-	cmd.Args.ServerMode = f.Bool("servermode", false, "server mode")
-	cmd.Args.HeadlessMode = f.Bool("headless", false, "Headless Mode")
-	cmd.Args.Arch = f.String("arch", "", "cpu arch")
-	cmd.Args.OnlyServer = f.Bool("onlys", false, "mutil player mode server only")
-	cmd.Args.OnlyClient = f.Bool("onlyc", false, "mutil player mode clients only")
-	cmd.Args.Tags = f.String("tags", "", "build tags")
-	cmd.Args.Target = f.String("target", "esp32", "target board (default: esp32)")
-	cmd.Args.NoMap = f.Bool("nomap", false, "no map mode")
-	cmd.Args.Install = f.Bool("install", false, "install mode")
-	cmd.Args.DebugWebService = f.Bool("debugweb", false, "open debug web service")
-	cmd.Args.FullScreen = f.Bool("fullscreen", false, "full screen")
-	cmd.Args.Build = f.String("build", "normal", "build mode: normal or fast")
-	cmd.Args.Mode = f.String("mode", "none", "mode: none, worker, minigame")
-	cmd.Args.Movie = f.Bool("movie", false, "record movie mode")
-	cmd.Args.Verbose = f.Bool("v", false, "print verbose information")
-	cmd.Args.Output = f.String("o", "", "launcher output path (buildlauncher)")
+	f.StringVar(&cmd.Args.ServerAddr, "serveraddr", "", "server address")
+	f.StringVar(&cmd.Args.Path, "path", ".", "project path")
+	f.StringVar(&cmd.Args.ControllerName, "controller", "", "controller's type name")
+	f.BoolVar(&cmd.Args.ServerMode, "servermode", false, "server mode")
+	f.BoolVar(&cmd.Args.HeadlessMode, "headless", false, "Headless Mode")
+	f.StringVar(&cmd.Args.Arch, "arch", "", "cpu arch")
+	f.BoolVar(&cmd.Args.OnlyServer, "onlys", false, "mutil player mode server only")
+	f.BoolVar(&cmd.Args.OnlyClient, "onlyc", false, "mutil player mode clients only")
+	f.StringVar(&cmd.Args.Tags, "tags", "", "build tags")
+	f.StringVar(&cmd.Args.Target, "target", "esp32", "target board (default: esp32)")
+	f.BoolVar(&cmd.Args.NoMap, "nomap", false, "no map mode")
+	f.BoolVar(&cmd.Args.Install, "install", false, "install mode")
+	f.BoolVar(&cmd.Args.DebugWebService, "debugweb", false, "open debug web service")
+	f.BoolVar(&cmd.Args.FullScreen, "fullscreen", false, "full screen")
+	f.StringVar(&cmd.Args.Build, "build", "normal", "build mode: normal or fast")
+	f.StringVar(&cmd.Args.Mode, "mode", "none", "mode: none, worker, minigame")
+	f.BoolVar(&cmd.Args.Movie, "movie", false, "record movie mode")
+	f.BoolVar(&cmd.Args.Verbose, "v", false, "print verbose information")
+	f.StringVar(&cmd.Args.Output, "o", "", "launcher output path (buildlauncher)")
 	return help
 }
 

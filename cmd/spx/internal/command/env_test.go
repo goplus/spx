@@ -515,8 +515,7 @@ func TestSetupPaths(t *testing.T) {
 				target = filepath.Join(target, "file")
 				writeCommandTestFile(t, target, "not a directory")
 			}
-			address := test.address
-			cmd := &CmdTool{Args: ExtraArgs{Path: &target, ServerAddr: &address}}
+			cmd := &CmdTool{Args: ExtraArgs{Path: target, ServerAddr: test.address}}
 			err := cmd.setupPaths("project")
 			assertWorkingDirectory(t, before)
 			if test.wantError != "" {
@@ -532,7 +531,7 @@ func TestSetupPaths(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cmd.ServerPort != test.port || cmd.TargetDir != resolved || *cmd.Args.Path != resolved || cmd.ProjectDir != filepath.Join(resolved, "project") {
+			if cmd.ServerPort != test.port || cmd.TargetDir != resolved || cmd.Args.Path != resolved || cmd.ProjectDir != filepath.Join(resolved, "project") {
 				t.Fatalf("resolved command paths/port = %+v", cmd)
 			}
 		})
@@ -658,10 +657,9 @@ func TestPrepareCommandRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 			t.Setenv("GOARCH", "amd64")
 			t.Setenv("PATH", t.TempDir())
 			root := t.TempDir()
-			serverAddr := ""
 			cmd := &CmdTool{
 				Version: "test", FileSuffix: "spx", GoBinPath: filepath.Join(root, "bin"),
-				Args: ExtraArgs{Path: &root, ServerAddr: &serverAddr},
+				Args: ExtraArgs{Path: root},
 			}
 			writeCommandTestFile(t, filepath.Join(root, "main.spx"), "")
 			t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
@@ -674,8 +672,7 @@ func TestPrepareCommandRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 				cmd.GoBinPath = "invalid\x00path"
 				want = "requires engine to be installed"
 			case "missing target directory":
-				target := filepath.Join(root, "missing")
-				cmd.Args.Path = &target
+				cmd.Args.Path = filepath.Join(root, "missing")
 				want = "failed to resolve target directory"
 			case "blocked session directory":
 				writeCommandTestFile(t, filepath.Join(root, ".temp"), "keep")
@@ -691,7 +688,7 @@ func TestPrepareCommandRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 				if !errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("missing source error = %v, want ErrNotExist", err)
 				}
-				if _, err := os.Stat(*cmd.Args.Path); !os.IsNotExist(err) {
+				if _, err := os.Stat(cmd.Args.Path); !os.IsNotExist(err) {
 					t.Fatalf("failed setup created the missing source directory: %v", err)
 				}
 			}
@@ -727,10 +724,9 @@ func TestPrepareCommandAcceptsRelativeTargetDirectory(t *testing.T) {
 					t.Skipf("symlink unavailable: %v", err)
 				}
 			}
-			serverAddr := ""
 			cmd := CmdTool{
 				Version: "test", FileSuffix: "spx", ProjectFS: webExportTestFS, GoBinPath: binDir,
-				Args: ExtraArgs{Path: &source, ServerAddr: &serverAddr},
+				Args: ExtraArgs{Path: source},
 			}
 			writeCommandTestFile(t, filepath.Join(target, "main.spx"), "")
 			t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
@@ -742,7 +738,7 @@ func TestPrepareCommandAcceptsRelativeTargetDirectory(t *testing.T) {
 				"engine":   {cmd.CmdPath, filepath.Join(binDir, "gdspxtest"+executableSuffix(runtime.GOOS))},
 				"runtime":  {cmd.RuntimeCmdPath, filepath.Join(binDir, "gdspxrttest"+executableSuffix(runtime.GOOS))},
 				"source":   {cmd.TargetDir, target},
-				"argument": {*cmd.Args.Path, target},
+				"argument": {cmd.Args.Path, target},
 				"project":  {cmd.ProjectDir, project},
 				"go":       {cmd.GoDir, filepath.Join(project, "go")},
 				"library":  {cmd.LibPath, filepath.Join(project, "lib", libraryFileName(envName, "linux", "amd64"))},
@@ -796,8 +792,7 @@ func TestCommandsReportDeletedWorkingDirectory(t *testing.T) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Getwd in removed working directory = %v", err)
 	}
-	target := "."
-	cmd := CmdTool{Args: ExtraArgs{Path: &target}}
+	cmd := CmdTool{Args: ExtraArgs{Path: "."}}
 	if err := cmd.setupPaths("project"); err == nil || !strings.Contains(err.Error(), "failed to resolve target directory") {
 		t.Fatalf("deleted working directory error = %v", err)
 	}
@@ -902,8 +897,7 @@ func TestPrepareCommandRejectsProjectWithoutSource(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			writeCommandTestFile(t, filepath.Join(root, "README.md"), "not a source project")
-			address := ""
-			cmd := &CmdTool{FileSuffix: ".spx", Args: ExtraArgs{Path: &root, ServerAddr: &address}}
+			cmd := &CmdTool{FileSuffix: ".spx", Args: ExtraArgs{Path: root}}
 			spec, _ := findCommand(name)
 			if err := cmd.prepareCommand(spec, "template/project", "project"); err == nil || !strings.Contains(err.Error(), "not a valid project directory") {
 				t.Fatalf("project validation error = %v", err)

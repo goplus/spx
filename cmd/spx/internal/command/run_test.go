@@ -171,8 +171,7 @@ func TestPrepareInterpretedCommandOnlyResolvesPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pathArg := projectDir
-	cmd := CmdTool{Args: ExtraArgs{Path: &pathArg}}
+	cmd := CmdTool{Args: ExtraArgs{Path: projectDir}}
 
 	spec, ok := findCommand("run")
 	if !ok {

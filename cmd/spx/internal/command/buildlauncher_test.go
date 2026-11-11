@@ -95,19 +95,19 @@ func TestBuildLauncherDispatchesBeforeLegacySetup(t *testing.T) {
 }
 
 func TestValidateBuildLauncherArgs(t *testing.T) {
-	if err := validateBuildLauncherArgs(ExtraArgs{Build: launcherStringPointer("normal"), Mode: launcherStringPointer("none"), Target: launcherStringPointer("esp32")}); err != nil {
+	if err := validateBuildLauncherArgs(ExtraArgs{Build: "normal", Mode: "none", Target: "esp32"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
 		name string
 		args ExtraArgs
 	}{
-		{name: "arch", args: ExtraArgs{Arch: launcherStringPointer("arm64")}},
-		{name: "tags", args: ExtraArgs{Tags: launcherStringPointer("custom_tag")}},
-		{name: "servermode", args: ExtraArgs{ServerMode: launcherBoolPointer(true)}},
-		{name: "build", args: ExtraArgs{Build: launcherStringPointer("fast")}},
-		{name: "mode", args: ExtraArgs{Mode: launcherStringPointer("worker")}},
-		{name: "target", args: ExtraArgs{Target: launcherStringPointer("web")}},
+		{name: "arch", args: ExtraArgs{Arch: "arm64"}},
+		{name: "tags", args: ExtraArgs{Tags: "custom_tag"}},
+		{name: "servermode", args: ExtraArgs{ServerMode: true}},
+		{name: "build", args: ExtraArgs{Build: "fast"}},
+		{name: "mode", args: ExtraArgs{Mode: "worker"}},
+		{name: "target", args: ExtraArgs{Target: "web"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := validateBuildLauncherArgs(test.args)
@@ -128,7 +128,7 @@ func TestBuildLauncherRejectsPositionalArgs(t *testing.T) {
 }
 
 func TestBuildLauncherBuildFlags(t *testing.T) {
-	if got := buildLauncherBuildFlags(ExtraArgs{Verbose: launcherBoolPointer(true)}); len(got) != 1 || got[0] != "-v=true" {
+	if got := buildLauncherBuildFlags(ExtraArgs{Verbose: true}); len(got) != 1 || got[0] != "-v=true" {
 		t.Fatalf("verbose build flags = %#v", got)
 	}
 	if got := buildLauncherBuildFlags(ExtraArgs{}); got != nil {
@@ -258,7 +258,7 @@ func TestBuildLauncherFailureDoesNotPublishOutput(t *testing.T) {
 			if err := flag.CommandLine.Parse(nil); err != nil {
 				t.Fatal(err)
 			}
-			cmd := &CmdTool{Args: ExtraArgs{Path: &root, Output: &output}}
+			cmd := &CmdTool{}
 			called := false
 			cmd.launcherBuilder = func(context.Context, launchpack.Config) (launchpack.Result, error) {
 				called = true
@@ -286,6 +286,7 @@ func TestBuildLauncherFailureDoesNotPublishOutput(t *testing.T) {
 				t.Setenv("PATH", t.TempDir())
 				want = "Go command"
 			}
+			cmd.Args = ExtraArgs{Path: root, Output: output}
 			before := readTestFile(t, output)
 			if err := cmd.runBuildLauncher(); err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("buildlauncher error = %v, want %q", err, want)
@@ -326,7 +327,3 @@ func findSPXRoot(t *testing.T) string {
 		dir = parent
 	}
 }
-
-func launcherStringPointer(value string) *string { return &value }
-
-func launcherBoolPointer(value bool) *bool { return &value }

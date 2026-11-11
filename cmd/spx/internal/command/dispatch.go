@@ -117,7 +117,7 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	case noSetup:
 		return nil
 	case interpretedSetup:
-		return cmd.resolveProjectPaths(*cmd.Args.Path, dstRelDir)
+		return cmd.resolveProjectPaths(cmd.Args.Path, dstRelDir)
 	case pathSetup, projectSetup, webExportSetup:
 		if err := cmd.setupPaths(dstRelDir); err != nil {
 			return err
