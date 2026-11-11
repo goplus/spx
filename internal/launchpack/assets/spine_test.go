@@ -50,13 +50,17 @@ func TestCollectSpineResources(t *testing.T) {
 }
 
 func TestCollectSpineRejectsMissingOrEscapingPage(t *testing.T) {
-	for _, page := range []string{"missing.png", "../outside.png", "nested/../page.png", "/page.png", "res://shared/page.png", `nested\page.png`} {
+	for _, page := range []string{"missing.png", "../outside.png", "nested/../page.png", "/page.png", "res://shared/page.png", `nested\page.png`, "page.png\nsize: 1,1\n\n../outside.png"} {
 		dir := t.TempDir()
 		writeAssetTestFile(t, dir, "assets/index_pack.json", `{"sprites":{"Hero":{"spineAnim":{"atlas":"res://shared/hero.atlas","skeleton":"res://shared/hero.json"}}}}`)
 		writeAssetTestFile(t, dir, "shared/hero.atlas", page+"\nsize: 1,1\n")
 		writeAssetTestFile(t, dir, "shared/hero.json", `{}`)
 		_, err := Collect(Config{ProjectDir: dir, PackDir: "assets", PackIndex: "index.json"})
-		if err == nil || (!strings.Contains(err.Error(), "missing") && !strings.Contains(err.Error(), "unsafe page")) {
+		wantError := "unsafe page"
+		if page == "missing.png" {
+			wantError = "missing"
+		}
+		if err == nil || !strings.Contains(err.Error(), "shared/hero.atlas") || !strings.Contains(err.Error(), wantError) {
 			t.Fatalf("page %s: %v", page, err)
 		}
 	}

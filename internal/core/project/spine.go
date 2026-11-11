@@ -17,13 +17,15 @@
 package project
 
 import (
+	"fmt"
 	"path"
 	"strings"
 )
 
-// SpineAtlasPages lists the texture paths in a Spine text atlas. Each page
-// starts a nonempty block; subsequent lines describe its metadata and regions.
-func SpineAtlasPages(atlas string) []string {
+// SpineAtlasPages lists validated texture paths in a Spine text atlas. Each
+// page starts a nonempty block; subsequent lines describe metadata and regions.
+// Unsafe paths fail the whole atlas instead of returning partial results.
+func SpineAtlasPages(atlas string) ([]string, error) {
 	var pages []string
 	pageStart := true
 	header := true
@@ -45,16 +47,19 @@ func SpineAtlasPages(atlas string) []string {
 		}
 		header = false
 		if pageStart {
+			if !validSpineAtlasPage(line) {
+				return nil, fmt.Errorf("unsafe page %q", line)
+			}
 			pages = append(pages, line)
 			pageStart = false
 		}
 	}
-	return pages
+	return pages, nil
 }
 
-// ValidSpineAtlasPage confines texture pages to the atlas directory and its
+// validSpineAtlasPage confines texture pages to the atlas directory and its
 // descendants. Keep this consistent with the native Spine resource loader.
-func ValidSpineAtlasPage(page string) bool {
+func validSpineAtlasPage(page string) bool {
 	if page == "" || path.IsAbs(page) || strings.ContainsAny(page, "\\\x00:") {
 		return false
 	}

@@ -54,13 +54,13 @@ func TestPackProjectIncludesSpineResources(t *testing.T) {
 }
 
 func TestPackProjectRejectsEscapingSpinePage(t *testing.T) {
-	for _, page := range []string{"../page.png", "nested/../page.png", "/page.png", "res://page.png", "C:/page.png", `nested\page.png`} {
+	for _, page := range []string{"../page.png", "nested/../page.png", "/page.png", "res://page.png", "C:/page.png", `nested\page.png`, "page.png\nsize: 1,1\n\n../outside.png"} {
 		root := t.TempDir()
 		project := filepath.Join(root, "Game")
 		writeTestFile(t, filepath.Join(project, "assets", "index_pack.json"), `{"sprites":{"Hero":{"spineAnim":{"atlas":"hero.atlas","skeleton":"hero.skel"}}}}`)
 		writeTestFile(t, filepath.Join(project, "assets", "sprites", "Hero", "hero.atlas"), page+"\nsize: 1,1\n")
 		writeTestFile(t, filepath.Join(project, "assets", "sprites", "Hero", "hero.skel"), "skeleton")
-		if err := PackProject(project, filepath.Join(root, "game.zip")); err == nil || !strings.Contains(err.Error(), "unsafe page") {
+		if err := PackProject(project, filepath.Join(root, "game.zip")); err == nil || !strings.Contains(err.Error(), "unsafe page") || !strings.Contains(err.Error(), "hero.atlas") {
 			t.Fatalf("page %q: %v", page, err)
 		}
 	}

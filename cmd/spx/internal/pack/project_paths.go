@@ -94,10 +94,11 @@ func collectExternalAssetPaths(baseFolder string, existingZipPaths map[string]st
 			if err != nil {
 				return nil, fmt.Errorf("read Spine atlas %s: %w", sourcePath, err)
 			}
-			for _, page := range coreproject.SpineAtlasPages(string(data)) {
-				if !coreproject.ValidSpineAtlasPage(page) {
-					return nil, fmt.Errorf("Spine atlas %s has unsafe page %q", sourcePath, page)
-				}
+			pages, err := coreproject.SpineAtlasPages(string(data))
+			if err != nil {
+				return nil, fmt.Errorf("Spine atlas %s: %w", sourcePath, err)
+			}
+			for _, page := range pages {
 				pageFile := filepath.Join(filepath.Dir(sourcePath), filepath.FromSlash(page))
 				if _, _, err := inspectExternalAssetPath(externalRoot, compatibilityRoot, pageFile); err != nil {
 					return nil, fmt.Errorf("Spine atlas %s page %q: %w", sourcePath, page, err)

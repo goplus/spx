@@ -178,10 +178,11 @@ func (r *resolver) addSpineReferences(source, base string, config *spineConfig) 
 	if err != nil {
 		return err
 	}
-	for _, page := range coreproject.SpineAtlasPages(string(data)) {
-		if !coreproject.ValidSpineAtlasPage(page) {
-			return fmt.Errorf("Spine atlas %s has unsafe page %q", atlas, page)
-		}
+	pages, err := coreproject.SpineAtlasPages(string(data))
+	if err != nil {
+		return fmt.Errorf("Spine atlas %s: %w", atlas, err)
+	}
+	for _, page := range pages {
 		if err := r.addReference(atlas, path.Dir(atlas), page); err != nil {
 			return err
 		}

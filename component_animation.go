@@ -92,16 +92,6 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 			isCostumeSet: a.sprite.runtimeState.isCostumeSet,
 		}
 	}
-	if cfg := a.shared.spine; cfg != nil {
-		for name := range cfg.AnimMap {
-			if _, exists := a.shared.animations[name]; !exists {
-				a.shared.animations[name] = &animationEntry{name: name, config: &coreproject.AniConfig{
-					StepDuration: cfg.StepDuration, TurnToDuration: cfg.TurnToDuration, Speed: 1,
-				}}
-			}
-		}
-	}
-
 }
 
 // cloneFor creates a new animation component for newSprite.

@@ -236,7 +236,7 @@ func prepareSpriteConfig(config *coreproject.SpriteConfig) (preparedSprite, erro
 	}
 	var animations map[string]*coreproject.AniConfig
 	if spine != nil {
-		animations, err = prepareSpineAnimations(config.FAnimations)
+		animations, err = prepareSpineAnimations(config.FAnimations, spine)
 	} else {
 		animations, err = prepareFrameAnimations(config.FAnimations, layout)
 	}
@@ -285,8 +285,8 @@ func prepareSpineTiming(name string, value *float64, fallback float64) error {
 	return nil
 }
 
-func prepareSpineAnimations(animations map[string]*coreproject.AniConfig) (map[string]*coreproject.AniConfig, error) {
-	if animations == nil {
+func prepareSpineAnimations(animations map[string]*coreproject.AniConfig, spine *coreproject.SpineAnimConfig) (map[string]*coreproject.AniConfig, error) {
+	if animations == nil && len(spine.AnimMap) == 0 {
 		return nil, nil
 	}
 	prepared := make(map[string]*coreproject.AniConfig, len(animations))
@@ -304,6 +304,15 @@ func prepareSpineAnimations(animations map[string]*coreproject.AniConfig) (map[s
 		}
 		definition.Speed = 1
 		prepared[name] = &definition
+	}
+	// Materialize aliases here so runtime initialization consumes only prepared
+	// definitions. Explicit metadata keeps its own timing defaults.
+	for name := range spine.AnimMap {
+		if _, exists := prepared[name]; !exists {
+			prepared[name] = &coreproject.AniConfig{
+				StepDuration: spine.StepDuration, TurnToDuration: spine.TurnToDuration, Speed: 1,
+			}
+		}
 	}
 	return prepared, nil
 }
