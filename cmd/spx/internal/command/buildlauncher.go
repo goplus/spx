@@ -17,6 +17,7 @@
 package command
 
 import (
+	"cmp"
 	"context"
 	"flag"
 	"fmt"
@@ -41,7 +42,7 @@ func (cmd *CmdTool) runBuildLauncher() error {
 	if flag.NArg() != 0 {
 		return fmt.Errorf("buildlauncher: unexpected positional arguments: %q", flag.Args())
 	}
-	projectPath := valueOrDefault(cmd.Args.Path, ".")
+	projectPath := cmp.Or(cmd.Args.Path, ".")
 	projectDir, err := canonicalDirectory(projectPath)
 	if err != nil {
 		return fmt.Errorf("buildlauncher: project path: %w", err)
@@ -64,7 +65,7 @@ func (cmd *CmdTool) runBuildLauncher() error {
 	final, err := resolveLauncherOutput(launcherOutputInputs{
 		ProjectDir: project.dir, ProjectExt: project.extension,
 		PackDir: project.packDir, Protection: protected,
-	}, valueOf(cmd.Args.Output))
+	}, cmd.Args.Output)
 	if err != nil {
 		return err
 	}
@@ -111,10 +112,10 @@ func validateBuildLauncherArgs(args ExtraArgs) error {
 		name  string
 		value string
 	}{
-		{name: "serveraddr", value: valueOf(args.ServerAddr)},
-		{name: "controller", value: valueOf(args.ControllerName)},
-		{name: "arch", value: valueOf(args.Arch)},
-		{name: "tags", value: valueOf(args.Tags)},
+		{name: "serveraddr", value: args.ServerAddr},
+		{name: "controller", value: args.ControllerName},
+		{name: "arch", value: args.Arch},
+		{name: "tags", value: args.Tags},
 	} {
 		if unsupported.value != "" {
 			return fmt.Errorf("buildlauncher: -%s is not supported for the host-only launcher (got %q)", unsupported.name, unsupported.value)
@@ -125,54 +126,36 @@ func validateBuildLauncherArgs(args ExtraArgs) error {
 		name  string
 		value bool
 	}{
-		{name: "servermode", value: boolValue(args.ServerMode)},
-		{name: "headless", value: boolValue(args.HeadlessMode)},
-		{name: "onlys", value: boolValue(args.OnlyServer)},
-		{name: "onlyc", value: boolValue(args.OnlyClient)},
-		{name: "nomap", value: boolValue(args.NoMap)},
-		{name: "install", value: boolValue(args.Install)},
-		{name: "debugweb", value: boolValue(args.DebugWebService)},
-		{name: "fullscreen", value: boolValue(args.FullScreen)},
-		{name: "movie", value: boolValue(args.Movie)},
+		{name: "servermode", value: args.ServerMode},
+		{name: "headless", value: args.HeadlessMode},
+		{name: "onlys", value: args.OnlyServer},
+		{name: "onlyc", value: args.OnlyClient},
+		{name: "nomap", value: args.NoMap},
+		{name: "install", value: args.Install},
+		{name: "debugweb", value: args.DebugWebService},
+		{name: "fullscreen", value: args.FullScreen},
+		{name: "movie", value: args.Movie},
 	} {
 		if unsupported.value {
 			return fmt.Errorf("buildlauncher: -%s is not supported for the host-only launcher (got true)", unsupported.name)
 		}
 	}
 
-	if target := valueOrDefault(args.Target, "esp32"); target != "esp32" {
+	if target := cmp.Or(args.Target, "esp32"); target != "esp32" {
 		return fmt.Errorf("buildlauncher: -target is not supported for the host-only launcher (got %q)", target)
 	}
-	if build := valueOrDefault(args.Build, "normal"); build != "normal" {
+	if build := cmp.Or(args.Build, "normal"); build != "normal" {
 		return fmt.Errorf("buildlauncher: -build is not supported for the host-only launcher (got %q)", build)
 	}
-	if mode := valueOrDefault(args.Mode, "none"); mode != "none" {
+	if mode := cmp.Or(args.Mode, "none"); mode != "none" {
 		return fmt.Errorf("buildlauncher: -mode is not supported for the host-only launcher (got %q)", mode)
 	}
 	return nil
 }
 
 func buildLauncherBuildFlags(args ExtraArgs) []string {
-	if boolValue(args.Verbose) {
+	if args.Verbose {
 		return []string{"-v=true"}
 	}
 	return nil
-}
-
-func boolValue(value *bool) bool {
-	return value != nil && *value
-}
-
-func valueOf(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
-}
-
-func valueOrDefault(value *string, fallback string) string {
-	if value == nil || *value == "" {
-		return fallback
-	}
-	return *value
 }

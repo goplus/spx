@@ -24,7 +24,7 @@ import (
 
 // Init creates a project in the target path.
 func (cmd *CmdTool) Init() error {
-	targetPath := *cmd.Args.Path
+	targetPath := cmd.Args.Path
 	if targetPath == "." {
 		var err error
 		targetPath, err = os.Getwd()

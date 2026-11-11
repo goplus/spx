@@ -54,7 +54,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 		return err
 	}
 
-	target := *cmd.Args.Target
+	target := cmd.Args.Target
 	if target == "" || target == "esp32" {
 		target = "esp32-coreboard-v2"
 	}
@@ -92,11 +92,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 func (cmd *CmdTool) BuildDll() error {
 	cmd.hideIOSFiles()
 
-	requestedArch := ""
-	if cmd.Args.Arch != nil {
-		requestedArch = *cmd.Args.Arch
-	}
-	targetArchs, err := determineTargetArchs(runtime.GOOS, runtime.GOARCH, requestedArch)
+	targetArchs, err := determineTargetArchs(runtime.GOOS, runtime.GOARCH, cmd.Args.Arch)
 	if err != nil {
 		return err
 	}

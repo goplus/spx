@@ -158,8 +158,8 @@ func TestExportWebAcceptsSymlinkProjectPath(t *testing.T) {
 			if err != nil {
 				t.Fatalf("exportweb through project symlink: %v", err)
 			}
-			if cmd.TargetDir != projectRoot || *cmd.Args.Path != projectRoot {
-				t.Fatalf("source paths = %q, %q; want real root %q", cmd.TargetDir, *cmd.Args.Path, projectRoot)
+			if cmd.TargetDir != projectRoot || cmd.Args.Path != projectRoot {
+				t.Fatalf("source paths = %q, %q; want real root %q", cmd.TargetDir, cmd.Args.Path, projectRoot)
 			}
 			projectDir := filepath.Join(projectRoot, "project")
 			webDir := filepath.Join(projectDir, ".builds", "web")
@@ -1076,11 +1076,10 @@ func newWebExportFixture(t *testing.T, mode string) *CmdTool {
 	t.Setenv("SPX_WEB_GOROOT", goRoot)
 	t.Setenv("SPX_WEB_PROJECT_DIR", root)
 	installCommandTestTools(t, map[string]string{"go": `test "$*" = 'env GOROOT'; test "$(pwd -P)" = "$SPX_WEB_PROJECT_DIR"; printf '%s\n' "$SPX_WEB_GOROOT"`})
-	build := "fast"
 	cmd := &CmdTool{
 		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
 		WebDir: filepath.Join(root, "project", ".builds", "web"), GoBinPath: filepath.Join(root, "bin"), Version: "test",
-		ProjectFS: webExportTestFS, PlatformFS: webExportTestFS, Args: ExtraArgs{Build: &build},
+		ProjectFS: webExportTestFS, PlatformFS: webExportTestFS, Args: ExtraArgs{Build: "fast"},
 	}
 	templateDir := filepath.Join(cmd.GoBinPath, "gdspxrttest_web"+mode)
 	for name, content := range map[string]string{

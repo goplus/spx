@@ -90,7 +90,7 @@ func (cmd *CmdTool) ExportMinigame() error {
 		return err
 	}
 
-	buildMode := *cmd.Args.Build
+	buildMode := cmd.Args.Build
 	paths, err := cmd.prepareMinigameWorkspace()
 	if err != nil {
 		return err

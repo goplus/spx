@@ -137,7 +137,7 @@ func (cmd *CmdTool) ClearBuild() error {
 
 // setupPaths resolves command paths and server options without changing cwd.
 func (cmd *CmdTool) setupPaths(dstRelDir string) error {
-	if err := cmd.resolveProjectPaths(*cmd.Args.Path, dstRelDir); err != nil {
+	if err := cmd.resolveProjectPaths(cmd.Args.Path, dstRelDir); err != nil {
 		return err
 	}
 	info, err := os.Stat(cmd.TargetDir)
@@ -148,8 +148,8 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 		return fmt.Errorf("target path %q is not a directory", cmd.TargetDir)
 	}
 
-	if *cmd.Args.ServerAddr != "" {
-		addr := *cmd.Args.ServerAddr
+	if cmd.Args.ServerAddr != "" {
+		addr := cmd.Args.ServerAddr
 		parts := strings.Split(addr, ":")
 		if len(parts) < 2 {
 			return fmt.Errorf("invalid server address format: %s", addr)
