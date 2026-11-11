@@ -200,7 +200,7 @@ TEST_CASE("[SceneTree][SPX] Navigation debug drawer survives replacement and ext
 	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
 	Node *old = scene.root->get_child(-1);
 	REQUIRE(Object::cast_to<PathDebugDrawer>(old));
-	finder->reset();
+	old->queue_free(); // Setup must replace a drawer queued externally before it is freed.
 	CHECK(old->is_queued_for_deletion());
 	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
 	Node *replacement = scene.root->get_child(-1);

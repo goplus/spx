@@ -44,6 +44,7 @@
 #include "../recorder/thread_safe_frame_buffer.h"
 #include "core/io/marshalls.h"
 #include "core/os/semaphore.h"
+#include "core/string/print_string.h"
 #include "main/main_loop_phase_callback_bus.h"
 #include "servers/audio/effects/audio_effect_amplify.h"
 #include "servers/rendering_server.h"
@@ -1147,6 +1148,77 @@ TEST_CASE("[SPX] AVI merger rejects damaged indexes without consuming input stre
 	}
 }
 
+TEST_CASE("[SPX] AVI merger rejects source truncation between parsing and interleaving") {
+	TestSpx::TempDirectory files("spx_avi_changed_input");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	write_avi_pair(video, audio);
+	const auto original_video = read_avi(video), original_audio = read_avi(audio);
+	const int chunk = find_tag(original_video, "00db");
+	REQUIRE(chunk > 0);
+	const uint32_t payload_size = decode_uint32(original_video.ptr() + chunk + 4);
+	REQUIRE(payload_size > 0);
+
+	// The second index log marks a real I/O boundary: video parsing has closed its
+	// handle, while audio parsing is still in progress. Change the file there to
+	// exercise a concurrent writer deterministically, without racing test threads.
+	struct ChangeParsedInput {
+		PrintHandlerList handler;
+		String path;
+		PackedByteArray bytes;
+		int indexes_seen = 0;
+		bool changed = false;
+
+		ChangeParsedInput(const String &p_path, const PackedByteArray &p_bytes) :
+				path(p_path), bytes(p_bytes) {
+			handler.userdata = this;
+			handler.printfunc = [](void *userdata, const String &message, bool, bool) {
+				auto &change = *static_cast<ChangeParsedInput *>(userdata);
+				if (message.begins_with("PostMergeProcessor: Parsing ") && ++change.indexes_seen == 2) {
+					auto file = FileAccess::open(change.path, FileAccess::WRITE);
+					change.changed = file.is_valid() && file->store_buffer(change.bytes.ptr(), change.bytes.size());
+				}
+			};
+			add_print_handler(&handler);
+		}
+		~ChangeParsedInput() { remove_print_handler(&handler); }
+	};
+
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.enable_debug_output = true;
+	processor.set_config(config);
+	for (int damage = 0; damage < 4; damage++) {
+		INFO("Source change: ", damage);
+		write_avi(video, original_video);
+		auto changed = original_video;
+		switch (damage) {
+			case 0:
+				changed.resize(chunk - 1); // The first chunk no longer exists.
+				break;
+			case 1:
+				changed.resize(chunk + 7); // The chunk header is incomplete.
+				break;
+			case 2:
+				encode_uint32(payload_size - 1, changed.ptrw() + chunk + 4); // The parsed size is stale.
+				break;
+			case 3:
+				changed.resize(chunk + 8 + payload_size - 1); // The payload was truncated.
+				break;
+		}
+		ChangeParsedInput change(video, changed);
+		ERR_PRINT_OFF;
+		const auto result = processor.merge_files(video, audio, files.file("output.avi"));
+		ERR_PRINT_ON;
+		REQUIRE(change.changed);
+		CHECK(result.error_code == ERR_FILE_CORRUPT);
+		CHECK(result.error_message == "Failed to interleave video and audio data");
+		CHECK(result.output_file_path.is_empty());
+		CHECK_FALSE(result.intermediate_files_cleaned);
+		CHECK(FileAccess::get_file_as_bytes(video) == changed);
+		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
+	}
+}
+
 TEST_CASE("[SPX] AVI merger requires complete ordered indexes and preserves existing output") {
 	TestSpx::TempDirectory files("spx_avi_index_order");
 	const String video = files.file("video.avi"), audio = files.file("audio.avi"), output = files.file("merged.avi");
@@ -1441,6 +1513,19 @@ TEST_CASE("[SPX] AVI merge preserves inputs on output failure and cleans up only
 	check_avi_index(read_avi(blocked), 4);
 	CHECK_FALSE(FileAccess::exists(video));
 	CHECK_FALSE(FileAccess::exists(audio));
+	// Cleanup must have identical behavior with diagnostics disabled.
+	write_avi_pair(video, audio);
+	config.enable_debug_output = false;
+	processor.set_config(config);
+	result = processor.merge_files(video, audio, blocked);
+	REQUIRE(result.error_code == OK);
+	CHECK(result.intermediate_files_cleaned);
+	CHECK(result.output_file_path == blocked);
+	check_avi_index(read_avi(blocked), 4);
+	CHECK_FALSE(FileAccess::exists(video));
+	CHECK_FALSE(FileAccess::exists(audio));
+	config.enable_debug_output = true;
+	processor.set_config(config);
 #ifdef UNIX_ENABLED
 	const auto expected_output = FileAccess::get_file_as_bytes(blocked);
 	for (bool block_video : { true, false }) {

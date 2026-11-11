@@ -34,13 +34,15 @@
 #include "../spx.h"
 #include "../spx_camera_mgr.h"
 #include "../spx_engine.h"
-#include "../spx_layer_sorter.h"
 #include "../spx_image_texture.h"
-#include "servers/rendering_server.h"
+#include "../spx_layer_sorter.h"
 #include "../spx_sprite.h"
 #include "scene/2d/camera_2d.h"
 #include "scene/main/viewport.h"
 #include "scene/main/window.h"
+#include "scene/resources/theme.h"
+#include "scene/theme/theme_db.h"
+#include "servers/rendering_server.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxLayerSorter {
@@ -209,6 +211,7 @@ TEST_CASE("[SceneTree][SPX] Layer sorting reserves z slots for rendered bounds u
 	CHECK_EQ(front->get_z_index(), 3);
 
 	// A genuinely over-capacity batch must not be partly applied.
+	std::vector<SortableSprite> unknown_bounds;
 	SUBCASE("All bounds intersect the viewport") {
 		for (ISortableSprite *sprite : sprites) {
 			static_cast<SpxRenderSprite *>(sprite)->set_position(Point2(20, 20));
@@ -219,12 +222,28 @@ TEST_CASE("[SceneTree][SPX] Layer sorting reserves z slots for rendered bounds u
 			static_cast<SpxRenderSprite *>(sprite)->set_texture(Ref<Texture2D>());
 		}
 	}
+	SUBCASE("Custom sortable sprites without bounds remain eligible") {
+		unknown_bounds.reserve(sprites.size());
+		for (int i = 0; i < sprites.size(); ++i) {
+			unknown_bounds.emplace_back(i + 1, Point2(-1000, -1000));
+		}
+		sprites.clear();
+		for (SortableSprite &sprite : unknown_bounds) {
+			sprites.push_back(&sprite);
+		}
+	}
+	SUBCASE("A missing camera keeps offscreen bounds eligible") {
+		SpxEngine::get_singleton()->get_camera()->on_destroy();
+	}
 	ERR_PRINT_OFF;
 	fixture.sorter.update(sprites);
 	ERR_PRINT_ON;
 	CHECK_EQ(returning->get_z_index(), 1);
 	CHECK_EQ(large->get_z_index(), 2);
 	CHECK_EQ(front->get_z_index(), 3);
+	for (const SortableSprite &sprite : unknown_bounds) {
+		CHECK(sprite.z_updates == 0);
+	}
 }
 
 TEST_CASE("[SceneTree][SPX] Static-only layers update z-order when members disappear") {
@@ -253,7 +272,16 @@ TEST_CASE("[SceneTree][SPX] Layer sorting debug overlay follows the scene lifecy
 	Spx::set_debug_mode(true);
 	SortableSprite fixed(1, Point2(20, 20), true), moving(2, Point2(40, 40));
 	Vector<ISortableSprite *> sprites{ &fixed, &moving };
-	fixture.sorter.update(sprites);
+	SUBCASE("The default theme provides a font") {
+		fixture.sorter.update(sprites);
+	}
+	SUBCASE("A theme without a font still permits sorting and drawer cleanup") {
+		Ref<Theme> theme = ThemeDB::get_singleton()->get_default_theme();
+		const Ref<Font> previous_font = theme->get_default_font();
+		theme->set_default_font(Ref<Font>());
+		fixture.sorter.update(sprites);
+		theme->set_default_font(previous_font);
+	}
 	auto drawers = fixture.viewport->find_children("*", "Node2D", true, false);
 	Node2D *drawer = nullptr;
 	for (int i = 0; i < drawers.size(); ++i) {
@@ -272,7 +300,7 @@ TEST_CASE("[SceneTree][SPX] Layer sorting debug overlay follows the scene lifecy
 	MessageQueue::get_singleton()->flush();
 	CHECK(moving.z_index == 1);
 	CHECK(fixed.z_index == 2);
-	fixture.sorter.reset();
+	drawer->queue_free(); // External deletion leaves the sorter's ID valid until replacement.
 	CHECK(drawer->is_queued_for_deletion());
 	fixture.sorter.update(sprites);
 	Node *replacement = fixture.viewport->get_child(-1);

@@ -36,6 +36,7 @@
 #include "../spx_physics_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
+#include "core/object/script_language.h"
 #include "scene/2d/visible_on_screen_notifier_2d.h"
 #include "scene/resources/2d/capsule_shape_2d.h"
 #include "scene/resources/2d/circle_shape_2d.h"
@@ -48,6 +49,28 @@
 #include "spx_test_fixtures.h"
 
 namespace TestSpxSpriteMgr {
+
+struct ScriptLanguageFixture {
+	ScriptLanguage *language = nullptr;
+
+	ScriptLanguageFixture() {
+		// --test skips the language initialization normally performed by Main.
+		for (int i = 0; i < ScriptServer::get_language_count(); ++i) {
+			if (ScriptServer::get_language(i)->get_type() == "GDScript") {
+				language = ScriptServer::get_language(i);
+				language->init();
+				break;
+			}
+		}
+		REQUIRE(language != nullptr);
+	}
+
+	~ScriptLanguageFixture() {
+		if (language) {
+			language->finish();
+		}
+	}
+};
 
 TEST_CASE("[SceneTree][SPX] Sprite manager converts coordinates and owns sprite lifetime") {
 	TestSpx::EngineScene scene;
@@ -553,6 +576,69 @@ TEST_CASE("[SceneTree][SPX] Native sprite clones isolate shader parameters and a
 	CHECK(double(material->get_shader_parameter("amount")) == doctest::Approx(0.5));
 }
 
+TEST_CASE("[SceneTree][SPX] Native sprite clones tolerate incomplete authored visual components") {
+	TestSpx::TempDirectory files("spx_clone_components");
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	files.write("incomplete.tscn", "[gd_scene format=3]\n[node name=\"Incomplete\" type=\"SpxSprite\"]\n");
+	const CharString path = files.file("incomplete.tscn").utf8();
+	ERR_PRINT_OFF;
+	const GdObj id = manager->create_sprite(path.get_data(), Vector2(3, 4));
+	ERR_PRINT_ON;
+	REQUIRE(id != NULL_OBJECT_ID);
+	ERR_PRINT_OFF;
+	const GdObj clone_id = manager->clone_sprite(id);
+	ERR_PRINT_ON;
+	REQUIRE(clone_id != NULL_OBJECT_ID);
+	auto *clone = manager->get_sprite(clone_id);
+	REQUIRE(clone);
+	CHECK(clone->get_anim2d() == nullptr);
+	CHECK(manager->get_sprite(id)->get_anim2d() == nullptr);
+	CHECK(Vector2(manager->get_position(clone_id)) == Vector2(3, 4));
+	Rect2 bounds;
+	CHECK_FALSE(clone->get_sort_bounds(bounds));
+	CHECK(clone->get_material_shader() == nullptr);
+}
+
+TEST_CASE("[SceneTree][SPX] Authored frame signals before sprite startup preserve the selected frame") {
+	ScriptLanguageFixture language;
+	TestSpx::TempDirectory files("spx_authored_frame_signal");
+	files.write("animation.gd", "extends AnimatedSprite2D\nfunc _ready():\n\tframe = 1\n");
+	files.write("sprite.tscn", R"([gd_scene load_steps=4 format=3]
+[ext_resource type="Script" path="animation.gd" id="1"]
+[sub_resource type="PlaceholderTexture2D" id="Texture"]
+size = Vector2(8, 6)
+[sub_resource type="SpriteFrames" id="Frames"]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Texture")}, {"duration": 1.0, "texture": SubResource("Texture")}], "loop": true, "name": &"default", "speed": 5.0}]
+[node name="Authored" type="SpxSprite"]
+[node name="RenderRoot" type="Node2D" parent="."]
+[node name="Anim2D" type="AnimatedSprite2D" parent="RenderRoot"]
+sprite_frames = SubResource("Frames")
+script = ExtResource("1")
+[node name="Collider2D" type="CollisionShape2D" parent="."]
+[node name="Area2D" type="Area2D" parent="."]
+[node name="Trigger2D" type="CollisionShape2D" parent="Area2D"]
+[connection signal="frame_changed" from="RenderRoot/Anim2D" to="." method="on_sprite_frame_changed"]
+)");
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	static int early_frame_changes;
+	early_frame_changes = 0;
+	scene.engine->get_callbacks()->func_on_sprite_frame_changed = [](GdObj id) {
+		++early_frame_changes;
+		// Authored _ready runs before the manager publishes the sprite.
+		CHECK(SpxEngine::get_singleton()->get_sprite()->get_sprite(id) == nullptr);
+	};
+	const CharString path = files.file("sprite.tscn").utf8();
+	const GdObj id = scene.engine->get_sprite()->create_sprite(path.get_data(), Vector2());
+	REQUIRE(id != NULL_OBJECT_ID);
+	auto *sprite = scene.engine->get_sprite()->get_sprite(id);
+	REQUIRE(sprite->get_anim2d()->get_script_instance() != nullptr);
+	CHECK(early_frame_changes == 1);
+	CHECK(sprite->get_anim_frame() == 1);
+	CHECK(sprite->get_texture() != nullptr);
+	scene.engine->get_callbacks()->func_on_sprite_frame_changed = [](GdObj) {};
+}
+
 TEST_CASE("[SceneTree][SPX] Sprite animation controls update playback and frame transforms") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_sprite();
@@ -917,12 +1003,13 @@ TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow autho
 	animation->set_sprite_frames(frames);
 	CHECK(sprite->get_texture() == nullptr);
 	CHECK(sprite->get_rect() == Rect2(0, 0, 1, 1));
+	Rect2 bounds;
+	CHECK_FALSE(sprite->get_sort_bounds(bounds));
 	Ref<PlaceholderTexture2D> texture;
 	texture.instantiate();
 	texture->set_size(Vector2(8, 6));
 	frames->set_frame("default", 0, texture);
 	CHECK(sprite->get_rect() == Rect2(6.25, 17.25, 8, 6));
-	Rect2 bounds;
 	REQUIRE(sprite->get_sort_bounds(bounds));
 	CHECK(bounds == Rect2(6.25, 17.25, 8, 6));
 	animation->set_scale(Vector2(2, 3));
@@ -963,6 +1050,51 @@ TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow autho
 	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
 }
 
+TEST_CASE("[SceneTree][SPX] Sort bounds conservatively retain scripted and extra visuals") {
+	ScriptLanguageFixture language;
+	TestSpx::TempDirectory files("spx_scripted_sort_bounds");
+	files.write("draw.gd", "extends Node2D\nfunc _draw():\n\tdraw_rect(Rect2(-100, -100, 200, 200), Color.RED)\n");
+	Ref<Script> script = ResourceLoader::load(files.file("draw.gd"));
+	REQUIRE(script.is_valid());
+	REQUIRE(script->is_valid());
+	TestSpx::EngineScene scene;
+	auto *rendered = memnew(SpxRenderSprite);
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(8, 6));
+	rendered->set_texture(texture);
+	scene.root->add_child(rendered);
+	Rect2 bounds;
+	REQUIRE(rendered->get_sort_bounds(bounds));
+	CHECK(bounds == Rect2(-4, -3, 8, 6));
+	SUBCASE("Script on the sprite can draw outside the texture") {
+		rendered->set_script(script);
+		REQUIRE(rendered->get_script_instance() != nullptr);
+		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	}
+	SUBCASE("Logic children do not expand bounds but scripted descendants can") {
+		auto *logic = memnew(Node);
+		rendered->add_child(logic);
+		auto *custom = memnew(Node2D);
+		logic->add_child(custom);
+		CHECK(rendered->get_sort_bounds(bounds));
+		custom->set_script(script);
+		REQUIRE(custom->get_script_instance() != nullptr);
+		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	}
+	SUBCASE("Hidden visuals do not expand bounds until shown") {
+		auto *extra = memnew(Sprite2D);
+		extra->set_texture(texture);
+		extra->set_position(Vector2(100, 100));
+		extra->hide();
+		rendered->add_child(extra, false, Node::INTERNAL_MODE_BACK);
+		CHECK(rendered->get_sort_bounds(bounds));
+		CHECK(bounds == Rect2(-4, -3, 8, 6));
+		extra->show();
+		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+	}
+}
+
 TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and tree lifetime") {
 	TestSpx::EngineScene scene;
 	auto *parent = memnew(Node2D);
@@ -999,8 +1131,10 @@ TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and
 	texture->set_size(Vector2(8, 6));
 	rendered->set_texture(texture);
 	auto *visual = memnew(Sprite2D);
-	visual->set_texture(texture);
+	body->add_child(memnew(CollisionShape2D));
 	body->add_child(visual);
+	CHECK_FALSE(body->get_sort_bounds(bounds));
+	visual->set_texture(texture);
 	CHECK(rendered->get_sort_bounds(bounds));
 	CHECK(bounds == Rect2(11, 23, 8, 6));
 	CHECK(body->get_sort_bounds(bounds));
