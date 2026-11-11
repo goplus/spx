@@ -88,13 +88,13 @@ type Widget interface {
 	SetXpos(x float64)
 	SetYpos(y float64)
 	SetXYpos(x float64, y float64)
-	ChangeXpos(dx float64)
-	ChangeYpos(dy float64)
-	ChangeXYpos(dx float64, dy float64)
+	ChangeXpos(dX float64)
+	ChangeYpos(dY float64)
+	ChangeXYpos(dX float64, dY float64)
 
 	Size() float64
 	SetSize(size float64)
-	ChangeSize(delta float64)
+	ChangeSize(dSize float64)
 }
 
 // ShapeGetter exposes the runtime shape collection used by shared helpers.

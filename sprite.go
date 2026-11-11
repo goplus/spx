@@ -206,29 +206,29 @@ type Sprite interface {
 	SetXpos(x float64)
 	SetYpos(y float64)
 	SetXYpos(x, y float64)
-	ChangeXpos(dx float64)
-	ChangeYpos(dy float64)
-	ChangeXYpos(dx, dy float64)
+	ChangeXpos(dX float64)
+	ChangeYpos(dY float64)
+	ChangeXYpos(dX, dY float64)
 	SetDragMode(mode DragMode)
 
 	// Movement Methods
-	Step__0(step float64)
-	Step__1(step float64, speed Speed)
-	Step__2(step float64, speed Speed, animation SpriteAnimationName)
+	Step__0(distance float64)
+	Step__1(distance float64, speed Speed)
+	Step__2(distance float64, speed Speed, animation SpriteAnimationName)
 
-	StepWith(step float64, __xgo_optional_opts *MotionOptions)
+	StepWith(distance float64, __xgo_optional_opts *MotionOptions)
 
 	StepTo__0(sprite Sprite)
-	StepTo__1(sprite SpriteName)
-	StepTo__2(target specialObj)
+	StepTo__1(name SpriteName)
+	StepTo__2(object specialObj)
 	StepTo__3(x, y float64)
 	StepTo__4(sprite Sprite, speed Speed)
-	StepTo__5(sprite SpriteName, speed Speed)
-	StepTo__6(target specialObj, speed Speed)
+	StepTo__5(name SpriteName, speed Speed)
+	StepTo__6(object specialObj, speed Speed)
 	StepTo__7(x, y, speed Speed)
 	StepTo__8(sprite Sprite, speed Speed, animation SpriteAnimationName)
-	StepTo__9(sprite SpriteName, speed Speed, animation SpriteAnimationName)
-	StepTo__a(target specialObj, speed Speed, animation SpriteAnimationName)
+	StepTo__9(name SpriteName, speed Speed, animation SpriteAnimationName)
+	StepTo__a(object specialObj, speed Speed, animation SpriteAnimationName)
 	StepTo__b(x, y, speed Speed, animation SpriteAnimationName)
 	StepTo__c(pos Pos)
 	StepTo__d(pos Pos, speed Speed)
@@ -237,39 +237,39 @@ type Sprite interface {
 	StepToTarget(target Target, __xgo_optional_opts *MotionOptions)
 	StepToXYpos(x, y float64, __xgo_optional_opts *MotionOptions)
 
-	Glide__0(sprite Sprite, secs Seconds)
-	Glide__1(sprite SpriteName, secs Seconds)
-	Glide__2(target specialObj, secs Seconds)
-	Glide__3(pos Pos, secs Seconds)
-	Glide__4(x, y float64, secs Seconds)
+	Glide__0(sprite Sprite, seconds Seconds)
+	Glide__1(name SpriteName, seconds Seconds)
+	Glide__2(object specialObj, seconds Seconds)
+	Glide__3(pos Pos, seconds Seconds)
+	Glide__4(x, y float64, seconds Seconds)
 
 	GlideToTarget(target Target, secs Seconds)
 	GlideToXYpos(x, y float64, secs Seconds)
 
 	// Heading and Rotation Methods
 	Heading() Direction
-	SetHeading(dir Direction)
-	ChangeHeading(dir Direction)
+	SetHeading(direction Direction)
+	ChangeHeading(degree Direction)
 	SetRotationStyle(style RotationStyle)
 
-	Turn__0(dir Direction)
-	Turn__1(dir Direction, speed Speed)
-	Turn__2(dir Direction, speed Speed, animation SpriteAnimationName)
+	Turn__0(direction Direction)
+	Turn__1(direction Direction, speed Speed)
+	Turn__2(direction Direction, speed Speed, animation SpriteAnimationName)
 
-	TurnWith(dir Direction, __xgo_optional_opts *MotionOptions)
+	TurnWith(direction Direction, __xgo_optional_opts *MotionOptions)
 
-	TurnTo__0(target Sprite)
-	TurnTo__1(target SpriteName)
-	TurnTo__2(dir Direction)
-	TurnTo__3(target specialObj)
-	TurnTo__4(target Sprite, speed Speed)
-	TurnTo__5(target SpriteName, speed Speed)
-	TurnTo__6(dir Direction, speed Speed)
-	TurnTo__7(target specialObj, speed Speed)
-	TurnTo__8(target Sprite, speed Speed, animation SpriteAnimationName)
-	TurnTo__9(target SpriteName, speed Speed, animation SpriteAnimationName)
-	TurnTo__a(dir Direction, speed Speed, animation SpriteAnimationName)
-	TurnTo__b(target specialObj, speed Speed, animation SpriteAnimationName)
+	TurnTo__0(sprite Sprite)
+	TurnTo__1(name SpriteName)
+	TurnTo__2(direction Direction)
+	TurnTo__3(object specialObj)
+	TurnTo__4(sprite Sprite, speed Speed)
+	TurnTo__5(name SpriteName, speed Speed)
+	TurnTo__6(direction Direction, speed Speed)
+	TurnTo__7(object specialObj, speed Speed)
+	TurnTo__8(sprite Sprite, speed Speed, animation SpriteAnimationName)
+	TurnTo__9(name SpriteName, speed Speed, animation SpriteAnimationName)
+	TurnTo__a(direction Direction, speed Speed, animation SpriteAnimationName)
+	TurnTo__b(object specialObj, speed Speed, animation SpriteAnimationName)
 
 	TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions)
 	TurnToTarget(target Target, __xgo_optional_opts *MotionOptions)
@@ -280,11 +280,11 @@ type Sprite interface {
 	// Size Methods
 	Size() float64
 	SetSize(size float64)
-	ChangeSize(delta float64)
+	ChangeSize(dSize float64)
 
 	// Layer Methods
 	SetLayer__0(layer layerAction)
-	SetLayer__1(dir dirAction, delta int)
+	SetLayer__1(direction dirAction, layers int)
 
 	SetLayerTo(layer layerAction)
 
@@ -297,7 +297,7 @@ type Sprite interface {
 	// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex] instead.
 	ResolveCostumeIndex(costume string) int
 
-	SetCostume__0(costume SpriteCostumeName)
+	SetCostume__0(name SpriteCostumeName)
 	SetCostume__1(index float64)
 	SetCostume__2(index int)
 	SetCostume__3(action switchAction)
@@ -311,8 +311,8 @@ type Sprite interface {
 	StopAnimation(name SpriteAnimationName)
 
 	// Graphic Effects Methods
-	SetGraphicEffect(kind EffectKind, val float64)
-	ChangeGraphicEffect(kind EffectKind, delta float64)
+	SetGraphicEffect(kind EffectKind, value float64)
+	ChangeGraphicEffect(kind EffectKind, value float64)
 	ClearGraphicEffects()
 
 	// Pen Methods
@@ -333,8 +333,8 @@ type Sprite interface {
 
 	// Distance and Detection Methods
 	DistanceTo__0(sprite Sprite) float64
-	DistanceTo__1(sprite SpriteName) float64
-	DistanceTo__2(target specialObj) float64
+	DistanceTo__1(name SpriteName) float64
+	DistanceTo__2(object specialObj) float64
 	DistanceTo__3(pos Pos) float64
 
 	DistanceToWith(target Target) float64
@@ -348,25 +348,25 @@ type Sprite interface {
 	DirectionToWith(target Target) Direction
 
 	Touching__0(sprite Sprite) bool
-	Touching__1(sprite SpriteName) bool
-	Touching__2(obj specialObj) bool
+	Touching__1(name SpriteName) bool
+	Touching__2(object specialObj) bool
 
 	TouchingWith(target Target) bool
 	TouchingColor__0(color Color) bool
 	TouchingColor__1(spriteColor, targetColor Color) bool
 
 	// Communication Methods
-	Say__0(msg any)
-	Say__1(msg any, secs Seconds)
+	Say__0(word any)
+	Say__1(word any, seconds Seconds)
 
-	SayWith(msg any, __xgo_optional_secs Seconds)
+	SayWith(word any, __xgo_optional_seconds Seconds)
 
-	Think__0(msg any)
-	Think__1(msg any, secs Seconds)
+	Think__0(word any)
+	Think__1(word any, seconds Seconds)
 
-	ThinkWith(msg any, __xgo_optional_secs Seconds)
+	ThinkWith(word any, __xgo_optional_seconds Seconds)
 
-	Ask(msg any)
+	Ask(question any)
 
 	Quote__0(message string)
 	Quote__1(message string, secs Seconds)
@@ -380,38 +380,38 @@ type Sprite interface {
 	OnCloned__0(onCloned func())
 	OnCloned__1(onCloned func(data any))
 
-	OnTouchStart__0(sprite SpriteName, onTouchStart func())
-	OnTouchStart__1(sprite SpriteName, onTouchStart func(Sprite))
-	OnTouchStart__2(sprites []SpriteName, onTouchStart func())
-	OnTouchStart__3(sprites []SpriteName, onTouchStart func(Sprite))
+	OnTouchStart__0(name SpriteName, onTouchStart func())
+	OnTouchStart__1(name SpriteName, onTouchStart func(Sprite))
+	OnTouchStart__2(names []SpriteName, onTouchStart func())
+	OnTouchStart__3(names []SpriteName, onTouchStart func(Sprite))
 
 	// Sound Methods
 	Volume() float64
 	SetVolume(volume float64)
-	ChangeVolume(delta float64)
+	ChangeVolume(dVolume float64)
 	GetSoundEffect(kind SoundEffectKind) float64
 	SetSoundEffect(kind SoundEffectKind, value float64)
 	ChangeSoundEffect(kind SoundEffectKind, delta float64)
 	ClearSoundEffects()
 
-	Play__0(name SoundName)
-	Play__1(name SoundName, loop bool)
+	Play__0(sound SoundName)
+	Play__1(sound SoundName, loop bool)
 
-	PlayWith(name SoundName, __xgo_optional_loop bool)
-	PlayAndWait(name SoundName)
-	PausePlaying(name SoundName)
-	ResumePlaying(name SoundName)
-	StopPlaying(name SoundName)
+	PlayWith(sound SoundName, __xgo_optional_loop bool)
+	PlayAndWait(sound SoundName)
+	PausePlaying(sound SoundName)
+	ResumePlaying(sound SoundName)
+	StopPlaying(sound SoundName)
 
 	// Physics Methods
 	SetPhysicsMode(mode PhysicsMode)
 	PhysicsMode() PhysicsMode
-	SetVelocity(velocityX, velocityY float64)
+	SetVelocity(vx, vy float64)
 	Velocity() (velocityX, velocityY float64)
-	SetGravity(gravity float64)
+	SetGravity(g float64)
 	Gravity() float64
 	// AddImpulse adds impulse / mass to velocity on the next dynamic physics tick.
-	AddImpulse(impulseX, impulseY float64)
+	AddImpulse(ix, iy float64)
 	IsOnFloor() bool
 
 	// Collider Methods

@@ -26,11 +26,11 @@ import (
 // Communication Methods (Say, Think, Ask, Quote)
 // ============================================================================
 
-func (p *SpriteImpl) Ask(msg any) {
+func (p *SpriteImpl) Ask(question any) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("Ask: sprite=%s, msg=%v", p.name, msg)
+		spxlog.Debug("Ask: sprite=%s, msg=%v", p.name, question)
 	}
-	msgStr := dialogText(msg)
+	msgStr := dialogText(question)
 
 	isVisible := p.Visible()
 	if isVisible {
@@ -42,39 +42,39 @@ func (p *SpriteImpl) Ask(msg any) {
 	})
 }
 
-func (p *SpriteImpl) Say__0(msg any) {
-	p.SayWith(msg, 0)
+func (p *SpriteImpl) Say__0(word any) {
+	p.SayWith(word, 0)
 }
 
-func (p *SpriteImpl) Say__1(msg any, secs Seconds) {
-	p.SayWith(msg, secs)
+func (p *SpriteImpl) Say__1(word any, seconds Seconds) {
+	p.SayWith(word, seconds)
 }
 
-func (p *SpriteImpl) SayWith(msg any, __xgo_optional_secs Seconds) {
+func (p *SpriteImpl) SayWith(word any, __xgo_optional_seconds Seconds) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, __xgo_optional_secs)
+		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, word, __xgo_optional_seconds)
 	}
-	token := p.sayOrThink(msg, ui.StyleSay)
-	if __xgo_optional_secs > 0 {
-		p.waitAndExpireText(__xgo_optional_secs, token)
+	token := p.sayOrThink(word, ui.StyleSay)
+	if __xgo_optional_seconds > 0 {
+		p.waitAndExpireText(__xgo_optional_seconds, token)
 	}
 }
 
-func (p *SpriteImpl) Think__0(msg any) {
-	p.ThinkWith(msg, 0)
+func (p *SpriteImpl) Think__0(word any) {
+	p.ThinkWith(word, 0)
 }
 
-func (p *SpriteImpl) Think__1(msg any, secs Seconds) {
-	p.ThinkWith(msg, secs)
+func (p *SpriteImpl) Think__1(word any, seconds Seconds) {
+	p.ThinkWith(word, seconds)
 }
 
-func (p *SpriteImpl) ThinkWith(msg any, __xgo_optional_secs Seconds) {
+func (p *SpriteImpl) ThinkWith(word any, __xgo_optional_seconds Seconds) {
 	if isDebugInstrEnabled() {
-		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, __xgo_optional_secs)
+		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, word, __xgo_optional_seconds)
 	}
-	token := p.sayOrThink(msg, ui.StyleThink)
-	if __xgo_optional_secs > 0 {
-		p.waitAndExpireText(__xgo_optional_secs, token)
+	token := p.sayOrThink(word, ui.StyleThink)
+	if __xgo_optional_seconds > 0 {
+		p.waitAndExpireText(__xgo_optional_seconds, token)
 	}
 }
 

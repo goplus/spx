@@ -78,8 +78,8 @@ func Forever(call func()) {
 	coreruntime.Forever(call, engine.NewControlFlowWaiter())
 }
 
-func Repeat(loopCount int, call func()) {
-	coreruntime.Repeat(loopCount, call, engine.NewControlFlowWaiter())
+func Repeat(times int, call func()) {
+	coreruntime.Repeat(times, call, engine.NewControlFlowWaiter())
 }
 
 // The __xgo_autoclosure_ prefix preserves XGo's command-style condition syntax.

@@ -54,12 +54,12 @@ func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
 	return p.touching(sprite)
 }
 
-func (p *SpriteImpl) Touching__1(sprite SpriteName) bool {
-	return p.touching(sprite)
+func (p *SpriteImpl) Touching__1(name SpriteName) bool {
+	return p.touching(name)
 }
 
-func (p *SpriteImpl) Touching__2(obj specialObj) bool {
-	return p.touching(obj)
+func (p *SpriteImpl) Touching__2(object specialObj) bool {
+	return p.touching(object)
 }
 
 func (p *SpriteImpl) TouchingWith(target Target) bool {

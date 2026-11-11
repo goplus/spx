@@ -69,8 +69,8 @@ func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
 	return scratch.ParseCostumeIndex(costume, len(p.costumes))
 }
 
-func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {
-	p.setCostume(costume)
+func (p *SpriteImpl) SetCostume__0(name SpriteCostumeName) {
+	p.setCostume(name)
 }
 
 func (p *SpriteImpl) SetCostume__1(index float64) {
@@ -85,14 +85,14 @@ func (p *SpriteImpl) SetCostume__3(action switchAction) {
 	p.setCostume(action)
 }
 
-func (p *SpriteImpl) SetGraphicEffect(kind EffectKind, val float64) {
+func (p *SpriteImpl) SetGraphicEffect(kind EffectKind, value float64) {
 	p.requestRedrawIfVisible()
-	p.setGraphicEffect(kind, val)
+	p.setGraphicEffect(kind, value)
 }
 
-func (p *SpriteImpl) ChangeGraphicEffect(kind EffectKind, delta float64) {
+func (p *SpriteImpl) ChangeGraphicEffect(kind EffectKind, value float64) {
 	p.requestRedrawIfVisible()
-	p.changeGraphicEffect(kind, delta)
+	p.changeGraphicEffect(kind, value)
 }
 
 func (p *SpriteImpl) ClearGraphicEffects() {
@@ -104,18 +104,18 @@ func (p *SpriteImpl) SetLayer__0(layer layerAction) {
 	p.SetLayerTo(layer)
 }
 
-func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
-	switch dir {
+func (p *SpriteImpl) SetLayer__1(direction dirAction, layers int) {
+	switch direction {
 	case Forward:
 		// Saturate math.MinInt before negation to preserve Scratch's negative-input direction reversal.
-		if delta == math.MinInt {
-			delta = math.MaxInt
+		if layers == math.MinInt {
+			layers = math.MaxInt
 		} else {
-			delta = -delta
+			layers = -layers
 		}
-		p.g.shapeMgr.goBackLayers(p, delta)
+		p.g.shapeMgr.goBackLayers(p, layers)
 	case Backward:
-		p.g.shapeMgr.goBackLayers(p, delta)
+		p.g.shapeMgr.goBackLayers(p, layers)
 	}
 }
 
