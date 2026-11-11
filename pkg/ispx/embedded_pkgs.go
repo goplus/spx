@@ -20,7 +20,7 @@ package ispx
 //go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v4/pkg/spx/pkg/engine
 //go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v4/pkg/spx
 //go:generate go run ../../internal/cmd/qexpwrap -types -outdir internal/pkg -directcalls * github.com/goplus/spx/v4/pkg/scratchcompat
-//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg -directcalls-only -directcalls List.*,Value.* github.com/goplus/spx/v4/internal/scratch
+//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg -directcalls-only -directcalls List.*,Value.* github.com/goplus/spx/v4/internal/core/scratch
 
 // Embedded packages available across all ispx runtime platforms.
 import (

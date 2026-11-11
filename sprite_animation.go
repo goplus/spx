@@ -19,7 +19,6 @@ package spx
 import (
 	"sync"
 
-	intani "github.com/goplus/spx/v4/internal/animation"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
@@ -98,12 +97,8 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []*animState) []*animState 
 // -----------------------------------------------------------------------------
 func (e *animationEntry) ensureRegistered() int {
 	e.loadOnce.Do(func() {
-		payloadJSON, maxBitmap, err := intani.BuildPayloadJSON(
-			intani.Config{
-				FrameFrom: e.config.IFrameFrom,
-				FrameTo:   e.config.IFrameTo,
-			},
-			buildAnimationSources(e.costumes),
+		payloadJSON, maxBitmap, err := buildAnimationPayloadJSON(
+			e.costumes, e.config.IFrameFrom, e.config.IFrameTo,
 			e.isCostumeSet,
 		)
 		if err != nil {
@@ -119,12 +114,4 @@ func (e *animationEntry) ensureRegistered() int {
 		)
 	})
 	return e.adaptBitmapResolution
-}
-
-func buildAnimationSources(costumes []*costume) []intani.FrameSource {
-	frames := make([]intani.FrameSource, len(costumes))
-	for i, c := range costumes {
-		frames[i] = intani.FrameSource{Path: c.path, Frame: c.frame}
-	}
-	return frames
 }

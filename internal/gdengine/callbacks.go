@@ -22,8 +22,8 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -100,7 +100,7 @@ func onEngineStart() {
 
 func onEngineUpdate(delta float64) {
 	// Replays use one logical delta for scripts, timers, and tweens.
-	delta = itime.EffectiveLogicalDeltaTime(delta)
+	delta = clock.EffectiveLogicalDeltaTime(delta)
 	AdvanceTimeSinceGameStart(delta)
 	if coreCallbacks.OnEngineUpdate != nil {
 		coreCallbacks.OnEngineUpdate(delta)

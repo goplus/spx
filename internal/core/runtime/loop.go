@@ -18,7 +18,7 @@ package runtime
 
 import (
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/input"
+	"github.com/goplus/spx/v4/internal/core/input"
 )
 
 type InputFrame struct {

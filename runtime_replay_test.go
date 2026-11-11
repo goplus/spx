@@ -27,9 +27,9 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -51,7 +51,7 @@ type replayQueryInputMgr struct{ *inputSourceTestManager }
 
 func TestInputReplayRuntimeUsesIndependentInputTicks(t *testing.T) {
 	resetInputSessionTest(t)
-	itime.SetFixedDeltaTime(1.0 / 60.0)
+	clock.SetFixedDeltaTime(1.0 / 60.0)
 
 	if _, err := PrepareInputRecording(30); err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 		if game.MousePressed() != (sample.state.Buttons != 0) || game.KeyPressed(KeyA) != (i == 1) || game.KeyPressed(KeyB) {
 			t.Fatalf("frame %d held state does not match recorded input", i)
 		}
-		itime.Update(0.1, 10)
+		clock.Update(0.1, 10)
 		game.dispatchFrameEvents()
 		currentScheduler.Update()
 		game.dispatchFrameEvents()
@@ -398,23 +398,23 @@ func TestRecordingTimestepLifecycle(t *testing.T) {
 		fps              float64
 		previousTimestep float64
 	}{
-		{name: "default", fps: itime.DefaultFPS},
+		{name: "default", fps: clock.DefaultFPS},
 		{name: "custom", fps: 24, previousTimestep: 1.0 / 60},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			resetInputSessionTest(t)
-			itime.SetFixedDeltaTime(tt.previousTimestep)
+			clock.SetFixedDeltaTime(tt.previousTimestep)
 			previousFixed := tt.previousTimestep > 0
 			if _, err := PrepareInputRecording(tt.fps); err != nil {
 				t.Fatal(err)
 			}
-			if got, fixed := itime.FixedDeltaTime(); fixed != previousFixed || got != tt.previousTimestep {
+			if got, fixed := clock.FixedDeltaTime(); fixed != previousFixed || got != tt.previousTimestep {
 				t.Fatalf("prepared session fixed timestep = (%v, %v), want (%v, %v)", got, fixed, tt.previousTimestep, previousFixed)
 			}
 			game := &Game{}
 			claimPreparedSession(t, game)
 			want := 1 / tt.fps
-			if got, ok := itime.FixedDeltaTime(); !ok || got != want {
+			if got, ok := clock.FixedDeltaTime(); !ok || got != want {
 				t.Fatalf("recording fixed timestep = (%v, %v), want (%v, true)", got, ok, want)
 			}
 			replay, err := FinishInputRecording()
@@ -424,11 +424,11 @@ func TestRecordingTimestepLifecycle(t *testing.T) {
 			if replay.FixedTimestep != want {
 				t.Fatalf("recorded fixed timestep = %v, want %v", replay.FixedTimestep, want)
 			}
-			if got, ok := itime.FixedDeltaTime(); !ok || got != want {
+			if got, ok := clock.FixedDeltaTime(); !ok || got != want {
 				t.Fatalf("completed session fixed timestep = (%v, %v), want (%v, true) until Game ends", got, ok, want)
 			}
 			game.abortInputSession("game ended")
-			if got, fixed := itime.FixedDeltaTime(); fixed != previousFixed || got != tt.previousTimestep {
+			if got, fixed := clock.FixedDeltaTime(); fixed != previousFixed || got != tt.previousTimestep {
 				t.Fatalf("restored fixed timestep = (%v, %v), want (%v, %v)", got, fixed, tt.previousTimestep, previousFixed)
 			}
 		})
@@ -488,7 +488,7 @@ func TestReplayOverridesAndRestoresTimestep(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			resetInputSessionTest(t)
-			itime.SetFixedDeltaTime(1.0 / 60)
+			clock.SetFixedDeltaTime(1.0 / 60)
 			replay := validRuntimeReplay()
 			replay.FixedTimestep = tt.timestep
 			if _, err := PrepareInputReplay(replay); err != nil {
@@ -497,14 +497,14 @@ func TestReplayOverridesAndRestoresTimestep(t *testing.T) {
 			game := &Game{}
 			claimPreparedSession(t, game)
 			wantFixed := tt.timestep > 0
-			if got, fixed := itime.FixedDeltaTime(); fixed != wantFixed || got != tt.timestep {
+			if got, fixed := clock.FixedDeltaTime(); fixed != wantFixed || got != tt.timestep {
 				t.Fatalf("replay fixed timestep = (%v, %v), want (%v, %v)", got, fixed, tt.timestep, wantFixed)
 			}
 			if status := GetInputSessionStatus(); status.Mode != InputSessionModeReplaying || status.Phase != InputSessionPhaseRunning {
 				t.Fatalf("replay session status = %+v", status)
 			}
 			game.abortInputSession("game ended")
-			if got, fixed := itime.FixedDeltaTime(); !fixed || got != 1.0/60 {
+			if got, fixed := clock.FixedDeltaTime(); !fixed || got != 1.0/60 {
 				t.Fatalf("restored fixed timestep = (%v, %v), want (%v, true)", got, fixed, 1.0/60.0)
 			}
 		})
@@ -602,7 +602,7 @@ func TestOrdinaryGameClaimsInputLifecycleBeforeBootstrap(t *testing.T) {
 
 func TestGameAbortInvalidatesRecordingAndRestoresEnvironment(t *testing.T) {
 	resetInputSessionTest(t)
-	itime.SetFixedDeltaTime(1.0 / 60)
+	clock.SetFixedDeltaTime(1.0 / 60)
 	if _, err := PrepareInputRecording(30); err != nil {
 		t.Fatal(err)
 	}
@@ -638,7 +638,7 @@ func TestGameAbortInvalidatesRecordingAndRestoresEnvironment(t *testing.T) {
 	if _, err := session.finishRecordingResult(nil); err == nil {
 		t.Fatal("aborted recording produced a commit result")
 	}
-	if got, ok := itime.FixedDeltaTime(); !ok || got != 1.0/60 {
+	if got, ok := clock.FixedDeltaTime(); !ok || got != 1.0/60 {
 		t.Fatalf("aborted session restored fixed timestep = (%v, %v)", got, ok)
 	}
 }
@@ -853,7 +853,7 @@ func TestSnapshotInputSessionFixtureClearsGameAndPendingCaptures(t *testing.T) {
 	if status := GetInputSessionStatus(); status.Mode != InputSessionModeIdle {
 		t.Errorf("input session after fixture cleanup = %+v, want idle", status)
 	}
-	if _, fixed := itime.FixedDeltaTime(); fixed {
+	if _, fixed := clock.FixedDeltaTime(); fixed {
 		t.Error("fixture cleanup left the fixed timestep enabled")
 	}
 	if engine.HasPendingCaptures() {
@@ -976,14 +976,14 @@ func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	claimPreparedSession(t, game)
-	frame := itime.Frame() + 1
+	frame := clock.Frame() + 1
 	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
 		t.Fatal("capture-key replay frame was not prepared")
 	}
 	if engine.HasPendingCaptures() || len(got) != 0 {
 		t.Fatal("capture key requested a screenshot before clock advancement")
 	}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	game.dispatchFrameEvents()
 	if !engine.HasPendingCaptures() || len(got) != 0 {
 		t.Fatal("capture key did not queue screenshots for the end of the frame")
@@ -1676,7 +1676,7 @@ func TestInputAttachmentCanceledWhilePreparingEnvironment(t *testing.T) {
 	}()
 	deadline := time.Now().Add(time.Second)
 	for {
-		if delta, enabled := itime.FixedDeltaTime(); enabled && delta == 1.0/30 {
+		if delta, enabled := clock.FixedDeltaTime(); enabled && delta == 1.0/30 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -1697,7 +1697,7 @@ func TestInputAttachmentCanceledWhilePreparingEnvironment(t *testing.T) {
 	if game.currentInputSession() != nil {
 		t.Fatal("canceled game retained input session")
 	}
-	if _, enabled := itime.FixedDeltaTime(); enabled {
+	if _, enabled := clock.FixedDeltaTime(); enabled {
 		t.Fatal("failed attachment did not restore environment")
 	}
 }
@@ -1762,7 +1762,7 @@ func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
 			handled := 0
 			game.OnCond(func() bool { return true }, func() { handled++ })
 			game.OnEngineBeforeUpdate(1.0 / 30)
-			itime.Update(1.0/30, 30)
+			clock.Update(1.0/30, 30)
 			game.OnEngineUpdate(1.0 / 30)
 			currentScheduler.Update()
 			game.OnEngineRender(1.0 / 30)
@@ -1874,11 +1874,11 @@ func resetInputSessionTest(t *testing.T) {
 	t.Helper()
 	resetInputSessionState()
 	engine.SetGame(nil)
-	itime.SetFixedDeltaTime(0)
+	clock.SetFixedDeltaTime(0)
 	t.Cleanup(func() {
 		resetInputSessionState()
 		engine.SetGame(nil)
-		itime.SetFixedDeltaTime(0)
+		clock.SetFixedDeltaTime(0)
 		ResetRandomSeed()
 	})
 }

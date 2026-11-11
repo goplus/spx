@@ -19,7 +19,7 @@ package engine
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 

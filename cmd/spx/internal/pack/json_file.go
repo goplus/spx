@@ -20,25 +20,25 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 const maxPackJSONSize = 16 << 20
 
 func readJSONFile(name string, value any) error {
-	return readJSONFileWithReader(name, value, stablefile.Reader{MaxBytes: maxPackJSONSize})
+	return readJSONFileWithReader(name, value, fileutil.StableReader{MaxBytes: maxPackJSONSize})
 }
 
-func readJSONFileWithReader(name string, value any, reader stablefile.Reader) error {
+func readJSONFileWithReader(name string, value any, reader fileutil.StableReader) error {
 	data, _, err := reader.Read(name)
 	switch {
-	case err == stablefile.ErrTooLarge:
+	case err == fileutil.ErrTooLarge:
 		return fmt.Errorf("%s exceeds the JSON size limit", name)
-	case err == stablefile.ErrNotRegular:
+	case err == fileutil.ErrNotRegular:
 		return fmt.Errorf("%s must be a regular non-symlink file", name)
-	case err == stablefile.ErrChangedOpening:
+	case err == fileutil.ErrChangedOpening:
 		return fmt.Errorf("%s changed while it was opened", name)
-	case err == stablefile.ErrChangedReading:
+	case err == fileutil.ErrChangedReading:
 		return fmt.Errorf("%s changed while it was read", name)
 	case err != nil:
 		return err

@@ -764,7 +764,7 @@ func newWorkflowFixture(t *testing.T) string {
 	}
 	mustWriteFile(t, filepath.Join(root, "go.mod"), nil)
 	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "install.sh"), nil)
-	mustMkdirAll(t, filepath.Join(root, "internal", "tools"))
+	mustMkdirAll(t, filepath.Join(root, "internal", "cmd", "buildctl"))
 	t.Chdir(root)
 	return root
 }

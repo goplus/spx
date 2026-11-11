@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
@@ -145,8 +145,8 @@ func TestCaptureFailureStopsFrameAndReportsExit(t *testing.T) {
 	isolateCaptureState(t)
 	resetInputState()
 	resetTriggerEvents()
-	itime.Start()
-	t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start() })
+	clock.Start()
+	t.Cleanup(func() { resetInputState(); resetTriggerEvents(); clock.Start() })
 	previousExt := gdx.ExtMgr
 	t.Cleanup(func() { gdx.ExtMgr = previousExt; wrap.Init(WaitMainThread) })
 	gdx.PlatformMgr = resetDirectPlatform{}

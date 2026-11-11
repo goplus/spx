@@ -23,11 +23,11 @@ import (
 	"syscall"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/base/numeric"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/core/scratch"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	"github.com/goplus/spx/v4/internal/scratch"
-	"github.com/goplus/spx/v4/internal/tools"
-	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // -----------------------------------------------------------------------------
@@ -294,7 +294,7 @@ func parseMonitorColor(v coreproject.StageShape, appearance ui.MonitorAppearance
 
 func parseListMonitorDimensions(v coreproject.StageShape) mathf.Vec2 {
 	dimension := func(key string, fallback, minimum float64) float64 {
-		value, ok := tools.GetFloat(v[key])
+		value, ok := numeric.ParseFloat64(v[key])
 		if !ok || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
 			return fallback
 		}
@@ -304,8 +304,8 @@ func parseListMonitorDimensions(v coreproject.StageShape) mathf.Vec2 {
 }
 
 func parseMonitorSlider(v coreproject.StageShape) ui.MonitorSlider {
-	min, _ := tools.GetFloat(v["sliderMin"])
-	max, ok := tools.GetFloat(v["sliderMax"])
+	min, _ := numeric.ParseFloat64(v["sliderMin"])
+	max, ok := numeric.ParseFloat64(v["sliderMax"])
 	if !ok {
 		max = 100
 	}

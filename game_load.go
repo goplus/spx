@@ -27,7 +27,6 @@ import (
 	spxfs "github.com/goplus/spx/v4/fs"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/projectloader"
 )
 
 type projectFontBridge interface {
@@ -38,7 +37,7 @@ type projectFontBridge interface {
 // Loading
 // -----------------------------------------------------------------------------
 func (p *Game) loadGame(resource any, generation uint64) (err error) {
-	opened, err := projectloader.OpenResources(resource, nil)
+	opened, err := openGameResources(resource, nil)
 	if err != nil {
 		return err
 	}

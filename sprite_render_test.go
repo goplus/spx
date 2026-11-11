@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
@@ -162,7 +161,7 @@ func TestCostumeRenderAnchorConvertsAssetCoordinatesToSPX(t *testing.T) {
 func TestCostumeCenterInAssetNormalizesStaleCenterOnEmptyFrame(t *testing.T) {
 	// An empty vector costume is imported as a 1x1 frame, but the source project can
 	// still declare a rotation center sized for its original canvas.
-	empty := assetutil.FrameDescriptor{Width: 1, Height: 1, BitmapResolution: 1}
+	empty := costumeFrame{Width: 1, Height: 1, BitmapResolution: 1}
 	if got := costumeCenterInAsset(empty, mathf.NewVec2(240, 180)); got != (mathf.NewVec2(0.5, 0.5)) {
 		t.Fatalf("empty frame center = %v, want {0.5 0.5}", got)
 	}
@@ -173,13 +172,13 @@ func TestCostumeCenterInAssetNormalizesStaleCenterOnEmptyFrame(t *testing.T) {
 		t.Fatalf("renderAnchorInSPX = %v, want {0 0}", got)
 	}
 
-	filled := assetutil.FrameDescriptor{Width: 960, Height: 720, BitmapResolution: 2}
+	filled := costumeFrame{Width: 960, Height: 720, BitmapResolution: 2}
 	if got := costumeCenterInAsset(filled, mathf.NewVec2(480, 360)); got != (mathf.NewVec2(480, 360)) {
 		t.Fatalf("filled frame center = %v, want {480 360}", got)
 	}
 
 	// A 1xN costume has real pixels and may anchor at an end rather than its center.
-	thin := assetutil.FrameDescriptor{Width: 1, Height: 200, BitmapResolution: 1}
+	thin := costumeFrame{Width: 1, Height: 200, BitmapResolution: 1}
 	if got := costumeCenterInAsset(thin, mathf.NewVec2(0.5, 200)); got != (mathf.NewVec2(0.5, 200)) {
 		t.Fatalf("thin frame center = %v, want {0.5 200}", got)
 	}
@@ -254,7 +253,7 @@ func TestLegacyLeftRightRotationStyleFlipsNegativeHeading(t *testing.T) {
 		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
 		AnimBindings:  map[string]string{},
 	})
-	sprite.costumes = []*costume{{frame: assetutil.FrameDescriptor{BitmapResolution: 1}}}
+	sprite.costumes = []*costume{{frame: costumeFrame{BitmapResolution: 1}}}
 
 	rotation, scaleX, scaleY := getRenderRotationAndScale(sprite)
 	if rotation != 0 || scaleX != -1 || scaleY != 1 {
@@ -363,7 +362,7 @@ func newRenderOffsetTestSprite() *SpriteImpl {
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
 	sprite.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Center:           mathf.NewVec2(10, 20),
 			BitmapResolution: 1,
 			Width:            100,

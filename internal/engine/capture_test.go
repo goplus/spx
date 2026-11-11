@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
@@ -42,8 +42,8 @@ func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
 	if got.InputTick == nil || *got.InputTick != 0 {
 		t.Fatalf("capture input tick = %v, want 0", got.InputTick)
 	}
-	if got.Frame != itime.Frame() {
-		t.Fatalf("capture engine frame = %d, want %d", got.Frame, itime.Frame())
+	if got.Frame != clock.Frame() {
+		t.Fatalf("capture engine frame = %d, want %d", got.Frame, clock.Frame())
 	}
 }
 
@@ -103,7 +103,7 @@ func TestConcurrentCaptureMetadataIsCoherentAndOrdered(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
 	isolateCaptureState(t)
-	expectedFrame := itime.Frame()
+	expectedFrame := clock.Frame()
 
 	var got []CaptureRequest
 	SetCaptureHandler(func(req CaptureRequest) error {
@@ -235,7 +235,7 @@ func TestResetCapturesClearsCapturesAndResetsSequence(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
 	isolateCaptureState(t)
-	frame := itime.Frame()
+	frame := clock.Frame()
 
 	var got []CaptureRequest
 	SetCaptureHandler(func(req CaptureRequest) error {
@@ -278,7 +278,7 @@ func TestCaptureRequestQueuesForActiveGame(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
 	isolateCaptureState(t)
-	expectedFrame := itime.Frame()
+	expectedFrame := clock.Frame()
 	SetCaptureHandler(func(req CaptureRequest) error {
 		got = req
 		return nil

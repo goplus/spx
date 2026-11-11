@@ -32,7 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/base/stablefile"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/interpruntime"
 )
 
@@ -219,13 +219,13 @@ func TestValidateStableFileReportsChangedReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeNativeTestFile(t, name, `{}`)
-	if exists, err := validateStableFile(name, stablefile.Reader{Expected: original}); exists || err == nil || !strings.Contains(err.Error(), "changed while it was read") {
+	if exists, err := validateStableFile(name, fileutil.StableReader{Expected: original}); exists || err == nil || !strings.Contains(err.Error(), "changed while it was read") {
 		t.Fatalf("identity drift validation = (%v, %v)", exists, err)
 	}
 
 	writeNativeTestFile(t, name, `{}`)
 	calls := 0
-	reader := stablefile.Reader{Lstat: func(path string) (os.FileInfo, error) {
+	reader := fileutil.StableReader{Lstat: func(path string) (os.FileInfo, error) {
 		calls++
 		if calls == 2 {
 			if err := os.Remove(path); err != nil {

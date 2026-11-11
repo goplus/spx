@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	itime "github.com/goplus/spx/v4/internal/time"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -55,10 +55,10 @@ type unlinkAudioMgr struct {
 
 func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 	previousCallbacks, previousSprites := coreCallbacks, spriteSnapshot
-	previousDelta, _ := itime.FixedDeltaTime()
+	previousDelta, _ := clock.FixedDeltaTime()
 	t.Cleanup(func() {
 		coreCallbacks, spriteSnapshot = previousCallbacks, previousSprites
-		itime.SetFixedDeltaTime(previousDelta)
+		clock.SetFixedDeltaTime(previousDelta)
 		engine.SetRuntimeBridge(nil)
 	})
 
@@ -70,7 +70,7 @@ func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 				engine.SetRuntimeBridge(&callbackTestRuntime{
 					sprites: map[engine.Object]engine.ISpriter{1: sprite}, calls: &calls,
 				})
-				itime.SetFixedDeltaTime(fixed)
+				clock.SetFixedDeltaTime(fixed)
 				coreCallbacks = engine.CoreCallbackInfo{
 					OnEngineUpdate: func(delta float64) {
 						calls = append(calls, fmt.Sprintf("frame-begin:%g", delta))
@@ -107,7 +107,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	previousPen, previousPhysics, previousPlatform := engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr
 	previousRes, previousScene, previousSprite := engine.ResMgr, engine.SceneMgr, engine.SpriteMgr
 	previousTilemap, previousTilemapparser, previousUI := engine.TilemapMgr, engine.TilemapparserMgr, engine.UiMgr
-	previousDelta, _ := itime.FixedDeltaTime()
+	previousDelta, _ := clock.FixedDeltaTime()
 	t.Cleanup(func() {
 		coreCallbacks, spriteSnapshot = previousCallbacks, previousSprites
 		activeLink, isWebInterpreterMode = previousLink, previousInterpreter
@@ -119,7 +119,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 		if runtime.GOOS != "js" {
 			facade.BindCallbacks(makeCallbacks())
 		}
-		itime.SetFixedDeltaTime(previousDelta)
+		clock.SetFixedDeltaTime(previousDelta)
 		engine.SetRuntimeBridge(nil)
 	})
 	if activeLink != nil {
@@ -134,7 +134,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 				engine.SetRuntimeBridge(&callbackTestRuntime{
 					sprites: map[engine.Object]engine.ISpriter{1: sprite}, calls: &calls,
 				})
-				itime.SetFixedDeltaTime(fixed)
+				clock.SetFixedDeltaTime(fixed)
 				core := engine.CoreCallbackInfo{}
 				if withCore {
 					core = engine.CoreCallbackInfo{
@@ -228,7 +228,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	if runtime.GOOS != "js" {
 		var calls []string
 		engine.SetRuntimeBridge(&callbackTestRuntime{calls: &calls})
-		itime.SetFixedDeltaTime(0)
+		clock.SetFixedDeltaTime(0)
 		bridge := linkerBridge{}
 		bridge.Link(engine.CoreCallbackInfo{
 			OnEngineUpdate: func(delta float64) {

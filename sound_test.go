@@ -23,10 +23,10 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 type soundControlBackend struct {
@@ -549,13 +549,13 @@ func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
 	if play.soundObj != 77 || play.owner != 42 || play.attenation != 0.35 || play.maxDist != 640 || len(backend.loops) != 0 {
 		t.Fatalf("blocking playback parameters = %+v, loops = %v", play, backend.loops)
 	}
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if finished {
 		t.Fatal("PlayAndWait returned while the backend still reported active playback")
 	}
 	backend.playing[backend.nextID] = false
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 	if !finished {
 		t.Fatal("PlayAndWait did not resume after playback completed")
@@ -690,3 +690,738 @@ func (b *cloneSoundBackend) DestroyAudio(id engine.Object) {
 func (b *spritePlaybackBackend) Pause(id int64) { b.paused = append(b.paused, id) }
 
 func (b *spritePlaybackBackend) Resume(id int64) { b.resumed = append(b.resumed, id) }
+
+type soundManagerTestBackend struct {
+	nextID    int64
+	plays     []soundManagerPlayCall
+	pauses    []int64
+	resumes   []int64
+	stops     []int64
+	restarts  []int64
+	loops     []soundManagerLoopCall
+	volumes   []float64
+	destroys  []engine.Object
+	lifecycle []string
+	pan       float64
+	pitch     float64
+	volume    float64
+	playing   map[int64]bool
+}
+
+type soundManagerPlayCall struct {
+	path       string
+	owner      engine.Object
+	attenation float64
+	maxDist    float64
+}
+
+type soundManagerLoopCall struct {
+	id   int64
+	loop bool
+}
+
+type cloningSoundManagerBackend struct {
+	soundManagerTestBackend
+	pans, pitches map[engine.Object]float64
+}
+
+type immediateSoundManagerBackend struct {
+	soundManagerTestBackend
+	id int64
+}
+
+func TestSoundManagerRepeatedPlayStopsPreviousPlayback(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id1 := mgr.Play(1, "sounds/a.wav", false, false, 9, 0, 100)
+	id2 := mgr.Play(2, "sounds/a.wav", true, false, 9, 12, 100)
+
+	if id1 != 1 || id2 != 2 {
+		t.Fatalf("Play ids = %d, %d; want 1, 2", id1, id2)
+	}
+	if backend.plays[0].path != engine.ToAssetPath("sounds/a.wav") {
+		t.Fatalf("Play path = %q, want %q", backend.plays[0].path, engine.ToAssetPath("sounds/a.wav"))
+	}
+	if backend.plays[0].owner != 0 {
+		t.Fatalf("owner with zero attenuation = %d, want 0", backend.plays[0].owner)
+	}
+	if backend.plays[1].owner != 9 {
+		t.Fatalf("owner with attenuation = %d, want 9", backend.plays[1].owner)
+	}
+	if len(backend.stops) != 1 || backend.stops[0] != id1 {
+		t.Fatalf("Stop calls after replay = %+v, want [%d]", backend.stops, id1)
+	}
+	if backend.playing[id1] || !backend.playing[id2] {
+		t.Fatalf("playing states after replay = first:%v second:%v, want false/true", backend.playing[id1], backend.playing[id2])
+	}
+	if id := mgr.path2id["sounds/a.wav"]; id != id2 {
+		t.Fatalf("path2id = %+v, want only latest playback %d", id, id2)
+	}
+
+	mgr.Pause("sounds/a.wav")
+	mgr.Resume("sounds/a.wav")
+	mgr.Stop("sounds/a.wav")
+
+	if len(backend.pauses) != 1 || backend.pauses[0] != id2 {
+		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, id2)
+	}
+	if len(backend.resumes) != 1 || backend.resumes[0] != id2 {
+		t.Fatalf("Resume calls = %+v, want [%d]", backend.resumes, id2)
+	}
+	if len(backend.stops) != 2 || backend.stops[1] != id2 {
+		t.Fatalf("Stop calls = %+v, want [%d %d]", backend.stops, id1, id2)
+	}
+	if len(backend.loops) != 1 || backend.loops[0].id != 2 {
+		t.Fatalf("SetLoop calls = %+v, want loop only on latest id", backend.loops)
+	}
+	if len(backend.destroys) != 0 {
+		t.Fatalf("DestroyAudio calls = %+v, want none before the sound objects are released", backend.destroys)
+	}
+}
+
+func TestSoundManagerDifferentSoundsCanPlayTogether(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/b.wav", false, false, 0, 0, 0)
+
+	if len(backend.stops) != 0 {
+		t.Fatalf("Stop calls = %+v, want none for different sounds", backend.stops)
+	}
+	if !backend.playing[first] || !backend.playing[second] {
+		t.Fatalf("playing states = first:%v second:%v, want true/true", backend.playing[first], backend.playing[second])
+	}
+}
+
+func TestSoundManagerRepeatedPlayReplacesFinishedPlayback(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	backend.playing[first] = false
+
+	second := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	mgr.Pause("sounds/a.wav")
+
+	if mgr.path2id["sounds/a.wav"] != second {
+		t.Fatalf("path2id = %+v, want only latest live id", mgr.path2id["sounds/a.wav"])
+	}
+	if len(backend.pauses) != 1 || backend.pauses[0] != second {
+		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)
+	}
+}
+
+func TestSoundManagerStopIDOnlyStopsRequestedPlayback(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/b.wav", true, false, 0, 0, 0)
+
+	mgr.StopID(first)
+	mgr.Pause("sounds/b.wav")
+
+	if len(backend.stops) != 1 || backend.stops[0] != first {
+		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, first)
+	}
+	if _, ok := mgr.path2id["sounds/a.wav"]; ok {
+		t.Fatalf("path2id still contains stopped playback %d", first)
+	}
+	if mgr.path2id["sounds/b.wav"] != second {
+		t.Fatalf("path2id = %+v, want playback %d", mgr.path2id["sounds/b.wav"], second)
+	}
+	if len(backend.pauses) != 1 || backend.pauses[0] != second {
+		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)
+	}
+}
+
+func TestSoundManagerPruneStoppedIDsRemovesStalePathEntries(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	first := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	second := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
+	backend.playing[first] = false
+
+	live := mgr.PruneStoppedIDs([]int64{first, second})
+
+	if len(live) != 1 || live[0] != second {
+		t.Fatalf("live = %+v, want [%d]", live, second)
+	}
+	if mgr.path2id["sounds/a.wav"] != second {
+		t.Fatalf("path2id = %+v, want only second playback %d", mgr.path2id["sounds/a.wav"], second)
+	}
+}
+
+func TestSoundManagerRestartIDKeepsTrackedPlayback(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+
+	if !mgr.RestartID(id) {
+		t.Fatalf("RestartID(%d) = false, want true", id)
+	}
+	if len(backend.restarts) != 1 || backend.restarts[0] != id {
+		t.Fatalf("restart calls = %+v, want [%d]", backend.restarts, id)
+	}
+	if mgr.path2id["sounds/a.wav"] != id {
+		t.Fatalf("path2id = %+v, want [%d]", mgr.path2id["sounds/a.wav"], id)
+	}
+}
+
+func TestSoundManagerRestartIDPrunesStalePlayback(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id := mgr.Play(1, "sounds/a.wav", true, false, 0, 0, 0)
+	backend.playing[id] = false
+
+	if mgr.RestartID(id) {
+		t.Fatalf("RestartID(%d) = true, want false for stale playback", id)
+	}
+	if _, ok := mgr.path2id["sounds/a.wav"]; ok {
+		t.Fatalf("path2id still contains stale playback %d", id)
+	}
+}
+
+func TestSoundManagerVolumeAndEffects(t *testing.T) {
+	backend := &soundManagerTestBackend{pan: 0.25, pitch: 2, volume: 0.8}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	if got := mgr.GetPan(1); got != 25 {
+		t.Fatalf("GetPan = %v, want 25", got)
+	}
+	if got := mgr.GetPitch(1); !soundManagerAlmostEqual(got, 120) {
+		t.Fatalf("GetPitch = %v, want 120", got)
+	}
+	if got := mgr.GetVolume(1); got != 80 {
+		t.Fatalf("GetVolume = %v, want 80", got)
+	}
+
+	mgr.SetPan(1, 40)
+	mgr.SetPitch(1, 120)
+	mgr.SetVolume(1, -5)
+
+	if backend.pan != 0.4 {
+		t.Fatalf("SetPan backend = %v, want 0.4", backend.pan)
+	}
+	if !soundManagerAlmostEqual(backend.pitch, 2) {
+		t.Fatalf("SetPitch backend = %v, want 2", backend.pitch)
+	}
+	if got := backend.volumes[len(backend.volumes)-1]; got != 0 {
+		t.Fatalf("SetVolume backend = %v, want 0", got)
+	}
+}
+
+func TestSoundManagerChangeVolume(t *testing.T) {
+	backend := &soundManagerTestBackend{volume: 0.9}
+	var mgr soundManager
+	mgr.Init(backend)
+	for _, step := range []struct {
+		name        string
+		delta, want float64
+	}{
+		{"NaN preserves volume", math.NaN(), 90},
+		{"upper bound", 30, 100},
+		{"decrease after upper bound", -10, 90},
+		{"lower bound", -120, 0},
+		{"increase after lower bound", 10, 10},
+		{"positive infinity", math.Inf(1), 100},
+		{"negative infinity", math.Inf(-1), 0},
+	} {
+		mgr.ChangeVolume(1, step.delta)
+		if got := mgr.GetVolume(1); !soundManagerAlmostEqual(got, step.want) {
+			t.Fatalf("%s: volume = %g, want %g", step.name, got, step.want)
+		}
+	}
+}
+
+func TestSoundManagerPitchEffectUsesScale(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	mgr.SetPitch(1, 0)
+	if !soundManagerAlmostEqual(backend.pitch, 1) {
+		t.Fatalf("SetPitch(0) backend = %v, want 1", backend.pitch)
+	}
+
+	mgr.SetPitch(1, 10)
+	want := math.Pow(2, 1.0/12)
+	if !soundManagerAlmostEqual(backend.pitch, want) {
+		t.Fatalf("SetPitch(10) backend = %v, want %v", backend.pitch, want)
+	}
+
+	backend.pitch = want
+	if got := mgr.GetPitch(1); !soundManagerAlmostEqual(got, 10) {
+		t.Fatalf("GetPitch = %v, want 10", got)
+	}
+
+	backend.pitch = 0
+	if got := mgr.GetPitch(1); got != 0 {
+		t.Fatalf("GetPitch with non-positive backend scale = %v, want 0", got)
+	}
+}
+
+func TestSoundManagerAllocAndRelease(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	if got := mgr.AllocSound(); got != 77 {
+		t.Fatalf("AllocSound = %d, want 77", got)
+	}
+
+	mgr.ReleaseSound(13)
+	if !slices.Equal(backend.destroys, []engine.Object{13}) {
+		t.Fatalf("DestroyAudio calls = %+v, want [13]", backend.destroys)
+	}
+}
+
+func TestSoundManagerReleaseSoundDefersDestroyUntilAllPlaybackStops(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	first := mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	second := mgr.Play(13, "sounds/b.wav", false, false, 0, 0, 0)
+	mgr.Pause("sounds/b.wav")
+
+	mgr.ReleaseSound(13)
+	if len(backend.destroys) != 0 {
+		t.Fatalf("DestroyAudio calls = %+v, want none while playbacks are live", backend.destroys)
+	}
+
+	backend.playing[first] = false
+	mgr.Update()
+	if len(backend.destroys) != 0 {
+		t.Fatalf("DestroyAudio calls = %+v, want none while playback %d is live", backend.destroys, second)
+	}
+
+	mgr.Resume("sounds/b.wav")
+	backend.playing[second] = false
+	mgr.Update()
+	mgr.Update()
+	mgr.StopAll()
+	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
+		t.Fatalf("DestroyAudio calls = %+v, want [13] after all playback stops", backend.destroys)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerReleaseSoundDoesNotDestroyPendingSoundTwice(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id := mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+
+	mgr.ReleaseSound(13)
+	backend.playing[id] = false
+	mgr.ReleaseSound(13)
+	mgr.Update()
+
+	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
+		t.Fatalf("DestroyAudio calls = %+v, want exactly [13]", backend.destroys)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerReleaseSoundStopsLoopedPlaybackBeforeDestroy(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id := mgr.Play(13, "sounds/loop.wav", true, false, 0, 0, 0)
+	mgr.Pause("sounds/loop.wav")
+
+	mgr.ReleaseSound(13)
+
+	if len(backend.stops) != 1 || backend.stops[0] != id {
+		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, id)
+	}
+	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
+		t.Fatalf("DestroyAudio calls = %+v, want [13] after loop playback stops", backend.destroys)
+	}
+	if want := []string{fmt.Sprintf("stop:%d", id), "destroy:13"}; !slices.Equal(backend.lifecycle, want) {
+		t.Fatalf("lifecycle = %v, want %v", backend.lifecycle, want)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerReleaseSoundStopsLoopsAndDefersOneShots(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	loopID := mgr.Play(13, "sounds/loop.wav", true, false, 0, 0, 0)
+	oneShotID := mgr.Play(13, "sounds/hit.wav", false, false, 0, 0, 0)
+
+	mgr.ReleaseSound(13)
+
+	if len(backend.stops) != 1 || backend.stops[0] != loopID {
+		t.Fatalf("Stop calls = %+v, want only loop playback %d stopped", backend.stops, loopID)
+	}
+	if len(backend.destroys) != 0 {
+		t.Fatalf("DestroyAudio calls = %+v, want none while one-shot playback %d is live", backend.destroys, oneShotID)
+	}
+	if _, ok := mgr.playbacks[loopID]; ok {
+		t.Fatalf("loop playback %d still tracked after release", loopID)
+	}
+	if _, ok := mgr.playbacks[oneShotID]; !ok {
+		t.Fatalf("one-shot playback %d not tracked while still playing", oneShotID)
+	}
+
+	backend.playing[oneShotID] = false
+	mgr.Update()
+
+	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
+		t.Fatalf("DestroyAudio calls = %+v, want [13] after one-shot playback stops", backend.destroys)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerStopPathDestroysPendingReleasedSound(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id := mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	mgr.ReleaseSound(13)
+
+	mgr.Stop("sounds/a.wav")
+
+	if len(backend.stops) != 1 || backend.stops[0] != id {
+		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, id)
+	}
+	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
+		t.Fatalf("DestroyAudio calls = %+v, want [13] after Stop", backend.destroys)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerStopIDDestroysPendingReleasedSound(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	id := mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	mgr.ReleaseSound(13)
+
+	mgr.StopID(id)
+
+	if len(backend.stops) != 1 || backend.stops[0] != id {
+		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, id)
+	}
+	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
+		t.Fatalf("DestroyAudio calls = %+v, want [13] after StopID", backend.destroys)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerStopAllDestroysPendingReleasedSounds(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+
+	mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	mgr.Play(14, "sounds/b.wav", false, false, 0, 0, 0)
+	mgr.Play(15, "sounds/c.wav", false, false, 0, 0, 0)
+	mgr.ReleaseSound(13)
+	mgr.ReleaseSound(14)
+	mgr.StopAll()
+	mgr.StopAll()
+	mgr.Update()
+
+	slices.Sort(backend.destroys)
+	if !slices.Equal(backend.destroys, []engine.Object{13, 14}) {
+		t.Fatalf("DestroyAudio calls = %+v, want [13 14] after StopAll; unreleased sound 15 must survive", backend.destroys)
+	}
+	assertSoundManagerNoTracking(t, &mgr)
+}
+
+func TestSoundManagerStopAllBeforeInitialization(t *testing.T) {
+	var mgr soundManager
+	mgr.StopAll()
+	mgr.StopAll()
+	backend := &soundManagerTestBackend{}
+	mgr.Init(backend)
+	id := mgr.Play(13, "sound.wav", false, false, 0, 0, 0)
+	if !backend.IsPlaying(id) {
+		t.Fatal("initialization after stop did not restore playback")
+	}
+	mgr.StopAll()
+	if backend.IsPlaying(id) {
+		t.Fatal("initialized playback survived stop")
+	}
+}
+
+func TestSoundManagerCanReplayAfterRepeatedStopAll(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+	for round := 1; round <= 3; round++ {
+		id := mgr.Play(13, "sound.wav", false, false, 0, 0, 0)
+		mgr.ReleaseSound(13)
+		mgr.StopAll()
+		mgr.StopAll()
+		if backend.IsPlaying(id) || len(backend.destroys) != round {
+			t.Fatalf("round %d: playing=%v destroyed=%v", round, backend.IsPlaying(id), backend.destroys)
+		}
+	}
+}
+
+func TestSoundManagerControlRanges(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+	for _, control := range []struct {
+		name                        string
+		set                         func(engine.Object, float64)
+		backendValue                func(engine.Object) float64
+		low, high                   float64
+		wantLow, wantHigh, wantZero float64
+	}{
+		{"volume", mgr.SetVolume, backend.GetVolume, 0, 100, 0, 1, 0},
+		{"pan", mgr.SetPan, backend.GetPan, -100, 100, -1, 1, 0},
+		{"pitch", mgr.SetPitch, backend.GetPitch, -360, 360, 0.125, 8, 1},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			for _, tt := range []struct {
+				name        string
+				input, want float64
+			}{
+				{"zero", 0, control.wantZero},
+				{"minimum", control.low, control.wantLow},
+				{"maximum", control.high, control.wantHigh},
+				{"below minimum", control.low - 30, control.wantLow},
+				{"above maximum", control.high + 30, control.wantHigh},
+				{"negative infinity", math.Inf(-1), control.wantLow},
+				{"positive infinity", math.Inf(1), control.wantHigh},
+				{"NaN", math.NaN(), control.wantZero},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					control.set(1, tt.input)
+					if got := control.backendValue(1); !soundManagerAlmostEqual(got, tt.want) {
+						t.Errorf("backend value = %g, want %g", got, tt.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestSoundManagerCloneAndInvalidPlayback(t *testing.T) {
+	backend := &cloningSoundManagerBackend{soundManagerTestBackend: soundManagerTestBackend{volume: 0.4}, pans: map[engine.Object]float64{9: 0.25}, pitches: map[engine.Object]float64{9: 2}}
+	var mgr soundManager
+	mgr.Init(backend)
+	if got := mgr.CloneSoundEffects(invalidSoundObject); got != invalidSoundObject {
+		t.Fatalf("unallocated clone=%d", got)
+	}
+	if got := mgr.CloneSoundEffects(9); got != 77 || backend.pans[77] != 0.25 || backend.pitches[77] != 2 || backend.volume != 0.4 || len(backend.plays) != 0 || len(backend.volumes) != 0 {
+		t.Fatalf("clone=%d backend=%+v", got, backend)
+	}
+	mgr.ReleaseSound(invalidSoundObject)
+	mgr.StopID(invalidPlaybackID)
+	if mgr.RestartID(invalidPlaybackID) || mgr.IsPlaying(invalidPlaybackID) || len(backend.stops) != 0 || len(backend.destroys) != 0 {
+		t.Fatal("invalid identifiers reached backend")
+	}
+	id := mgr.Play(9, "sound", false, false, 0, 0, 0)
+	if !mgr.IsPlaying(id) {
+		t.Fatal("live playback reported stopped")
+	}
+	backend.playing[id] = false
+	if mgr.IsPlaying(id) {
+		t.Fatal("stopped playback reported live")
+	}
+	var uninitialized soundManager
+	if uninitialized.RestartID(1) {
+		t.Fatal("restarted without backend")
+	}
+	ids := []int64{1, 2}
+	if got := uninitialized.PruneStoppedIDs(ids); len(got) != 2 {
+		t.Fatal("pruned without backend")
+	}
+	uninitialized.Update()
+}
+
+func TestSoundManagerFailedAndAlreadyFinishedPlayback(t *testing.T) {
+	for _, id := range []int64{invalidPlaybackID, 42} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			backend := &immediateSoundManagerBackend{id: id}
+			var mgr soundManager
+			mgr.Init(backend)
+			if got := mgr.Play(1, "sound", false, true, 0, 0, 0); got != id {
+				t.Fatalf("play=%d,want%d", got, id)
+			}
+			if len(mgr.playbacks) != 0 || len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 {
+				t.Fatal("failed/completed playback remained tracked")
+			}
+		})
+	}
+}
+
+// Every single-playback removal path must update all indexes and finalize only
+// the released sound, even when cleanup is repeated after the ID is gone.
+func TestSoundManagerPlaybackRemovalFinalizesOnlyReleasedSound(t *testing.T) {
+	for _, remove := range []struct {
+		name string
+		run  func(*soundManager, int64)
+	}{
+		{"stop path", func(m *soundManager, _ int64) { m.Stop("released.wav") }},
+		{"stop ID", func(m *soundManager, id int64) { m.StopID(id) }},
+		{"restart stopped ID", func(m *soundManager, id int64) { m.RestartID(id) }},
+		{"prune stopped IDs", func(m *soundManager, id int64) { m.PruneStoppedIDs([]int64{id}) }},
+		{"pause stopped path", func(m *soundManager, _ int64) { m.Pause("released.wav") }},
+		{"resume stopped path", func(m *soundManager, _ int64) { m.Resume("released.wav") }},
+		{"update", func(m *soundManager, _ int64) { m.Update() }},
+	} {
+		t.Run(remove.name, func(t *testing.T) {
+			backend := &soundManagerTestBackend{}
+			var mgr soundManager
+			mgr.Init(backend)
+			id := mgr.Play(13, "released.wav", false, false, 0, 0, 0)
+			other := mgr.Play(14, "retained.wav", false, false, 0, 0, 0)
+			mgr.ReleaseSound(13)
+			backend.playing[id] = false
+			remove.run(&mgr, id)
+			remove.run(&mgr, id)
+			if !slices.Equal(backend.destroys, []engine.Object{13}) {
+				t.Fatalf("DestroyAudio calls = %v, want [13]", backend.destroys)
+			}
+			if len(mgr.path2id) != 1 || mgr.path2id["retained.wav"] != other ||
+				len(mgr.playbacks) != 1 || mgr.playbacks[other].soundObj != 14 ||
+				len(mgr.obj2ids) != 1 || !slices.Equal(mgr.obj2ids[14], []int64{other}) ||
+				len(mgr.pendingDestroy) != 0 || !backend.IsPlaying(other) {
+				t.Fatalf("removal disturbed retained playback or left stale tracking: %+v", mgr)
+			}
+			mgr.StopAll()
+			assertSoundManagerNoTracking(t, &mgr)
+		})
+	}
+}
+
+func (f *soundManagerTestBackend) CreateAudio() engine.Object {
+	return 77
+}
+
+func (f *soundManagerTestBackend) DestroyAudio(obj engine.Object) {
+	f.lifecycle = append(f.lifecycle, fmt.Sprintf("destroy:%d", obj))
+	f.destroys = append(f.destroys, obj)
+}
+
+func (f *soundManagerTestBackend) SetPitch(obj engine.Object, pitch float64) {
+	f.pitch = pitch
+}
+
+func (f *soundManagerTestBackend) GetPitch(obj engine.Object) float64 {
+	return f.pitch
+}
+
+func (f *soundManagerTestBackend) SetPan(obj engine.Object, pan float64) {
+	f.pan = pan
+}
+
+func (f *soundManagerTestBackend) GetPan(obj engine.Object) float64 {
+	return f.pan
+}
+
+func (f *soundManagerTestBackend) SetVolume(obj engine.Object, volume float64) {
+	f.volume = volume
+	f.volumes = append(f.volumes, volume)
+}
+
+func (f *soundManagerTestBackend) GetVolume(obj engine.Object) float64 {
+	return f.volume
+}
+
+func (f *soundManagerTestBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
+	f.nextID++
+	if f.playing == nil {
+		f.playing = make(map[int64]bool)
+	}
+	f.playing[f.nextID] = true
+	f.plays = append(f.plays, soundManagerPlayCall{
+		path:       path,
+		owner:      ownerID,
+		attenation: attenuation,
+		maxDist:    maxDistance,
+	})
+	return f.nextID
+}
+
+func (f *soundManagerTestBackend) Pause(aid int64) {
+	f.pauses = append(f.pauses, aid)
+}
+
+func (f *soundManagerTestBackend) Resume(aid int64) {
+	f.resumes = append(f.resumes, aid)
+}
+
+func (f *soundManagerTestBackend) Stop(aid int64) {
+	f.lifecycle = append(f.lifecycle, fmt.Sprintf("stop:%d", aid))
+	if f.playing != nil {
+		f.playing[aid] = false
+	}
+	f.stops = append(f.stops, aid)
+}
+
+func (f *soundManagerTestBackend) Restart(aid int64) bool {
+	if f.playing == nil || !f.playing[aid] {
+		return false
+	}
+	f.restarts = append(f.restarts, aid)
+	return true
+}
+
+func (f *soundManagerTestBackend) SetLoop(aid int64, loop bool) {
+	f.loops = append(f.loops, soundManagerLoopCall{id: aid, loop: loop})
+}
+
+func (f *soundManagerTestBackend) IsPlaying(aid int64) bool {
+	return f.playing[aid]
+}
+
+func (f *soundManagerTestBackend) StopAll() {
+	f.playing = make(map[int64]bool)
+}
+
+func (b *cloningSoundManagerBackend) GetPan(id engine.Object) float64 { return b.pans[id] }
+
+func (b *cloningSoundManagerBackend) SetPan(id engine.Object, value float64) { b.pans[id] = value }
+
+func (b *cloningSoundManagerBackend) GetPitch(id engine.Object) float64 { return b.pitches[id] }
+
+func (b *cloningSoundManagerBackend) SetPitch(id engine.Object, value float64) { b.pitches[id] = value }
+
+func (b *immediateSoundManagerBackend) PlayWithAttenuation(engine.Object, string, engine.Object, float64, float64) int64 {
+	return b.id
+}
+
+func assertSoundManagerNoTracking(t *testing.T, mgr *soundManager) {
+	t.Helper()
+	if len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
+		t.Fatalf(
+			"manager tracking not cleared: path2id=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
+			mgr.path2id,
+			mgr.obj2ids,
+			mgr.playbacks,
+			mgr.pendingDestroy,
+		)
+	}
+}
+
+func soundManagerAlmostEqual(got, want float64) bool {
+	return math.Abs(got-want) < 1e-9
+}

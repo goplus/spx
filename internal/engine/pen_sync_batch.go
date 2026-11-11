@@ -16,6 +16,8 @@
 
 package engine
 
+import "slices"
+
 // PenBatchFields is the number of float32 lanes in one pen command.
 // [op, objectIDLowBits, objectIDHighBits, a, b, c, d, reserved]
 const PenBatchFields = 8
@@ -83,7 +85,7 @@ func (b *PenSyncBuffer) Flush(send func([]float32)) {
 		return
 	}
 	b.data[0] = float32(count)
-	send(b.data[:len(b.data):len(b.data)])
+	send(slices.Clip(b.data))
 	b.reset()
 }
 

@@ -27,8 +27,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v4/internal/driverbundle"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/release/driverbundle"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 

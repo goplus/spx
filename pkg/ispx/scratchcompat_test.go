@@ -28,7 +28,7 @@ import (
 	"github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
-// Exercise bindings and type identity here; semantic matrices live in internal/scratch.
+// Exercise bindings and type identity here; semantic matrices live in internal/core/scratch.
 const scratchCompatSource = `import (
 	"github.com/goplus/spx/v4"
 	compat "github.com/goplus/spx/v4/pkg/scratchcompat"
@@ -145,7 +145,7 @@ func scratchAdapterOnStack(adapter string) bool {
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
 	for {
 		frame, more := frames.Next()
-		if strings.HasSuffix(frame.Function, "/internal/scratch."+adapter) {
+		if strings.HasSuffix(frame.Function, "/internal/core/scratch."+adapter) {
 			return true
 		}
 		if !more {
@@ -202,10 +202,10 @@ func TestInterpreterScratchCompat(t *testing.T) {
 						"github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex":     scratchcompat.ResolveCostumeIndex,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.SetSoundEffect":          scratchcompat.SetSoundEffect,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.SetVolume":               scratchcompat.SetVolume,
-						"(*github.com/goplus/spx/v4/internal/scratch.List).Init":             (*spx.List).Init,
-						"(*github.com/goplus/spx/v4/internal/scratch.List).InitFrom":         (*spx.List).InitFrom,
-						"(*github.com/goplus/spx/v4/internal/scratch.List).String":           (*spx.List).String,
-						"(github.com/goplus/spx/v4/internal/scratch.Value).String":           spx.Value.String,
+						"(*github.com/goplus/spx/v4/internal/core/scratch.List).Init":        (*scratchcompat.List).Init,
+						"(*github.com/goplus/spx/v4/internal/core/scratch.List).InitFrom":    (*scratchcompat.List).InitFrom,
+						"(*github.com/goplus/spx/v4/internal/core/scratch.List).String":      (*scratchcompat.List).String,
+						"(github.com/goplus/spx/v4/internal/core/scratch.Value).String":      spx.Value.String,
 					} {
 						called[name] = false
 						native := reflect.ValueOf(fn)

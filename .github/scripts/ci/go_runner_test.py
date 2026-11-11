@@ -171,7 +171,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         "web": {
             "coverage-web.out": [
                 "./internal/gdengine/binding/web", "./internal/gdengine/impl", "./internal/engine/wrap",
-                "./pkg/ispx", "./internal/coroutine",
+                "./pkg/ispx", "./internal/engine/coroutine",
             ],
             "coverage-web-engine.out": ["./internal/engine"],
         },

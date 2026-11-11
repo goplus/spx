@@ -20,10 +20,10 @@ import (
 	"reflect"
 
 	"github.com/goplus/ixgo"
-	"github.com/goplus/spx/v4/internal/scratch"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 
 	// This parent package can import the generated adapters beneath internal/.
-	_ "github.com/goplus/spx/v4/pkg/ispx/internal/pkg/github.com/goplus/spx/v4/internal/scratch"
+	_ "github.com/goplus/spx/v4/pkg/ispx/internal/pkg/github.com/goplus/spx/v4/internal/core/scratch"
 )
 
 // This hand-written bridge keeps registration limited to the public aliases'
@@ -31,7 +31,7 @@ import (
 func init() {
 	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "scratch",
-		Path: "github.com/goplus/spx/v4/internal/scratch",
+		Path: "github.com/goplus/spx/v4/internal/core/scratch",
 		NamedTypes: map[string]reflect.Type{
 			"List":  reflect.TypeFor[scratch.List](),
 			"Value": reflect.TypeFor[scratch.Value](),

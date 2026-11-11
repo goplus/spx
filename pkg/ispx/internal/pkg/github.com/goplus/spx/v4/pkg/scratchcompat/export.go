@@ -38,9 +38,9 @@ func init() {
 		Name: "scratchcompat",
 		Path: "github.com/goplus/spx/v4/pkg/scratchcompat",
 		Deps: map[string]string{
-			"github.com/goplus/spx/v4":                  "spx",
-			"github.com/goplus/spx/v4/internal/engine":  "engine",
-			"github.com/goplus/spx/v4/internal/scratch": "scratch",
+			"github.com/goplus/spx/v4":                       "spx",
+			"github.com/goplus/spx/v4/internal/core/scratch": "scratch",
+			"github.com/goplus/spx/v4/internal/engine":       "engine",
 		},
 		Interfaces: map[string]reflect.Type{
 			"CostumeResolver":    reflect.TypeOf((*q.CostumeResolver)(nil)).Elem(),

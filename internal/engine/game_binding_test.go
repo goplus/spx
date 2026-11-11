@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -862,7 +862,7 @@ func TestFrameRuntimeUpdatesPrecedeScriptsAndCapture(t *testing.T) {
 			var scriptValue atomic.Int32
 			game := &frameRecordingGame{step: func(phase string) {
 				steps = append(steps, phase)
-				if phase == "before" && itime.Frame() != 0 {
+				if phase == "before" && clock.Frame() != 0 {
 					t.Error("frame clock advanced before readback")
 				}
 				if phase == "render" && scriptValue.Load() != 42 {
@@ -882,7 +882,7 @@ func TestFrameRuntimeUpdatesPrecedeScriptsAndCapture(t *testing.T) {
 			state.sprites[sprite.Id] = sprite
 			sprite.onPosition = func(mathf.Vec2) {
 				steps = append(steps, "runtime")
-				if itime.Frame() != 1 {
+				if clock.Frame() != 1 {
 					t.Error("runtime update did not see the advanced clock")
 				}
 				if stop {
@@ -918,8 +918,8 @@ func TestFrameStopBoundaries(t *testing.T) {
 			setupExecuteTest(t)
 			resetInputState()
 			resetTriggerEvents()
-			itime.Start()
-			t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start() })
+			clock.Start()
+			t.Cleanup(func() { resetInputState(); resetTriggerEvents(); clock.Start() })
 			isolateCaptureState(t)
 			var steps []string
 			var binding *gameBinding
@@ -960,7 +960,7 @@ func TestFrameStopBoundaries(t *testing.T) {
 			if HasPendingCaptures() != wantPending {
 				t.Errorf("pending capture=%v, want %v", HasPendingCaptures(), wantPending)
 			}
-			if got := itime.Frame(); got != 1 {
+			if got := clock.Frame(); got != 1 {
 				t.Errorf("frame=%d, want 1", got)
 			}
 			if stopAfter != "" {

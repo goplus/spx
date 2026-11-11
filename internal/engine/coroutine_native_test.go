@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	gde "github.com/goplus/spx/v4/internal/gdengine"
-	itime "github.com/goplus/spx/v4/internal/time"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
@@ -220,7 +220,7 @@ func TestEngineDrainStopsWaitsWithoutUpdate(t *testing.T) {
 				t.Error("canceled script resumed after its wait")
 			})
 			current.JoinFirstSlice(thread)
-			frame, round := itime.Frame(), current.ScriptRound()
+			frame, round := clock.Frame(), current.ScriptRound()
 			current.RunAfterStop(func() {
 				afterCalled = true
 				if !cleaned {
@@ -230,7 +230,7 @@ func TestEngineDrainStopsWaitsWithoutUpdate(t *testing.T) {
 			if !thread.Stopped() || !afterCalled {
 				t.Fatalf("shutdown stopped=%v after=%v", thread.Stopped(), afterCalled)
 			}
-			if itime.Frame() != frame || current.ScriptRound() != round {
+			if clock.Frame() != frame || current.ScriptRound() != round {
 				t.Fatal("shutdown advanced a frame or script round")
 			}
 		})

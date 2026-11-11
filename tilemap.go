@@ -21,10 +21,11 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/base/numeric"
+	"github.com/goplus/spx/v4/internal/core/collision"
+	tm "github.com/goplus/spx/v4/internal/core/tilemap"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	tm "github.com/goplus/spx/v4/internal/tilemap"
 )
 
 // -----------------------------------------------------------------------------
@@ -67,12 +68,12 @@ func (p *Game) UnloadTilemap() {
 // -----------------------------------------------------------------------------
 func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
-	engine.Managers().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
+	engine.Managers().TilemapMgr.PlaceTiles(numeric.ConvertFloatSlice[float32](positions), path)
 }
 
 func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
 	path := engine.ToAssetPath(texturePath)
-	engine.Managers().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
+	engine.Managers().TilemapMgr.PlaceTilesWithLayer(numeric.ConvertFloatSlice[float32](positions), path, layerIndex)
 }
 
 func (p *Game) PlaceTile(x, y float64, texturePath string) {
@@ -116,7 +117,7 @@ func (p *Game) setTileMapLayerIndex(index int64) {
 
 func (p *Game) setTileInfo(texturePath string, collisionPoints []float64) {
 	path := engine.ToAssetPath(texturePath)
-	engine.Managers().TilemapMgr.SetTileWithCollisionInfo(path, engine.F64Tof32(collisionPoints))
+	engine.Managers().TilemapMgr.SetTileWithCollisionInfo(path, numeric.ConvertFloatSlice[float32](collisionPoints))
 }
 
 func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2, colliderType string, colliderPivot mathf.Vec2, colliderParams []float64) {

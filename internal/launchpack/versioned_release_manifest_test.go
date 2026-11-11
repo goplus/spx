@@ -168,6 +168,7 @@ func TestVersionedManifestRejectsInvalidInputs(t *testing.T) {
 	spec := testVersionedReleaseManifestSpec(t.TempDir())
 	parse := func(data []byte) (string, error) { return string(data), nil }
 	version := func(s string) string { return s }
+	//lint:ignore SA1012 Verify manifest acquisition rejects a nil context.
 	if _, _, err := acquireVersionedReleaseManifest(nil, spec, parse, version); err == nil || !strings.Contains(err.Error(), "nil context") {
 		t.Fatalf("nil context: %v", err)
 	}

@@ -18,6 +18,7 @@ package numeric
 
 import (
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -42,4 +43,47 @@ func TestFloat64ConvertsBuiltinNumbersOnly(t *testing.T) {
 			t.Errorf("Float64(%T) = %v, %v; want 0, false", value, got, ok)
 		}
 	}
+}
+
+func TestFloatSliceConversions(t *testing.T) {
+	t.Run("nil and empty", func(t *testing.T) {
+		if ConvertFloatSlice[float32, float64](nil) != nil || ConvertFloatSlice[float64, float32](nil) != nil {
+			t.Fatal("conversion did not preserve nil")
+		}
+		if got := ConvertFloatSlice[float32]([]float64{}); got == nil || len(got) != 0 {
+			t.Fatalf("ConvertFloatSlice[float32](empty) = %#v, want non-nil empty slice", got)
+		}
+		if got := ConvertFloatSlice[float64]([]float32{}); got == nil || len(got) != 0 {
+			t.Fatalf("ConvertFloatSlice[float64](empty) = %#v, want non-nil empty slice", got)
+		}
+	})
+	t.Run("values and ownership", func(t *testing.T) {
+		input := []float64{-2.5, 0, 1.25}
+		narrowed := ConvertFloatSlice[float32](input)
+		if !slices.Equal(narrowed, []float32{-2.5, 0, 1.25}) {
+			t.Fatalf("ConvertFloatSlice[float32] = %v", narrowed)
+		}
+		widened := ConvertFloatSlice[float64](narrowed)
+		if !slices.Equal(widened, input) {
+			t.Fatalf("ConvertFloatSlice[float64] = %v, want %v", widened, input)
+		}
+		narrowed[0] = 7
+		widened[1] = 8
+		if input[0] != -2.5 || input[1] != 0 || widened[0] != -2.5 || narrowed[1] != 0 {
+			t.Fatal("conversion shared mutable storage")
+		}
+	})
+	t.Run("IEEE values", func(t *testing.T) {
+		input := []float64{math.Copysign(0, -1), math.Inf(1), math.Inf(-1), math.NaN(), math.MaxFloat64, -math.MaxFloat64}
+		got := ConvertFloatSlice[float64](ConvertFloatSlice[float32](input))
+		if len(got) != len(input) {
+			t.Fatalf("converted length = %d, want %d", len(got), len(input))
+		}
+		if got[0] != 0 || !math.Signbit(got[0]) || !math.IsInf(got[1], 1) || !math.IsInf(got[2], -1) || !math.IsNaN(got[3]) {
+			t.Fatalf("special values were not preserved: %v", got[:4])
+		}
+		if !math.IsInf(got[4], 1) || !math.IsInf(got[5], -1) {
+			t.Fatalf("overflow did not preserve sign: %v", got[4:])
+		}
+	})
 }

@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 func TestRand0SwapsReversedBounds(t *testing.T) {
@@ -83,7 +83,7 @@ func TestRand1EqualBoundsStillConsumeRandomSource(t *testing.T) {
 }
 
 // Keep the legacy entry points wired to the core rules. Boundary matrices live
-// with their implementation in internal/scratch.
+// with their implementation in internal/core/scratch.
 func TestLegacyOperatorDelegation(t *testing.T) {
 	if got := LimitPrecision(5e-10); got != 0 {
 		t.Errorf("LimitPrecision = %v", got)
@@ -142,8 +142,8 @@ func TestNumericAndClockUtilities(t *testing.T) {
 	if got := Compare("z", "a"); got != 1 {
 		t.Fatalf("lexical comparison = %d, want 1", got)
 	}
-	itime.Start()
-	itime.Update(0.25, 30)
+	clock.Start()
+	clock.Update(0.25, 30)
 	if DeltaTime() != 0.25 || TimeSinceLevelLoad() != 0.25 {
 		t.Fatalf("logical clock = %v/%v", DeltaTime(), TimeSinceLevelLoad())
 	}

@@ -21,10 +21,10 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
-	"github.com/goplus/spx/v4/internal/time"
 )
 
 // ============================================================================
@@ -402,7 +402,7 @@ func (a *animationComponent) doTween(name SpriteAnimationName, base *coreproject
 		}
 	}
 	for elapsed := 0.0; elapsed < params.duration && !info.IsCanceled; {
-		elapsed += time.DeltaTime()
+		elapsed += clock.DeltaTime()
 		a.applyTweenStep(info, mathf.Clamp01f(elapsed/params.duration), &params)
 		engine.WaitNextFrame()
 	}

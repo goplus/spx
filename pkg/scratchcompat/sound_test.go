@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spx/v4"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
@@ -79,7 +79,7 @@ func TestSoundControlsYieldBeforeFollowingStatement(t *testing.T) {
 					for range 2 {
 						operation.call(target)
 						order = append(order, "music")
-						frames = append(frames, itime.Frame())
+						frames = append(frames, clock.Frame())
 					}
 				})
 				scheduler.JoinFirstSlice(music)
@@ -97,7 +97,7 @@ func TestSoundControlsYieldBeforeFollowingStatement(t *testing.T) {
 				}
 
 				for frame := int64(1); frame <= 2; frame++ {
-					itime.Update(1.0/30, 30)
+					clock.Update(1.0/30, 30)
 					scheduler.Update()
 					if len(frames) != int(frame) || frames[len(frames)-1] != frame {
 						t.Fatalf("frame %d: subsequent statements ran at %v", frame, frames)
@@ -136,7 +136,7 @@ func TestSoundControlsOutsideCoroutine(t *testing.T) {
 
 func newSoundScheduler(t *testing.T) *coroutine.Scheduler {
 	t.Helper()
-	itime.Start()
+	clock.Start()
 	scheduler := coroutine.New(func(report coroutine.PanicReport) {
 		t.Errorf("unexpected coroutine panic: %v", report.Value)
 	})
@@ -144,7 +144,7 @@ func newSoundScheduler(t *testing.T) *coroutine.Scheduler {
 	t.Cleanup(func() {
 		scheduler.RunAfterStop(nil)
 		engine.SetScheduler(nil)
-		itime.Start()
+		clock.Start()
 	})
 	return scheduler
 }

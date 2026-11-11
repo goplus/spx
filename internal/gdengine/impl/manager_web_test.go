@@ -10,7 +10,7 @@ import (
 	"syscall/js"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	webffi "github.com/goplus/spx/v4/internal/gdengine/binding/web"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"

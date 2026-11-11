@@ -25,7 +25,7 @@ import (
 	"github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
-// The semantic matrices live in internal/scratch; this checks the public facade.
+// The semantic matrices live in internal/core/scratch; this checks the public facade.
 func TestOperatorDelegation(t *testing.T) {
 	if got := scratchcompat.LimitPrecision(5e-10); got != 0 {
 		t.Errorf("LimitPrecision = %v", got)
@@ -39,7 +39,7 @@ func TestOperatorDelegation(t *testing.T) {
 	if !scratchcompat.Contains("Scratch", "RaTc") {
 		t.Error("Contains lost case-insensitive matching")
 	}
-	items := spx.NewList("01")
+	items := scratchcompat.NewList("01")
 	if got := scratchcompat.Compare(items.At(0), 2); got != -1 {
 		t.Errorf("Compare = %v", got)
 	}
@@ -63,6 +63,7 @@ func TestCharAtUsesOneBasedIndex(t *testing.T) {
 	if got := scratchcompat.CharAt("", 1); got != "" {
 		t.Errorf("CharAt(empty) = %q", got)
 	}
+	//lint:ignore SA1019 Verify the legacy API retains zero-based indexing.
 	if got := spx.CharAt("A😀B", 0); got != "A" {
 		t.Errorf("spx.CharAt lost zero-based indexing: %q", got)
 	}

@@ -282,13 +282,7 @@ func (l *Logger) log(level Level, format string, args ...any) {
 		return
 	}
 
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(format, args...)
-	} else {
-		msg = format
-	}
-	l.targetLogger(level).Printf("[%s] [%s] %s", level, l.prefix, msg)
+	l.targetLogger(level).Printf("[%s] [%s] %s", level, l.prefix, l.format(format, args...))
 }
 
 func (l *Logger) format(format string, args ...any) string {

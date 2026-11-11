@@ -21,7 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/base/sliceutil"
+	"github.com/goplus/spx/v4/internal/base"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
@@ -417,7 +417,7 @@ func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
 	batch := proxyBatch{changes: p.shapeMgr.proxyChangeBuffer}
 	p.shapeMgr.proxyChangeBuffer = nil
 	defer func() {
-		p.shapeMgr.proxyChangeBuffer = sliceutil.Reset(batch.changes, 0)
+		p.shapeMgr.proxyChangeBuffer = base.Reset(batch.changes, 0)
 	}()
 	p.syncBuffer.Clear()
 	p.shapeMgr.collectProxyChanges(activeShapes, p.syncBuffer, &batch)
@@ -438,7 +438,7 @@ func (p *Game) pullPhysicsPositions() {
 	}
 	pull.ids = pull.ids[:0]
 	defer func() {
-		pull.sprites = sliceutil.Reset(pull.sprites, 0)
+		pull.sprites = base.Reset(pull.sprites, 0)
 		if reuse {
 			pull.busy.Store(false)
 		}
@@ -480,7 +480,7 @@ func (p *Game) dispatchPhysicsTriggers() {
 		}
 		src.doWhenTouchStart(dst)
 	}
-	p.triggerEvents = sliceutil.Reset(p.triggerEvents, 0)
+	p.triggerEvents = base.Reset(p.triggerEvents, 0)
 }
 
 func (p *baseObj) applyLayerUpdate() {

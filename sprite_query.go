@@ -18,10 +18,11 @@ package spx
 
 import (
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
@@ -380,9 +381,9 @@ func withPendingCloneSensingVisibility(sprites []*SpriteImpl, call func()) {
 	defer func() {
 		failure := recover()
 		var cleanupFailure any
-		for i := len(leases) - 1; i >= 0; i-- {
+		for _, lease := range slices.Backward(leases) {
 			if recovered := capturePendingCloneSensingPanic(func() {
-				releasePendingCloneSensingVisibility(leases[i])
+				releasePendingCloneSensingVisibility(lease)
 			}); cleanupFailure == nil {
 				cleanupFailure = recovered
 			}

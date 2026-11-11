@@ -23,8 +23,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v4/internal/projectassets"
-	"github.com/goplus/spx/v4/internal/projectbundle"
+	"github.com/goplus/spx/v4/internal/launchpack/assets"
+	"github.com/goplus/spx/v4/internal/launchpack/bundle"
 	"github.com/goplus/spx/v4/internal/projectpolicy"
 )
 
@@ -87,22 +87,22 @@ func topLevelProjectName(projectDir, projectFile string) (string, error) {
 	return rel, nil
 }
 
-func prepareProjectBundleConfig(cfg Config, snapshot projectpolicy.PortableConfigSnapshot) (projectbundle.Config, error) {
+func prepareProjectBundleConfig(cfg Config, snapshot projectpolicy.PortableConfigSnapshot) (bundle.Config, error) {
 	files, err := collectProjectAllowlist(cfg)
 	if err != nil {
-		return projectbundle.Config{}, err
+		return bundle.Config{}, err
 	}
 	if err := snapshot.Verify(cfg.ProjectDir); err != nil {
-		return projectbundle.Config{}, fmt.Errorf("launchpack: %w", err)
+		return bundle.Config{}, fmt.Errorf("launchpack: %w", err)
 	}
-	return projectbundle.Config{ProjectDir: cfg.ProjectDir, ProjectFiles: files,
+	return bundle.Config{ProjectDir: cfg.ProjectDir, ProjectFiles: files,
 		IncludeConfig: snapshot.Present(), ConfigBytes: snapshot.Bytes(), PackDir: cfg.PackDir,
 		Output: cfg.Output}, nil
 }
 
 // collectReferencedProjectFiles resolves explicit resources outside PackDir.
 func collectReferencedProjectFiles(cfg Config) ([]string, error) {
-	referenced, err := projectassets.Collect(projectassets.Config{
+	referenced, err := assets.Collect(assets.Config{
 		ProjectDir: cfg.ProjectDir,
 		PackDir:    cfg.PackDir,
 		PackIndex:  cfg.PackIndex,

@@ -25,8 +25,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v4/internal/driverbundle"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/release/driverbundle"
 )
 
 type descriptorInputs []string

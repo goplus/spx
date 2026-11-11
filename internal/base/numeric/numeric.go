@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package numeric converts built-in Go number types without coercing other values.
+// Package numeric provides conversions for built-in Go numbers and numeric slices.
 package numeric
 
 // Float64 converts built-in integer and floating-point values to float64.
@@ -47,4 +47,16 @@ func Float64(value any) (float64, bool) {
 		return float64(value), true
 	}
 	return 0, false
+}
+
+// ConvertFloatSlice converts floating-point values into a new slice, preserving nil.
+func ConvertFloatSlice[To, From ~float32 | ~float64](slice []From) []To {
+	if slice == nil {
+		return nil
+	}
+	out := make([]To, len(slice))
+	for i, v := range slice {
+		out[i] = To(v)
+	}
+	return out
 }

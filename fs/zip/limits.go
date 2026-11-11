@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goplus/spx/v4/internal/zippreflight"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 // Limits bound ZIP metadata and decompression work.
@@ -85,12 +85,12 @@ func (r *zipLimitedReadCloser) Read(p []byte) (int, error) {
 
 // preflightZipArchive bounds work before zip.NewReader allocates entries.
 func preflightZipArchive(reader io.ReaderAt, size int64) error {
-	err := zippreflight.Check(reader, size, zippreflight.Limits{
+	err := fileutil.CheckZIPPreflight(reader, size, fileutil.ZIPPreflightLimits{
 		MaxArchiveBytes:          MaxZipArchiveBytes,
 		MaxCentralDirectoryBytes: MaxZipCentralDirectoryBytes,
 		MaxEntries:               MaxZipEntries,
 	})
-	if zippreflight.IsLimit(err) {
+	if fileutil.IsZIPPreflightLimit(err) {
 		return fmt.Errorf("%w: %v", ErrArchiveLimit, err)
 	}
 	return err

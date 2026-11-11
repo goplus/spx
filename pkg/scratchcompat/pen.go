@@ -18,7 +18,7 @@ package scratchcompat
 
 import (
 	"github.com/goplus/spx/v4"
-	"github.com/goplus/spx/v4/internal/scratch"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 )
 
 // PenColorParamFromString accepts color, saturation, brightness, and

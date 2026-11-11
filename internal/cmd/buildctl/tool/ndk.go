@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
-	"github.com/goplus/spx/v4/internal/zippreflight"
 )
 
 type toolSetupNDKConfig struct {
@@ -381,7 +381,7 @@ func verifyNDKArchive(path string, archive androidNDKArchive) error {
 	if digest := hex.EncodeToString(hash.Sum(nil)); digest != archive.sha256 {
 		return invalidNDKArchivef("SHA-256 %s does not match locked digest %s", digest, archive.sha256)
 	}
-	if err := zippreflight.Check(file, info.Size(), zippreflight.Limits{
+	if err := fileutil.CheckZIPPreflight(file, info.Size(), fileutil.ZIPPreflightLimits{
 		MaxArchiveBytes:          maxNDKArchiveBytes,
 		MaxCentralDirectoryBytes: maxNDKCentralDirectoryBytes,
 		MaxEntries:               maxNDKEntries,

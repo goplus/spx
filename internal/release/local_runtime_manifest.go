@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v4/internal/strictjson"
+	"github.com/goplus/spx/v4/internal/base/strictjson"
 )
 
 const localRuntimeManifestSchema = "spx-local-engine/v1"

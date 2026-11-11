@@ -18,14 +18,14 @@ package engine
 
 import (
 	"context"
-	stdtime "time"
+	"time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/profiler"
-	itime "github.com/goplus/spx/v4/internal/time"
 )
 
-const warpBudget = 500 * stdtime.Millisecond
+const warpBudget = 500 * time.Millisecond
 
 var scheduler *coroutine.Scheduler
 
@@ -84,9 +84,9 @@ func WaitMainThread(call func()) {
 }
 
 func Wait(secs float64) float64 {
-	startTime := itime.TimeSinceLevelLoad()
+	startTime := clock.TimeSinceLevelLoad()
 	scheduler.Wait(secs)
-	return itime.TimeSinceLevelLoad() - startTime
+	return clock.TimeSinceLevelLoad() - startTime
 }
 
 func WaitYield() {
@@ -95,14 +95,14 @@ func WaitYield() {
 
 func WaitNextFrame() float64 {
 	scheduler.WaitNextFrame()
-	return itime.DeltaTime()
+	return clock.DeltaTime()
 }
 
 func WaitNextFrameIfNeeded() float64 {
 	if ShouldWaitNextFrame() {
 		return WaitNextFrame()
 	}
-	return itime.DeltaTime()
+	return clock.DeltaTime()
 }
 
 func WaitForChan[T any](ch <-chan T) T {

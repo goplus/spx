@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v4/internal/projectbundle"
+	"github.com/goplus/spx/v4/internal/launchpack/bundle"
 	"github.com/goplus/spx/v4/internal/projectpolicy"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 	"github.com/goplus/spx/v4/internal/runtimepayload"
@@ -121,7 +121,7 @@ func buildLauncher(ctx context.Context, cfg Config, assets Assets, configSnapsho
 	return payloadDigest, manifestDigest, err
 }
 
-func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Assets, projectConfig projectbundle.Config, streams IO) (payloadDigest, manifestDigest string, err error) {
+func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Assets, projectConfig bundle.Config, streams IO) (payloadDigest, manifestDigest string, err error) {
 	projectPath := filepath.Join(workDir, "project.zip")
 	projectFile, err := os.OpenFile(projectPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -132,7 +132,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Asse
 			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("launchpack: close project archive: %w", closeErr)
 		}
 	}()
-	projectDigest, err := projectbundle.WriteArchive(projectFile, projectConfig)
+	projectDigest, err := bundle.WriteArchive(projectFile, projectConfig)
 	if err != nil {
 		return "", "", fmt.Errorf("launchpack: collect project: %w", err)
 	}

@@ -22,11 +22,12 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/base/numeric"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/scratch"
-	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	spxapi "github.com/goplus/spx/v4/pkg/spx"
 )
 
@@ -161,11 +162,11 @@ func (p *Game) Wait(secs Seconds) {
 }
 
 func (p *Game) Timer() Seconds {
-	return itime.Timer()
+	return clock.Timer()
 }
 
 func (p *Game) ResetTimer() {
-	itime.ResetTimer()
+	clock.ResetTimer()
 }
 
 func (p *Game) Now() time.Time {
@@ -251,7 +252,7 @@ func (p *Game) FindPath__2(xFrom, yFrom, xTo, yTo float64, withDebug, withJump b
 
 	arr := engine.Managers().NavigationMgr.FindPath(mathf.NewVec2(xFrom, yFrom), mathf.NewVec2(xTo, yTo), withJump)
 	result := arr.([]float32)
-	return engine.F32Tof64(result)
+	return numeric.ConvertFloatSlice[float64](result)
 }
 
 func (p *Game) getMousePos() (x, y float64) {

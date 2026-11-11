@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/preprocessor"
 )
 
 // ParseGDExtensionInterface expands the parser headers with an in-memory source
@@ -36,11 +35,11 @@ func ParseGDExtensionInterface(nativeDir, extensionHeader string) (clang.CHeader
 	if err != nil {
 		return clang.CHeaderFileAST{}, err
 	}
-	preprocFile, err := preprocessor.ParsePreprocessorString(source)
+	preprocFile, err := parsePreprocessor(source)
 	if err != nil {
 		return clang.CHeaderFileAST{}, fmt.Errorf("error preprocessing %s: %w", nativeDir, err)
 	}
-	ast, err := clang.ParseCString(preprocFile.Eval(false))
+	ast, err := clang.ParseCString(preprocFile.eval(false))
 	if err != nil {
 		return clang.CHeaderFileAST{}, fmt.Errorf("error parsing %s: %w", nativeDir, err)
 	}

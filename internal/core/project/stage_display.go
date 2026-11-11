@@ -21,7 +21,7 @@ import (
 	"reflect"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/tools"
+	"github.com/goplus/spx/v4/internal/base/numeric"
 )
 
 const (
@@ -80,7 +80,7 @@ func ParseMonitorShape(shape StageShape) (config MonitorShape, err error) {
 	config.Style, _ = ShapeValue(shape, "style", "default").(string)
 	config.Size = 1
 	if shape["size"] != nil {
-		config.Size, _ = tools.GetFloat(shape["size"])
+		config.Size, _ = numeric.ParseFloat64(shape["size"])
 	}
 	return
 }

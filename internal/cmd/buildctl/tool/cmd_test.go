@@ -162,7 +162,7 @@ func TestToolInstallFindsRepository(t *testing.T) {
 		t.Fatalf("missing repository error = %v", err)
 	}
 	writeToolFixture(t, filepath.Join(root, "go.mod"), "module fixture\n", 0o644)
-	writeToolFixture(t, filepath.Join(root, "internal", "tools", "fixture"), "", 0o644)
+	writeToolFixture(t, filepath.Join(root, "internal", "cmd", "buildctl", "fixture"), "", 0o644)
 	log := filepath.Join(root, "install-args")
 	t.Setenv("TOOL_LOG", log)
 	writeToolFixture(t, filepath.Join(root, "cmd", "spx", "install.sh"), "printf '%s\\n' \"$@\" > \"$TOOL_LOG\"\n", 0o644)

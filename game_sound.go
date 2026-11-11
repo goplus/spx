@@ -19,7 +19,6 @@ package spx
 import (
 	"math"
 
-	internalaudio "github.com/goplus/spx/v4/internal/audio"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
@@ -35,7 +34,8 @@ type sound *coreproject.SoundConfig
 // -----------------------------------------------------------------------------
 const (
 	defaultAudioMaxDist               = coreproject.DefaultAudioMaxDistance
-	invalidSoundObject  engine.Object = internalaudio.InvalidSoundID
+	invalidSoundObject  engine.Object = 0
+	invalidPlaybackID   int64         = 0
 )
 
 // -----------------------------------------------------------------------------

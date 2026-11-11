@@ -44,28 +44,6 @@ func UniformVec2(v float64) mathf.Vec2 {
 	return mathf.NewVec2(v, v)
 }
 
-func F64Tof32(slice []float64) []float32 {
-	if slice == nil {
-		return nil
-	}
-	out := make([]float32, len(slice))
-	for i, v := range slice {
-		out[i] = float32(v)
-	}
-	return out
-}
-
-func F32Tof64(slice []float32) []float64 {
-	if slice == nil {
-		return nil
-	}
-	out := make([]float64, len(slice))
-	for i, v := range slice {
-		out[i] = float64(v)
-	}
-	return out
-}
-
 func boolArg(value bool) float64 {
 	if value {
 		return 1
@@ -95,10 +73,7 @@ func ensureFloat32BufferSize(buffer []float32, size int) []float32 {
 	if cap(buffer) < size {
 		newCap := size * 2
 		if newCap < size || newCap < 16 {
-			newCap = size
-			if newCap < 16 {
-				newCap = 16
-			}
+			newCap = max(size, 16)
 		}
 		return make([]float32, size, newCap)
 	}

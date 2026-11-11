@@ -21,12 +21,11 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
-	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -314,8 +313,8 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 
 	sprite := newTouchingTestSprite("mover", 0, 0, 1)
 	sprite.costumes = []*costume{
-		{name: "idle", path: "idle.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
-		{name: "hit", path: "hit.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
+		{name: "idle", path: "idle.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
+		{name: "hit", path: "hit.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
 	}
 	sprite.costumeIndex = 0
 	sprite.runtimeState.isCostumeDirty = false
@@ -507,7 +506,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 				ghost:             make(map[pkgengine.Object]float64),
 			}
 			pkgengine.SpriteMgr = mgr
-			itime.Start()
+			clock.Start()
 
 			ground := newCloneLimitSprite(game, "Ground")
 			player := newCloneLimitSprite(game, "Player")
@@ -538,7 +537,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 			var samples, missedFrames []int64
 			player.OnStart(func() {
 				Forever(func() {
-					frame := itime.Frame()
+					frame := clock.Frame()
 					touching := player.Touching__1("Ground")
 					if frame > 0 {
 						samples = append(samples, frame)
@@ -555,7 +554,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 			for range frames {
 				currentScheduler.Update()
 				flushCloneProxyUpdates(game)
-				itime.Update(1.0/30, 30)
+				clock.Update(1.0/30, 30)
 			}
 			if len(samples) != frames-1 {
 				t.Fatalf("collision samples = %v, want one per frame after startup", samples)
@@ -672,8 +671,8 @@ func TestTouchingNameUsesRotatedCostume(t *testing.T) {
 	_, mgr, receiver, target := newTouchingPair(t, false)
 	receiver.SetXYpos(4, 0)
 	target.costumes = []*costume{
-		{name: "small", atlas: true, frame: assetutil.FrameDescriptor{Width: 2, Height: 10, BitmapResolution: 1}},
-		{name: "wide", atlas: true, frame: assetutil.FrameDescriptor{Width: 10, Height: 2, BitmapResolution: 1}},
+		{name: "small", atlas: true, frame: costumeFrame{Width: 2, Height: 10, BitmapResolution: 1}},
+		{name: "wide", atlas: true, frame: costumeFrame{Width: 10, Height: 2, BitmapResolution: 1}},
 	}
 	target.transform().direction = 90
 	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }

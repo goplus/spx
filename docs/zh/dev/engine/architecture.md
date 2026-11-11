@@ -12,11 +12,19 @@ Go 到引擎的边界随平台变化：原生平台通过 GDExtension/native 绑
 
 | 层 | 职责 | 边界 |
 | --- | --- | --- |
-| 根 `spx` 包 | 游戏/精灵公开接口、对象装配、脚本与帧调度 | 持有游戏对象和引擎代理 |
-| `internal/core/project` | 配置、打包配置覆盖、字体和显示方案 | 消费资源能力，不选择引擎 |
-| `internal/core/runtime`、`internal/input` | 输入归一化、回放数据和脚本循环规则 | 处理值，通过参数接收回调和时钟 |
-| `internal/projectloader` | 运行时资源装配 | 先适配引擎资源，再交给核心配置层 |
+| 根 `spx` 包 | 游戏/精灵公开接口、资源装配、造型帧、动画载荷、声音播放生命周期、脚本与帧调度 | 持有游戏对象和引擎代理 |
+| `internal/core/clock` | 逻辑帧时间、固定步长与计时器 | 后端无关的游戏时钟，区别于真实时间 |
+| `internal/core/collision` | 碰撞类型、精度默认值与 AABB 规则 | 领域规则，不依赖引擎 |
+| `internal/core/scratch` | Scratch 值、列表、运算与画笔语义 | 保持兼容语义隔离，不依赖引擎 |
+| `internal/core/project` | 配置、共享资源索引解析与合并、打包配置覆盖、字体和显示方案 | 消费资源能力，不选择引擎 |
+| `internal/core/tilemap` | 瓦片地图解析、数据模型与地图边界计算 | 保持独立包，不依赖引擎 |
+| `internal/core/runtime`、`internal/core/input` | 输入归一化、回放数据和脚本循环规则 | 处理值，通过参数接收回调和时钟 |
+| `internal/base` | 默认值处理与通用切片操作 | 仅依赖标准库 |
+| `internal/base/fileutil` | 文件操作、可移植路径检查、稳定读取和 ZIP 预检 | 不同操作使用独立 API，保留各自的行为保证 |
+| 其他 `internal/base/*` 包 | 数值转换、JSON 校验、HTTP 策略和源码工具 | 各工具保持独立包，不依赖引擎 |
 | `internal/engine` | 引擎生命周期、坐标转换、帧同步 | 使用有类型的 manager 包装 |
+| `internal/engine/coroutine` | 协作式调度、等待、脚本生命周期与关闭屏障 | 保持独立包，通过 `internal/engine/platform` 协调主线程调用 |
+| `internal/engine/ui` | UI 控件、文本布局与 UI 节点绑定 | 保持独立包，单向依赖 `internal/engine` |
 | `internal/engine/wrap` | 管理器包装、主线程调度和绑定状态 | 公开与内部调用共用包装器，私有持有原始后端 |
 | `internal/gdengine` | 原生/Web 传输、回调和绑定生命周期 | 后端只负责参数转换与 ABI 调用 |
 | `godot_modules/spx` | 引擎侧实现与导出的 manager 声明 | 由 SPX 仓库持有，与独立 Godot 仓库一起构建 |
@@ -25,26 +33,23 @@ Go 到引擎的边界随平台变化：原生平台通过 GDExtension/native 绑
 ```mermaid
 flowchart TD
     API[spx 装配与游戏逻辑] --> Core[core project 和 runtime]
-    API --> Loader[projectloader]
     API --> Engine[engine]
-    Loader --> Core
-    Loader --> Engine
-    Core --> Input[input 数据与规则]
+    Core --> Input[core/input 数据与规则]
     Engine --> Input
     Engine --> Wrappers[engine/wrap 和 gdengine]
     Wrappers --> Godot[godot_modules/spx]
     CLI[CLI 打包] --> Core
 ```
 
-配置解析只接收一次资源目录。运行时加载器把引擎查找放在打包配置覆盖层的**下方**，后续精灵、声音和瓦片地图都沿用同一目录与优先级。准备阶段根据该目录定位资源，不依赖上一个游戏的全局资源根目录。字体目录发现和二进制存在性检查是可选目录能力：Web 解释器可以验证 Godot 挂载的字体，而不必从解释器文件系统读取字体二进制。核心解析和离线打包不应要求启动引擎，也不需要全局后端注册钩子。
+配置解析只接收一次资源目录。根包中的 `game_resources.go` 把引擎查找放在打包配置覆盖层的**下方**，后续精灵、声音和瓦片地图都沿用同一目录与优先级。准备阶段根据该目录定位资源，不依赖上一个游戏的全局资源根目录。字体目录发现和二进制存在性检查是可选目录能力：Web 解释器可以验证 Godot 挂载的字体，而不必从解释器文件系统读取字体二进制。核心解析和离线打包不应要求启动引擎，也不需要全局后端注册钩子。
 
-输入事件归属 `internal/input`，`internal/engine` 为既有调用方保留类型别名。这样不需要转换或复制事件切片，输入规则测试也无需初始化引擎。公开的具名键码类型保持兼容。
+输入事件归属 `internal/core/input`，`internal/engine` 为既有调用方保留类型别名。这样不需要转换或复制事件切片，输入规则测试也无需初始化引擎。公开的具名键码类型保持兼容。
 
 根包有意承担装配职责。公开重载、基于反射的 XGo 对象和生成的解释器导出共同约束包边界。可复用规则进入核心包；依赖引擎且只有一个使用方的实现留在所属对象附近。仅拆分文件并不能形成有价值的架构边界。
 
 ### 管理器绑定生命周期
 
-共享管理器包装在派发前捕获一次绑定，并在排队调用执行时复核同一绑定，重新绑定不会把旧调用转交给新会话。绑定查找、安装、派发器快照和原生平台探测共用短临界区，任何锁都不跨越派发或后端回调。
+共享管理器包装在派发前捕获一次绑定，并在排队调用执行时复核同一绑定，重新绑定不会把旧调用转交给新会话。绑定查找、安装、派发器快照和原生平台探测通过 `platform.ManagerMu` 共用短临界区，任何锁都不跨越派发或后端回调。
 
 解绑会拒绝后续查找和排队调用，但不等待已经通过最终目标校验的调用；协程清退与后端资源销毁仍由引擎生命周期负责。直接读写公开管理器全局变量仍须与 link/unlink 协调；保留的包装引用与零值 facade 使用同步查找路径。
 

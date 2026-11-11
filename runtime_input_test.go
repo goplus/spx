@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 func TestOnEngineBeforeUpdateSamplesInputBeforeConditions(t *testing.T) {
@@ -43,11 +43,11 @@ func TestOnEngineBeforeUpdateSamplesInputBeforeConditions(t *testing.T) {
 			game.lifecycleState.IsRunned.Store(true)
 			game.lifecycleState.StartDispatched.Store(true)
 			input.point.X, input.point.Y = 23, -17
-			frame := itime.Frame()
+			frame := clock.Frame()
 			samples, handlers := 0, 0
 			game.OnCond(func() bool {
 				samples++
-				if game.MouseX() != input.point.X || game.MouseY() != input.point.Y || itime.Frame() != frame {
+				if game.MouseX() != input.point.X || game.MouseY() != input.point.Y || clock.Frame() != frame {
 					t.Error("condition did not observe current input before the clock advanced")
 				}
 				return true
@@ -56,7 +56,7 @@ func TestOnEngineBeforeUpdateSamplesInputBeforeConditions(t *testing.T) {
 			if samples != 1 || handlers != 0 || game.inputMgr.frame.pending == nil {
 				t.Fatalf("samples=%d, handlers=%d, pending=%v, want 1, 0, and a prepared frame", samples, handlers, game.inputMgr.frame.pending != nil)
 			}
-			itime.Update(1.0/30, 30)
+			clock.Update(1.0/30, 30)
 			game.dispatchFrameEvents()
 			currentScheduler.Update()
 			if handlers != 1 {
@@ -85,7 +85,7 @@ func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
 	samples, conditions, timers := 0, 0, 0
 	game.OnCond(func() bool { samples++; return true }, func() { conditions++ })
 	game.OnTimer(0.1, func() { timers++ })
-	frame := itime.Frame() + 1
+	frame := clock.Frame() + 1
 
 	game.OnEngineBeforeUpdate(0.1)
 	if pending := game.inputMgr.frame.pending; pending == nil || len(pending.events) != 0 {
@@ -94,14 +94,14 @@ func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
 	if samples != 1 || conditions != 0 || timers != 0 {
 		t.Fatalf("before clock: samples/conditions/timers = %d/%d/%d, want 1/0/0", samples, conditions, timers)
 	}
-	itime.Update(0.1, 30)
+	clock.Update(0.1, 30)
 	for update := range 2 {
 		game.OnEngineUpdate(0.1)
 		currentScheduler.Update()
 		if samples != 1 || conditions != 1 || timers != 1 {
 			t.Fatalf("update %d: samples/conditions/timers = %d/%d/%d, want 1/1/1", update+1, samples, conditions, timers)
 		}
-		if game.inputMgr.frame.pending != nil || itime.Frame() != frame {
+		if game.inputMgr.frame.pending != nil || clock.Frame() != frame {
 			t.Fatal("update retained the consumed frame or advanced the clock")
 		}
 	}
@@ -123,7 +123,7 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 	game.OnCond(func() bool { samples++; return true }, func() { conditions++ })
 	game.OnKey__0(KeyA, func() { keys++ })
 	game.OnEngineBeforeUpdate(1.0 / 30)
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	game.dispatchFrameEvents()
 	currentScheduler.Update()
 	session.endFrame()
@@ -132,7 +132,7 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 	}
 
 	game.OnEngineBeforeUpdate(1.0 / 30)
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	game.OnEngineUpdate(1.0 / 30)
 	currentScheduler.Update()
 	if samples != 1 || conditions != 1 || keys != 1 {
@@ -201,7 +201,7 @@ func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
 		close(finished)
 	})
 	game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: KeySpace}}}
-	frame := itime.Frame()
+	frame := clock.Frame()
 	returned := make(chan struct{})
 	go func() {
 		game.dispatchFrameEvents()
@@ -212,7 +212,7 @@ func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("input dispatch waited for a handler's future frame")
 	}
-	if itime.Frame() != frame {
+	if clock.Frame() != frame {
 		t.Fatal("input dispatch advanced the frame clock")
 	}
 	currentScheduler.Update()
@@ -226,7 +226,7 @@ func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
 		t.Fatal("handler resumed its next-frame wait in the current frame")
 	default:
 	}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	currentScheduler.Update()
 	select {
 	case <-finished:
@@ -237,23 +237,23 @@ func TestDispatchFrameEventsDoesNotWaitForFutureHandlerFrames(t *testing.T) {
 
 func TestDispatchFrameEventsUsesAdvancedClockForDueTimers(t *testing.T) {
 	_, game := setupInputFrameGame(t)
-	itime.RegisterTimer(0.1)
-	itime.RegisterTimer(0.3)
+	clock.RegisterTimer(0.1)
+	clock.RegisterTimer(0.3)
 	var routed []int64
 	var frames []int64
 	game.scriptEvents.manager.Add(coreevent.BucketAnyKeyPressed, coreevent.NewSink(game, nil, func(value any) bool {
 		routed = append(routed, int64(value.(Key)))
-		frames = append(frames, itime.Frame())
+		frames = append(frames, clock.Frame())
 		return false
 	}))
 	game.scriptEvents.manager.Add(coreevent.BucketTimer, coreevent.NewSink(game, nil, func(value any) bool {
 		routed = append(routed, value.(int64))
-		frames = append(frames, itime.Frame())
+		frames = append(frames, clock.Frame())
 		return false
 	}))
 	game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: KeyA}}}
-	frame := itime.Frame() + 1
-	itime.Update(0.2, 30)
+	frame := clock.Frame() + 1
+	clock.Update(0.2, 30)
 	game.dispatchFrameEvents()
 	if want := []int64{int64(KeyA), 100}; !slices.Equal(routed, want) {
 		t.Fatalf("input and timer routing = %v, want %v", routed, want)
@@ -261,7 +261,7 @@ func TestDispatchFrameEventsUsesAdvancedClockForDueTimers(t *testing.T) {
 	if !slices.Equal(frames, []int64{frame, frame}) {
 		t.Fatalf("routing frames = %v, want both in frame %d", frames, frame)
 	}
-	if timestamp, ok := itime.NextTimer(); ok {
+	if timestamp, ok := clock.NextTimer(); ok {
 		t.Fatalf("future timer %d became eligible before its frame", timestamp)
 	}
 }
@@ -271,7 +271,7 @@ func TestInputFrameExpiresStationarySwipeAfterClockAdvances(t *testing.T) {
 	clockReads := 0
 	game.inputMgr.swipe.InitWithClock(func() time.Time {
 		clockReads++
-		return time.Unix(0, int64(itime.TimeSinceLevelLoad()*float64(time.Second)))
+		return time.Unix(0, int64(clock.TimeSinceLevelLoad()*float64(time.Second)))
 	})
 	game.inputMgr.swipe.Begin(mathf.Vec2{}, &SpriteImpl{name: "held"})
 	if !game.inputMgr.prepareInputFrame(0.6) {
@@ -280,7 +280,7 @@ func TestInputFrameExpiresStationarySwipeAfterClockAdvances(t *testing.T) {
 	if len(game.inputMgr.frame.pending.events) != 0 || clockReads != 1 {
 		t.Fatal("sampling manufactured an event or expired before advancing the clock")
 	}
-	itime.Update(0.6, 30)
+	clock.Update(0.6, 30)
 	game.dispatchFrameEvents()
 	game.dispatchFrameEvents()
 	if clockReads != 2 {
@@ -288,7 +288,7 @@ func TestInputFrameExpiresStationarySwipeAfterClockAdvances(t *testing.T) {
 	}
 
 	// An expired stationary gesture cannot revive when a logical clock rewinds.
-	itime.Update(-0.5, 30)
+	clock.Update(-0.5, 30)
 	if _, target, ok := game.inputMgr.swipe.Finish(mathf.Vec2{X: 100}); ok || target != nil || clockReads != 2 {
 		t.Fatal("stationary expiry retained its target or allowed a gesture after clock rollback")
 	}
@@ -325,8 +325,8 @@ func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 		phases.add("timer-handler")
 		close(handled)
 	})
-	itime.Update(0.1, 30)
-	frame := itime.Frame()
+	clock.Update(0.1, 30)
+	frame := clock.Frame()
 	game.inputMgr.frame.pending = &inputFrame{}
 	game.dispatchFrameEvents()
 	// A newly registered timer can run while the previous frame's logic task
@@ -340,7 +340,7 @@ func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 	currentScheduler.Update()
 	currentScheduler.Join(logic)
 	requireEventOrder(t, &phases, []string{"timer-route", "timer-handler", "audio", "animation-complete"})
-	if itime.Frame() != frame || anim.curAnimState != nil || len(anim.doneAnimations) != 0 {
+	if clock.Frame() != frame || anim.curAnimState != nil || len(anim.doneAnimations) != 0 {
 		t.Fatal("pending logic did not finish its animation in the timer's frame")
 	}
 }
@@ -352,10 +352,10 @@ func TestZeroTimerRoutesBeforeStartRegistration(t *testing.T) {
 	game.camera = &cameraImpl{g: game}
 	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
 	routed, timers, starts := 0, 0, 0
-	frame := itime.Frame() + 1
+	frame := clock.Frame() + 1
 	game.scriptEvents.manager.Add(coreevent.BucketTimer, coreevent.NewSink(game, nil, func(any) bool {
 		routed++
-		if game.startScheduled || game.lifecycleState.StartDispatched.Load() || itime.Frame() != frame {
+		if game.startScheduled || game.lifecycleState.StartDispatched.Load() || clock.Frame() != frame {
 			t.Error("zero timer did not route before startup registration in the advanced frame")
 		}
 		return false
@@ -368,7 +368,7 @@ func TestZeroTimerRoutesBeforeStartRegistration(t *testing.T) {
 		}
 	})
 	game.inputMgr.frame.pending = &inputFrame{}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	game.OnEngineUpdate(1.0 / 30)
 	currentScheduler.Update()
 	// Both handlers run; their order relative to each other is not the contract.
@@ -380,15 +380,15 @@ func TestZeroTimerRoutesBeforeStartRegistration(t *testing.T) {
 
 func TestDispatchFrameEventsFreezesTimersBeforeRouting(t *testing.T) {
 	_, game := setupInputFrameGame(t)
-	itime.RegisterTimer(0)
+	clock.RegisterTimer(0)
 	var routed []int64
 	game.scriptEvents.manager.Add(coreevent.BucketTimer, coreevent.NewSink(game, nil, func(value any) bool {
 		routed = append(routed, value.(int64))
 		if len(routed) == 1 {
 			// A newly registered overdue timer and a reset are eligible for the
 			// following batch, even though they happen during event routing.
-			itime.RegisterTimer(-0.1)
-			itime.ResetTimer()
+			clock.RegisterTimer(-0.1)
+			clock.ResetTimer()
 		}
 		return false
 	}))
@@ -474,17 +474,17 @@ func TestDispatchFrameEventsFreezesTimersBeforeConditions(t *testing.T) {
 	conditions := 0
 	game.OnCond(func() bool { return true }, func() {
 		conditions++
-		itime.ResetTimer()
-		itime.RegisterTimer(0)
+		clock.ResetTimer()
+		clock.RegisterTimer(0)
 	})
-	itime.RegisterTimer(0.1)
+	clock.RegisterTimer(0.1)
 	var routed []int64
 	game.scriptEvents.manager.Add(coreevent.BucketTimer, coreevent.NewSink(game, nil, func(value any) bool {
 		routed = append(routed, value.(int64))
 		return false
 	}))
 	game.scriptEvents.sampleConditions()
-	itime.Update(0.2, 30)
+	clock.Update(0.2, 30)
 	game.inputMgr.frame.pending = &inputFrame{}
 	game.dispatchFrameEvents()
 	if conditions != 1 || !slices.Equal(routed, []int64{100}) {
@@ -660,9 +660,9 @@ func TestKeyFromStringSpecialAndUnknownNames(t *testing.T) {
 
 func setupInputFrameGame(t *testing.T) (*coroutine.Scheduler, *Game) {
 	t.Helper()
-	itime.ClearTimers()
-	itime.Start()
-	t.Cleanup(itime.ClearTimers)
+	clock.ClearTimers()
+	clock.Start()
+	t.Cleanup(clock.ClearTimers)
 	currentScheduler, game := setupRuntimeEventGame(t)
 	game.inputMgr.init(game)
 	return currentScheduler, game

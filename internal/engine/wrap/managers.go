@@ -19,7 +19,6 @@ package wrap
 import (
 	"slices"
 
-	"github.com/goplus/spx/v4/internal/engine/managerstate"
 	"github.com/goplus/spx/v4/internal/engine/platform"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -34,17 +33,17 @@ type managerBinding[T comparable] struct {
 var mainCallback func(call func())
 
 func Init(call func(f func())) {
-	managerstate.Mu.Lock()
+	platform.ManagerMu.Lock()
 	mainCallback = call
-	managerstate.Mu.Unlock()
+	platform.ManagerMu.Unlock()
 }
 
 // BindManagers installs main-thread wrappers as one registry update.
 // Cleanup invalidates the set without clearing replacements or waiting for
 // calls that already acquired a backend.
 func BindManagers(managers []gdx.IManager) (cleanup func()) {
-	managerstate.Mu.Lock()
-	defer managerstate.Mu.Unlock()
+	platform.ManagerMu.Lock()
+	defer platform.ManagerMu.Unlock()
 
 	var releases []func()
 	releaseLocked := func() {
@@ -62,8 +61,8 @@ func BindManagers(managers []gdx.IManager) (cleanup func()) {
 		releases = append(releases, bindManager(manager))
 	}
 	return func() {
-		managerstate.Mu.Lock()
-		defer managerstate.Mu.Unlock()
+		platform.ManagerMu.Lock()
+		defer platform.ManagerMu.Unlock()
 		releaseLocked()
 	}
 }
@@ -71,9 +70,9 @@ func BindManagers(managers []gdx.IManager) (cleanup func()) {
 // CallInMainThread runs call synchronously on the engine main thread.
 // Without a dispatcher, only calls already on the engine thread may run.
 func CallInMainThread(call func()) {
-	managerstate.Mu.RLock()
+	platform.ManagerMu.RLock()
 	callback := mainCallback
-	managerstate.Mu.RUnlock()
+	platform.ManagerMu.RUnlock()
 	if callback == nil {
 		if platform.TryCallEngineDirectly(call) {
 			return
@@ -97,8 +96,8 @@ func (m *managerBinding[T]) binding() *managerBinding[T] { return m }
 // target rechecks the captured binding after dispatch. A queued facade call
 // must never resolve to a replacement session's backend.
 func (m *managerBinding[T]) target() T {
-	managerstate.Mu.RLock()
-	defer managerstate.Mu.RUnlock()
+	platform.ManagerMu.RLock()
+	defer platform.ManagerMu.RUnlock()
 	var zero T
 	if m.backend == zero {
 		panic("wrap: " + m.name + " manager is not bound")
@@ -106,7 +105,7 @@ func (m *managerBinding[T]) target() T {
 	return m.backend
 }
 
-// bind and its cleanup require managerstate.Mu's write lock.
+// bind and its cleanup require platform.ManagerMu's write lock.
 func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
 	*slot = wrapper
 	return func() {
@@ -121,8 +120,8 @@ func (m *managerBinding[T]) bind(slot *T, wrapper T) func() {
 // W is the concrete generated wrapper. Other implementations may embed a
 // wrapper and override methods, so they must remain valid backend targets.
 func resolveManager[W interface{ binding() *managerBinding[T] }, T comparable](binding *managerBinding[T], slot *T, name string) *managerBinding[T] {
-	managerstate.Mu.RLock()
-	defer managerstate.Mu.RUnlock()
+	platform.ManagerMu.RLock()
+	defer platform.ManagerMu.RUnlock()
 	if binding == nil {
 		current := *slot
 		if wrapper, ok := any(current).(W); ok {

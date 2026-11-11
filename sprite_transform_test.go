@@ -21,11 +21,10 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v4/internal/assets"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 func TestMotionInputsTreatNaNAsZero(t *testing.T) {
@@ -117,12 +116,12 @@ func TestScratchImmediateGlide(t *testing.T) {
 }
 
 func TestSpriteGlidePositiveDurationInterpolates(t *testing.T) {
-	itime.Start()
-	t.Cleanup(func() { itime.Start() })
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
 	currentScheduler := setupRuntimeScheduler(t)
 	sprite := newTestTransformSprite(12, -8)
 	finished := false
-	itime.Update(0.5, 30)
+	clock.Update(0.5, 30)
 	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.GlideToXYpos(30, 40, 1)
 		finished = true
@@ -134,12 +133,12 @@ func TestSpriteGlidePositiveDurationInterpolates(t *testing.T) {
 	if sprite.animation().getCurTweenState() == nil {
 		t.Fatal("positive-duration glide has no active tween")
 	}
-	itime.Update(0.5, 30)
+	clock.Update(0.5, 30)
 	currentScheduler.Update()
 	if sprite.Xpos() != 30 || sprite.Ypos() != 40 {
 		t.Fatalf("final glide position=(%v,%v), want (30,40)", sprite.Xpos(), sprite.Ypos())
 	}
-	itime.Update(0, 30)
+	clock.Update(0, 30)
 	currentScheduler.Update()
 	if !finished || sprite.animation().getCurTweenState() != nil {
 		t.Fatal("glide did not finish and release its tween after the final frame")
@@ -282,7 +281,7 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 }
 
 func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
-	t.Cleanup(func() { itime.Start() })
+	t.Cleanup(func() { clock.Start() })
 	currentScheduler := setupRuntimeScheduler(t)
 	sprite := newTestTransformSprite(0, 0)
 	sprite.SetHeading(-10)
@@ -293,7 +292,7 @@ func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
 
 	// At one degree per second, the shortest turn passes through zero after
 	// ten seconds and reaches the target after twenty.
-	itime.Update(10, 30)
+	clock.Update(10, 30)
 	returned := false
 	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
 		sprite.TurnToDir(-710, nil)
@@ -303,12 +302,12 @@ func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
 	if got := sprite.Heading(); got != 0 {
 		t.Fatalf("halfway heading = %v, want 0", got)
 	}
-	itime.Update(10, 30)
+	clock.Update(10, 30)
 	currentScheduler.Update()
 	if got := sprite.Heading(); got != 10 {
 		t.Fatalf("final heading = %v, want 10", got)
 	}
-	itime.Update(0, 30)
+	clock.Update(0, 30)
 	currentScheduler.Update()
 	if !returned {
 		t.Fatal("TurnToDir did not return after its final animation frame")
@@ -439,7 +438,7 @@ func TestFixWorldRange(t *testing.T) {
 			sprite.g.displayState.MinWorldY = -180
 			sprite.costumes = []*costume{{
 				atlas: true,
-				frame: assetutil.FrameDescriptor{
+				frame: costumeFrame{
 					Width:            tt.width,
 					Height:           tt.height,
 					BitmapResolution: 1,
@@ -466,7 +465,7 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 	sprite.g.displayState.MinWorldY = -180
 	sprite.baseObj.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width:            55,
 			Height:           54,
 			BitmapResolution: 2,
@@ -491,7 +490,7 @@ func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 	sprite.baseObj.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width:            100,
 			Height:           40,
 			BitmapResolution: 1,
@@ -518,7 +517,7 @@ func TestClampSpriteScaleToMaxScale(t *testing.T) {
 	sprite.g.displayState.WorldHeight = 360
 	sprite.baseObj.costumes = []*costume{{
 		atlas: true,
-		frame: assetutil.FrameDescriptor{
+		frame: costumeFrame{
 			Width:            480,
 			Height:           360,
 			BitmapResolution: 1,
@@ -898,9 +897,9 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 }
 
 func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
-	t.Cleanup(itime.ClearTimers)
+	t.Cleanup(clock.ClearTimers)
 	currentScheduler := setupRuntimeScheduler(t)
-	itime.Start()
+	clock.Start()
 	sprite := newTestTransformSprite(0, 0)
 	animation := &coreproject.AniConfig{StepDuration: 0.001}
 	sprite.animation().shared.animations["walk"] = &animationEntry{name: "walk", config: animation}
@@ -914,7 +913,7 @@ func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
 		t.Fatal("configured step animation completed before advancing a frame")
 	}
 	for range 2 {
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		currentScheduler.Update()
 	}
 	if x, y := sprite.getXY(); !done || x != 10 || y != 0 || sprite.animation().getCurTweenState() != nil {
@@ -924,7 +923,7 @@ func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
 }
 
 func TestTransformComponentDebugVisualOperations(t *testing.T) {
-	t.Cleanup(itime.ClearTimers)
+	t.Cleanup(clock.ClearTimers)
 	game := setupCloneLimitGame(t)
 	game.debugState.DebugInstr = true
 	sprite := newCloneLimitSprite(game, "moving")
@@ -936,7 +935,7 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	if transform.rotationStyle != LeftRight || transform.direction != 45 {
 		t.Fatal("unbound sprite lost its rotation style or heading")
 	}
-	itime.Start()
+	clock.Start()
 	done := false
 	thread := scheduler.Create(sprite, func(coroutine.Thread) {
 		transform.glide(5, 7, 0.01)
@@ -944,7 +943,7 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	})
 	scheduler.JoinFirstSlice(thread)
 	for range 2 {
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		scheduler.Update()
 	}
 	if x, y := sprite.getXY(); !done || x != 5 || y != 7 {

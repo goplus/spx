@@ -27,8 +27,8 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -60,6 +60,7 @@ type collisionLayerOrderSprite struct {
 
 type layoutInterfaceOwnerSprite struct {
 	SpriteImpl
+	//lint:ignore U1000 The unexported owner field is exercised through reflection.
 	owner any
 }
 
@@ -165,6 +166,7 @@ const testSpriteConfig = `{"costumes":[{"name":"idle","imageWidth":10,"imageHeig
 
 type prototypeConflictGame struct {
 	Game
+	//lint:ignore U1000 Prototype discovery checks this conflicting field through reflection.
 	projectTestSprite *conflictingSprite
 	Items             []*projectTestSprite
 }
@@ -176,8 +178,8 @@ type conflictingSprite struct {
 
 type layoutInvalidOwnerSprite struct {
 	SpriteImpl
+	//lint:ignore U1000 Layout validation inspects this invalid owner type through reflection.
 	owner *int
-	value int
 }
 
 type recordingProjectFontBridge struct {

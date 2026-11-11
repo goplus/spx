@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v4/internal/driverbundle"
+	"github.com/goplus/spx/v4/internal/release/driverbundle"
 )
 
 type digestWriter struct {

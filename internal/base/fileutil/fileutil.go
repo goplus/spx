@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"time"
 )
 
@@ -126,11 +127,7 @@ func WriteNamedZip(dst string, namedFiles map[string]string) error {
 	}
 
 	return writeZipFile(dst, func(writer *zip.Writer) error {
-		names := make([]string, 0, len(namedFiles))
-		for name := range namedFiles {
-			names = append(names, name)
-		}
-		sort.Strings(names)
+		names := slices.Sorted(maps.Keys(namedFiles))
 
 		for _, name := range names {
 			if err := addFileToZip(writer, namedFiles[name], name); err != nil {
@@ -173,7 +170,7 @@ func ZipDirectory(srcDir, dstZip string) error {
 	}); err != nil {
 		return err
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 
 	return writeZipFile(dstZip, func(writer *zip.Writer) error {
 		for _, path := range files {

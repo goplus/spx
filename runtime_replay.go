@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math"
 
-	inputstate "github.com/goplus/spx/v4/internal/input"
+	inputstate "github.com/goplus/spx/v4/internal/core/input"
 )
 
 const (

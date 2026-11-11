@@ -248,7 +248,7 @@ window.addEventListener('spxCaptureScreenshot', (event) => {
 - [`runtime_snapshot.go`](../../../../runtime_snapshot.go)
 - [`runtime_input.go`](../../../../runtime_input.go)
 - [`runtime_capture_js.go`](../../../../runtime_capture_js.go)
-- [`internal/time/time.go`](../../../../internal/time/time.go)
+- [`internal/core/clock/clock.go`](../../../../internal/core/clock/clock.go)
 - [`cmd/ispx/web/runner.html`](../../../../cmd/ispx/web/runner.html)
 - [`cmd/ispx/web/input-session.js`](../../../../cmd/ispx/web/input-session.js)
 - [`cmd/ispx/web/capture.js`](../../../../cmd/ispx/web/capture.js)

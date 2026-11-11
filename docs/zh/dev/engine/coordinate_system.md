@@ -88,7 +88,7 @@ godotToSPX(x, y) = (x, -y)
 | `costume.center` | 资产坐标 | Go `costume` 元数据层 |
 | `renderOffset` | SPX 局部渲染坐标 | Go 计算，Godot `RenderRoot` 应用 |
 | 动画逐帧 offset | Godot 渲染局部坐标 | Godot 资源/渲染层 |
-| UI 控件位置 | 左上角 UI 坐标 | `internal/ui.ViewToUI` |
+| UI 控件位置 | 左上角 UI 坐标 | `internal/engine/ui.ViewToUI` |
 
 核心规则：
 
@@ -135,7 +135,7 @@ SpxSprite.position（Godot 世界坐标）
 以下转换与 SPX/Godot 世界坐标反射不同，应保持独立且名称明确：
 
 - `costume.renderAnchorInSPX`：资产左上角坐标转 SPX 局部锚点。
-- `internal/ui.ViewToUI`：舞台中心坐标转 UI 左上角坐标。
+- `internal/engine/ui.ViewToUI`：舞台中心坐标转 UI 左上角坐标。
 - 动画 payload/frame offset：图片帧在图集或资源内部的局部布局。
 - 相机 view/world 变换：缩放和相机偏移，不是 Y 轴约定转换。
 

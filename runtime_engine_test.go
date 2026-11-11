@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/profiler"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -338,7 +338,7 @@ func TestFrameSyncUpdatesCustomShapesAndMonitors(t *testing.T) {
 	monitor := &Monitor{visible: true, isDirty: true, panel: panel, eval: func() ui.MonitorValue { return ui.MonitorValue{Text: "42"} }}
 	game.shapeMgr.items = []Shape{&SpriteImpl{}, &textBubble{}, &quoterBubble{}, monitor, updater, &struct{}{}}
 	withEventRegistrationBarrier(game, game.dispatchShapeUpdates)
-	if calls != 1 || delta != itime.DeltaTime() || panel.value.Text != "42" || monitor.isDirty {
+	if calls != 1 || delta != clock.DeltaTime() || panel.value.Text != "42" || monitor.isDirty {
 		t.Fatalf("shape update calls=%d delta=%v monitor=%+v", calls, delta, panel)
 	}
 }
@@ -476,7 +476,7 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 			game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 			game.OnEngineBeforeUpdate(1.0 / 60)
 			game.inputMgr.frame.pending.events = append(game.inputMgr.frame.pending.events, &eventKeyDown{Key: KeyA})
-			itime.Update(1.0/60, 60)
+			clock.Update(1.0/60, 60)
 			runFrameSyncCall(t, currentScheduler, func() {
 				game.OnEngineUpdate(1.0 / 60)
 				currentScheduler.Update()
@@ -651,7 +651,7 @@ func TestFrameSyncMonitorWaitStopsBeforeGameDestroy(t *testing.T) {
 		game.OnEngineDestroy()
 	})
 	runFrameSyncCall(t, currentScheduler, func() {
-		itime.Update(1.0/60, 60)
+		clock.Update(1.0/60, 60)
 		currentScheduler.Update()
 	})
 	if !stoppedBeforeDestroy || getter.completed != 0 || getter.active != 0 || len(panel.events) != 0 {
@@ -746,7 +746,7 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 	sprite := addFrameSyncSprite(game, 1, "moving")
 	sprite.SetXpos(10)
 	game.OnEngineBeforeUpdate(1.0 / 60)
-	itime.Update(1.0/60, 60)
+	clock.Update(1.0/60, 60)
 	// Low-level runtime tweens write the proxy after the physical snapshot.
 	withEventRegistrationBarrier(frameEventDispatcher{}, func() {
 		engine.WaitMainThread(func() {
@@ -880,7 +880,7 @@ func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
 func runFrameSyncGame(currentScheduler *coroutine.Scheduler, game *Game) {
 	const delta = 1.0 / 60
 	game.OnEngineBeforeUpdate(delta)
-	itime.Update(delta, 60)
+	clock.Update(delta, 60)
 	game.OnEngineUpdate(delta)
 	currentScheduler.Update()
 	game.OnEngineRender(delta)

@@ -22,8 +22,8 @@ import (
 	"time"
 
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 type stopAllAudioBackend struct {

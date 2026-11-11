@@ -21,10 +21,10 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -78,7 +78,7 @@ func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	content := component.textObj.content
 	sameText := component.upsertText("renewed", ui.StyleThink)
 	component.expireText(renewedText)
-	component.textObj.flushPendingRemoval(itime.Frame() + 1)
+	component.textObj.flushPendingRemoval(clock.Frame() + 1)
 	if component.textObj == nil || sameText.bubble != renewedText.bubble || sameText.generation != renewedText.generation+1 || component.textObj.timedRemovalPending || component.textObj.content != content {
 		t.Fatal("identical text did not renew the current bubble and cancel older removal")
 	}
@@ -103,7 +103,7 @@ func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	component.expireQuote(renewedQuote)
 	sameQuote := component.upsertQuote("renewed", "description")
 	component.expireQuote(renewedQuote)
-	component.quoteObj.flushPendingRemoval(itime.Frame() + 1)
+	component.quoteObj.flushPendingRemoval(clock.Frame() + 1)
 	if component.quoteObj == nil || sameQuote.bubble != renewedQuote.bubble || sameQuote.generation != renewedQuote.generation+1 || component.quoteObj.timedRemovalPending {
 		t.Fatal("identical quote did not renew the current bubble and cancel older removal")
 	}
@@ -161,7 +161,7 @@ func TestBubbleRemovalUnlocksBeforeDestroy(t *testing.T) {
 				if removal == "stop" {
 					stop()
 				} else {
-					bubble.flushPendingRemoval(itime.Frame() + 1)
+					bubble.flushPendingRemoval(clock.Frame() + 1)
 				}
 				if !destroyed || game.shapeMgr.findShapeIndex(bubble) >= 0 {
 					t.Fatal("bubble removal did not destroy its panel and remove its shape")
@@ -174,7 +174,7 @@ func TestBubbleRemovalUnlocksBeforeDestroy(t *testing.T) {
 func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 	installAskTestUiMgr(t)
 	currentScheduler := setupRuntimeScheduler(t)
-	itime.Start()
+	clock.Start()
 	_, sprite, component := newBubbleTestSprite()
 
 	done := false
@@ -190,7 +190,7 @@ func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 		t.Fatal("timed bubble calls completed in their issuing frame")
 	}
 	for range 3 {
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		currentScheduler.Update()
 	}
 	if !done {
@@ -638,9 +638,9 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	originalInput := pkgengine.InputMgr
 	pkgengine.InputMgr = askDelayedInputMgr{}
 	t.Cleanup(func() { pkgengine.InputMgr = originalInput })
-	t.Cleanup(itime.ClearTimers)
+	t.Cleanup(clock.ClearTimers)
 	currentScheduler := setupRuntimeScheduler(t)
-	itime.Start()
+	clock.Start()
 	game := &Game{}
 	game.shapeMgr.init()
 	answered := false
@@ -650,7 +650,7 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 		t.Fatal("Ask did not suspend while displaying its question")
 	}
 	game.dialogState.AskPanel.OnCheck("later answer")
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	currentScheduler.Update()
 	if !answered || game.Answer() != "later answer" {
 		t.Fatalf("Ask resumed=%v, answer=%q", answered, game.Answer())

@@ -12,11 +12,19 @@ Unhandled coroutine panics reach the engine as `coroutine.PanicReport`, preservi
 
 | Layer | Responsibility | Boundary |
 | --- | --- | --- |
-| Root `spx` package | Public game/sprite API, composition, script and frame orchestration | Owns live game objects and engine proxies |
-| `internal/core/project` | Configuration, packed overlays, fonts and display plans | Consumes resource capabilities; does not select an engine |
-| `internal/core/runtime`, `internal/input` | Input normalization, replay values and script-loop rules | Operates on values and supplied callbacks/clocks |
-| `internal/projectloader` | Runtime resource assembly | Adapts engine resources before core configuration loading |
+| Root `spx` package | Public game/sprite API, resource assembly, costume frames, animation payloads, sound playback lifecycle, script and frame orchestration | Owns live game objects and engine proxies |
+| `internal/core/clock` | Logical frame time, fixed steps and timers | Backend-independent game clock; distinct from wall time |
+| `internal/core/collision` | Collider types, precision defaults and AABB rules | Domain rules without engine dependencies |
+| `internal/core/scratch` | Scratch values, lists, operators and pen semantics | Isolated compatibility rules without engine dependencies |
+| `internal/core/project` | Configuration, shared asset index parsing and merging, packed overlays, fonts and display plans | Consumes resource capabilities; does not select an engine |
+| `internal/core/tilemap` | Tilemap parsing, data models and map bounds | Separate package without engine dependencies |
+| `internal/core/runtime`, `internal/core/input` | Input normalization, replay values and script-loop rules | Operates on values and supplied callbacks/clocks |
+| `internal/base` | Default values and reusable slice operations | Depends only on the standard library |
+| `internal/base/fileutil` | File operations, portable path checks, stable reads and ZIP preflight checks | Separate APIs preserve the guarantees of each operation |
+| Other `internal/base/*` packages | Numeric conversions, JSON validation, HTTP policy and source tooling | Independent utility packages without engine dependencies |
 | `internal/engine` | Engine lifecycle, coordinate adaptation and frame synchronization | Uses typed manager wrappers |
+| `internal/engine/coroutine` | Cooperative scheduling, waits, script lifetime and shutdown barriers | Separate package; coordinates engine-thread calls through `internal/engine/platform` |
+| `internal/engine/ui` | UI controls, text layout and UI node binding | Separate package with a one-way dependency on `internal/engine` |
 | `internal/engine/wrap` | Manager wrappers, main-thread dispatch and binding state | Public and internal calls share wrappers that privately hold raw backends |
 | `internal/gdengine` | Native/Web transport, callbacks and binding lifecycle | Backends only convert arguments and implement ABI calls |
 | `godot_modules/spx` | Engine-side implementation and exported manager declarations | Owned by SPX; built with the separate Godot checkout |
@@ -25,26 +33,23 @@ Unhandled coroutine panics reach the engine as `coroutine.PanicReport`, preservi
 ```mermaid
 flowchart TD
     API[spx composition and gameplay] --> Core[core project and runtime]
-    API --> Loader[projectloader]
     API --> Engine[engine]
-    Loader --> Core
-    Loader --> Engine
-    Core --> Input[input values and policies]
+    Core --> Input[core/input values and policies]
     Engine --> Input
     Engine --> Wrappers[engine/wrap and gdengine]
     Wrappers --> Godot[godot_modules/spx]
     CLI[CLI packaging] --> Core
 ```
 
-Configuration parsing receives a resource directory once. The runtime loader places engine lookup **below** the packed configuration overlay, so later sprite, sound and tilemap reads use the same directory and precedence rules. Preparation resolves assets from that directory without consulting the previous game's global asset root. Font discovery and binary availability are optional directory capabilities: a Web interpreter can verify a font mounted in Godot without reading its binary through the interpreter filesystem. Neither core parsing nor offline packaging should need a running engine or a global backend registration hook.
+Configuration parsing receives a resource directory once. The root package's `game_resources.go` places engine lookup **below** the packed configuration overlay, so later sprite, sound and tilemap reads use the same directory and precedence rules. Preparation resolves assets from that directory without consulting the previous game's global asset root. Font discovery and binary availability are optional directory capabilities: a Web interpreter can verify a font mounted in Godot without reading its binary through the interpreter filesystem. Neither core parsing nor offline packaging should need a running engine or a global backend registration hook.
 
-Input events belong to `internal/input`; `internal/engine` keeps aliases for its callers. This avoids conversion copies and lets input policy tests run without engine initialization. The public named key-code API remains compatible.
+Input events belong to `internal/core/input`; `internal/engine` keeps aliases for its callers. This avoids conversion copies and lets input policy tests run without engine initialization. The public named key-code API remains compatible.
 
 The root package is intentionally the composition layer. Public overloads, reflection-based XGo objects and generated interpreter exports constrain package boundaries. Move reusable policy into core packages; keep an engine-bound, single-consumer implementation beside its owner. A file split alone does not create a useful architectural boundary.
 
 ### Manager binding lifetime
 
-Shared manager wrappers capture one binding before dispatch and recheck that same binding when the queued call executes. Rebinding cannot redirect an old call to a new session. Binding lookup, installation, dispatcher snapshots and native platform probes share short critical sections; no lock crosses dispatch or backend callbacks.
+Shared manager wrappers capture one binding before dispatch and recheck that same binding when the queued call executes. Rebinding cannot redirect an old call to a new session. Binding lookup, installation, dispatcher snapshots and native platform probes share `platform.ManagerMu` in short critical sections; no lock crosses dispatch or backend callbacks.
 
 Release rejects later lookups and queued calls but does not wait for calls that passed their final target check. The engine lifecycle still owns coroutine draining and backend resource destruction. Direct reads or writes of public manager globals require coordination with link/unlink; retained wrappers and zero-value facades use the synchronized lookup path.
 

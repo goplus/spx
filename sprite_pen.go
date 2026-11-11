@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v4/internal/scratch"
+import "github.com/goplus/spx/v4/internal/core/scratch"
 
 // -----------------------------------------------------------------------------
 // Color

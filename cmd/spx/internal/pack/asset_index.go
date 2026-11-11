@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/goplus/spx/v4/internal/assetindex"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
@@ -202,10 +201,10 @@ func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
 	if err != nil {
 		return packedAssetIndex{}, false, err
 	}
-	mergedRoot := assetindex.Merge(sourceRoot, root)
+	mergedRoot := coreproject.MergeIndexRoot(sourceRoot, root)
 
 	var packed packedAssetIndex
-	if err := assetindex.DecodeRoot(mergedRoot, &packed.Project); err != nil {
+	if err := coreproject.DecodeIndexRoot(mergedRoot, &packed.Project); err != nil {
 		return packedAssetIndex{}, false, fmt.Errorf("parse %s root: %w", packedPath, err)
 	}
 	packed.Sprites = make(map[string]coreproject.SpriteConfig)
@@ -241,7 +240,7 @@ func readSourceAssetIndexRoot(assetRoot string) (map[string]json.RawMessage, err
 }
 
 func decodePackedAssetObjects[T any](raw json.RawMessage, dest map[string]T) error {
-	entries, err := assetindex.ParseEntries(raw)
+	entries, err := coreproject.ParseIndexEntries(raw)
 	if err != nil {
 		return err
 	}

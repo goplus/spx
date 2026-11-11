@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
 // CaptureRequest identifies a screenshot and its timing.
@@ -67,7 +67,7 @@ func EnqueueCapture(name string, inputTick *int64) error {
 	request := CaptureRequest{
 		Name:      name,
 		InputTick: tick,
-		Frame:     itime.Frame(),
+		Frame:     clock.Frame(),
 		Sequence:  captureState.sequence,
 	}
 	if enqueue {

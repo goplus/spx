@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/profiler"
-	itime "github.com/goplus/spx/v4/internal/time"
-	"github.com/goplus/spx/v4/internal/ui"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 )
 
 // -----------------------------------------------------------------------------
@@ -126,7 +126,7 @@ func (p *Game) OnEnginePause(bool) {
 // dispatchShapeUpdates runs under the managed frame dispatcher. Each shape's
 // first slice precedes event registration; future-frame waits stay independent.
 func (p *Game) dispatchShapeUpdates() {
-	delta := itime.DeltaTime()
+	delta := clock.DeltaTime()
 	generation := p.bootstrapGeneration()
 	var tasks []coroutine.Task
 	// Task collection cannot run user code, so the live list is stable here.
@@ -260,7 +260,7 @@ func (p *Game) showDebugPanel() {
 	renderInfo, _ := profiler.GetStats("GameRender")
 	lastInfo := scheduler.UpdateStats()
 
-	msg := fmt.Sprintf("FPS: %.f\n", itime.FPS())
+	msg := fmt.Sprintf("FPS: %.f\n", clock.FPS())
 	msg += fmt.Sprintf("Shape: %v\n", p.shapeMgr.count())
 	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
 	msg += fmt.Sprintf("GameRender: %v\n", renderInfo.ActualCall)

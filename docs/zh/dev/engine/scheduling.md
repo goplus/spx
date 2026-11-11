@@ -215,12 +215,12 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 
 | 职责 | 位置 |
 | --- | --- |
-| 协程准入与生命周期、停止与清理屏障 | `internal/coroutine/lifecycle.go`、`shutdown.go` |
-| 回调重入限制、主线程调用、帧边界回调 | `internal/coroutine/callback.go`、`mainthread.go` |
-| 定时与通道等待、worker 生命周期 | `internal/coroutine/wait.go` |
-| 帧等待、循环轮次、重绘预算 | `internal/coroutine/frame.go` |
-| 同步脚本入口、Join / Latch 的共享等待协议 | `internal/coroutine/execute.go`、`waiters.go` |
-| 等待任务处理与调度统计 | `internal/coroutine/update.go`、`stats.go` |
+| 协程准入与生命周期、停止与清理屏障 | `internal/engine/coroutine/lifecycle.go`、`shutdown.go` |
+| 回调重入限制、主线程调用、帧边界回调 | `internal/engine/coroutine/callback.go`、`mainthread.go` |
+| 定时与通道等待、worker 生命周期 | `internal/engine/coroutine/wait.go` |
+| 帧等待、循环轮次、重绘预算 | `internal/engine/coroutine/frame.go` |
+| 同步脚本入口、Join / Latch 的共享等待协议 | `internal/engine/coroutine/execute.go`、`waiters.go` |
+| 等待任务处理与调度统计 | `internal/engine/coroutine/update.go`、`stats.go` |
 | 控制流与调度器衔接 | `internal/engine/coroutine.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
 | 引擎层更新回调与 runtime 延时、tween | `internal/gdengine/callbacks.go`、`internal/engine/runtime_bridge.go` |
@@ -295,7 +295,7 @@ host 接入方式见[《Web 端截图接入说明》](web_capture.md)。
 - worker 的 `Goexit` 唤醒并停止所属脚本，停机回调异常退出后恢复准入。
 
 ```sh
-go test -race ./internal/coroutine ./internal/engine ./internal/core/runtime .
+go test -race ./internal/engine/coroutine ./internal/engine ./internal/core/runtime .
 go test ./...
 GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
@@ -304,12 +304,12 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 `runtime_event_order_test.go`、`runtime_engine_test.go`、`runtime_replay_test.go`、
 `runtime_sync_test.go`、`runtime_engine_native_test.go`、`internal/engine/frame_test.go`、
 `internal/engine/coroutine_native_test.go`、
-`sprite_clone_test.go`、`internal/coroutine/loop_test.go`、
-`internal/coroutine/order_test.go`、`internal/coroutine/wait_order_test.go` 和
-`internal/coroutine/ready_test.go`。
-取消与重启覆盖位于 `internal/coroutine/thread_test.go`、
-`internal/coroutine/worker_test.go`、`internal/coroutine/join_test.go`、
-`internal/coroutine/handler_test.go` 和 `internal/engine/coroutine_test.go`。
+`sprite_clone_test.go`、`internal/engine/coroutine/loop_test.go`、
+`internal/engine/coroutine/order_test.go`、`internal/engine/coroutine/wait_order_test.go` 和
+`internal/engine/coroutine/ready_test.go`。
+取消与重启覆盖位于 `internal/engine/coroutine/thread_test.go`、
+`internal/engine/coroutine/worker_test.go`、`internal/engine/coroutine/join_test.go`、
+`internal/engine/coroutine/handler_test.go` 和 `internal/engine/coroutine_test.go`。
 WASM 编译检查不替代浏览器运行验证。
 
 ## 参考实现

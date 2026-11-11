@@ -25,8 +25,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -321,7 +321,7 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 
 func TestWaitYieldResumesWithoutAdvancingFrame(t *testing.T) {
 	current := setupExecuteTest(t)
-	frame := itime.Frame()
+	frame := clock.Frame()
 	done := make(chan struct{})
 	thread := current.Create("yield", func(coroutine.Thread) {
 		WaitYield()
@@ -341,15 +341,15 @@ func TestWaitYieldResumesWithoutAdvancingFrame(t *testing.T) {
 		t.Fatal("yielding coroutine did not resume")
 	}
 	current.Join(thread)
-	if got := itime.Frame(); got != frame {
+	if got := clock.Frame(); got != frame {
 		t.Fatalf("frame after WaitYield = %d, want unchanged frame %d", got, frame)
 	}
 }
 
 func TestWaitAdaptersResumeAfterFrameAndPreserveElapsedTime(t *testing.T) {
 	current := setupExecuteTest(t)
-	itime.Start()
-	t.Cleanup(func() { itime.Start() })
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
 	elapsed := make(chan float64, 3)
 	thread := current.Create("waits", func(coroutine.Thread) {
 		elapsed <- Wait(.1)
@@ -358,7 +358,7 @@ func TestWaitAdaptersResumeAfterFrameAndPreserveElapsedTime(t *testing.T) {
 		elapsed <- WaitNextFrameIfNeeded()
 	})
 	current.JoinFirstSlice(thread)
-	itime.Update(.1, 60)
+	clock.Update(.1, 60)
 	current.Update()
 	current.JoinFirstSlice(thread)
 	select {
@@ -369,7 +369,7 @@ func TestWaitAdaptersResumeAfterFrameAndPreserveElapsedTime(t *testing.T) {
 	default:
 		t.Fatal("elapsed wait did not resume")
 	}
-	itime.Update(.25, 60)
+	clock.Update(.25, 60)
 	current.Update()
 	current.Join(thread)
 	for range 2 {
@@ -443,7 +443,7 @@ func TestControlFlowWaiterFollowsWarpMode(t *testing.T) {
 				t.Fatal("normal loop did not yield")
 			default:
 			}
-			itime.Update(0, 0)
+			clock.Update(0, 0)
 			current.Update()
 			current.Join(thread)
 			select {
@@ -456,9 +456,9 @@ func TestControlFlowWaiterFollowsWarpMode(t *testing.T) {
 }
 
 func TestWarpWaiterYieldsAfterBudget(t *testing.T) {
-	defer itime.Start()
+	defer clock.Start()
 	synctest.Test(t, func(t *testing.T) {
-		itime.Start()
+		clock.Start()
 		current := setupExecuteTest(t)
 		done := make(chan struct{})
 		thread := current.Create("warp", func(coroutine.Thread) {
@@ -476,7 +476,7 @@ func TestWarpWaiterYieldsAfterBudget(t *testing.T) {
 			t.Fatal("exhausted warp budget resumed in the same frame")
 		default:
 		}
-		itime.Update(0, 0)
+		clock.Update(0, 0)
 		current.Update()
 		current.Join(thread)
 		select {

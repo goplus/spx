@@ -284,12 +284,12 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 
 | Responsibility | Location |
 | --- | --- |
-| Thread admission and lifecycle, stop and drain barriers | `internal/coroutine/lifecycle.go`, `shutdown.go` |
-| Callback reentry guards, engine-thread calls, frame-boundary callbacks | `internal/coroutine/callback.go`, `mainthread.go` |
-| Timed and channel waits, worker lifecycle | `internal/coroutine/wait.go` |
-| Frame waits, loop rounds, redraw budget | `internal/coroutine/frame.go` |
-| Synchronous script entry and shared Join / Latch waits | `internal/coroutine/execute.go`, `waiters.go` |
-| Wait-job processing and scheduler statistics | `internal/coroutine/update.go`, `stats.go` |
+| Thread admission and lifecycle, stop and drain barriers | `internal/engine/coroutine/lifecycle.go`, `shutdown.go` |
+| Callback reentry guards, engine-thread calls, frame-boundary callbacks | `internal/engine/coroutine/callback.go`, `mainthread.go` |
+| Timed and channel waits, worker lifecycle | `internal/engine/coroutine/wait.go` |
+| Frame waits, loop rounds, redraw budget | `internal/engine/coroutine/frame.go` |
+| Synchronous script entry and shared Join / Latch waits | `internal/engine/coroutine/execute.go`, `waiters.go` |
+| Wait-job processing and scheduler statistics | `internal/engine/coroutine/update.go`, `stats.go` |
 | Control-flow integration | `internal/engine/coroutine.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
 | Engine-facing update callbacks and runtime timers/tweens | `internal/gdengine/callbacks.go`, `internal/engine/runtime_bridge.go` |
@@ -392,7 +392,7 @@ provide preemption or a hard timeout.
 - Worker `Goexit` stops and wakes its script; abnormal shutdown callbacks restore admission.
 
 ```sh
-go test -race ./internal/coroutine ./internal/engine ./internal/core/runtime .
+go test -race ./internal/engine/coroutine ./internal/engine ./internal/core/runtime .
 go test ./...
 GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
@@ -402,12 +402,12 @@ Core regression coverage is in `runtime_scheduler_test.go`,
 `runtime_engine_test.go`, `runtime_replay_test.go`,
 `runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/frame_test.go`,
 `internal/engine/coroutine_native_test.go`,
-`sprite_clone_test.go`, `internal/coroutine/loop_test.go`,
-`internal/coroutine/order_test.go`, `internal/coroutine/wait_order_test.go`, and
-`internal/coroutine/ready_test.go`.
-Cancellation and restart coverage is in `internal/coroutine/thread_test.go`,
-`internal/coroutine/worker_test.go`, `internal/coroutine/join_test.go`,
-`internal/coroutine/handler_test.go`, and `internal/engine/coroutine_test.go`.
+`sprite_clone_test.go`, `internal/engine/coroutine/loop_test.go`,
+`internal/engine/coroutine/order_test.go`, `internal/engine/coroutine/wait_order_test.go`, and
+`internal/engine/coroutine/ready_test.go`.
+Cancellation and restart coverage is in `internal/engine/coroutine/thread_test.go`,
+`internal/engine/coroutine/worker_test.go`, `internal/engine/coroutine/join_test.go`,
+`internal/engine/coroutine/handler_test.go`, and `internal/engine/coroutine_test.go`.
 WASM compilation does not replace browser runtime verification.
 
 ## Reference implementation

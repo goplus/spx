@@ -18,8 +18,8 @@ package spx
 
 import (
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 // IsRunWithoutScreenRefresh reports whether the current coroutine is in warp mode.

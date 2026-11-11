@@ -33,12 +33,12 @@ import (
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/fs/asset"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
@@ -115,7 +115,7 @@ func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
 	if sampled != 42 || handled != 0 {
 		t.Fatalf("sampled value/handlers = %d/%d, want 42/0", sampled, handled)
 	}
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	game.dispatchFrameEvents()
 	currentScheduler.Update()
 	if handled != 1 {

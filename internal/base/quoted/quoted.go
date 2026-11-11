@@ -59,15 +59,9 @@ func Split(value string) ([]string, error) {
 func Join(fields []string) (string, error) {
 	quoted := make([]string, len(fields))
 	for index, field := range fields {
-		hasSpace := false
+		hasSpace := strings.ContainsAny(field, " \t\n\r")
 		hasSingle := strings.ContainsRune(field, '\'')
 		hasDouble := strings.ContainsRune(field, '"')
-		for offset := 0; offset < len(field); offset++ {
-			if isSpace(field[offset]) {
-				hasSpace = true
-				break
-			}
-		}
 		switch {
 		case field != "" && !hasSpace && field[0] != '\'' && field[0] != '"':
 			quoted[index] = field

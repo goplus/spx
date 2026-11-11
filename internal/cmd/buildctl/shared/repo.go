@@ -54,5 +54,5 @@ func DirExists(path string) bool {
 func isRepoRoot(dir string) bool {
 	return FileExists(filepath.Join(dir, "go.mod")) &&
 		FileExists(filepath.Join(dir, "cmd", "spx", "install.sh")) &&
-		FileExists(filepath.Join(dir, "internal", "tools"))
+		FileExists(filepath.Join(dir, "internal", "cmd", "buildctl"))
 }

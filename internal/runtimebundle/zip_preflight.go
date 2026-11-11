@@ -20,16 +20,16 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/goplus/spx/v4/internal/zippreflight"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 func preflightZipArchive(reader io.ReaderAt, size int64, limits Limits) error {
-	err := zippreflight.Check(reader, size, zippreflight.Limits{
+	err := fileutil.CheckZIPPreflight(reader, size, fileutil.ZIPPreflightLimits{
 		MaxArchiveBytes:          limits.MaxArchiveBytes,
 		MaxCentralDirectoryBytes: limits.MaxCentralDirectoryBytes,
 		MaxEntries:               limits.MaxEntries,
 	})
-	if zippreflight.IsLimit(err) {
+	if fileutil.IsZIPPreflightLimit(err) {
 		return fmt.Errorf("%w: %v", ErrArchiveLimit, err)
 	}
 	return err

@@ -23,8 +23,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

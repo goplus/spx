@@ -20,10 +20,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalaudio "github.com/goplus/spx/v4/internal/audio"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 type animationAudioBackend struct {
@@ -920,7 +919,7 @@ func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
 }
 
 func initTestAnimationAudio(anim *animationComponent, backend *animationAudioBackend) {
-	anim.sprite.g.soundMgr = internalaudio.Manager{}
+	anim.sprite.g.soundMgr = soundManager{}
 	anim.sprite.g.soundMgr.Init(backend)
 	anim.sprite.g.sounds = map[string]sound{
 		"walk": &coreproject.SoundConfig{Path: "sounds/walk.wav"},

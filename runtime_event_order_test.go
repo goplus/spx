@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
 type eventOrderLog struct {
@@ -281,7 +281,7 @@ func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
 			var want []Key
 			// Once the first invocation finishes, the registration accepts a new frame.
 			for _, edges := range [][]Key{tt.edges, {tt.edges[len(tt.edges)-1]}} {
-				itime.Update(1.0/30, 30)
+				clock.Update(1.0/30, 30)
 				batch := &inputFrame{}
 				for _, key := range edges {
 					batch.events = append(batch.events, &eventKeyDown{Key: key})
@@ -311,7 +311,7 @@ func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t
 	})
 	want := [][]Key{{KeyA}, {KeyA}, {KeyA, KeyB}}
 	for frame, key := range []Key{KeyA, KeyB, KeyB} {
-		itime.Update(1.0/30, 30)
+		clock.Update(1.0/30, 30)
 		game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: key}}}
 		game.dispatchFrameEvents()
 		currentScheduler.Update()
@@ -353,7 +353,7 @@ func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
 
 	// Let the receiver first segments return instead of leaving their frame
 	// waits for test cleanup to abort.
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	currentScheduler.Update()
 }
 
@@ -388,7 +388,7 @@ func TestAsyncBroadcastReceiversFollowEarlierScriptsInRound(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			currentScheduler, game := setupRuntimeEventGame(t)
-			itime.Start()
+			clock.Start()
 			var log eventOrderLog
 			game.OnMsg__1("new-receiver", func() { log.add("C") })
 
@@ -411,7 +411,7 @@ func TestAsyncBroadcastReceiversFollowEarlierScriptsInRound(t *testing.T) {
 			// Both old scripts are eligible together. A's broadcast must not
 			// let its new receiver overtake B's continuation.
 			if test.advance > 0 {
-				itime.Update(test.advance, 30)
+				clock.Update(test.advance, 30)
 			}
 			currentScheduler.Update()
 			requireEventOrder(t, &log, []string{"A-before", "A-after", "B", "C"})
@@ -421,7 +421,7 @@ func TestAsyncBroadcastReceiversFollowEarlierScriptsInRound(t *testing.T) {
 
 func TestAsyncBroadcastDoesNotWaitForUnexpiredEarlierScript(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
-	itime.Start()
+	clock.Start()
 	var log eventOrderLog
 	game.OnMsg__1("new-receiver", func() { log.add("C") })
 
@@ -438,18 +438,18 @@ func TestAsyncBroadcastDoesNotWaitForUnexpiredEarlierScript(t *testing.T) {
 	})
 	currentScheduler.JoinFirstSlice(b)
 
-	itime.Update(0.5, 30)
+	clock.Update(0.5, 30)
 	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "A-after", "C"})
 
-	itime.Update(0.5, 30)
+	clock.Update(0.5, 30)
 	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "A-after", "C", "B"})
 }
 
 func TestBroadcastAndWaitResumesOlderScriptBeforeNewReceiver(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
-	itime.Start()
+	clock.Start()
 	var log eventOrderLog
 	game.OnMsg__1("new-receiver", func() {
 		log.add("C-before")
@@ -470,11 +470,11 @@ func TestBroadcastAndWaitResumesOlderScriptBeforeNewReceiver(t *testing.T) {
 	})
 	currentScheduler.JoinFirstSlice(b)
 
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "B", "C-before"})
 
-	itime.Update(1.0/30, 30)
+	clock.Update(1.0/30, 30)
 	currentScheduler.Update()
 	requireEventOrder(t, &log, []string{"A-before", "B", "C-before", "C-after", "A-after"})
 }
@@ -617,7 +617,7 @@ func TestBroadcastAndWaitResumesBeforeRestartedEarlierReceiver(t *testing.T) {
 
 			// Restarting preserves child's earlier thread slot, which this
 			// round already visited. The caller resumes before child runs again.
-			itime.Update(0, 0)
+			clock.Update(0, 0)
 			currentScheduler.Update()
 			want := []string{"child-started", "outer-returned", "caller-resumed", "child-started"}
 			if stopOthers {
@@ -1050,7 +1050,7 @@ func waitForEventOrderEntries(t *testing.T, currentScheduler *coroutine.Schedule
 
 func advanceEventFrame(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
 	t.Helper()
-	itime.Update(0, 0)
+	clock.Update(0, 0)
 	waitForEventOrderEntries(t, currentScheduler, log, count)
 }
 

@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/coroutine"
-	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -52,12 +52,12 @@ func TestInternalUpdateFrameUsesScriptDeltaForDelayCall(t *testing.T) {
 	resetFrameTestState()
 	t.Cleanup(resetFrameTestState)
 
-	itime.SetFixedDeltaTime(0.1)
+	clock.SetFixedDeltaTime(0.1)
 
 	firedAt := 0
 	delayCall(0.25, func() {
 		if firedAt == 0 {
-			firedAt = int(itime.Frame())
+			firedAt = int(clock.Frame())
 		}
 	})
 
@@ -74,7 +74,7 @@ func TestInternalUpdateFrameUsesScriptDeltaForTweens(t *testing.T) {
 	resetFrameTestState()
 	t.Cleanup(resetFrameTestState)
 
-	itime.SetFixedDeltaTime(0.1)
+	clock.SetFixedDeltaTime(0.1)
 
 	sprite := &frameCallbackSprite{Sprite: gdx.Sprite{Id: 1}}
 	state.sprites[1] = sprite
@@ -735,13 +735,13 @@ func (*nilBaseRuntimeSprite) BaseSprite() *gdx.Sprite { return nil }
 
 func resetFrameTestState() {
 	resetRuntimeState()
-	itime.SetFixedDeltaTime(0)
-	itime.Start()
+	clock.SetFixedDeltaTime(0)
+	clock.Start()
 }
 
 func advanceTestFrame(realDelta float64) {
-	logicalDelta := itime.EffectiveLogicalDeltaTime(realDelta)
-	itime.Update(logicalDelta, 60)
+	logicalDelta := clock.EffectiveLogicalDeltaTime(realDelta)
+	clock.Update(logicalDelta, 60)
 	runtimeBridge{}.InternalUpdateFrame(logicalDelta, nil)
 }
 

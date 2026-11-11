@@ -27,9 +27,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/goplus/spx/v4/internal/base/pathutil"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
+	"github.com/goplus/spx/v4/internal/base/strictjson"
 
-	"github.com/goplus/spx/v4/internal/strictjson"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
@@ -469,12 +469,12 @@ func isDriveAbsolute(name string) bool {
 }
 
 func validatePortableComponent(component string) error {
-	switch pathutil.CheckComponent(component) {
-	case pathutil.TrailingDotOrSpace:
+	switch fileutil.CheckPathComponent(component) {
+	case fileutil.TrailingDotOrSpace:
 		return fmt.Errorf("trailing dot/space is not portable on Windows")
-	case pathutil.ReservedCharacter:
+	case fileutil.ReservedCharacter:
 		return fmt.Errorf("contains a Windows-reserved character")
-	case pathutil.ControlCharacter:
+	case fileutil.ControlCharacter:
 		return fmt.Errorf("contains a control character")
 	}
 	base := cases.Fold().String(component)
@@ -482,7 +482,7 @@ func validatePortableComponent(component string) error {
 		base = base[:index]
 	}
 	base = strings.TrimRight(base, " .")
-	if pathutil.IsDeviceBase(base) {
+	if fileutil.IsDeviceBase(base) {
 		return fmt.Errorf("reserved Windows device name")
 	}
 	return nil
