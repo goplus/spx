@@ -31,32 +31,32 @@ const (
 // -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) Play__0(name SoundName) {
-	p.Play__1(name, false)
+func (p *SpriteImpl) Play__0(sound SoundName) {
+	p.Play__1(sound, false)
 }
 
-func (p *SpriteImpl) Play__1(name SoundName, loop bool) {
-	p.sound().play(name, loop)
+func (p *SpriteImpl) Play__1(sound SoundName, loop bool) {
+	p.sound().play(sound, loop)
 }
 
-func (p *SpriteImpl) PlayWith(name SoundName, __xgo_optional_loop bool) {
-	p.sound().play(name, __xgo_optional_loop)
+func (p *SpriteImpl) PlayWith(sound SoundName, __xgo_optional_loop bool) {
+	p.sound().play(sound, __xgo_optional_loop)
 }
 
-func (p *SpriteImpl) PlayAndWait(name SoundName) {
-	p.sound().playAndWait(name)
+func (p *SpriteImpl) PlayAndWait(sound SoundName) {
+	p.sound().playAndWait(sound)
 }
 
-func (p *SpriteImpl) PausePlaying(name SoundName) {
-	p.g.pauseSound(name)
+func (p *SpriteImpl) PausePlaying(sound SoundName) {
+	p.g.pauseSound(sound)
 }
 
-func (p *SpriteImpl) ResumePlaying(name SoundName) {
-	p.g.resumeSound(name)
+func (p *SpriteImpl) ResumePlaying(sound SoundName) {
+	p.g.resumeSound(sound)
 }
 
-func (p *SpriteImpl) StopPlaying(name SoundName) {
-	p.g.stopSound(name)
+func (p *SpriteImpl) StopPlaying(sound SoundName) {
+	p.g.stopSound(sound)
 }
 
 // -----------------------------------------------------------------------------
@@ -71,8 +71,8 @@ func (p *SpriteImpl) SetVolume(volume float64) {
 	engine.RequestRedraw()
 }
 
-func (p *SpriteImpl) ChangeVolume(delta float64) {
-	p.sound().changeVolume(delta)
+func (p *SpriteImpl) ChangeVolume(dVolume float64) {
+	p.sound().changeVolume(dVolume)
 	engine.RequestRedraw()
 }
 

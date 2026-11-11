@@ -51,13 +51,13 @@ func NewList(items ...any) List {
 	return List{data: data}
 }
 
-func (p *List) Init(data ...any) {
-	p.data = data
+func (p *List) Init(values ...any) {
+	p.data = values
 }
 
-func (p *List) InitFrom(src *List) {
-	data := make([]any, len(src.data))
-	copy(data, src.data)
+func (p *List) InitFrom(sourceList *List) {
+	data := make([]any, len(sourceList.data))
+	copy(data, sourceList.data)
 	p.data = data
 }
 
@@ -86,61 +86,61 @@ func (p *List) String() string {
 	return strings.Join(items, sep)
 }
 
-// Contains returns true if the list contains the element v.
-func (p *List) Contains(v any) bool {
-	return p.IndexOf(v) != ListInvalid
+// Contains returns true if the list contains value.
+func (p *List) Contains(value any) bool {
+	return p.IndexOf(value) != ListInvalid
 }
 
-// Append adds the element v to the end of the list.
-func (p *List) Append(v any) {
-	p.data = append(p.data, UnwrapValue(v))
+// Append adds value to the end of the list.
+func (p *List) Append(value any) {
+	p.data = append(p.data, UnwrapValue(value))
 }
 
-// Set sets the element at the specified index i to v.
-func (p *List) Set(i int, v any) {
+// Set sets the element at index to value.
+func (p *List) Set(index int, value any) {
 	n := len(p.data)
-	i = getListPos(i, n)
-	if i >= 0 && i < n {
-		p.data[i] = UnwrapValue(v)
+	index = getListPos(index, n)
+	if index >= 0 && index < n {
+		p.data[index] = UnwrapValue(value)
 	}
 }
 
-// Insert inserts the element v at the specified index i.
-func (p *List) Insert(i int, v any) {
+// Insert inserts value at index.
+func (p *List) Insert(index int, value any) {
 	n := len(p.data)
-	if i == ListInvalid {
+	if index == ListInvalid {
 		return
 	}
-	i = getListPos(i, n+1)
-	val := UnwrapValue(v)
+	index = getListPos(index, n+1)
+	val := UnwrapValue(value)
 	p.data = append(p.data, val)
-	if i < n {
-		copy(p.data[i+1:], p.data[i:])
-		p.data[i] = val
+	if index < n {
+		copy(p.data[index+1:], p.data[index:])
+		p.data[index] = val
 	}
 }
 
 // Delete removes the element at the specified index.
-func (p *List) Delete(i int) {
+func (p *List) Delete(index int) {
 	n := len(p.data)
-	if i == ListAll {
+	if index == ListAll {
 		p.Clear()
 		return
 	}
-	i = getListPos(i, n)
-	if i >= 0 && i < n {
-		p.data = append(p.data[:i], p.data[i+1:]...)
+	index = getListPos(index, n)
+	if index >= 0 && index < n {
+		p.data = append(p.data[:index], p.data[index+1:]...)
 	}
 }
 
 // At returns the Value at the specified index.
-func (p *List) At(i int) Value {
+func (p *List) At(index int) Value {
 	n := len(p.data)
-	i = getListPos(i, n)
-	if i < 0 || i >= n {
+	index = getListPos(index, n)
+	if index < 0 || index >= n {
 		return Value{}
 	}
-	return WrapValue(p.data[i])
+	return WrapValue(p.data[index])
 }
 
 // IndexOf returns the zero-based position of the first occurrence of v in the list.
