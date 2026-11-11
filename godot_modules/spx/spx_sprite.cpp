@@ -36,6 +36,7 @@
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "scene/2d/visible_on_screen_notifier_2d.h"
 #include "scene/main/viewport.h"
+#include "scene/resources/material.h"
 
 #include "spx.h"
 #include "spx_collision_debug_overlay.h"
@@ -302,7 +303,17 @@ void SpxSprite::_connect_runtime_signals() {
 }
 
 void SpxSprite::on_start() {
+	const bool first_start = anim2d == nullptr;
 	_resolve_runtime_components();
+
+	// Isolate authored parameters even if a missing component prevents startup.
+	// Later retries and explicit material replacements must keep their identity.
+	if (first_start && anim2d != nullptr) {
+		Ref<ShaderMaterial> material = anim2d->get_material();
+		if (material.is_valid()) {
+			anim2d->set_material(material->duplicate());
+		}
+	}
 
 	ERR_FAIL_NULL_MSG(collider2d, "SpxSprite: CollisionShape2D component is missing.");
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");

@@ -437,6 +437,37 @@ TEST_CASE("[SceneTree][SPX] Audio capture saturates PCM, preserves the master mi
 	CHECK(server->get_bus_effect_count(0) == before);
 }
 
+TEST_CASE("[Audio][SPX] Audio capture safely detaches after the audio server shuts down") {
+	auto *server = AudioServer::get_singleton();
+	REQUIRE(server != nullptr);
+	HybridAudioDriver driver;
+	REQUIRE(driver.init(8000) == OK);
+	Ref<AudioEffectInstance> effect = server->get_bus_effect(0, server->get_bus_effect_count(0) - 1)->instantiate();
+	REQUIRE(effect.is_valid());
+	IndependentAudioRecorder recorder;
+	driver.register_audio_recorder(&recorder);
+	driver.enable_recording(true);
+
+	// Shutdown can destroy AudioServer before the capture owner and retained effect instances.
+	server->finish();
+	memdelete(server);
+	REQUIRE(AudioServer::get_singleton() == nullptr);
+	driver.finish();
+	CHECK_FALSE(driver.is_recording_enabled());
+	CHECK(driver.get_registered_recorder_count() == 0);
+	AudioFrame input[2] = { AudioFrame(0.25, -0.5), AudioFrame(-0.25, 0.5) };
+	AudioFrame output[2];
+	effect->process(input, output, 2);
+	for (int i = 0; i < 2; ++i) {
+		CHECK(output[i].left == input[i].left);
+		CHECK(output[i].right == input[i].right);
+	}
+	driver.finish(); // Explicit cleanup and the destructor remain idempotent.
+	ERR_PRINT_OFF;
+	CHECK(driver.init(8000) == ERR_UNCONFIGURED);
+	ERR_PRINT_ON;
+}
+
 TEST_CASE("[SceneTree][SPX] Audio recorder consumes captured PCM and closes the worker file") {
 	TestSpx::TempDirectory files("spx_audio_thread");
 	TestSpx::EngineScene scene;

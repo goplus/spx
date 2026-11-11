@@ -57,6 +57,8 @@ public:
 	virtual int get_sort_z_index() const = 0;
 	virtual bool is_node_valid() const = 0;
 	virtual bool is_sort_static() const { return false; }
+	// Custom sortables remain eligible unless they can establish invisibility.
+	virtual bool is_sort_visible() const { return true; }
 	// Unknown bounds must remain eligible for sorting.
 	virtual bool get_sort_bounds(Rect2 &r_bounds) const { return false; }
 };
@@ -80,6 +82,7 @@ public:
 	void set_sort_z_index(int p_z_index) override { set_z_index(p_z_index); }
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
+	bool is_sort_visible() const override { return is_visible_in_tree(); }
 	bool is_sort_static() const override { return true; }
 	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
@@ -106,6 +109,7 @@ public:
 	void set_sort_z_index(int p_z_index) override { set_z_index(p_z_index); }
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
+	bool is_sort_visible() const override { return is_visible_in_tree(); }
 	bool is_sort_static() const override { return true; }
 	bool get_sort_bounds(Rect2 &r_bounds) const override;
 
@@ -246,6 +250,7 @@ public:
 	void set_sort_z_index(int p_z_index) override { set_z_index(p_z_index); }
 	int get_sort_z_index() const override { return get_z_index(); }
 	bool is_node_valid() const override { return is_inside_tree(); }
+	bool is_sort_visible() const override { return is_visible_in_tree(); }
 	bool is_sort_static() const override { return get_physics_mode() == PhysicsMode::STATIC; }
 	bool get_sort_bounds(Rect2 &r_bounds) const override;
 

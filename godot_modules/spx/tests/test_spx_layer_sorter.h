@@ -211,7 +211,9 @@ TEST_CASE("[SceneTree][SPX] Layer sorting reserves z slots for rendered bounds u
 	CHECK_EQ(front->get_z_index(), 3);
 
 	// A genuinely over-capacity batch must not be partly applied.
+	returning->set_position(Point2(20, 90));
 	std::vector<SortableSprite> unknown_bounds;
+	Camera2D *detached_camera = nullptr;
 	SUBCASE("All bounds intersect the viewport") {
 		for (ISortableSprite *sprite : sprites) {
 			static_cast<SpxRenderSprite *>(sprite)->set_position(Point2(20, 20));
@@ -235,15 +237,111 @@ TEST_CASE("[SceneTree][SPX] Layer sorting reserves z slots for rendered bounds u
 	SUBCASE("A missing camera keeps offscreen bounds eligible") {
 		SpxEngine::get_singleton()->get_camera()->on_destroy();
 	}
+	SUBCASE("A camera detached during teardown has no viewport for culling") {
+		detached_camera = SpxEngine::get_singleton()->get_camera()->get_camera();
+		fixture.viewport->remove_child(detached_camera);
+	}
 	ERR_PRINT_OFF;
 	fixture.sorter.update(sprites);
 	ERR_PRINT_ON;
+	if (detached_camera) {
+		fixture.viewport->add_child(detached_camera);
+	}
 	CHECK_EQ(returning->get_z_index(), 1);
 	CHECK_EQ(large->get_z_index(), 2);
 	CHECK_EQ(front->get_z_index(), 3);
 	for (const SortableSprite &sprite : unknown_bounds) {
 		CHECK(sprite.z_updates == 0);
 	}
+	if (!unknown_bounds.empty()) {
+		// Returning to the supported limit restores the entire batch on the next update.
+		sprites.resize(RS::CANVAS_ITEM_Z_MAX);
+		fixture.sorter.update(sprites);
+		for (int i = 0; i < RS::CANVAS_ITEM_Z_MAX; ++i) {
+			CHECK_EQ(unknown_bounds[i].z_index, i + 1);
+			CHECK_EQ(unknown_bounds[i].z_updates, 1);
+		}
+		CHECK_EQ(unknown_bounds.back().z_updates, 0);
+	}
+}
+
+TEST_CASE("[SceneTree][SPX] Hidden sprites leave capacity for visible ordering and rejoin when shown") {
+	SorterFixture fixture;
+	const Ref<Texture2D> texture = SpxImageTexture::create_from_image(Image::create_empty(32, 32, false, Image::FORMAT_RGBA8));
+	auto *hidden_parent = memnew(Node2D);
+	fixture.viewport->add_child(hidden_parent);
+	bool hide_parent = false;
+	bool without_texture = false;
+	SUBCASE("Sprites hidden individually") {}
+	SUBCASE("Sprites inherit their parent's visibility") {
+		hide_parent = true;
+	}
+	SUBCASE("Hidden sprites with unknown bounds do not need a camera") {
+		without_texture = true;
+		SpxEngine::get_singleton()->get_camera()->on_destroy();
+	}
+	hidden_parent->set_visible(!hide_parent);
+	Vector<ISortableSprite *> sprites;
+	for (int i = 0; i < RS::CANVAS_ITEM_Z_MAX - 1; ++i) {
+		Node2D *node;
+		if (i == 0) {
+			auto *sprite = memnew(SpxStaticSprite);
+			sprite->set_sort_id(i + 1);
+			node = sprite;
+		} else if (i == 1) {
+			auto *sprite = memnew(SpxSprite);
+			sprite->set_gid(i + 1);
+			node = sprite;
+		} else {
+			auto *sprite = memnew(SpxRenderSprite);
+			sprite->set_sort_id(i + 1);
+			if (!without_texture) {
+				sprite->set_texture(texture);
+			}
+			node = sprite;
+		}
+		node->set_position(Point2(20, 10));
+		node->set_visible(hide_parent);
+		hidden_parent->add_child(node);
+		sprites.push_back(dynamic_cast<ISortableSprite *>(node));
+	}
+	auto *back = memnew(SpxRenderSprite);
+	auto *front = memnew(SpxRenderSprite);
+	back->set_sort_id(RS::CANVAS_ITEM_Z_MAX);
+	front->set_sort_id(RS::CANVAS_ITEM_Z_MAX + 1);
+	back->set_position(Point2(20, 30));
+	front->set_position(Point2(20, 50));
+	for (SpxRenderSprite *sprite : { back, front }) {
+		sprite->set_texture(texture);
+		fixture.viewport->add_child(sprite);
+		sprites.push_back(sprite);
+	}
+	fixture.sorter.update(sprites);
+	CHECK_EQ(back->get_z_index(), 1);
+	CHECK_EQ(front->get_z_index(), 2);
+	for (int i = 0; i < RS::CANVAS_ITEM_Z_MAX - 1; ++i) {
+		CHECK_FALSE(sprites[i]->is_sort_visible());
+		CHECK_EQ(sprites[i]->get_sort_z_index(), 0);
+	}
+
+	// Show a previously hidden real node without rebuilding the sortable list.
+	auto *returning = Object::cast_to<Node2D>(hidden_parent->get_child(2));
+	if (hide_parent) {
+		hidden_parent->remove_child(returning);
+		fixture.viewport->add_child(returning);
+	} else {
+		returning->show();
+	}
+	fixture.sorter.update(sprites);
+	CHECK_EQ(returning->get_z_index(), 1);
+	CHECK_EQ(back->get_z_index(), 2);
+	CHECK_EQ(front->get_z_index(), 3);
+
+	returning->hide();
+	front->set_position(Point2(20, 20));
+	fixture.sorter.update(sprites);
+	CHECK_EQ(front->get_z_index(), 1);
+	CHECK_EQ(back->get_z_index(), 2);
 }
 
 TEST_CASE("[SceneTree][SPX] Static-only layers update z-order when members disappear") {

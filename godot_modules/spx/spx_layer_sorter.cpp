@@ -75,8 +75,10 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 		const Viewport *viewport = camera ? camera->get_viewport() : nullptr;
 		const Rect2 screen = viewport ? viewport->get_canvas_transform().affine_inverse().xform(viewport->get_visible_rect()) : Rect2();
 		sorted.erase(std::remove_if(sorted.begin(), sorted.end(), [&](const SortInfo &info) {
+			const ISortableSprite *sprite = sprites[info.id];
 			Rect2 bounds;
-			return viewport && sprites[info.id]->get_sort_bounds(bounds) && !screen.intersects(bounds, true);
+			return !sprite->is_sort_visible() ||
+					(viewport && sprite->get_sort_bounds(bounds) && !screen.intersects(bounds, true));
 		}), sorted.end());
 	}
 	ERR_FAIL_COND_MSG(sorted.size() > RS::CANVAS_ITEM_Z_MAX,
@@ -126,6 +128,10 @@ void SpxLayerSorter::reset() {
 }
 
 void SpxLayerSorter::_clear_drawer() {
+	// The static sorter can be destroyed after ObjectDB has been cleaned up.
+	if (drawer_id.is_null()) {
+		return;
+	}
 	if (Node *drawer = Object::cast_to<Node>(ObjectDB::get_instance(drawer_id))) {
 		drawer->queue_free();
 	}

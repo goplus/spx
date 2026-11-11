@@ -507,6 +507,7 @@ TEST_CASE("[SceneTree][SPX] Authored sprite shaders receive current atlas UVs wi
 	animation->set_material(material);
 
 	sprite->on_start();
+	CHECK(animation->get_material() == material);
 	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0.25, 0.25, 0.5, 0.5));
 	sprite->set_anim_frame(1);
 	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
@@ -517,6 +518,116 @@ TEST_CASE("[SceneTree][SPX] Authored sprite shaders receive current atlas UVs wi
 	sprite->set_anim_frame(0);
 	CHECK(Vector4(replacement->get_shader_parameter("atlas_uv_rect2")) == Vector4(0.25, 0.25, 0.5, 0.5));
 	CHECK(Vector4(material->get_shader_parameter("atlas_uv_rect2")) == Vector4(0, 0, 1, 1));
+}
+
+TEST_CASE("[SceneTree][SPX] Packed scenes isolate authored shader materials per sprite") {
+	bool retry_start = false;
+	SUBCASE("Complete authored components") {}
+	SUBCASE("Retry after restoring a missing component") {
+		retry_start = true;
+	}
+	TestSpx::TempDirectory files("spx_scene_material");
+	String source = R"([gd_scene load_steps=6 format=3]
+[sub_resource type="PlaceholderTexture2D" id="Texture"]
+size = Vector2(100, 80)
+[sub_resource type="AtlasTexture" id="Atlas"]
+atlas = SubResource("Texture")
+region = Rect2(25, 20, 50, 40)
+[sub_resource type="SpriteFrames" id="Frames"]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas")}, {"duration": 1.0, "texture": SubResource("Texture")}], "loop": true, "name": &"default", "speed": 5.0}]
+[sub_resource type="Shader" id="Shader"]
+code = "shader_type canvas_item; uniform vec4 atlas_uv_rect2; uniform float amount; uniform sampler2D detail;"
+[sub_resource type="ShaderMaterial" id="Material"]
+shader = SubResource("Shader")
+shader_parameter/amount = 0.25
+shader_parameter/atlas_uv_rect2 = Vector4(0, 0, 0, 0)
+shader_parameter/detail = SubResource("Texture")
+[node name="Pair" type="Node2D"]
+)";
+	for (int i = 0; i < 2; ++i) {
+		const String name = i == 0 ? "First" : "Second";
+		source += "[node name=\"" + name + "\" type=\"SpxSprite\" parent=\".\"]\n";
+		source += "[node name=\"RenderRoot\" type=\"Node2D\" parent=\"" + name + "\"]\n";
+		source += "[node name=\"Anim2D\" type=\"AnimatedSprite2D\" parent=\"" + name + "/RenderRoot\"]\n";
+		source += "material = SubResource(\"Material\")\nsprite_frames = SubResource(\"Frames\")\nframe = " + itos(i) + "\n";
+		source += "[node name=\"Collider2D\" type=\"CollisionShape2D\" parent=\"" + name + "\"]\n";
+		source += "[node name=\"Area2D\" type=\"Area2D\" parent=\"" + name + "\"]\n";
+		source += "[node name=\"Trigger2D\" type=\"CollisionShape2D\" parent=\"" + name + "/Area2D\"]\n";
+	}
+	files.write("pair.tscn", source);
+	TestSpx::EngineScene scene;
+	Ref<PackedScene> packed = ResourceLoader::load(files.file("pair.tscn"));
+	REQUIRE(packed.is_valid());
+	SpxSprite *sprites[4];
+	Ref<ShaderMaterial> materials[4];
+	Ref<ShaderMaterial> authored;
+	for (int instance = 0; instance < 2; ++instance) {
+		Node *root = packed->instantiate();
+		REQUIRE(root != nullptr);
+		scene.root->add_child(root);
+		for (int child = 0; child < 2; ++child) {
+			const int index = instance * 2 + child;
+			auto *sprite = Object::cast_to<SpxSprite>(root->get_node(NodePath(child == 0 ? "First" : "Second")));
+			REQUIRE(sprite != nullptr);
+			auto *animation = Object::cast_to<AnimatedSprite2D>(sprite->get_node(NodePath("RenderRoot/Anim2D")));
+			REQUIRE(animation != nullptr);
+			Ref<ShaderMaterial> original = animation->get_material();
+			REQUIRE(original.is_valid());
+			CHECK_FALSE(original->is_local_to_scene());
+			if (authored.is_null()) {
+				authored = original;
+			}
+			CHECK(original == authored);
+			Ref<Material> first_material;
+			if (retry_start) {
+				Node *area = sprite->get_node(NodePath("Area2D"));
+				sprite->remove_child(area);
+				ERR_PRINT_OFF;
+				sprite->on_start();
+				ERR_PRINT_ON;
+				first_material = animation->get_material();
+				CHECK(first_material != authored);
+				sprite->add_child(area);
+			}
+			sprite->on_start();
+			if (retry_start) {
+				CHECK(animation->get_material() == first_material);
+			}
+			sprites[index] = sprite;
+			materials[index] = animation->get_material();
+			REQUIRE(materials[index].is_valid());
+			CHECK(materials[index] != authored);
+			CHECK(materials[index]->get_shader() == authored->get_shader());
+			CHECK(materials[index]->get_shader_parameter("detail") == authored->get_shader_parameter("detail"));
+			CHECK(double(sprite->get_material_params("amount")) == doctest::Approx(0.25));
+		}
+	}
+	const Vector4 atlas_uv(0.25, 0.25, 0.5, 0.5), full_uv(0, 0, 1, 1);
+	for (int i = 0; i < 4; ++i) {
+		CHECK(Vector4(materials[i]->get_shader_parameter("atlas_uv_rect2")) == (i % 2 == 0 ? atlas_uv : full_uv));
+		for (int j = 0; j < i; ++j) {
+			CHECK(materials[i] != materials[j]);
+		}
+	}
+	CHECK(Vector4(authored->get_shader_parameter("atlas_uv_rect2")) == Vector4());
+	sprites[0]->set_anim_frame(1);
+	sprites[1]->set_anim_frame(0);
+	sprites[0]->set_material_params("amount", 0.75);
+	CHECK(Vector4(materials[0]->get_shader_parameter("atlas_uv_rect2")) == full_uv);
+	CHECK(Vector4(materials[1]->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(Vector4(materials[2]->get_shader_parameter("atlas_uv_rect2")) == atlas_uv);
+	CHECK(Vector4(materials[3]->get_shader_parameter("atlas_uv_rect2")) == full_uv);
+	CHECK(double(materials[0]->get_shader_parameter("amount")) == doctest::Approx(0.75));
+	CHECK(double(materials[2]->get_shader_parameter("amount")) == doctest::Approx(0.25));
+
+	// Explicit sharing after startup, including a repeated start, stays intentional.
+	sprites[0]->get_anim2d()->set_material(materials[2]);
+	sprites[0]->on_start();
+	CHECK(sprites[0]->get_anim2d()->get_material() == materials[2]);
+	CHECK(Vector4(materials[2]->get_shader_parameter("atlas_uv_rect2")) == full_uv);
+	materials[2]->set_shader_parameter("amount", 0.5);
+	CHECK(double(sprites[0]->get_material_params("amount")) == doctest::Approx(0.5));
+	CHECK(double(sprites[2]->get_material_params("amount")) == doctest::Approx(0.5));
 }
 
 TEST_CASE("[SceneTree][SPX] Native sprite clones isolate shader parameters and atlas UVs") {
@@ -1071,6 +1182,11 @@ TEST_CASE("[SceneTree][SPX] Sort bounds conservatively retain scripted and extra
 		rendered->set_script(script);
 		REQUIRE(rendered->get_script_instance() != nullptr);
 		CHECK_FALSE(rendered->get_sort_bounds(bounds));
+		CHECK(rendered->is_sort_visible());
+		rendered->hide();
+		CHECK_FALSE(rendered->is_sort_visible());
+		rendered->show();
+		CHECK(rendered->is_sort_visible());
 	}
 	SUBCASE("Logic children do not expand bounds but scripted descendants can") {
 		auto *logic = memnew(Node);
