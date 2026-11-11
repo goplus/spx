@@ -23,12 +23,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser"
 	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/common"
 	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/ffi"
 	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/gdext"
 	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/webffi"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	"github.com/goplus/spx/v4/internal/release"
 )
 

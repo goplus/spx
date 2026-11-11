@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 func TestLoggingLevelsFormattingAndStreams(t *testing.T) {

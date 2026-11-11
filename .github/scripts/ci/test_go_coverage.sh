@@ -68,7 +68,7 @@ case "${1:-}" in
   web-process)
     covered_web_test coverage-web-process.out \
       -run 'UnsupportedPlatform|^Test(RunCommand|MaterializeComponent)|^Test(RunRejectsInvalidInput|PrepareLinuxRuntimePackAssetsRejectsInvalidInputs|ProcessStatusSuccess|RunRejectsInvalidPayload|RunContextRejectsInvalidContext|ContextWriter)$' \
-      ./internal/cmd/buildctl/engine ./internal/processsupervisor ./pkg/launcher
+      ./internal/cmd/buildctl/engine ./internal/base/processsupervisor ./pkg/launcher
     ;;
   web-interpreter)
     cd cmd/ispx

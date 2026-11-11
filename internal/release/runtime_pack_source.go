@@ -28,16 +28,16 @@ import (
 )
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
-	".github/scripts/runtime/build_pack.sh":               {},
 	".github/scripts/runtime/build_contract.py":           {},
+	".github/scripts/runtime/build_pack.sh":               {},
 	".github/scripts/setup/build_buildctl.sh":             {},
 	"cmd/internal/macos_go_toolchain.sh":                  {},
 	"internal/base/fileutil/fileutil.go":                  {},
-	"internal/cmd/buildctl/main.go":                       {},
-	"internal/cmd/buildctl/runtime_dispatch.go":           {},
 	"internal/cmd/buildctl/engine/download_linux_pack.go": {},
 	"internal/cmd/buildctl/engine/download_local.go":      {},
 	"internal/cmd/buildctl/engine/download_zip.go":        {},
+	"internal/cmd/buildctl/main.go":                       {},
+	"internal/cmd/buildctl/runtime_dispatch.go":           {},
 	"internal/cmd/buildctl/runtimecmd/dispatch.go":        {},
 	"internal/cmd/buildctl/runtimecmd/pack.go":            {},
 	"internal/cmd/buildctl/runtimecmd/workspace.go":       {},
@@ -45,9 +45,9 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 	"internal/cmd/buildctl/shared/build_env.go":           {},
 	"internal/cmd/buildctl/shared/command_runner.go":      {},
 	"internal/cmd/buildctl/shared/files.go":               {},
+	"internal/cmd/buildctl/shared/gopath.go":              {},
 	"internal/cmd/buildctl/shared/macos_go_toolchain.go":  {},
 	"internal/cmd/buildctl/shared/repo.go":                {},
-	"internal/cmd/buildctl/shared/runtime_files.go":       {},
 	"internal/release/runtime_asset.go":                   {},
 	"internal/release/runtime_lock.go":                    {},
 }
@@ -60,17 +60,17 @@ var runtimeBuildRecipePrefixes = []string{
 
 var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/appname.txt":                                           {},
-	"cmd/spx/main.go":                                               {},
 	"cmd/spx/internal/command/ai_module.go":                         {},
 	"cmd/spx/internal/command/args.go":                              {},
 	"cmd/spx/internal/command/build.go":                             {},
+	"cmd/spx/internal/command/builderai/project.go":                 {},
 	"cmd/spx/internal/command/cmd.go":                               {},
 	"cmd/spx/internal/command/dispatch.go":                          {},
 	"cmd/spx/internal/command/env.go":                               {},
 	"cmd/spx/internal/command/export.go":                            {},
 	"cmd/spx/internal/command/logging.go":                           {},
 	"cmd/spx/internal/command/platform.go":                          {},
-	"cmd/spx/internal/command/builderai/project.go":                 {},
+	"cmd/spx/main.go":                                               {},
 	"cmd/spx/template/project/.godot/extension_list.cfg":            {},
 	"cmd/spx/template/project/.godot/global_script_class_cache.cfg": {},
 	"cmd/spx/template/project/export_presets.cfg":                   {},
@@ -88,6 +88,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"fs/zip":                           {},
 	"internal/base":                    {},
 	"internal/base/fileutil":           {},
+	"internal/base/log":                {},
 	"internal/base/numeric":            {},
 	"internal/core/clock":              {},
 	"internal/core/collision":          {},
@@ -108,7 +109,6 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/gdengine/binding/facade": {},
 	"internal/gdengine/binding/native": {},
 	"internal/gdengine/impl":           {},
-	"internal/log":                     {},
 	"internal/scaffold":                {},
 	"pkg/spx":                          {},
 	"pkg/spx/pkg/engine":               {},
@@ -244,6 +244,11 @@ func isRuntimeBuildRecipePath(name string) bool {
 	if _, ok := runtimeBuildRecipeFiles[name]; ok {
 		return true
 	}
+	// Historical revisions retain this name for the GOPATH helper. Keep it
+	// selectable without requiring it in the current worktree's file list.
+	if name == "internal/cmd/buildctl/shared/runtime_files.go" {
+		return true
+	}
 	for _, prefix := range runtimeBuildRecipePrefixes {
 		if strings.HasPrefix(name, prefix) {
 			return true
@@ -275,6 +280,11 @@ func isRuntimePackSourcePath(name string) bool {
 		return true
 	}
 	if _, ok := runtimePackSourceDirectories[path.Dir(name)]; ok {
+		return true
+	}
+	// Historical revisions predate the move to internal/base/log. Their
+	// original tree entries must still contribute to the source digest.
+	if path.Dir(name) == "internal/log" {
 		return true
 	}
 	for _, prefix := range runtimePackSourcePrefixes {

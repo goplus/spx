@@ -20,9 +20,9 @@ import (
 	"runtime/debug"
 	"time"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 var (

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package interpruntime
+package interpsession
 
 import (
 	"errors"

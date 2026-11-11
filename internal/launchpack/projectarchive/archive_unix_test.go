@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"errors"
@@ -88,7 +88,7 @@ func TestCollectRejectsUnreadableDirectories(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			projectDir := t.TempDir()
-			writeBundleTestFile(t, filepath.Join(projectDir, "pack", "private", "asset"), "asset", 0600)
+			writeArchiveTestFile(t, filepath.Join(projectDir, "pack", "private", "asset"), "asset", 0600)
 			name := filepath.Join(projectDir, test.relative)
 			if err := os.Chmod(name, 0); err != nil {
 				t.Fatal(err)
@@ -119,7 +119,7 @@ func TestCollectRejectsUnreadableDirectories(t *testing.T) {
 
 func TestSafeDirectoryTraversesAndRejectsClosedHandles(t *testing.T) {
 	rootPath := t.TempDir()
-	writeBundleTestFile(t, filepath.Join(rootPath, "one", "two", "source"), "content", 0600)
+	writeArchiveTestFile(t, filepath.Join(rootPath, "one", "two", "source"), "content", 0600)
 	observed, err := observeRoot(rootPath)
 	if err != nil {
 		t.Fatal(err)
@@ -151,9 +151,9 @@ func TestSafeDirectoryTraversesAndRejectsClosedHandles(t *testing.T) {
 	}
 }
 
-func TestBundleRejectsNonportableDiskEntry(t *testing.T) {
+func TestArchiveRejectsNonportableDiskEntry(t *testing.T) {
 	root := t.TempDir()
-	writeBundleTestFile(t, filepath.Join(root, "pack", "bad:name"), "asset", 0600)
+	writeArchiveTestFile(t, filepath.Join(root, "pack", "bad:name"), "asset", 0600)
 	if _, err := collect(Config{ProjectDir: root, PackDir: "pack"}); !errors.Is(err, ErrInvalidPath) {
 		t.Fatalf("nonportable disk entry = %v", err)
 	}

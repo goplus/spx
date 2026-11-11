@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ import (
 func readRegularFile(file *os.File, name string, maxFileBytes, remainingTotalBytes int64) ([]byte, error) {
 	before, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("projectbundle: fstat source %q: %w", name, err)
+		return nil, fmt.Errorf("projectarchive: fstat source %q: %w", name, err)
 	}
 	if !before.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: source %q has mode %s", ErrUnsafeFile, name, before.Mode())
@@ -40,14 +40,14 @@ func readRegularFile(file *os.File, name string, maxFileBytes, remainingTotalByt
 
 	data, err := io.ReadAll(io.LimitReader(file, readLimit+1))
 	if err != nil {
-		return nil, fmt.Errorf("projectbundle: read source %q: %w", name, err)
+		return nil, fmt.Errorf("projectarchive: read source %q: %w", name, err)
 	}
 	if int64(len(data)) > readLimit {
 		return nil, fmt.Errorf("%w: source %q grew beyond its byte allowance", ErrLimit, name)
 	}
 	after, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("projectbundle: second fstat source %q: %w", name, err)
+		return nil, fmt.Errorf("projectarchive: second fstat source %q: %w", name, err)
 	}
 	if !after.Mode().IsRegular() || !os.SameFile(before, after) || before.Mode() != after.Mode() || before.Size() != after.Size() ||
 		!before.ModTime().Equal(after.ModTime()) || int64(len(data)) != after.Size() {

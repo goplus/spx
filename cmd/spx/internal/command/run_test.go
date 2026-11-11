@@ -27,7 +27,7 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/interpsession"
 	"github.com/goplus/spx/v4/internal/launchpack"
 	"github.com/goplus/spx/v4/internal/scaffold"
 )
@@ -210,7 +210,7 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 	if err := os.WriteFile(libPath, []byte("bridge"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{interpruntime.ProjectDirEnv, interpruntime.AssetDirEnv, interpruntime.SessionDirEnv} {
+	for _, key := range []string{interpsession.ProjectDirEnv, interpsession.AssetDirEnv, interpsession.SessionDirEnv} {
 		t.Setenv(key, "/stale")
 	}
 

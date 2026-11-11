@@ -22,8 +22,8 @@ import (
 	"maps"
 	"slices"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

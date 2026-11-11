@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-// Package interpruntime prepares isolated native interpreter sessions without
+// Package interpsession prepares isolated native interpreter sessions without
 // changing the process working directory or environment.
-package interpruntime
+package interpsession
 
 import (
 	"fmt"
@@ -57,14 +57,14 @@ func RootsFromEnv(env []string) (Roots, error) {
 			continue
 		}
 		if _, duplicate := values[canonical]; duplicate {
-			return Roots{}, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
+			return Roots{}, fmt.Errorf("interpsession: duplicate environment variable %s", canonical)
 		}
 		values[canonical] = value
 	}
 
 	for _, key := range []string{ProjectDirEnv, AssetDirEnv, SessionDirEnv} {
 		if _, ok := values[key]; !ok {
-			return Roots{}, fmt.Errorf("interpruntime: required environment variable %s is not set", key)
+			return Roots{}, fmt.Errorf("interpsession: required environment variable %s is not set", key)
 		}
 	}
 	r := Roots{
@@ -92,14 +92,14 @@ func PortableConfigFromEnv(env []string) (directory, identity string, found bool
 			continue
 		}
 		if _, duplicate := values[canonical]; duplicate {
-			return "", "", false, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
+			return "", "", false, fmt.Errorf("interpsession: duplicate environment variable %s", canonical)
 		}
 		values[canonical] = candidate
 	}
 	directory, dirFound := values[PortableConfigDirEnv]
 	identity, identityFound := values[PortableConfigIdentityEnv]
 	if dirFound != identityFound {
-		return "", "", false, fmt.Errorf("interpruntime: portable config environment is incomplete")
+		return "", "", false, fmt.Errorf("interpsession: portable config environment is incomplete")
 	}
 	return directory, identity, dirFound, nil
 }
@@ -154,15 +154,15 @@ func (r Roots) Environment(base []string) ([]string, error) {
 func validateDirectoryWithin(name, root, directory string) error {
 	canonicalRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return fmt.Errorf("interpruntime: canonicalize ProjectDir %q: %w", root, err)
+		return fmt.Errorf("interpsession: canonicalize ProjectDir %q: %w", root, err)
 	}
 	canonicalDirectory, err := filepath.EvalSymlinks(directory)
 	if err != nil {
-		return fmt.Errorf("interpruntime: canonicalize %s %q: %w", name, directory, err)
+		return fmt.Errorf("interpsession: canonicalize %s %q: %w", name, directory, err)
 	}
 	rel, err := filepath.Rel(canonicalRoot, canonicalDirectory)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("interpruntime: %s %q must be within ProjectDir %q", name, directory, root)
+		return fmt.Errorf("interpsession: %s %q must be within ProjectDir %q", name, directory, root)
 	}
 	return nil
 }
@@ -178,26 +178,26 @@ func validateDirectory(name, path string, rejectSymlink bool) error {
 		info, err = os.Stat(path)
 	}
 	if err != nil {
-		return fmt.Errorf("interpruntime: stat %s %q: %w", name, path, err)
+		return fmt.Errorf("interpsession: stat %s %q: %w", name, path, err)
 	}
 	if rejectSymlink && info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("interpruntime: %s %q must not be a symlink", name, path)
+		return fmt.Errorf("interpsession: %s %q must not be a symlink", name, path)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("interpruntime: %s %q is not a directory", name, path)
+		return fmt.Errorf("interpsession: %s %q is not a directory", name, path)
 	}
 	return nil
 }
 
 func validateAbsoluteCleanPath(name, path string) error {
 	if path == "" {
-		return fmt.Errorf("interpruntime: %s is empty", name)
+		return fmt.Errorf("interpsession: %s is empty", name)
 	}
 	if !filepath.IsAbs(path) {
-		return fmt.Errorf("interpruntime: %s %q is not absolute", name, path)
+		return fmt.Errorf("interpsession: %s %q is not absolute", name, path)
 	}
 	if clean := filepath.Clean(path); clean != path {
-		return fmt.Errorf("interpruntime: %s %q is not clean (want %q)", name, path, clean)
+		return fmt.Errorf("interpsession: %s %q is not clean (want %q)", name, path, clean)
 	}
 	return nil
 }

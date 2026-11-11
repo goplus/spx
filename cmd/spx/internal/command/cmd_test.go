@@ -31,7 +31,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spx/v4/cmd/spx/internal/command/builderai"
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 func TestRunCmdRejectsInvalidFlags(t *testing.T) {

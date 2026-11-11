@@ -14,11 +14,22 @@
  * limitations under the License.
  */
 
-// Package bundle collects an explicitly allowed set of project files
-// and writes it as a deterministic ZIP archive.
-//
-// Configured roots are resolved to canonical filesystem paths before use, and
-// collection never follows symbolic links below those roots. Project and
-// member paths must be clean relative paths. Every archive entry name is
-// supplied by the caller rather than derived from an absolute host path.
-package bundle
+package scaffold
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/goplus/spx/v4/internal/release"
+)
+
+func TestGoModUsesDefaultSPXRelease(t *testing.T) {
+	got := GoMod()
+	want := "require github.com/goplus/spx/v4 " + release.DefaultReleaseMeta().SPXVersion + " //xgo:class"
+	if !strings.Contains(got, want) {
+		t.Fatalf("go.mod template does not contain %q:\n%s", want, got)
+	}
+	if strings.Contains(got, spxVersionPlaceholder) {
+		t.Fatalf("go.mod template still contains %q:\n%s", spxVersionPlaceholder, got)
+	}
+}

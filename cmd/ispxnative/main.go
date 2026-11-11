@@ -28,7 +28,7 @@ import (
 	_ "unsafe"
 
 	"github.com/goplus/spx/v4/internal/base/fileutil"
-	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/interpsession"
 	"github.com/goplus/spx/v4/pkg/ispx"
 )
 
@@ -51,7 +51,7 @@ func main() {
 }
 
 func run(env []string) (int, error) {
-	roots, err := interpruntime.RootsFromEnv(env)
+	roots, err := interpsession.RootsFromEnv(env)
 	if err != nil {
 		return 1, err
 	}

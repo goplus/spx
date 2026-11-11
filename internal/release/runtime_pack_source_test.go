@@ -57,6 +57,8 @@ func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 		"100644 blob cccccccccccccccccccccccccccccccccccccccc\tcmd/spx/internal/command/buildlauncher.go",
 		"100644 blob dddddddddddddddddddddddddddddddddddddddd\tinternal/base/defaults.go",
 		"100644 blob eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\tinternal/base/fileutil/zip_preflight.go",
+		"100644 blob ffffffffffffffffffffffffffffffffffffffff\tinternal/base/log/log.go",
+		"100644 blob 1234567890123456789012345678901234567890\tinternal/log/log.go",
 	}
 	tree := gitTreeFixture(entries...)
 
@@ -65,7 +67,7 @@ func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	hasher := sha256.New()
-	for _, index := range []int{1, 3, 6, 9, 12, 13} {
+	for _, index := range []int{1, 3, 6, 9, 12, 13, 14, 15} {
 		_, _ = hasher.Write([]byte(entries[index]))
 		_, _ = hasher.Write([]byte{0})
 	}
@@ -126,6 +128,10 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"internal/base/strictjson/decode.go", false},
 		{"internal/base/quoted/quoted.go", false},
 		{"internal/base/licenseheader/licenseheader.go", false},
+		{"internal/base/log/log.go", true},
+		{"internal/base/log/log_test.go", false},
+		{"internal/log/log.go", true}, // Historical revisions.
+		{"internal/log/log_test.go", false},
 		{"internal/core/clock/clock.go", true},
 		{"internal/core/clock/clock_test.go", false},
 		{"internal/core/collision/collision.go", true},
@@ -265,7 +271,10 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/shared/api.go", true},
 		{"internal/cmd/buildctl/shared/command_runner.go", true},
 		{"internal/cmd/buildctl/shared/files.go", true},
-		{"internal/cmd/buildctl/shared/runtime_files.go", true},
+		{"internal/cmd/buildctl/shared/gopath.go", true},
+		{"internal/cmd/buildctl/shared/gopath_test.go", false},
+		{"internal/cmd/buildctl/shared/runtime_files.go", true}, // Historical revisions.
+		{"internal/cmd/buildctl/shared/runtime_files_test.go", false},
 		{"internal/cmd/buildctl/shared/runner.go", false},
 		{"internal/cmd/buildctl/shared/validate.go", false},
 		{"internal/cmd/buildctl/shared/workflow_runner.go", false},
@@ -490,6 +499,8 @@ func TestRuntimeBuildRecipeTracksBuildInputs(t *testing.T) {
 		".github/scripts/runtime/build_contract.py",
 		".github/scripts/setup/build_buildctl.sh",
 		"internal/cmd/buildctl/shared/files.go",
+		"internal/cmd/buildctl/shared/gopath.go",
+		"internal/cmd/buildctl/shared/runtime_files.go", // Historical revisions.
 		"internal/base/fileutil/fileutil.go",
 		"internal/base/httpclient/http.go",
 	} {

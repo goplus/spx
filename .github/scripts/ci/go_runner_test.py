@@ -177,7 +177,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "coverage-web-engine.out": ["./internal/engine"],
         },
         "web-process": {
-            "coverage-web-process.out": ["./internal/cmd/buildctl/engine", "./internal/processsupervisor", "./pkg/launcher"],
+            "coverage-web-process.out": ["./internal/cmd/buildctl/engine", "./internal/base/processsupervisor", "./pkg/launcher"],
         },
         "web-interpreter": {"cmd/ispx/coverage-web.out": ["./..."]},
         "tools": {"coverage-tools.out": ["./.github/cmd/..."]},

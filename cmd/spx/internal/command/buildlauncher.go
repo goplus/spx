@@ -26,7 +26,7 @@ import (
 	"runtime"
 
 	"github.com/goplus/spx/v4/internal/launchpack"
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 )
 
 const spxModulePath = "github.com/goplus/spx/v4"
@@ -75,7 +75,7 @@ func (cmd *CmdTool) runBuildLauncher() error {
 	}
 	defer cleanup()
 
-	snapshot, err := projectpolicy.SnapshotPortableConfig(project.dir)
+	snapshot, err := portableconfig.SnapshotPortableConfig(project.dir)
 	if err != nil {
 		return fmt.Errorf("buildlauncher: portable config: %w", err)
 	}
