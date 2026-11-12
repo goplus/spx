@@ -40,6 +40,10 @@ GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
 To run an existing game directly, change to its root directory and run
 `xgo run .`.
 
+## Project authoring skill
+
+Install the [spx-project skill](skills/README.md) for guidance on `.spx`
+scripts, events, clones, asset configuration, and Scratch-style gameplay.
 
 ## Games powered by spx
 

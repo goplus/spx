@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPX project"
+  short_description: "Create and modify SPX game projects"
+  default_prompt: "Use $spx-project to create or modify an SPX game project."
