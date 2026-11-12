@@ -38,6 +38,8 @@ def resolve_platforms(env):
             if platform in selected:
                 raise ValueError(f"Duplicate platform: {platform}")
             selected.add(platform)
+        if env["OPERATION_INPUT"] == "dry-run" and "web" not in selected:
+            raise ValueError("dry-run validates the web build against spxbench; include web in platforms")
     with Path(env["GITHUB_OUTPUT"]).open("a") as output:
         for platform in PLATFORMS:
             output.write(f"run_{platform}={str(platform in selected).lower()}\n")
