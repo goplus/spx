@@ -16,7 +16,7 @@
 
 package logutil
 
-import spxlog "github.com/goplus/spx/v4/internal/log"
+import spxlog "github.com/goplus/spx/v4/internal/base/log"
 
 func EnableDebug() {
 	spxlog.SetLevel(spxlog.LevelDebug)

@@ -23,6 +23,15 @@ import (
 	"testing"
 )
 
+func TestNewValueUnwrapsOnce(t *testing.T) {
+	var list List
+	list.Init(NewValue("nested"))
+	value := NewValue(list.At(0))
+	if got := value.Raw(); got != NewValue("nested") {
+		t.Fatalf("NewValue must unwrap exactly one layer: got %#v", got)
+	}
+}
+
 func TestToFloat64String(t *testing.T) {
 	for _, test := range []struct {
 		name  string

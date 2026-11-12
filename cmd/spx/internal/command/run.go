@@ -31,7 +31,7 @@ import (
 
 	"github.com/goplus/spx/v4/cmd/spx/internal/runtimeasset"
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
-	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/interpsession"
 	"github.com/goplus/spx/v4/internal/launchpack"
 	"github.com/goplus/spx/v4/internal/runtimevariant"
 	"github.com/goplus/spx/v4/internal/webserver"
@@ -79,15 +79,15 @@ func (cmd *CmdTool) StopWeb() error {
 
 func (cmd *CmdTool) runInterpretedEngine(runtimePath, bridgePath, engineKind string, pargs ...string) error {
 	roots := cmd.interpretedRoots()
-	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{
+	if err := interpsession.PrepareSession(interpsession.SessionConfig{
 		Roots: roots, BridgePath: bridgePath,
 	}); err != nil {
 		return err
 	}
 
-	engineCmd, err := interpruntime.PrepareCommand(context.Background(), interpruntime.CommandConfig{
+	engineCmd, err := interpsession.PrepareCommand(context.Background(), interpsession.CommandConfig{
 		Roots: roots, Executable: runtimePath, Args: pargs, Env: os.Environ(),
-		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, PathPolicy: interpruntime.ReplacePath,
+		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, PathPolicy: interpsession.ReplacePath,
 	})
 	if err != nil {
 		return err
@@ -128,8 +128,8 @@ func (cmd *CmdTool) runtimeTempDir() string {
 	return filepath.Join(cmd.TargetDir, ".temp")
 }
 
-func (cmd *CmdTool) interpretedRoots() interpruntime.Roots {
-	return interpruntime.Roots{
+func (cmd *CmdTool) interpretedRoots() interpsession.Roots {
+	return interpsession.Roots{
 		ProjectDir: cmd.TargetDir,
 		AssetDir:   filepath.Join(cmd.TargetDir, "assets"),
 		SessionDir: cmd.runtimeTempDir(),

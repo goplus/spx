@@ -33,7 +33,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v4/internal/base/fileutil"
-	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/interpsession"
 )
 
 func TestValidateAssetIndex(t *testing.T) {
@@ -427,35 +427,35 @@ func TestBuildPinnedProjectUsesConfigOverlay(t *testing.T) {
 func TestRunRejectsInvalidEnvironment(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
-		prepare func(*testing.T, interpruntime.Roots) []string
+		prepare func(*testing.T, interpsession.Roots) []string
 		want    string
 	}{
 		{
 			name: "missing roots",
-			prepare: func(t *testing.T, roots interpruntime.Roots) []string {
+			prepare: func(t *testing.T, roots interpsession.Roots) []string {
 				return nil
 			},
 			want: "required environment variable SPX_PROJECT_DIR is not set",
 		},
 		{
 			name: "duplicate roots",
-			prepare: func(t *testing.T, roots interpruntime.Roots) []string {
-				return append(nativeRunTestEnv(t, roots), interpruntime.ProjectDirEnv+"="+roots.ProjectDir)
+			prepare: func(t *testing.T, roots interpsession.Roots) []string {
+				return append(nativeRunTestEnv(t, roots), interpsession.ProjectDirEnv+"="+roots.ProjectDir)
 			},
 			want: "duplicate environment variable SPX_PROJECT_DIR",
 		},
 		{
 			name: "missing asset index",
-			prepare: func(t *testing.T, roots interpruntime.Roots) []string {
+			prepare: func(t *testing.T, roots interpsession.Roots) []string {
 				return nativeRunTestEnv(t, roots)
 			},
 			want: "validate asset index: neither",
 		},
 		{
 			name: "incomplete portable config",
-			prepare: func(t *testing.T, roots interpruntime.Roots) []string {
+			prepare: func(t *testing.T, roots interpsession.Roots) []string {
 				writeNativeTestFile(t, filepath.Join(roots.AssetDir, "index.json"), "{}")
-				return append(nativeRunTestEnv(t, roots), interpruntime.PortableConfigDirEnv+"="+roots.SessionDir)
+				return append(nativeRunTestEnv(t, roots), interpsession.PortableConfigDirEnv+"="+roots.SessionDir)
 			},
 			want: "portable config environment is incomplete",
 		},
@@ -517,7 +517,7 @@ func main() { fmt.Println("portable project executed") }
 		{
 			name:         "missing roots",
 			missingRoots: true,
-			wantOutput:   "ispxnative: interpruntime: required environment variable SPX_PROJECT_DIR is not set",
+			wantOutput:   "ispxnative: interpsession: required environment variable SPX_PROJECT_DIR is not set",
 			wantExit:     1,
 		},
 		{
@@ -595,17 +595,17 @@ func main() { os.Exit(7) }
 	}
 }
 
-func nativeRunTestRoots(t *testing.T) interpruntime.Roots {
+func nativeRunTestRoots(t *testing.T) interpsession.Roots {
 	t.Helper()
 	projectDir := t.TempDir()
 	assetDir := filepath.Join(projectDir, "assets")
 	if err := os.Mkdir(assetDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	return interpruntime.Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: t.TempDir()}
+	return interpsession.Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: t.TempDir()}
 }
 
-func nativeRunTestEnv(t *testing.T, roots interpruntime.Roots) []string {
+func nativeRunTestEnv(t *testing.T, roots interpsession.Roots) []string {
 	t.Helper()
 	env, err := roots.Environment(nil)
 	if err != nil {

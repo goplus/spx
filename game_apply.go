@@ -19,11 +19,11 @@ package spx
 import (
 	"reflect"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/platform"
 	"github.com/goplus/spx/v4/internal/engine/ui"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func (p *Game) applySpriteFields(gamer reflect.Value, plan *projectPlan) {

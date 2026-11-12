@@ -30,8 +30,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/goplus/spx/v4/internal/interpruntime"
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/interpsession"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 )
 
 type portableConfigTestFS struct{ file fs.File }
@@ -97,7 +97,7 @@ func TestLoadPortableConfigOverlayValidatesSessionContainment(t *testing.T) {
 	configDir := makePortableConfigTestDir(t, sessionDir)
 	want := []byte(`{"name":"captured"}`)
 	writeNativeTestFile(t, filepath.Join(configDir, ".config"), string(want))
-	roots := interpruntime.Roots{SessionDir: sessionDir}
+	roots := interpsession.Roots{SessionDir: sessionDir}
 	env := portableConfigTestEnv(t, configDir)
 	overlay, err := loadPortableConfigOverlay(env, roots)
 	if err != nil {
@@ -113,7 +113,7 @@ func TestLoadPortableConfigOverlayValidatesSessionContainment(t *testing.T) {
 
 	outside := t.TempDir()
 	_, err = loadPortableConfigOverlay([]string{
-		interpruntime.PortableConfigDirEnv + "=" + outside,
+		interpsession.PortableConfigDirEnv + "=" + outside,
 		env[1],
 	}, roots)
 	if err == nil || !strings.Contains(err.Error(), "below session") {
@@ -141,7 +141,7 @@ func TestOpenPortableConfigRootPinsSessionTree(t *testing.T) {
 	if err := os.Symlink(outside, configDir); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := projectpolicy.SnapshotPortableConfigRoot(root)
+	snapshot, err := portableconfig.SnapshotPortableConfigRoot(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestLoadPortableConfigOverlayRejectsSnapshotDrift(t *testing.T) {
 				}
 			}
 			writeNativeTestFile(t, path, test.after)
-			_, err := loadPortableConfigOverlay(env, interpruntime.Roots{SessionDir: session})
+			_, err := loadPortableConfigOverlay(env, interpsession.Roots{SessionDir: session})
 			if err == nil || !strings.Contains(err.Error(), "identity mismatch") {
 				t.Fatalf("snapshot drift error = %v, want identity mismatch", err)
 			}
@@ -181,10 +181,10 @@ func TestLoadPortableConfigOverlayRejectsIncompleteEnvironment(t *testing.T) {
 	sessionDir := t.TempDir()
 	configDir := makePortableConfigTestDir(t, sessionDir)
 	for _, env := range [][]string{
-		{interpruntime.PortableConfigDirEnv + "=" + configDir},
-		{interpruntime.PortableConfigIdentityEnv + "=absent"},
+		{interpsession.PortableConfigDirEnv + "=" + configDir},
+		{interpsession.PortableConfigIdentityEnv + "=absent"},
 	} {
-		if _, err := loadPortableConfigOverlay(env, interpruntime.Roots{SessionDir: sessionDir}); err == nil || !strings.Contains(err.Error(), "incomplete") {
+		if _, err := loadPortableConfigOverlay(env, interpsession.Roots{SessionDir: sessionDir}); err == nil || !strings.Contains(err.Error(), "incomplete") {
 			t.Fatalf("loadPortableConfigOverlay(%v) error = %v", env, err)
 		}
 	}
@@ -396,7 +396,7 @@ func TestPortableConfigRootRejectsSymlinks(t *testing.T) {
 	aliasedSession := filepath.Join(base, "session-link")
 	aliasedConfig := filepath.Join(aliasedSession, "config")
 	assertPortableConfigError(t, validatePortableConfigDir(aliasedSession, aliasedConfig), "")
-	_, err = loadPortableConfigOverlay(portableConfigTestEnv(t, aliasedConfig), interpruntime.Roots{SessionDir: aliasedSession})
+	_, err = loadPortableConfigOverlay(portableConfigTestEnv(t, aliasedConfig), interpsession.Roots{SessionDir: aliasedSession})
 	assertPortableConfigError(t, err, "must be a real directory")
 }
 
@@ -422,11 +422,11 @@ func TestLoadPortableConfigOverlayAbsentAndInvalidSnapshots(t *testing.T) {
 			} else if test.content != "" {
 				writeNativeTestFile(t, path, test.content)
 			}
-			env := []string{interpruntime.PortableConfigDirEnv + "=" + config, interpruntime.PortableConfigIdentityEnv + "=absent"}
+			env := []string{interpsession.PortableConfigDirEnv + "=" + config, interpsession.PortableConfigIdentityEnv + "=absent"}
 			if test.duplicateEnv {
 				env = append(env, env[0])
 			}
-			overlay, err := loadPortableConfigOverlay(env, interpruntime.Roots{SessionDir: session})
+			overlay, err := loadPortableConfigOverlay(env, interpsession.Roots{SessionDir: session})
 			assertPortableConfigError(t, err, test.wantError)
 			if test.wantError == "" && (overlay == nil || overlay.present || overlay.data != nil) {
 				t.Errorf("absent overlay = %#v, want captured absence", overlay)
@@ -467,7 +467,7 @@ func makePortableConfigTestDir(t *testing.T, sessionDir string) string {
 
 func portableConfigTestEnv(t *testing.T, configDir string) []string {
 	t.Helper()
-	snapshot, err := projectpolicy.SnapshotPortableConfig(configDir)
+	snapshot, err := portableconfig.SnapshotPortableConfig(configDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,8 +476,8 @@ func portableConfigTestEnv(t *testing.T, configDir string) []string {
 		t.Fatal(err)
 	}
 	return []string{
-		interpruntime.PortableConfigDirEnv + "=" + configDir,
-		interpruntime.PortableConfigIdentityEnv + "=" + identity,
+		interpsession.PortableConfigDirEnv + "=" + configDir,
+		interpsession.PortableConfigIdentityEnv + "=" + identity,
 	}
 }
 

@@ -20,10 +20,10 @@ import (
 	"runtime/debug"
 	"time"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // -----------------------------------------------------------------------------

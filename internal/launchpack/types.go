@@ -22,7 +22,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 	"github.com/goplus/spx/v4/internal/release"
 )
 
@@ -61,7 +61,7 @@ type Config struct {
 	PackDir     string
 	PackIndex   string
 
-	PortableConfig projectpolicy.PortableConfigSnapshot
+	PortableConfig portableconfig.PortableConfigSnapshot
 
 	RuntimeSourceRoot   string
 	RuntimeManifestPath string

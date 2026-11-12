@@ -2,93 +2,97 @@
 extends SceneTree
 ## Command-line export script for SPX TileMap and Decorator data
 ##
-## Usage: godot --headless --path <project_path> -s addons/spx_tilemap_exporter/export_cli.gd
+## Usage: godot --path <project_path> -s addons/spx_tilemap_exporter/export_cli.gd [-- --scene <scene_path> --no-preview]
 ##
-## Configuration is done via constants below:
+## Arguments:
+##   --scene <path>  Path to the scene file to export (default: res://main.tscn)
+##   --no-preview    Export only data (also automatic with --headless)
+##
+## Examples:
+##   godot --headless --path . -s addons/spx_tilemap_exporter/export_cli.gd
+##   godot --headless --path . -s addons/spx_tilemap_exporter/export_cli.gd -- --scene res://levels/level1.tscn
 
 const TileMapExtractor = preload("res://addons/spx_tilemap_exporter/tilemap_extractor.gd")
 const DecoratorExtractor = preload("res://addons/spx_tilemap_exporter/decorator_extractor.gd")
+const PreviewExporter = preload("res://addons/spx_tilemap_exporter/preview_exporter.gd")
 
 # ============================================================================
-# Configuration - modify these as needed
+# Configuration - default values (can be overridden via command line)
 # ============================================================================
-const SCENE_PATH = "res://main.tscn"
+const DEFAULT_SCENE_PATH = "res://main.tscn"
 const EXPORT_TILEMAP = true
 const EXPORT_DECORATORS = true
-# ============================================================================
+const EXPORT_PREVIEW = true  # Export scene preview PNG
+
+var _scene_path: String = DEFAULT_SCENE_PATH
+var _export_preview: bool = EXPORT_PREVIEW
+
 
 func _init() -> void:
-	# Get scene name for export directory
-	var scene_name = SCENE_PATH.get_file().get_basename()
-	var export_base = "res://_export/" + scene_name
+	# Run after SceneTree initialization so a preview viewport can enter the tree.
+	call_deferred("_run")
 
-	print("SPX Export CLI")
-	print("==============")
-	print("Scene:  ", SCENE_PATH)
-	print("Output: ", export_base)
-	print("Export TileMap: ", EXPORT_TILEMAP)
-	print("Export Decorators: ", EXPORT_DECORATORS)
-	print("")
 
-	# Load the scene
-	var packed_scene = load(SCENE_PATH)
-	if not packed_scene:
-		printerr("ERROR: Failed to load scene: ", SCENE_PATH)
+func _run() -> void:
+	if not _parse_arguments():
 		quit(1)
 		return
+	if DisplayServer.get_name() == "headless":
+		_export_preview = false
 
+	var export_base = "res://_export/" + _scene_path.get_file().get_basename()
+	print("SPX Export CLI")
+	print("Scene: ", _scene_path)
+	print("Output: ", export_base)
+	print("Export Preview: ", _export_preview)
+
+	var packed_scene = load(_scene_path)
 	if not packed_scene is PackedScene:
-		printerr("ERROR: Loaded resource is not a PackedScene: ", SCENE_PATH)
+		printerr("ERROR: Failed to load a PackedScene: ", _scene_path)
 		quit(1)
 		return
 
 	var scene_root = packed_scene.instantiate()
 	if not scene_root:
-		printerr("ERROR: Failed to instantiate scene")
+		printerr("ERROR: Failed to instantiate scene: ", _scene_path)
+		quit(1)
+		return
+	var global_export_dir = ProjectSettings.globalize_path(export_base)
+	var err = DirAccess.make_dir_recursive_absolute(global_export_dir)
+	if err != OK:
+		printerr("ERROR: Failed to create export directory: ", global_export_dir)
+		scene_root.free()
 		quit(1)
 		return
 
-	# Ensure export directory exists
-	var global_export_dir = ProjectSettings.globalize_path(export_base)
-	if not DirAccess.dir_exists_absolute(global_export_dir):
-		var err = DirAccess.make_dir_recursive_absolute(global_export_dir)
-		if err != OK:
-			printerr("ERROR: Failed to create export directory: ", global_export_dir)
-			scene_root.queue_free()
-			quit(1)
-			return
-
 	var has_error = false
 	var node_offset = Vector2.ZERO
-
-	# Export TileMap
 	if EXPORT_TILEMAP:
-		var tilemap_path = export_base + "/tilemap.json"
-		var global_tilemap_path = ProjectSettings.globalize_path(tilemap_path)
-		var tilemap_result = _export_tilemap(scene_root, global_tilemap_path)
+		var tilemap_path = ProjectSettings.globalize_path(export_base + "/tilemap.json")
+		var tilemap_result = _export_tilemap(scene_root, tilemap_path)
 		if tilemap_result.success:
 			node_offset = tilemap_result.node_offset
 		elif tilemap_result.error != "skipped":
 			has_error = true
 
-	# Export Decorators
 	if EXPORT_DECORATORS:
-		var decorator_path = export_base + "/decorator.json"
-		var global_decorator_path = ProjectSettings.globalize_path(decorator_path)
-		var decorator_result = _export_decorators(scene_root, global_decorator_path, node_offset)
+		var decorator_path = ProjectSettings.globalize_path(export_base + "/decorator.json")
+		var decorator_result = _export_decorators(scene_root, decorator_path, node_offset)
 		if not decorator_result.success and decorator_result.error != "skipped":
 			has_error = true
 
-	scene_root.queue_free()
+	if _export_preview:
+		var preview_result = await PreviewExporter.export_scene_as_png_async(scene_root, root)
+		if not preview_result.success:
+			if preview_result.error == "No TileMapLayer content found in scene":
+				print("Preview: No TileMapLayer content found (skipped)")
+			else:
+				printerr("ERROR: Preview export failed: ", preview_result.error)
+				has_error = true
 
-	if has_error:
-		print("")
-		print("Export completed with errors")
-		quit(1)
-	else:
-		print("")
-		print("Export completed successfully!")
-		quit(0)
+	scene_root.free()
+	print("Export completed with errors" if has_error else "Export completed successfully!")
+	quit(1 if has_error else 0)
 
 
 # ============================================================================
@@ -179,6 +183,30 @@ func _export_decorators(scene_root: Node, output_path: String, node_offset: Vect
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+func _parse_arguments() -> bool:
+	var args = OS.get_cmdline_user_args()
+	var i = 0
+	while i < args.size():
+		match args[i]:
+			"--no-preview":
+				_export_preview = false
+			"--scene":
+				i += 1
+				if i >= args.size() or args[i].begins_with("--") or args[i].is_empty():
+					printerr("ERROR: --scene requires a project-relative scene path")
+					return false
+				var scene_arg = args[i].trim_prefix("res://")
+				if scene_arg.is_absolute_path() or ".." in scene_arg.split("/"):
+					printerr("ERROR: Scene must be inside the project: ", args[i])
+					return false
+				_scene_path = "res://" + scene_arg
+			_:
+				printerr("ERROR: Unknown argument: ", args[i])
+				return false
+		i += 1
+	return true
+
 
 func _find_tilemap_layers(node: Node) -> Array[TileMapLayer]:
 	var layers: Array[TileMapLayer] = []

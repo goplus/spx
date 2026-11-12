@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v4/internal/interpruntime"
-	"github.com/goplus/spx/v4/internal/processsupervisor"
+	"github.com/goplus/spx/v4/internal/base/processsupervisor"
+	"github.com/goplus/spx/v4/internal/interpsession"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
@@ -92,19 +92,19 @@ func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, erro
 	if err := ctx.Err(); err != nil {
 		return ProcessStatus{}, err
 	}
-	roots := interpruntime.Roots{
+	roots := interpsession.Roots{
 		ProjectDir: project.Path,
 		AssetDir:   filepath.Join(project.Path, filepath.FromSlash(verified.Manifest.Project.PackDirectory)),
 		SessionDir: sessionDir,
 	}
 	bridgePath := filepath.Join(bridge.Path, verified.Manifest.Bridge.File)
-	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{Roots: roots, BridgePath: bridgePath}); err != nil {
+	if err := interpsession.PrepareSession(interpsession.SessionConfig{Roots: roots, BridgePath: bridgePath}); err != nil {
 		return ProcessStatus{}, fmt.Errorf("launcher: prepare Engine session: %w", err)
 	}
-	command, err := interpruntime.PrepareCommand(ctx, interpruntime.CommandConfig{
+	command, err := interpsession.PrepareCommand(ctx, interpsession.CommandConfig{
 		Roots: roots, Executable: filepath.Join(engine.Path, verified.Manifest.Engine.Executable),
 		Args: cfg.Args, Env: os.Environ(), Stdin: cfg.Stdin, Stdout: cfg.Stdout, Stderr: cfg.Stderr,
-		PathPolicy: interpruntime.RejectPath,
+		PathPolicy: interpsession.RejectPath,
 	})
 	if err != nil {
 		return ProcessStatus{}, fmt.Errorf("launcher: prepare Engine command: %w", err)

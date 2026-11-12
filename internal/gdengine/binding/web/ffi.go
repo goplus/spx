@@ -21,7 +21,7 @@ package webffi
 import (
 	"syscall/js"
 
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

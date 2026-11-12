@@ -19,9 +19,9 @@ package spx
 import (
 	"slices"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func (p *SpriteImpl) OnCloned__0(onCloned func()) {
