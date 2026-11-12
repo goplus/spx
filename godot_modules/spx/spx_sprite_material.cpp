@@ -67,6 +67,9 @@ GdString SpxSprite::get_material_shader() {
 }
 
 void SpxSprite::set_color(GdColor p_color) {
+	if (spine_child) {
+		_set_spine_color(p_color);
+	}
 	if (anim2d == nullptr) {
 		return;
 	}
@@ -100,6 +103,9 @@ void SpxSprite::set_material_params(GdString p_effect, GdFloat p_amount) {
 	}
 
 	material->set_shader_parameter(SpxStr(p_effect), p_amount);
+	if (spine_child && SpxStr(p_effect) == "alpha_amount") {
+		_set_spine_color(get_color());
+	}
 }
 
 GdFloat SpxSprite::get_material_params(GdString p_effect) {

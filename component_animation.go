@@ -37,6 +37,7 @@ type sharedAnimationData struct {
 	animations       map[SpriteAnimationName]*animationEntry
 	animBindings     map[string]string
 	defaultAnimation SpriteAnimationName
+	spine            *coreproject.SpineAnimConfig
 }
 
 type animationComponent struct {
@@ -53,6 +54,7 @@ type animationComponent struct {
 
 	// Animation tracking (per-instance).
 	doneAnimations []*animState
+	spineBounds    mathf.Rect2
 }
 
 // tweenParams holds typed endpoints and derived velocity.
@@ -78,6 +80,7 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 		defaultAnimation: spriteCfg.DefaultAnimation,
 		animations:       make(map[SpriteAnimationName]*animationEntry, len(spriteCfg.FAnimations)),
 		animBindings:     maps.Clone(spriteCfg.AnimBindings),
+		spine:            spriteCfg.SpineAnim,
 	}
 
 	for name, ani := range spriteCfg.FAnimations {
@@ -192,7 +195,7 @@ func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed
 		a.sprite.applyCostumeUpdate()
 		a.prepareAnimationPlayback(entry, syncSprite)
 		playbackStarted = true
-		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)
+		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), a.playbackName(entry.name), speed, loop, false)
 	})
 	if isBlocking {
 		a.sprite.runtimeState.isAnimating = true
@@ -208,6 +211,10 @@ func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed
 }
 
 func (a *animationComponent) prepareAnimationPlayback(entry *animationEntry, syncSprite *engine.Sprite) {
+	if a.shared.spine != nil {
+		syncSprite.SetRenderScale(engine.UniformVec2(a.sprite.runtimeState.scale))
+		return
+	}
 	bitmapResolution := entry.ensureRegistered()
 	renderScale := a.sprite.getAnimRenderScale(bitmapResolution)
 	syncSprite.SetRenderScale(engine.UniformVec2(renderScale))
@@ -239,7 +246,7 @@ func (a *animationComponent) playDefaultAnim() {
 
 	if entry, ok := a.shared.animations[animName]; ok {
 		a.prepareAnimationPlayback(entry, syncSprite)
-		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, true, false)
+		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), a.playbackName(entry.name), speed, true, false)
 		a.defaultAnimActive = true
 	} else {
 		a.defaultAnimActive = false
@@ -327,6 +334,15 @@ func (a *animationComponent) cancelAnimState(state *animState) int64 {
 // ============================================================================
 // Animation Lookup
 // ============================================================================
+
+func (a *animationComponent) playbackName(name SpriteAnimationName) string {
+	if cfg := a.shared.spine; cfg != nil {
+		if mapped, ok := cfg.AnimMap[name]; ok {
+			return mapped
+		}
+	}
+	return name
+}
 
 func (a *animationComponent) hasAnim(animName string) bool {
 	_, ok := a.shared.animations[animName]

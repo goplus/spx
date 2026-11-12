@@ -42,6 +42,9 @@ type BuildEnvironment struct {
 }
 
 func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
+	if err := ValidateSpineEnvironment(); err != nil {
+		return BuildEnvironment{}, err
+	}
 	runtimeLock := release.DefaultRuntimeLock()
 	goPath, err := EnsureGoPath()
 	if err != nil {
@@ -154,6 +157,17 @@ func detectBuildArch() (string, error) {
 }
 
 func detectGodotTemplateDir(engineVersion string) (string, error) {
+	enabled, err := SpineEnabled()
+	if err != nil {
+		return "", err
+	}
+	if enabled {
+		goPath, err := EnsureGoPath()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(goPath, "bin", "editor_data", "export_templates", engineVersion), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

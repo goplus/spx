@@ -18,9 +18,16 @@ package engine
 
 import (
 	"fmt"
+
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 )
 
 func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
+	if enabled, err := shared.SpineEnabled(); err != nil {
+		return err
+	} else if enabled {
+		return fmt.Errorf("published runtime downloads do not support SPX_SPINE=1; build the local Spine runtime with make dev")
+	}
 	env, err := prepareEngineDownloadEnv(repoRoot, cfg.Platform, cfg.AssetDir, cfg.SameRunArtifacts)
 	if err != nil {
 		return err

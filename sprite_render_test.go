@@ -207,6 +207,25 @@ func TestInitSpriteCostumesConsumesPreparedLayout(t *testing.T) {
 	}
 }
 
+func TestBaseObjSpineUsesTexturelessPlaceholder(t *testing.T) {
+	config := &coreproject.SpriteConfig{
+		SpineAnim: &coreproject.SpineAnimConfig{Atlas: "hero.atlas", Skeleton: "hero.skel"},
+		// Frame costumes must not be loaded for a Spine sprite.
+		Costumes: []*coreproject.CostumeConfig{nil}, CostumeIndex: 10,
+	}
+	var obj baseObj
+	obj.initSpriteCostumes(config, nil)
+	if len(obj.costumes) != 1 || obj.getCostumeIndex() != 0 {
+		t.Fatalf("placeholder costumes = %v, index = %d", obj.costumes, obj.getCostumeIndex())
+	}
+	if width, height := obj.getCostumeSize(); width != 1 || height != 1 {
+		t.Fatalf("placeholder size = %v x %v, want 1 x 1", width, height)
+	}
+	if obj.currentCostume().path != "" || obj.isCostumeAtlas() {
+		t.Fatal("Spine placeholder must not load a frame texture")
+	}
+}
+
 func TestToBitmapResolution(t *testing.T) {
 	if got := normalizeBitmapResolution(0); got != defaultBitmapResolution {
 		t.Fatalf("normalizeBitmapResolution(0) = %d, want %d", got, defaultBitmapResolution)

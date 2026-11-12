@@ -63,6 +63,9 @@ func BuildEngine(cfg BuildConfig, repoRoot string) error {
 }
 
 func prepareEngineBuildEnvironment(buildEnv buildEnvironment) (map[string]string, string, error) {
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		return nil, "", err
+	}
 	runOptionalStreamingCommand("", "xgo", "version")
 	runOptionalStreamingCommand("", "go", "version")
 

@@ -97,6 +97,8 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"internal/cmd/buildctl/runtimecmd/assets.go", false},
 		{"docs/zh/dev/engine/cmd_make.md", false},
 		{"cmd/spx/internal/command/export.go", true},
+		{"internal/runtimevariant/spine.go", true},
+		{"internal/runtimevariant/spine_test.go", false},
 		{"cmd/spx/internal/command/dispatch.go", true},
 		{"cmd/spx/internal/command/buildlauncher.go", false},
 		{"cmd/spx/internal/command/run.go", false},
@@ -107,6 +109,8 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"cmd/spx/template/project/project.godot", true},
 		{"cmd/spx/template/project/engine/ui/UiAsk.tscn", true},
 		{"cmd/spx/template/project/engine/fonts/default.LICENSE.txt", false},
+		{"cmd/spx/template/project/engine/licenses/SpineRuntime.txt", true},
+		{"cmd/spx/template/project/engine/licenses/SpineJson.txt", true},
 		{"cmd/spx/template/project/engine/fonts/default.NOTICE.txt", false},
 		{"cmd/spx/template/project/.godot/gdspx_web_server.py", false},
 		{"cmd/spx/template/project/.builds/keep.txt", false},
@@ -265,12 +269,16 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/runtimecmd/cmd.go", false},
 		{"internal/cmd/buildctl/runtimecmd/dispatch.go", true},
 		{"internal/cmd/buildctl/runtimecmd/compress.go", false},
-		{"internal/cmd/buildctl/runtimecmd/local_manifest.go", false},
 		{"internal/cmd/buildctl/runtimecmd/pack.go", true},
 		{"internal/cmd/buildctl/runtimecmd/workspace.go", true},
 		{"internal/cmd/buildctl/shared/api.go", true},
 		{"internal/cmd/buildctl/shared/command_runner.go", true},
 		{"internal/cmd/buildctl/shared/files.go", true},
+		{"internal/cmd/buildctl/shared/spine_environment.go", true},
+		{"internal/cmd/buildctl/runtimecmd/local_manifest.go", true},
+		{"internal/cmd/buildctl/shared/spine_test.go", false},
+		{"internal/runtimevariant/spine.go", true},
+		{"internal/runtimevariant/spine_test.go", false},
 		{"internal/cmd/buildctl/shared/gopath.go", true},
 		{"internal/cmd/buildctl/shared/gopath_test.go", false},
 		{"internal/cmd/buildctl/shared/runtime_files.go", true}, // Historical revisions.
@@ -919,4 +927,47 @@ func installReleaseGitFixture(t *testing.T, output string) {
 	t.Setenv("SPX_GIT_OUTPUT", output)
 	t.Setenv("SPX_GIT_ERROR", "")
 	t.Setenv("SPX_GIT_STATUS", "0")
+}
+
+func TestSpineNoticeIncludedInRuntime(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate repository")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(testFile), "../.."))
+	read := func(name string) []byte {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	notices := map[string]string{
+		"engine/licenses/SpineRuntime.txt": "LICENSE",
+		"engine/licenses/SpineJson.txt":    "LICENSE-Json",
+	}
+	for notice, source := range notices {
+		if !bytes.Equal(read("cmd/spx/template/project/"+notice), read("godot_modules/spx/thirdparty/spine_godot/"+source)) {
+			t.Fatalf("distributed Spine notice %s differs from its source license", notice)
+		}
+	}
+	jsonSource := read("godot_modules/spx/thirdparty/spine_godot/spine-cpp/src/spine/Json.cpp")
+	if !bytes.Contains(jsonSource, bytes.TrimSpace(read("godot_modules/spx/thirdparty/spine_godot/LICENSE-Json"))) {
+		t.Fatal("JSON parser notice differs from its original source notice")
+	}
+	presets := 0
+	for _, line := range strings.Split(string(read("cmd/spx/template/project/export_presets.cfg")), "\n") {
+		if strings.HasPrefix(line, "include_filter=") {
+			presets++
+			for notice := range notices {
+				if !strings.Contains(line, notice) {
+					t.Errorf("export preset omits %s: %s", notice, line)
+				}
+			}
+		}
+	}
+	if presets == 0 {
+		t.Fatal("no export presets checked")
+	}
 }

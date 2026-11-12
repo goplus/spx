@@ -22,12 +22,20 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
 )
 
 // writeLocalRuntimeManifestIfComplete publishes source-mode metadata only
 // after both local runtime files exist.
 func writeLocalRuntimeManifestIfComplete(repoRoot, goBinDir string) error {
+	// This source-tree manifest has no feature axis. Spine launch bundles use
+	// the dedicated GOPATH/bin directly, never the default source-tree cache.
+	if enabled, err := shared.SpineEnabled(); err != nil {
+		return err
+	} else if enabled {
+		return nil
+	}
 	lock := release.DefaultRuntimeLock()
 	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
 	if err != nil {

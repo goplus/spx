@@ -1372,6 +1372,36 @@ func (s *SpriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {
 		return binding.target().GetCurrentAnimName(obj)
 	})
 }
+func (s *SpriteMgrImpl) IsSpineSupported() bool {
+	binding := s.resolve()
+	return CallInMainThreadValue(func() bool {
+		return binding.target().IsSpineSupported()
+	})
+}
+func (s *SpriteMgrImpl) SetSpineSkeleton(obj gdx.Object, atlas_path string, skeleton_path string, default_mix float64) bool {
+	binding := s.resolve()
+	return CallInMainThreadValue(func() bool {
+		return binding.target().SetSpineSkeleton(obj, atlas_path, skeleton_path, default_mix)
+	})
+}
+func (s *SpriteMgrImpl) ClearSpineSkeleton(obj gdx.Object) {
+	binding := s.resolve()
+	CallInMainThread(func() {
+		binding.target().ClearSpineSkeleton(obj)
+	})
+}
+func (s *SpriteMgrImpl) GetSpineBounds(obj gdx.Object) Rect2 {
+	binding := s.resolve()
+	return CallInMainThreadValue(func() Rect2 {
+		return binding.target().GetSpineBounds(obj)
+	})
+}
+func (s *SpriteMgrImpl) HasSpineAnimation(obj gdx.Object, name string) bool {
+	binding := s.resolve()
+	return CallInMainThreadValue(func() bool {
+		return binding.target().HasSpineAnimation(obj, name)
+	})
+}
 func (s *SpriteMgrImpl) SetVelocity(obj gdx.Object, velocity Vec2) {
 	binding := s.resolve()
 	CallInMainThread(func() {

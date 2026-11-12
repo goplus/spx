@@ -37,6 +37,9 @@
 #include "spx_sprite_render_util.h"
 
 GdString SpxSprite::get_current_anim_name() {
+	if (spine_child) {
+		return SpxReturnStr(spine_animation);
+	}
 	return SpxReturnStr(visual_source.animation_name);
 }
 
@@ -102,6 +105,10 @@ void SpxSprite::_play_prepared_animation(const PreparedVisual &p_visual, GdFloat
 }
 
 void SpxSprite::play_anim(GdString p_name, GdFloat p_speed, GdBool p_is_loop, GdBool p_from_end) {
+	if (spine_child) {
+		_play_spine_animation(SpxStr(p_name), p_speed, p_is_loop, p_from_end);
+		return;
+	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	PreparedVisual visual;
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
@@ -112,6 +119,10 @@ void SpxSprite::play_anim(GdString p_name, GdFloat p_speed, GdBool p_is_loop, Gd
 }
 
 void SpxSprite::play_backwards_anim(GdString p_name) {
+	if (spine_child) {
+		_play_spine_animation(SpxStr(p_name), -1.0f, false, true);
+		return;
+	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	PreparedVisual visual;
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
@@ -121,22 +132,45 @@ void SpxSprite::play_backwards_anim(GdString p_name) {
 }
 
 void SpxSprite::pause_anim() {
+	if (spine_child) {
+		spine_playing = false;
+		_update_spine_speed();
+		return;
+	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->pause();
 }
 
 void SpxSprite::stop_anim() {
+	if (spine_child) {
+		_stop_spine_animation();
+		spine_animation = String();
+		spine_playing = false;
+		playback_speed = 1.0f;
+		_update_spine_speed();
+		return;
+	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->stop();
 	playback_speed = 1.0f;
 }
 
 GdBool SpxSprite::is_playing_anim() const {
+	if (spine_child) {
+		return spine_playing;
+	}
 	ERR_FAIL_NULL_V_MSG(anim2d, false, "SpxSprite: AnimatedSprite2D component is missing.");
 	return anim2d->is_playing();
 }
 
 void SpxSprite::set_anim(GdString p_name) {
+	if (spine_child) {
+		bool was_playing = spine_playing;
+		_play_spine_animation(SpxStr(p_name), playback_speed, false, false);
+		spine_playing = was_playing;
+		_update_spine_speed();
+		return;
+	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	PreparedVisual visual;
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
@@ -152,11 +186,17 @@ void SpxSprite::set_anim(GdString p_name) {
 }
 
 GdString SpxSprite::get_anim() const {
+	if (spine_child) {
+		return SpxReturnStr(spine_animation);
+	}
 	ERR_FAIL_NULL_V_MSG(anim2d, GdString(), "SpxSprite: AnimatedSprite2D component is missing.");
 	return SpxReturnStr(String(anim2d->get_animation()));
 }
 
 void SpxSprite::set_anim_frame(GdInt p_frame) {
+	if (spine_child) {
+		return;
+	}
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->set_frame(p_frame);
 	_update_frame_transform();
@@ -164,13 +204,18 @@ void SpxSprite::set_anim_frame(GdInt p_frame) {
 }
 
 GdInt SpxSprite::get_anim_frame() const {
+	if (spine_child) {
+		return 0;
+	}
 	ERR_FAIL_NULL_V_MSG(anim2d, 0, "SpxSprite: AnimatedSprite2D component is missing.");
 	return anim2d->get_frame();
 }
 
 void SpxSprite::set_anim_speed_scale(GdFloat p_speed_scale) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
+	ERR_FAIL_COND(spine_child && !Math::is_finite(p_speed_scale));
 	anim2d->set_speed_scale(p_speed_scale);
+	_update_spine_speed();
 }
 
 GdFloat SpxSprite::get_anim_speed_scale() const {
@@ -179,6 +224,9 @@ GdFloat SpxSprite::get_anim_speed_scale() const {
 }
 
 GdFloat SpxSprite::get_anim_playing_speed() const {
+	if (spine_child) {
+		return spine_playing ? playback_speed * anim2d->get_speed_scale() : 0.0f;
+	}
 	ERR_FAIL_NULL_V_MSG(anim2d, 0.0f, "SpxSprite: AnimatedSprite2D component is missing.");
 	return anim2d->get_playing_speed();
 }
@@ -199,6 +247,9 @@ void SpxSprite::set_anim_offset(GdVec2 p_offset) {
 }
 
 GdVec2 SpxSprite::get_anim_offset() const {
+	if (spine_child) {
+		return base_offset;
+	}
 	ERR_FAIL_NULL_V_MSG(anim2d, GdVec2(), "SpxSprite: AnimatedSprite2D component is missing.");
 	return anim2d->get_offset();
 }
@@ -206,6 +257,7 @@ GdVec2 SpxSprite::get_anim_offset() const {
 void SpxSprite::set_anim_flip_h(GdBool p_flip) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->set_flip_h(p_flip);
+	_update_spine_transform();
 }
 
 GdBool SpxSprite::is_anim_flipped_h() const {
@@ -216,6 +268,7 @@ GdBool SpxSprite::is_anim_flipped_h() const {
 void SpxSprite::set_anim_flip_v(GdBool p_flip) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->set_flip_v(p_flip);
+	_update_spine_transform();
 }
 
 GdBool SpxSprite::is_anim_flipped_v() const {

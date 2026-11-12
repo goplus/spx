@@ -158,6 +158,12 @@ func appendProjectAssetRefs(refs []assetPathRef, conf coreproject.ProjectConfig)
 }
 
 func appendSpriteAssetRefs(refs []assetPathRef, configDir string, conf coreproject.SpriteConfig) []assetPathRef {
+	if conf.SpineAnim != nil {
+		if conf.SpineAnim.Atlas != "" {
+			refs = append(refs, assetPathRef{configDir: configDir, path: conf.SpineAnim.Atlas, spineAtlas: true})
+		}
+		refs = appendAssetPathRef(refs, configDir, conf.SpineAnim.Skeleton)
+	}
 	for _, costume := range conf.Costumes {
 		if costume != nil {
 			refs = appendAssetPathRef(refs, configDir, costume.Path)

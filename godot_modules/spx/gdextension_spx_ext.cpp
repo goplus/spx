@@ -900,6 +900,26 @@ static void gdextension_spx_sprite_get_current_anim_name(GdObj obj, GdString *re
 	*ret_val = spriteMgr->get_current_anim_name(obj);
 }
 
+static void gdextension_spx_sprite_is_spine_supported(GdBool *ret_val) {
+	*ret_val = SpxSpriteMgr::is_spine_supported();
+}
+
+static void gdextension_spx_sprite_set_spine_skeleton(GdObj obj, GdString atlas_path, GdString skeleton_path, GdFloat default_mix, GdBool *ret_val) {
+	*ret_val = spriteMgr->set_spine_skeleton(obj, atlas_path, skeleton_path, default_mix);
+}
+
+static void gdextension_spx_sprite_clear_spine_skeleton(GdObj obj) {
+	spriteMgr->clear_spine_skeleton(obj);
+}
+
+static void gdextension_spx_sprite_get_spine_bounds(GdObj obj, GdRect2 *ret_val) {
+	*ret_val = spriteMgr->get_spine_bounds(obj);
+}
+
+static void gdextension_spx_sprite_has_spine_animation(GdObj obj, GdString name, GdBool *ret_val) {
+	*ret_val = spriteMgr->has_spine_animation(obj, name);
+}
+
 static void gdextension_spx_sprite_set_velocity(GdObj obj, GdVec2 velocity) {
 	spriteMgr->set_velocity(obj, velocity);
 }
@@ -1629,6 +1649,11 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_anim_flip_v);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_is_anim_flipped_v);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_get_current_anim_name);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_is_spine_supported);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_spine_skeleton);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_clear_spine_skeleton);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_get_spine_bounds);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_has_spine_animation);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_velocity);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_get_velocity);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_is_on_floor);

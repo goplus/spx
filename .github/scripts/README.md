@@ -91,10 +91,13 @@ consumer together when changing them.
   `.github` packages.
 - `check_source.yml` owns Linux/Web/tooling suite ordering. `build_go.yml` runs the targeted native suites in its existing macOS/Windows build jobs. Both save profiles as Actions artifacts using the test runner's outputs. Release source checks keep Go coverage collection disabled; release assembly independently downloads only runtime, Web, and standalone artifact namespaces.
 - `test_godot_module.yml` verifies the locked Godot checks and produces
-  `coverage-spx-cpp`. The final `ci.yml` gate validates the selected runtime
+  `coverage-spx-cpp` for the default build and `coverage-spx-cpp-spine` for the
+  opt-in `spx_spine=yes` build. Each runs the full SPX suite; the opt-in job also
+  requires enabled Spine tests to be registered. Their coverage build caches
+  remain separate. The final `ci.yml` gate validates the selected runtime
   path, collects all required reports, uploads them under separate `go` and
-  `cpp` flags, and requests combined Codecov checks. Report delivery must
-  succeed. The `cpp` flag carries forward coverage when the published-runtime
+  `cpp` flags (both native reports share `cpp`), and requests combined Codecov
+  checks. Report delivery must succeed. The `cpp` flag carries forward coverage when the published-runtime
   path skips module tests. See [coverage](../../CONTRIBUTING.md#go-coverage) for
   report scope, retention, and baseline requirements.
 

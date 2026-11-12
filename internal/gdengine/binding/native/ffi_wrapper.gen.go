@@ -261,6 +261,11 @@ type GDExtensionSpxSpriteIsAnimFlippedH C.GDExtensionSpxSpriteIsAnimFlippedH
 type GDExtensionSpxSpriteSetAnimFlipV C.GDExtensionSpxSpriteSetAnimFlipV
 type GDExtensionSpxSpriteIsAnimFlippedV C.GDExtensionSpxSpriteIsAnimFlippedV
 type GDExtensionSpxSpriteGetCurrentAnimName C.GDExtensionSpxSpriteGetCurrentAnimName
+type GDExtensionSpxSpriteIsSpineSupported C.GDExtensionSpxSpriteIsSpineSupported
+type GDExtensionSpxSpriteSetSpineSkeleton C.GDExtensionSpxSpriteSetSpineSkeleton
+type GDExtensionSpxSpriteClearSpineSkeleton C.GDExtensionSpxSpriteClearSpineSkeleton
+type GDExtensionSpxSpriteGetSpineBounds C.GDExtensionSpxSpriteGetSpineBounds
+type GDExtensionSpxSpriteHasSpineAnimation C.GDExtensionSpxSpriteHasSpineAnimation
 type GDExtensionSpxSpriteSetVelocity C.GDExtensionSpxSpriteSetVelocity
 type GDExtensionSpxSpriteGetVelocity C.GDExtensionSpxSpriteGetVelocity
 type GDExtensionSpxSpriteIsOnFloor C.GDExtensionSpxSpriteIsOnFloor
@@ -2549,6 +2554,59 @@ func CallSpriteGetCurrentAnimName(
 	C.cgo_callfn_GDExtensionSpxSpriteGetCurrentAnimName(arg0, arg1, &ret_val)
 
 	return (GdString)(ret_val)
+}
+func CallSpriteIsSpineSupported() GdBool {
+	arg0 := (C.GDExtensionSpxSpriteIsSpineSupported)(api.SpxSpriteIsSpineSupported)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteIsSpineSupported(arg0, &ret_val)
+	return (GdBool)(ret_val)
+}
+func CallSpriteSetSpineSkeleton(
+	obj GdObj,
+	atlas_path GdString,
+	skeleton_path GdString,
+	default_mix GdFloat,
+) GdBool {
+	arg0 := (C.GDExtensionSpxSpriteSetSpineSkeleton)(api.SpxSpriteSetSpineSkeleton)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdString)(atlas_path)
+	arg3 := (C.GdString)(skeleton_path)
+	arg4 := (C.GdFloat)(default_mix)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteSetSpineSkeleton(arg0, arg1, arg2, arg3, arg4, &ret_val)
+
+	return (GdBool)(ret_val)
+}
+func CallSpriteClearSpineSkeleton(
+	obj GdObj,
+) {
+	arg0 := (C.GDExtensionSpxSpriteClearSpineSkeleton)(api.SpxSpriteClearSpineSkeleton)
+	arg1 := (C.GdObj)(obj)
+
+	C.cgo_callfn_GDExtensionSpxSpriteClearSpineSkeleton(arg0, arg1)
+
+}
+func CallSpriteGetSpineBounds(
+	obj GdObj,
+) GdRect2 {
+	arg0 := (C.GDExtensionSpxSpriteGetSpineBounds)(api.SpxSpriteGetSpineBounds)
+	arg1 := (C.GdObj)(obj)
+	var ret_val C.GdRect2
+	C.cgo_callfn_GDExtensionSpxSpriteGetSpineBounds(arg0, arg1, &ret_val)
+
+	return (GdRect2)(ret_val)
+}
+func CallSpriteHasSpineAnimation(
+	obj GdObj,
+	name GdString,
+) GdBool {
+	arg0 := (C.GDExtensionSpxSpriteHasSpineAnimation)(api.SpxSpriteHasSpineAnimation)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdString)(name)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteHasSpineAnimation(arg0, arg1, arg2, &ret_val)
+
+	return (GdBool)(ret_val)
 }
 func CallSpriteSetVelocity(
 	obj GdObj,

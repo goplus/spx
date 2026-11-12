@@ -74,6 +74,7 @@ GdBool SpxSprite::is_dynamic_frame_offset_enabled() const {
 }
 
 void SpxSprite::_commit_visual(const PreparedVisual &p_visual) {
+	clear_spine_skeleton();
 	visual_source = p_visual.source;
 	source_sprite_frames = p_visual.shared_frames;
 
@@ -88,6 +89,10 @@ void SpxSprite::_commit_visual(const PreparedVisual &p_visual) {
 }
 
 void SpxSprite::_update_render_scale() {
+	if (spine_child) {
+		_update_spine_transform();
+		return;
+	}
 	if (anim2d == nullptr) {
 		return;
 	}
@@ -156,6 +161,10 @@ int SpxSprite::_get_required_raster_scale() {
 }
 
 void SpxSprite::_update_frame_transform() {
+	if (spine_child) {
+		_update_spine_transform();
+		return;
+	}
 	if (anim2d == nullptr) {
 		return;
 	}

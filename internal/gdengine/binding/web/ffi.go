@@ -37,6 +37,7 @@ var (
 	wasmInitialized          bool
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
+	unsupportedSpineHandle   js.Func
 )
 
 func Link() (*LinkSession, bool) {
@@ -67,6 +68,19 @@ func BindCallbacks(info engine.CallbackInfo) {
 func resolveJSFunc(funcName string) js.Value {
 	val := js.Global().Get(funcName)
 	if val.IsUndefined() || val.IsNull() {
+		// Older default runtimes predate the optional Spine API. Keep ordinary
+		// projects working and let Spine initialization report a clear disabled
+		// capability instead of failing every project during linkage.
+		switch funcName {
+		case "gdspx_sprite_is_spine_supported":
+			if unsupportedSpineHandle.Type() == js.TypeUndefined {
+				unsupportedSpineHandle = js.FuncOf(func(js.Value, []js.Value) any { return false })
+			}
+			return unsupportedSpineHandle.Value
+		case "gdspx_sprite_set_spine_skeleton", "gdspx_sprite_clear_spine_skeleton", "gdspx_sprite_get_spine_bounds", "gdspx_sprite_has_spine_animation":
+			// These functions must only be used after IsSpineSupported succeeds.
+			return val
+		}
 		panic("JS function not found: " + funcName)
 	}
 	return val

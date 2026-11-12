@@ -46,6 +46,9 @@ func runRepoSPXCommand(runner shared.ScriptRunner, projectDir string, args ...st
 }
 
 func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (runtimeWorkspace, func(), error) {
+	if err := shared.PrepareSpineEnvironment(); err != nil {
+		return runtimeWorkspace{}, nil, err
+	}
 	version := release.DefaultRuntimeLock().RuntimeVersion
 	goPath, err := shared.EnsureGoPath()
 	if err != nil {

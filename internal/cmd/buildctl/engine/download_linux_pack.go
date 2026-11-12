@@ -45,6 +45,11 @@ type engineDownloadEnv struct {
 // PrepareLinuxRuntimePackAssets installs only the Linux/amd64 assets used by
 // the release runtime pack workflow.
 func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
+	if enabled, err := shared.SpineEnabled(); err != nil {
+		return err
+	} else if enabled {
+		return fmt.Errorf("release runtime pack assets do not support SPX_SPINE=1; build the local Spine runtime with make dev")
+	}
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return fmt.Errorf("preparing Linux runtime packs requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
 	}

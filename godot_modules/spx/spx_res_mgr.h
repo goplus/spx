@@ -37,6 +37,10 @@
 #include "servers/audio/audio_stream.h"
 #include "spx_manager.h"
 #include "spx_svg_cache.h"
+#include "spx_build_config.gen.h"
+#ifdef SPX_SPINE_ENABLED
+#include "thirdparty/spine_godot/SpineSkeletonDataResource.h"
+#endif
 
 class Texture2D;
 
@@ -70,6 +74,10 @@ private:
 	String game_data_root = "res://";
 	HashMap<String, SpxAnimationClip> animation_clips;
 	SpxSvgCache svg_cache;
+#ifdef SPX_SPINE_ENABLED
+	HashMap<String, Ref<SpineAtlasResource>> spine_atlases;
+	HashMap<String, Ref<SpineSkeletonFileResource>> spine_files;
+#endif
 
 private:
 	Ref<Texture2D> _load_texture_direct(const String &p_path, bool p_allow_placeholder);
@@ -84,6 +92,9 @@ private:
 	void _commit_project_fonts(ProjectFonts::Prepared &&p_prepared);
 
 public:
+#ifdef SPX_SPINE_ENABLED
+	Ref<SpineSkeletonDataResource> load_spine_data(const String &p_atlas, const String &p_skeleton, float p_mix);
+#endif
 	void on_awake() override;
 	void on_reset(int reset_code) override;
 	void on_destroy() override;

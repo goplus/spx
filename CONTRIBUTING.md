@@ -218,7 +218,7 @@ merge-group runs. Other branch and fork pushes run tests without publishing
 duplicate coverage.
 
 After all checks for the selected runtime path pass, the final CI gate collects
-the Go profiles and, when module tests ran, the C++ report. It uploads them to
+the Go profiles and, when module tests ran, both C++ reports. It uploads them to
 [Codecov](https://codecov.io/gh/goplus/spx) separately under `go` and `cpp`, then
 requests checks for the combined report. Missing artifacts, upload errors, or
 notification errors fail the gate. Codecov evaluates coverage asynchronously and
@@ -275,6 +275,9 @@ upload from `dev`.
 When CI selects the current-module path (`missing` or `incompatible` runtime),
 the locked Godot workflow builds the Linux editor with `tests=yes`,
 `use_coverage=yes`, and `optimize=none`, then runs the `*SPX*` unit tests.
+An additional job runs the same suite with `spx_spine=yes`, using a separate
+coverage build cache. It verifies that enabled Spine tests are registered;
+the default build remains disabled and exercises the unsupported API path.
 The coverage build caches SCons signatures, objects, archives, and `.gcno`
 metadata together. The cache requires a matching Godot commit, build settings,
 toolchain, and runner environment. When only the SPX module changes, it reuses
@@ -287,10 +290,12 @@ still a cold build.
 
 Godot uses pinned gcovr to produce a Cobertura report for maintained native
 code under `godot_modules/spx`, excluding tests, third-party code, and generated
-bindings. It publishes only the report as the `coverage-spx-cpp` artifact.
-The final SPX CI gate uploads that report alongside Go coverage with the `cpp`
-flag. Missing or empty reports fail CI. Manually dispatching `Test Godot Module`
-produces the artifact without publishing a partial Codecov report. These
+bindings. The default and Spine jobs publish `coverage-spx-cpp` and
+`coverage-spx-cpp-spine` respectively. The final SPX CI gate requires both
+reports and uploads them together alongside Go coverage with the `cpp`
+flag, so Codecov combines their executed lines. Missing or empty reports fail CI.
+Manually dispatching `Test Godot Module` produces both artifacts without
+publishing a partial Codecov report. These
 artifacts are retained for one day; after expiry, rerun all integration jobs
 to regenerate the report.
 

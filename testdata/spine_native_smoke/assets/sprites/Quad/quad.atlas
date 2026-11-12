@@ -1,0 +1,8 @@
+scale: 1
+quad.png
+size: 16,8
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+quad
+  bounds: 0,0,16,8

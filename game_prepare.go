@@ -221,17 +221,100 @@ func prepareSprite(fs spxfs.Dir, name string, typ reflect.Type, gamer reflect.Va
 }
 
 func prepareSpriteConfig(config *coreproject.SpriteConfig) (preparedSprite, error) {
-	layout, err := coreproject.PrepareCostumeLayout(config)
-	if err != nil {
-		return preparedSprite{}, err
-	}
-	preparedAnimations, err := prepareFrameAnimations(config.FAnimations, layout)
-	if err != nil {
-		return preparedSprite{}, err
-	}
 	preparedConfig := *config
-	preparedConfig.FAnimations = preparedAnimations
+	spine, err := prepareSpineAnimation(config.SpineAnim)
+	if err != nil {
+		return preparedSprite{}, err
+	}
+	preparedConfig.SpineAnim = spine
+	var layout *coreproject.CostumeLayout
+	if spine == nil {
+		layout, err = coreproject.PrepareCostumeLayout(config)
+		if err != nil {
+			return preparedSprite{}, err
+		}
+	}
+	var animations map[string]*coreproject.AniConfig
+	if spine != nil {
+		animations, err = prepareSpineAnimations(config.FAnimations, spine)
+	} else {
+		animations, err = prepareFrameAnimations(config.FAnimations, layout)
+	}
+	if err != nil {
+		return preparedSprite{}, err
+	}
+	preparedConfig.FAnimations = animations
 	return preparedSprite{config: preparedConfig, layout: layout}, nil
+}
+
+func prepareSpineAnimation(config *coreproject.SpineAnimConfig) (*coreproject.SpineAnimConfig, error) {
+	if config == nil {
+		return nil, nil
+	}
+	if config.Atlas == "" || config.Skeleton == "" {
+		return nil, fmt.Errorf("spineAnim requires atlas and skeleton")
+	}
+	prepared := *config
+	for _, field := range []struct {
+		name     string
+		value    *float64
+		fallback float64
+	}{
+		{"defaultMix", &prepared.DefaultMix, 0.1},
+		{"stepDuration", &prepared.StepDuration, 0.01},
+		{"turnToDuration", &prepared.TurnToDuration, 1},
+	} {
+		if err := prepareSpineTiming("spineAnim."+field.name, field.value, field.fallback); err != nil {
+			return nil, err
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(config.AnimMap)) {
+		if name == "" || config.AnimMap[name] == "" {
+			return nil, fmt.Errorf("spineAnim.animMap requires non-empty aliases and animation names")
+		}
+	}
+	prepared.AnimMap = maps.Clone(config.AnimMap)
+	return &prepared, nil
+}
+
+func prepareSpineTiming(name string, value *float64, fallback float64) error {
+	if math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0 {
+		return fmt.Errorf("%s must be finite and nonnegative", name)
+	}
+	base.SetDefaultIfZero(value, fallback)
+	return nil
+}
+
+func prepareSpineAnimations(animations map[string]*coreproject.AniConfig, spine *coreproject.SpineAnimConfig) (map[string]*coreproject.AniConfig, error) {
+	if animations == nil && len(spine.AnimMap) == 0 {
+		return nil, nil
+	}
+	prepared := make(map[string]*coreproject.AniConfig, len(animations))
+	for _, name := range slices.Sorted(maps.Keys(animations)) {
+		animation := animations[name]
+		if animation == nil {
+			return nil, fmt.Errorf("fAnimations[%q] is null", name)
+		}
+		definition := *animation
+		if err := prepareSpineTiming(fmt.Sprintf("fAnimations[%q].stepDuration", name), &definition.StepDuration, 0.01); err != nil {
+			return nil, err
+		}
+		if err := prepareSpineTiming(fmt.Sprintf("fAnimations[%q].turnToDuration", name), &definition.TurnToDuration, 1); err != nil {
+			return nil, err
+		}
+		definition.Speed = 1
+		prepared[name] = &definition
+	}
+	// Materialize aliases here so runtime initialization consumes only prepared
+	// definitions. Explicit metadata keeps its own timing defaults.
+	for name := range spine.AnimMap {
+		if _, exists := prepared[name]; !exists {
+			prepared[name] = &coreproject.AniConfig{
+				StepDuration: spine.StepDuration, TurnToDuration: spine.TurnToDuration, Speed: 1,
+			}
+		}
+	}
+	return prepared, nil
 }
 
 func prepareFrameAnimations(animations map[string]*coreproject.AniConfig, layout *coreproject.CostumeLayout) (map[string]*coreproject.AniConfig, error) {

@@ -39,6 +39,7 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 	"internal/cmd/buildctl/main.go":                       {},
 	"internal/cmd/buildctl/runtime_dispatch.go":           {},
 	"internal/cmd/buildctl/runtimecmd/dispatch.go":        {},
+	"internal/cmd/buildctl/runtimecmd/local_manifest.go":  {},
 	"internal/cmd/buildctl/runtimecmd/pack.go":            {},
 	"internal/cmd/buildctl/runtimecmd/workspace.go":       {},
 	"internal/cmd/buildctl/shared/api.go":                 {},
@@ -48,8 +49,10 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 	"internal/cmd/buildctl/shared/gopath.go":              {},
 	"internal/cmd/buildctl/shared/macos_go_toolchain.go":  {},
 	"internal/cmd/buildctl/shared/repo.go":                {},
+	"internal/cmd/buildctl/shared/spine_environment.go":   {},
 	"internal/release/runtime_asset.go":                   {},
 	"internal/release/runtime_lock.go":                    {},
+	"internal/runtimevariant/spine.go":                    {},
 }
 
 var runtimeBuildRecipePrefixes = []string{
@@ -59,6 +62,7 @@ var runtimeBuildRecipePrefixes = []string{
 }
 
 var runtimePackSourceFiles = map[string]struct{}{
+	"internal/runtimevariant/spine.go":                              {},
 	"cmd/spx/appname.txt":                                           {},
 	"cmd/spx/internal/command/ai_module.go":                         {},
 	"cmd/spx/internal/command/args.go":                              {},

@@ -1266,6 +1266,36 @@ void cgo_callfn_GDExtensionSpxSpriteGetCurrentAnimName(const GDExtensionSpxSprit
 	}
 	fn(obj, ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteIsSpineSupported(const GDExtensionSpxSpriteIsSpineSupported fn, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteSetSpineSkeleton(const GDExtensionSpxSpriteSetSpineSkeleton fn, GdObj obj, GdString atlas_path, GdString skeleton_path, GdFloat default_mix, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, atlas_path, skeleton_path, default_mix, ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteClearSpineSkeleton(const GDExtensionSpxSpriteClearSpineSkeleton fn, GdObj obj) {
+	if (!fn) {
+		return;
+	}
+	fn(obj);
+}
+void cgo_callfn_GDExtensionSpxSpriteGetSpineBounds(const GDExtensionSpxSpriteGetSpineBounds fn, GdObj obj, GdRect2* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, ret_val);
+}
+void cgo_callfn_GDExtensionSpxSpriteHasSpineAnimation(const GDExtensionSpxSpriteHasSpineAnimation fn, GdObj obj, GdString name, GdBool* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, name, ret_val);
+}
 void cgo_callfn_GDExtensionSpxSpriteSetVelocity(const GDExtensionSpxSpriteSetVelocity fn, GdObj obj, GdVec2 velocity) {
 	if (!fn) {
 		return;

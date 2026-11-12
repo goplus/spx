@@ -175,6 +175,10 @@ func (p *SpriteImpl) isFullyGhosted() bool {
 }
 
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
+	if p.isSpineMode() {
+		pivot := p.getPivot().Mulf(-p.runtimeState.scale)
+		return pivot.X, pivot.Y
+	}
 	return getCostumeRenderOffset(p.currentCostume(), p.getPivot(), p.runtimeState.scale, p.runtimeState.scale)
 }
 
@@ -221,6 +225,12 @@ func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64)
 }
 
 func getCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
+	if p.isSpineMode() {
+		bounds := p.animation().spineBounds
+		center := bounds.Position.Add(bounds.Size.Mulf(0.5))
+		center.Y = -center.Y
+		return center, bounds.Size
+	}
 	cs := p.costumes[p.costumeIndex]
 	var rect mathf.Rect2
 	if cs.isAtlas() {

@@ -89,6 +89,15 @@ func TestNativeBuiltinResolution(t *testing.T) {
 	}
 }
 
+func TestOlderNativeRuntimeHasNoSpineCapability(t *testing.T) {
+	previous := api.SpxSpriteIsSpineSupported
+	t.Cleanup(func() { api.SpxSpriteIsSpineSupported = previous })
+	api.SpxSpriteIsSpineSupported = nil
+	if ToBool(CallSpriteIsSpineSupported()) {
+		t.Fatal("older native runtime reported Spine support")
+	}
+}
+
 func TestNativeInitialization(t *testing.T) {
 	bindNativeBuiltinFixture(t)
 	configuration := initialization{minimum_initialization_level: initializationLevelScene + 1}

@@ -152,6 +152,10 @@ func normalizeProjectConfigPaths(conf *ProjectConfig) {
 }
 
 func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
+	if conf.SpineAnim != nil {
+		conf.SpineAnim.Atlas = NormalizeConfigPath(configDir, conf.SpineAnim.Atlas)
+		conf.SpineAnim.Skeleton = NormalizeConfigPath(configDir, conf.SpineAnim.Skeleton)
+	}
 	for _, costume := range conf.Costumes {
 		if costume == nil {
 			continue

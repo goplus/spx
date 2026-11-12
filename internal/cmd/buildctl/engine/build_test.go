@@ -64,6 +64,7 @@ func TestSConsBuildScriptIncludesProfileAndCustomModule(t *testing.T) {
 		"'optimize=size'",
 		"'module_text_server_adv_enabled=true'",
 		"'debug_symbols=false'",
+		"'spx_spine=no'",
 		"'custom_modules=" + moduleSource + "'",
 	} {
 		if !strings.Contains(script, arg) {
@@ -83,7 +84,7 @@ func TestSConsScriptQuotesCommandPath(t *testing.T) {
   "template_release": []
 }`)
 	script := templateSConsBuildScript("/tmp/spx tools/scons", module, []string{"platform=ios target=template_debug"})
-	want := "'/tmp/spx tools/scons' 'platform=ios' 'target=template_debug' 'custom_modules=" + moduleSource + "'"
+	want := "'/tmp/spx tools/scons' 'platform=ios' 'target=template_debug' 'spx_spine=no' 'custom_modules=" + moduleSource + "'"
 	if script != want {
 		t.Fatalf("templateSConsBuildScript did not quote command path: %q", script)
 	}
@@ -123,7 +124,7 @@ func TestBuildEngineDesktopCommands(t *testing.T) {
 						wantArgs = []string{"optimize=size", "debug_symbols=false", "platform=" + plan.TemplateSConsPlatform, "target=template_release"}
 					}
 					source = filepath.Join(buildEnv.EngineDir, source)
-					wantArgs = append(wantArgs, "custom_modules="+moduleSource)
+					wantArgs = append(wantArgs, "spx_spine=no", "custom_modules="+moduleSource)
 					mustWriteFile(t, source, []byte("stale"))
 					mustWriteFile(t, destination, []byte("old installation"))
 					database := filepath.Join(buildEnv.EngineDir, "compile_commands.json")
@@ -257,7 +258,7 @@ printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_RECORD.build"
 				if plan.EditorUseVSProj {
 					wantBuild = append(wantBuild, "vsproj=yes", "vsproj_gen_only=no")
 				}
-				assertEngineTestCommandRecord(t, env["SPX_RECORD"]+".build", append(wantBuild, "custom_modules="+moduleSource))
+				assertEngineTestCommandRecord(t, env["SPX_RECORD"]+".build", append(wantBuild, "spx_spine=no", "custom_modules="+moduleSource))
 				wantTest := []string{buildEnv.EngineDir, env["SPX_MARKER"], "--headless", "--test", "--test-case=*SPX*"}
 				for _, stage := range []string{"list", "test"} {
 					path := env["SPX_RECORD"] + "." + stage
@@ -373,7 +374,7 @@ printf post > "$SPX_ENGINE_DIR/bin/android_source.zip"
 			}
 			assertEngineTestCommandRecord(t, env["SPX_BUILD_RECORD"], []string{
 				buildEnv.EngineDir, env["SPX_MARKER"], wantJavaHome, "optimize=size", "debug_symbols=false",
-				"platform=" + tt.platform, "target=template_release", "arch=arm64", "custom_modules=" + moduleSource,
+				"platform=" + tt.platform, "target=template_release", "arch=arm64", "spx_spine=no", "custom_modules=" + moduleSource,
 			})
 			if tt.platform == "android" && tt.failure != "build" {
 				assertEngineTestCommandRecord(t, env["SPX_POST_RECORD"], []string{postDir, env["SPX_MARKER"], javaHome, "generateGodotTemplates"})
@@ -666,7 +667,7 @@ func TestBuildEngineWebTemplate(t *testing.T) {
 			if mode == "worker" {
 				wantArgs = append(wantArgs, "proxy_to_pthread=true")
 			}
-			wantArgs = append(wantArgs, "custom_modules="+moduleSource)
+			wantArgs = append(wantArgs, "spx_spine=no", "custom_modules="+moduleSource)
 			assertEngineTestCommandRecord(t, commandEnv["SPX_BUILD_RECORD"], wantArgs)
 			for _, destination := range append([]string{plan.WebCachedTemplateZip}, webTemplateNames[:]...) {
 				if !filepath.IsAbs(destination) {

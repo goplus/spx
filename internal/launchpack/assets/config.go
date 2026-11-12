@@ -34,7 +34,13 @@ type projectConfig struct {
 	TilemapPath string            `json:"tilemapPath"`
 }
 
+type spineConfig struct {
+	Atlas    string `json:"atlas"`
+	Skeleton string `json:"skeleton"`
+}
+
 type spriteConfig struct {
+	SpineAnim    *spineConfig      `json:"spineAnim"`
 	Costumes     []*resourceConfig `json:"costumes"`
 	CostumeSet   *resourceConfig   `json:"costumeSet"`
 	CostumeMPSet *resourceConfig   `json:"costumeMPSet"`

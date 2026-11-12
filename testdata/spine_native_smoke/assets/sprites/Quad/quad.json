@@ -1,0 +1,1 @@
+{"skeleton":{"spine":"4.2.99"},"bones":[{"name":"root"}],"slots":[{"name":"slot","bone":"root","attachment":"quad"}],"skins":[{"name":"default","attachments":{"slot":{"quad":{"type":"region","width":16,"height":8}}}}],"animations":{"move":{"bones":{"root":{"translate":[{"x":0,"y":0},{"time":0.25,"x":4,"y":0}]}}}}}

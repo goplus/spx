@@ -95,6 +95,14 @@ func (p *SpriteImpl) mirrorPosition(proxy *engine.Sprite, position mathf.Vec2, a
 }
 
 func (p *SpriteImpl) applyCostumeUpdate() {
+	if p.isSpineMode() {
+		p.applyLayerUpdate()
+		applyDirtyUpdate(&p.runtimeState.isCostumeDirty, func() {
+			p.runtimeState.syncSprite.SetRenderScale(engine.UniformVec2(p.runtimeState.scale))
+		})
+		p.preparedVisual = p.captureProxyVisual()
+		return
+	}
 	// Texture setters emit synchronous callbacks. Nested queries must not
 	// interleave another texture write with this preparation's scale and UVs.
 	if p.preparedVisual.proxy == p.runtimeState.syncSprite && p.preparedVisual.preparing {
@@ -160,6 +168,7 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	p.runtimeState.syncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.runtimeState.syncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
 	p.runtimeState.syncSprite.MirrorPosition = p.mirrorPosition
+	p.initSpineProxy()
 	p.applyPhysicsProxyConfig()
 	p.runtimeState.syncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.syncSprite.SetTypeName(p.name)

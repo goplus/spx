@@ -181,7 +181,18 @@ type AniConfig struct {
 	To    any
 }
 
+// SpineAnimConfig describes skeletal resources and animation name mappings.
+type SpineAnimConfig struct {
+	Atlas          string            `json:"atlas"`
+	Skeleton       string            `json:"skeleton"`
+	DefaultMix     float64           `json:"defaultMix"`
+	AnimMap        map[string]string `json:"animMap"`
+	StepDuration   float64           `json:"stepDuration"`
+	TurnToDuration float64           `json:"turnToDuration"`
+}
+
 type SpriteConfig struct {
+	SpineAnim        *SpineAnimConfig      `json:"spineAnim"`
 	Heading          float64               `json:"heading"`
 	X                float64               `json:"x"`
 	Y                float64               `json:"y"`

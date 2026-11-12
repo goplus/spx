@@ -221,6 +221,12 @@ public:
 	SPX_BIND GdBool is_anim_flipped_v(GdObj obj);
 	SPX_BIND GdString get_current_anim_name(GdObj obj);
 
+	SPX_BIND static GdBool is_spine_supported();
+	SPX_BIND GdBool set_spine_skeleton(GdObj obj, GdString atlas_path, GdString skeleton_path, GdFloat default_mix);
+	SPX_BIND void clear_spine_skeleton(GdObj obj);
+	SPX_BIND GdRect2 get_spine_bounds(GdObj obj);
+	SPX_BIND GdBool has_spine_animation(GdObj obj, GdString name);
+
 	// physics
 	SPX_BIND void set_velocity(GdObj obj, GdVec2 velocity);
 	SPX_BIND GdVec2 get_velocity(GdObj obj);

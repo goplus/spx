@@ -31,6 +31,7 @@ import (
 
 	builderai "github.com/goplus/spx/v4/cmd/spx/internal/command/builderai"
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/internal/runtimevariant"
 )
 
 const envName = "gdspx"
@@ -385,8 +386,12 @@ func hasGoModuleDeclaration(content, modulePath string) bool {
 
 func resolveAppPath(gobinDir, tag, version string) (string, error) {
 	dstFileName := tag + version + executableSuffix(runtime.GOOS)
+	_, spine, err := runtimevariant.LocalSpineBin(os.Environ(), gobinDir)
+	if err != nil {
+		return "", err
+	}
 	gdx, err := exec.LookPath(dstFileName)
-	if err == nil {
+	if err == nil && !spine {
 		if _, err := exec.Command(gdx, "--version").CombinedOutput(); err == nil {
 			return gdx, nil
 		}

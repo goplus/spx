@@ -26,6 +26,9 @@ import (
 )
 
 func cleanInstalledAssets() error {
+	if err := shared.ValidateSpineEnvironment(); err != nil {
+		return err
+	}
 	goPath, err := shared.EnsureGoPath()
 	if err != nil {
 		return err

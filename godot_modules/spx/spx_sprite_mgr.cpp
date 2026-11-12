@@ -100,6 +100,11 @@ constexpr int PIXEL_QUERY_MIN_PARALLEL_TILES = 4;
 constexpr SamplePointMode SENSING_POINT_MODE = SamplePointMode::INTEGER;
 
 bool capture_sprite_pixels(SpxSprite &p_sprite, Snapshot &r_snapshot, bool p_require_visible, bool p_apply_collision_alpha) {
+	// Skeletal meshes do not have a frame-image snapshot. Never query the hidden
+	// costume left in AnimatedSprite2D after switching to Spine.
+	if (p_sprite.is_spine_mode()) {
+		return false;
+	}
 	if (p_require_visible && !p_sprite.is_visible_in_tree()) {
 		return false;
 	}
@@ -1258,4 +1263,32 @@ void SpxSpriteMgr::set_pivot(GdObj obj, GdVec2 pivot) {
 GdVec2 SpxSpriteMgr::get_pivot(GdObj obj) {
 	SPX_REQUIRE_SPRITE_RETURN(GdVec2())
 	return godot_to_spx_vec2(sprite->get_render_offset());
+}
+
+GdBool SpxSpriteMgr::set_spine_skeleton(GdObj obj, GdString atlas_path, GdString skeleton_path, GdFloat default_mix) {
+	SPX_SPRITE_LOOKUP_RETURN(obj, __func__, false)
+	return sprite->set_spine_skeleton(atlas_path, skeleton_path, default_mix);
+}
+
+void SpxSpriteMgr::clear_spine_skeleton(GdObj obj) {
+	SPX_SPRITE_LOOKUP_VOID(obj, __func__)
+	sprite->clear_spine_skeleton();
+}
+
+GdRect2 SpxSpriteMgr::get_spine_bounds(GdObj obj) {
+	SPX_SPRITE_LOOKUP_RETURN(obj, __func__, GdRect2())
+	return sprite->get_spine_bounds();
+}
+
+GdBool SpxSpriteMgr::has_spine_animation(GdObj obj, GdString name) {
+	SPX_SPRITE_LOOKUP_RETURN(obj, __func__, false)
+	return sprite->has_spine_animation(name);
+}
+
+GdBool SpxSpriteMgr::is_spine_supported() {
+#ifdef SPX_SPINE_ENABLED
+	return true;
+#else
+	return false;
+#endif
 }

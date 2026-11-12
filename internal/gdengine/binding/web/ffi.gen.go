@@ -249,6 +249,11 @@ type GDExtensionInterface struct {
 	SpxSpriteSetAnimFlipV                       js.Value
 	SpxSpriteIsAnimFlippedV                     js.Value
 	SpxSpriteGetCurrentAnimName                 js.Value
+	SpxSpriteIsSpineSupported                   js.Value
+	SpxSpriteSetSpineSkeleton                   js.Value
+	SpxSpriteClearSpineSkeleton                 js.Value
+	SpxSpriteGetSpineBounds                     js.Value
+	SpxSpriteHasSpineAnimation                  js.Value
 	SpxSpriteSetVelocity                        js.Value
 	SpxSpriteGetVelocity                        js.Value
 	SpxSpriteIsOnFloor                          js.Value
@@ -590,6 +595,11 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteSetAnimFlipV = resolveJSFunc("gdspx_sprite_set_anim_flip_v")
 	x.SpxSpriteIsAnimFlippedV = resolveJSFunc("gdspx_sprite_is_anim_flipped_v")
 	x.SpxSpriteGetCurrentAnimName = resolveJSFunc("gdspx_sprite_get_current_anim_name")
+	x.SpxSpriteIsSpineSupported = resolveJSFunc("gdspx_sprite_is_spine_supported")
+	x.SpxSpriteSetSpineSkeleton = resolveJSFunc("gdspx_sprite_set_spine_skeleton")
+	x.SpxSpriteClearSpineSkeleton = resolveJSFunc("gdspx_sprite_clear_spine_skeleton")
+	x.SpxSpriteGetSpineBounds = resolveJSFunc("gdspx_sprite_get_spine_bounds")
+	x.SpxSpriteHasSpineAnimation = resolveJSFunc("gdspx_sprite_has_spine_animation")
 	x.SpxSpriteSetVelocity = resolveJSFunc("gdspx_sprite_set_velocity")
 	x.SpxSpriteGetVelocity = resolveJSFunc("gdspx_sprite_get_velocity")
 	x.SpxSpriteIsOnFloor = resolveJSFunc("gdspx_sprite_is_on_floor")

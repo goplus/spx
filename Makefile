@@ -5,6 +5,9 @@
 
 export GODOT_SRC
 export SPX_MODULE_SRC
+# Spine is opt-in; exported for buildctl and its child build commands.
+SPX_SPINE ?= 0
+export SPX_SPINE
 
 BUILDCTL_BIN := .bin/buildctl$(shell go env GOEXE)
 MACOS_GO_TOOLCHAIN := cmd/internal/macos_go_toolchain.sh
@@ -99,6 +102,7 @@ help: ## Show common commands
 	@echo ""
 	@echo "Variable notes:"
 	@echo "  MODE defaults to normal for Web-related targets."
+	@echo "  SPX_SPINE defaults to 0; see docs/en/dev/engine/spine.md for isolated opt-in builds."
 	@echo "  GODOT_SRC defaults to ./godot and is used by:"
 	@echo "    dev build-editor build-desktop build-web build-android build-ios"
 	@echo "  SPX_MODULE_SRC defaults to ./godot_modules/spx and is used by:"
@@ -112,6 +116,7 @@ help-advanced: ## Show all commands, including low-level targets
 	@echo ""
 	@echo "Advanced variable notes:"
 	@echo "  MODE defaults to normal for Web-related targets."
+	@echo "  SPX_SPINE defaults to 0; see docs/en/dev/engine/spine.md for isolated opt-in builds."
 	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
 	@echo "  SPX_ISPX_PROFILE defaults to ai; use base for a Web interpreter without Builder AI."
 	@echo "  PLATFORM is required by download-engine."
