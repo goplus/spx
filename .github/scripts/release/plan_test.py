@@ -108,7 +108,7 @@ class ReleasePlanTest(unittest.TestCase):
         cases = (
             ("dry-run", "all", ("web", "macos", "windows", "linux")),
             ("dry-run", " WINDOWS , web ", ("web", "windows")),
-            ("dry-run", "linux", ("linux",)),
+            ("dry-run", "linux", "include web in platforms"),
             ("dry-run", "web,web", "Duplicate platform: web"),
             ("dry-run", "other", "Unsupported platform: other"),
             ("dry-run", "", "Platforms must not be empty"),

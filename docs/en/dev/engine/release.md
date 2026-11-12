@@ -85,11 +85,13 @@ Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 | `operation` | Result | `platforms` |
 | --- | --- | --- |
-| `dry-run` | Build and verify the exact locked candidate without publishing; report canonical-ref ancestry | Usually `all` |
+| `dry-run` | Build and verify the exact locked candidate without publishing; report canonical-ref ancestry; run the spxbench regression gate on the web candidate | Must include `web` |
 | `publish-runtime` | Publish only the immutable `runtime-v*` bundle | Ignored |
 | `publish-release` | Publish runtime, SPX products, and npm | Must be `all` |
 
 `release_tag` must exactly equal the SPX tag declared by the selected commit. Product `platforms=all` means Web, macOS, Windows, and Linux packages; Android and iOS belong to the complete runtime asset matrix and device smoke tests, not the SPX product targets.
+
+`dry-run` also creates a temporary `v<version>-rc.<run>.<attempt>` prerelease containing `spx_web.zip`, registers it on spxbench, and runs the gate suite named `spx` against it. spxbench compares each game's run with its previously recorded result; a mismatch fails the gate. The workflow attempts to delete the prerelease after validation and retries cleanup after failure or cancellation. spxbench retains the installed candidate version because its runtime-version API has no removal action. The spxbench URL defaults to `https://spxbench.qiniu.io` inside the validation script (overridable via the `SPXBENCH_URL` environment variable); only the repository secret `SPXBENCH_API_TOKEN` must be configured. No formal SPX release, runtime, or npm package is published by `dry-run`.
 
 1. Run `release_tag=<declared-SPX-tag>`, `platforms=all`, and `operation=dry-run` against the exact locked Godot candidate. Check the workflow summary: a pre-merge candidate is allowed here but is explicitly marked as not publication-ready. Download and inspect every runtime/product artifact, then complete install and demo smoke tests.
 2. Promote that exact Godot commit into the canonical `godot.ref` and run the strict ancestry verifier. Rerun the same SPX commit with `operation=publish-runtime`. If no reusable runtime exists, this mode builds, verifies, and publishes the complete runtime asset set while skipping SPX products, the SPX release, and npm.

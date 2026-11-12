@@ -29,6 +29,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
         for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "write"})
+        self.assertEqual(self.jobs["run-spxbench-suite"]["permissions"], {"contents": "write"})
         # npm trusted publishing keeps release.yml as its direct caller.
         for name in ("publish-npm", "publish-dev-npm"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "read", "id-token": "write"})
@@ -131,11 +132,33 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(step_script(job, "Assemble immutable asset sets"),
                          "python3 .github/scripts/release/assemble.py")
         for upload, consumer in (("Upload assembled runtime release", "publish-runtime"),
-                                 ("Upload assembled SPX release", "prepare-spx-release")):
+                                 ("Upload assembled SPX release", "prepare-spx-release"),
+                                 ("Upload assembled SPX release", "run-spxbench-suite")):
             producer_name = named_step(job, upload)["with"]["name"]
             download, = action_steps(self.jobs[consumer], "actions/download-artifact")
             self.assertEqual(download["with"]["name"], producer_name.replace("needs.plan-release.", "needs.build-release."))
         self.assertEqual(self.jobs["publish-npm"]["with"]["release_artifact"], "web-release")
+
+    def test_candidate_validation_uses_the_assembled_web_archive(self):
+        job = self.jobs["run-spxbench-suite"]
+        checkout, = action_steps(job, "actions/checkout")
+        download, = action_steps(job, "actions/download-artifact")
+        validation = named_step(job, "Run spxbench regression suite")
+        cleanup = named_step(job, "Retry candidate prerelease cleanup after failure or cancellation")
+        self.assertLess(job["steps"].index(checkout), job["steps"].index(validation))
+        self.assertLess(job["steps"].index(download), job["steps"].index(validation))
+        self.assertEqual(job["env"], {
+            "CANDIDATE_VERSION": "${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}",
+        })
+        self.assertEqual(validation["env"], {
+            "SPXBENCH_API_TOKEN": "${{ secrets.SPXBENCH_API_TOKEN }}",
+            "GH_TOKEN": "${{ github.token }}",
+            "WEB_ARCHIVE_PATH": "dist/spx_web.zip",
+            "GITHUB_SHA": "${{ github.sha }}",
+        })
+        self.assertEqual(validation["run"], "python3 .github/scripts/release/run_spxbench_suite.py")
+        self.assertEqual(job_condition(cleanup), "failure()||cancelled()")
+        self.assertEqual(cleanup["env"]["CANDIDATE_TAG"], "v${{ env.CANDIDATE_VERSION }}")
 
     def test_internal_build_scheduling_preserves_optional_platforms_and_runtime_reuse(self):
         conditions = {
@@ -180,6 +203,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_publication_scheduling_and_development_isolation(self):
         contract = {
             "build-release": ((), "inputs.operation!='publish-dev-npm'"),
+            "run-spxbench-suite": (("build-release",), "!cancelled()&&inputs.operation=='dry-run'&&needs.build-release.result=='success'"),
             "publish-runtime": (("build-release",), "!cancelled()&&inputs.operation!='dry-run'&&needs.build-release.result=='success'"),
             "prepare-spx-release": (("build-release", "publish-runtime"), "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-runtime.result=='success'"),
             "publish-npm": (("build-release", "prepare-spx-release"), "!cancelled()&&inputs.operation=='publish-release'&&needs.prepare-spx-release.result=='success'"),
@@ -206,12 +230,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_release_gate_is_operation_aware_and_fail_closed(self):
         gate = self.jobs["release-gate"]
         required = {
-            "dry-run": ("build-release",),
+            "dry-run": ("build-release", "run-spxbench-suite"),
             "publish-runtime": ("build-release", "publish-runtime"),
             "publish-release": ("build-release", "publish-runtime", "prepare-spx-release", "publish-npm", "publish-spx-release"),
             "publish-dev-npm": ("validate-dev-npm", "publish-dev-npm"),
         }
-        terminal_jobs = (*required["publish-release"], *required["publish-dev-npm"])
+        terminal_jobs = (*required["publish-release"], "run-spxbench-suite", *required["publish-dev-npm"])
         self.assertEqual(job_needs(gate), terminal_jobs)
         self.assertEqual(job_condition(gate), "!cancelled()")
         step = named_step(gate, "Require the selected operation's terminal jobs")
