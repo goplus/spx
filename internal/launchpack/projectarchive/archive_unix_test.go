@@ -16,10 +16,11 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,40 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+func TestReadRegularFileEnforcesLimitsWithUnderreportedSize(t *testing.T) {
+	file, err := os.Open("/proc/self/status")
+	if err != nil {
+		t.Skipf("procfs status unavailable: %v", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Procfs provides real regular files with content but a reported size of
+	// zero, so this exercises the read-time bound without racing a writer.
+	if !info.Mode().IsRegular() || info.Size() != 0 {
+		t.Skip("procfs status does not report a zero-sized regular file")
+	}
+	for _, test := range []struct {
+		name                         string
+		maxFileBytes, remainingBytes int64
+	}{
+		{"file limit", 1, defaultMaxFileBytes},
+		{"total limit", defaultMaxFileBytes, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				t.Fatal(err)
+			}
+			data, err := readRegularFile(file, "status", test.maxFileBytes, test.remainingBytes)
+			if !errors.Is(err, ErrLimit) || data != nil {
+				t.Fatalf("readRegularFile = %q, %v, want no data and ErrLimit", data, err)
+			}
+		})
+	}
+}
 
 func TestCollectRejectsDeviceLikePackEntry(t *testing.T) {
 	projectDir := t.TempDir()
@@ -88,7 +123,7 @@ func TestCollectRejectsUnreadableDirectories(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			projectDir := t.TempDir()
-			writeBundleTestFile(t, filepath.Join(projectDir, "pack", "private", "asset"), "asset", 0600)
+			writeArchiveTestFile(t, filepath.Join(projectDir, "pack", "private", "asset"), "asset", 0600)
 			name := filepath.Join(projectDir, test.relative)
 			if err := os.Chmod(name, 0); err != nil {
 				t.Fatal(err)
@@ -119,7 +154,7 @@ func TestCollectRejectsUnreadableDirectories(t *testing.T) {
 
 func TestSafeDirectoryTraversesAndRejectsClosedHandles(t *testing.T) {
 	rootPath := t.TempDir()
-	writeBundleTestFile(t, filepath.Join(rootPath, "one", "two", "source"), "content", 0600)
+	writeArchiveTestFile(t, filepath.Join(rootPath, "one", "two", "source"), "content", 0600)
 	observed, err := observeRoot(rootPath)
 	if err != nil {
 		t.Fatal(err)
@@ -151,9 +186,9 @@ func TestSafeDirectoryTraversesAndRejectsClosedHandles(t *testing.T) {
 	}
 }
 
-func TestBundleRejectsNonportableDiskEntry(t *testing.T) {
+func TestArchiveRejectsNonportableDiskEntry(t *testing.T) {
 	root := t.TempDir()
-	writeBundleTestFile(t, filepath.Join(root, "pack", "bad:name"), "asset", 0600)
+	writeArchiveTestFile(t, filepath.Join(root, "pack", "bad:name"), "asset", 0600)
 	if _, err := collect(Config{ProjectDir: root, PackDir: "pack"}); !errors.Is(err, ErrInvalidPath) {
 		t.Fatalf("nonportable disk entry = %v", err)
 	}

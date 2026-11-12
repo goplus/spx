@@ -22,8 +22,8 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/engine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 const minCircleRadius = 0.01
@@ -72,15 +72,15 @@ func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
 	return p.physics().getVelocity()
 }
 
-func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
-	p.physics().setVelocity(velocityX, velocityY)
+func (p *SpriteImpl) SetVelocity(vx, vy float64) {
+	p.physics().setVelocity(vx, vy)
 }
 
 // AddImpulse applies a one-shot momentum change on the next dynamic physics tick.
 // Velocity changes by impulse / mass, independently of the physics tick rate.
 // Coordinates use positive X to the right and positive Y upward.
-func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
-	p.physics().addImpulse(impulseX, impulseY)
+func (p *SpriteImpl) AddImpulse(ix, iy float64) {
+	p.physics().addImpulse(ix, iy)
 }
 
 func (p *SpriteImpl) IsOnFloor() bool {
@@ -91,8 +91,8 @@ func (p *SpriteImpl) Gravity() float64 {
 	return p.physics().getGravity()
 }
 
-func (p *SpriteImpl) SetGravity(gravity float64) {
-	p.physics().setGravity(gravity)
+func (p *SpriteImpl) SetGravity(g float64) {
+	p.physics().setGravity(g)
 }
 
 func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {

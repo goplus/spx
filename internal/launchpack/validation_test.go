@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 	"github.com/goplus/spx/v4/internal/release"
 )
 
@@ -188,7 +188,7 @@ func TestRuntimeLockRejectsIncompatibleIdentity(t *testing.T) {
 	}
 }
 
-func TestProjectBundleIncludesSortedUniqueSourcesAndResources(t *testing.T) {
+func TestProjectArchiveIncludesSortedUniqueSourcesAndResources(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		index string
@@ -204,26 +204,26 @@ func TestProjectBundleIncludesSortedUniqueSourcesAndResources(t *testing.T) {
 				writeProjectTestFile(t, filepath.Join(projectDir, name), name)
 			}
 			writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), tc.index)
-			snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+			snapshot, err := portableconfig.SnapshotPortableConfig(projectDir)
 			if err != nil {
 				t.Fatal(err)
 			}
 			cfg := Config{ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "main.spx"), ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json"}
-			bundle, err := prepareProjectBundleConfig(cfg, snapshot)
+			archiveConfig, err := prepareProjectArchiveConfig(cfg, snapshot)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if bundle.PackDir != "assets" {
-				t.Fatalf("PackDir = %q, want assets", bundle.PackDir)
+			if archiveConfig.PackDir != "assets" {
+				t.Fatalf("PackDir = %q, want assets", archiveConfig.PackDir)
 			}
-			if !slices.Equal(bundle.ProjectFiles, tc.want) {
-				t.Fatalf("project files = %q, want %q", bundle.ProjectFiles, tc.want)
+			if !slices.Equal(archiveConfig.ProjectFiles, tc.want) {
+				t.Fatalf("project files = %q, want %q", archiveConfig.ProjectFiles, tc.want)
 			}
 		})
 	}
 }
 
-func TestProjectBundleRejectsNestedProjectFile(t *testing.T) {
+func TestProjectArchiveRejectsNestedProjectFile(t *testing.T) {
 	projectDir := t.TempDir()
 	writeProjectTestFile(t, filepath.Join(projectDir, "main.spx"), "main")
 	writeProjectTestFile(t, filepath.Join(projectDir, "nested", "main.spx"), "nested")
@@ -262,8 +262,8 @@ func TestProjectAllowlistRejectsUnsafeOrIncompleteProjects(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := validLaunchpackConfig(t)
 			tt.change(t, &cfg)
-			if _, err := prepareProjectBundleConfig(cfg, cfg.PortableConfig); err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("prepareProjectBundleConfig error = %v, want %q", err, tt.want)
+			if _, err := prepareProjectArchiveConfig(cfg, cfg.PortableConfig); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("prepareProjectArchiveConfig error = %v, want %q", err, tt.want)
 			}
 		})
 	}
@@ -288,7 +288,7 @@ func validLaunchpackConfig(t *testing.T) Config {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := projectpolicy.SnapshotPortableConfig(project)
+	snapshot, err := portableconfig.SnapshotPortableConfig(project)
 	if err != nil {
 		t.Fatal(err)
 	}

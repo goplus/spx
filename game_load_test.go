@@ -32,12 +32,12 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

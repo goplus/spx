@@ -19,9 +19,9 @@ package spx
 import (
 	"math"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // -----------------------------------------------------------------------------
@@ -46,30 +46,30 @@ func (p *Game) Volume() float64 {
 	return p.soundMgr.GetVolume(p.audioState.SoundObj)
 }
 
-func (p *Game) Play__0(name SoundName) {
-	p.Play__1(name, false)
+func (p *Game) Play__0(sound SoundName) {
+	p.Play__1(sound, false)
 }
 
-func (p *Game) Play__1(name SoundName, loop bool) {
+func (p *Game) Play__1(sound SoundName, loop bool) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
-	p.playSound(nil, p.audioState.SoundObj, name, loop, 0, defaultAudioMaxDist)
+	p.playSound(nil, p.audioState.SoundObj, sound, loop, 0, defaultAudioMaxDist)
 }
 
-func (p *Game) PlayAndWait(name SoundName) {
+func (p *Game) PlayAndWait(sound SoundName) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
-	p.playSoundAndWait(nil, p.audioState.SoundObj, name, 0, defaultAudioMaxDist)
+	p.playSoundAndWait(nil, p.audioState.SoundObj, sound, 0, defaultAudioMaxDist)
 }
 
-func (p *Game) PausePlaying(name SoundName) {
-	p.pauseSound(name)
+func (p *Game) PausePlaying(sound SoundName) {
+	p.pauseSound(sound)
 }
 
-func (p *Game) ResumePlaying(name SoundName) {
-	p.resumeSound(name)
+func (p *Game) ResumePlaying(sound SoundName) {
+	p.resumeSound(sound)
 }
 
-func (p *Game) StopPlaying(name SoundName) {
-	p.stopSound(name)
+func (p *Game) StopPlaying(sound SoundName) {
+	p.stopSound(sound)
 }
 
 func (p *Game) SetVolume(volume float64) {
@@ -78,9 +78,9 @@ func (p *Game) SetVolume(volume float64) {
 	engine.RequestRedraw()
 }
 
-func (p *Game) ChangeVolume(delta float64) {
+func (p *Game) ChangeVolume(dVolume float64) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
-	p.soundMgr.ChangeVolume(p.audioState.SoundObj, delta)
+	p.soundMgr.ChangeVolume(p.audioState.SoundObj, dVolume)
 	engine.RequestRedraw()
 }
 

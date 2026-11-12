@@ -19,7 +19,7 @@ package spx
 import (
 	"maps"
 
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 // SpriteImpl is the concrete implementation of the Sprite interface.

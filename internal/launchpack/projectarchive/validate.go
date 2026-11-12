@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"errors"
@@ -91,7 +91,7 @@ func validateOutputs(projectDir, output, finalOutput, packRoot string) error {
 	for i, root := range roots {
 		canonical, err := canonicalFilesystemPath(root)
 		if err != nil {
-			return fmt.Errorf("projectbundle: canonicalize input root %q: %w", root, err)
+			return fmt.Errorf("projectarchive: canonicalize input root %q: %w", root, err)
 		}
 		canonicalRoots[i] = canonical
 	}
@@ -111,7 +111,7 @@ func validateOutputs(projectDir, output, finalOutput, packRoot string) error {
 		}
 		canonical, err := canonicalFilesystemPath(candidate)
 		if err != nil {
-			return fmt.Errorf("projectbundle: canonicalize %s %q: %w", item.field, item.value, err)
+			return fmt.Errorf("projectarchive: canonicalize %s %q: %w", item.field, item.value, err)
 		}
 		for i, root := range canonicalRoots {
 			if isSameOrWithin(canonical, root) {

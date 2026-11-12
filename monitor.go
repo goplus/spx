@@ -23,11 +23,11 @@ import (
 	"syscall"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/base/numeric"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine/ui"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // -----------------------------------------------------------------------------
@@ -119,16 +119,16 @@ func (p *Monitor) SetXYpos(x float64, y float64) {
 	p.setXYpos(x, y)
 }
 
-func (p *Monitor) ChangeXpos(dx float64) {
-	p.setXYpos(p.pos.X+dx, p.pos.Y)
+func (p *Monitor) ChangeXpos(dX float64) {
+	p.setXYpos(p.pos.X+dX, p.pos.Y)
 }
 
-func (p *Monitor) ChangeYpos(dy float64) {
-	p.setXYpos(p.pos.X, p.pos.Y+dy)
+func (p *Monitor) ChangeYpos(dY float64) {
+	p.setXYpos(p.pos.X, p.pos.Y+dY)
 }
 
-func (p *Monitor) ChangeXYpos(dx float64, dy float64) {
-	p.setXYpos(p.pos.X+dx, p.pos.Y+dy)
+func (p *Monitor) ChangeXYpos(dX float64, dY float64) {
+	p.setXYpos(p.pos.X+dX, p.pos.Y+dY)
 }
 
 func (p *Monitor) Size() float64 {
@@ -140,8 +140,8 @@ func (p *Monitor) SetSize(size float64) {
 	p.isDirty = true
 }
 
-func (p *Monitor) ChangeSize(delta float64) {
-	p.size += delta
+func (p *Monitor) ChangeSize(dSize float64) {
+	p.size += dSize
 	p.isDirty = true
 }
 

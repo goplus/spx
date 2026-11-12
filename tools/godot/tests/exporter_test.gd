@@ -2,6 +2,7 @@ extends SceneTree
 
 const TileExtractor = preload("res://addons/spx_tilemap_exporter/tilemap_extractor.gd")
 const Decorations = preload("res://addons/spx_tilemap_exporter/decorator_extractor.gd")
+const Preview = preload("res://addons/spx_tilemap_exporter/preview_exporter.gd")
 var failures: Array[String] = []
 
 func check(condition: bool, message: String) -> void:
@@ -16,6 +17,7 @@ func run() -> void:
 	test_rejected_inputs()
 	test_tilemap_round_trip()
 	test_decorator_coordinates()
+	test_preview_bounds_and_copy()
 	if failures.is_empty():
 		print("Exporter contracts passed")
 	quit(0 if failures.is_empty() else 1)
@@ -115,6 +117,35 @@ func test_decorator_coordinates() -> void:
 	check(item.scale == {"x": -2.0, "y": 3.0} and item.z_index == -2, "signed scale and draw order survive export")
 	check(not item.has("collider_type"), "absent collider is omitted")
 	scene.free()
+
+func test_preview_bounds_and_copy() -> void:
+	var scene = Node2D.new()
+	var layer = TileMapLayer.new()
+	layer.tile_set = TileSet.new()
+	layer.tile_set.tile_size = Vector2i(16, 32)
+	layer.tile_set.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
+	var atlas = TileSetAtlasSource.new()
+	atlas.texture = fixture_texture()
+	atlas.texture_region_size = Vector2i(16, 32)
+	atlas.create_tile(Vector2i.ZERO)
+	layer.tile_set.add_source(atlas, 0)
+	layer.set_cell(Vector2i.ZERO, 0, Vector2i.ZERO)
+	scene.add_child(layer)
+	var sprite = Sprite2D.new()
+	scene.add_child(sprite)
+	# The two diagonal corners of a single isometric cell have the same X.
+	var bounds = Preview.calc_single_layer_bounds(layer)
+	check(bounds.size == Vector2(16, 32), "isometric tile retains its full preview extent")
+	atlas.get_tile_data(Vector2i.ZERO, 0).texture_origin = Vector2i(3, -5)
+	check(Preview.calc_single_layer_bounds(layer).position == bounds.position - Vector2(3, -5), "atlas origin affects preview bounds")
+	layer.set_cell(Vector2i.ZERO, 0, Vector2i.ZERO, TileSetAtlasSource.TRANSFORM_TRANSPOSE)
+	check(Preview.calc_single_layer_bounds(layer).size == Vector2(32, 16), "transposed tile swaps preview extent")
+	var copy = Preview.create_tilemap_only_copy(scene)
+	check(copy.get_child_count() == 1 and copy.get_child(0) is TileMapLayer, "preview copy excludes decorators")
+	check(scene.get_child_count() == 2, "preview leaves original scene intact")
+	copy.free()
+	scene.free()
+
 
 func fixture_texture() -> Texture2D:
 	var path = "res://fixture_texture.tres"

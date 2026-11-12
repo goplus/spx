@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

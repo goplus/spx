@@ -19,7 +19,7 @@
 
 package profiler
 
-import spxlog "github.com/goplus/spx/v4/internal/log"
+import spxlog "github.com/goplus/spx/v4/internal/base/log"
 
 func init() {
 	Enabled = true

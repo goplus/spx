@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"fmt"
@@ -96,7 +96,7 @@ func (d *safeDir) open(name string, directory bool) (*os.File, error) {
 		file := os.NewFile(uintptr(fd), name)
 		if file == nil {
 			_ = unix.Close(fd)
-			return nil, fmt.Errorf("projectbundle: wrap descriptor %q", name)
+			return nil, fmt.Errorf("projectarchive: wrap descriptor %q", name)
 		}
 		info, err := file.Stat()
 		if err != nil {
@@ -136,7 +136,7 @@ func openSafeRoot(name string, observed os.FileInfo) (*safeDir, error) {
 	file := os.NewFile(uintptr(fd), name)
 	if file == nil {
 		_ = unix.Close(fd)
-		return nil, fmt.Errorf("projectbundle: wrap root descriptor %q", name)
+		return nil, fmt.Errorf("projectarchive: wrap root descriptor %q", name)
 	}
 	info, err := file.Stat()
 	if err != nil {

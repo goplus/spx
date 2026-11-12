@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package interpruntime
+package interpsession
 
 import (
 	"errors"
@@ -226,6 +226,28 @@ func TestEnvironmentRejectsMissingRootsWithoutChangingBase(t *testing.T) {
 	}
 	if !reflect.DeepEqual(base, before) {
 		t.Fatalf("base environment changed: %v, want %v", base, before)
+	}
+}
+
+func TestValidateDirectoryWithinRejectsDisappearedPaths(t *testing.T) {
+	for _, removed := range []string{"ProjectDir", "AssetDir"} {
+		t.Run(removed, func(t *testing.T) {
+			roots := testRoots(t)
+			if err := roots.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			path := roots.AssetDir
+			if removed == "ProjectDir" {
+				path = roots.ProjectDir
+			}
+			if err := os.RemoveAll(path); err != nil {
+				t.Fatal(err)
+			}
+			err := validateDirectoryWithin("AssetDir", roots.ProjectDir, roots.AssetDir)
+			if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "canonicalize "+removed) {
+				t.Fatalf("validateDirectoryWithin = %v; want missing %s", err, removed)
+			}
+		})
 	}
 }
 

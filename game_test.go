@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
@@ -38,7 +39,6 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	spxapi "github.com/goplus/spx/v4/pkg/spx"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )

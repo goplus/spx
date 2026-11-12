@@ -81,14 +81,14 @@ func validateLegacyProjectConfig(baseFolder string) (string, error) {
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("projectpolicy: inspect project config %q: %w", configPath, err)
+		return "", fmt.Errorf("pack: inspect project config %q: %w", configPath, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("projectpolicy: project config %q must be a regular non-symlink file", configPath)
+		return "", fmt.Errorf("pack: project config %q must be a regular non-symlink file", configPath)
 	}
 	extAssetDir, err := readExtAssetDir(baseFolder)
 	if err != nil {
-		return "", fmt.Errorf("projectpolicy: parse project config %q: %w", configPath, err)
+		return "", fmt.Errorf("pack: parse project config %q: %w", configPath, err)
 	}
 	return extAssetDir, nil
 }

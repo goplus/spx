@@ -22,11 +22,11 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // Event Types

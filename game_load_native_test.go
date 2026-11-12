@@ -35,13 +35,13 @@ import (
 	"time"
 
 	spxfs "github.com/goplus/spx/v4/fs"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 

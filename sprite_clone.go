@@ -19,8 +19,8 @@ package spx
 import (
 	"reflect"
 
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 type spriteUserFieldSnapshot struct {

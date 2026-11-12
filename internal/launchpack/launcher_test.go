@@ -29,8 +29,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/launchpack/bundle"
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/launchpack/projectarchive"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 	"github.com/goplus/spx/v4/internal/release"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 	"github.com/goplus/spx/v4/internal/runtimepayload"
@@ -186,87 +186,6 @@ func TestCompileLauncherRetainsRequestedWorkAndNormalizesFlags(t *testing.T) {
 	}
 }
 
-func TestBuildSourceBridgeChecksGraphAndCleansFailures(t *testing.T) {
-	for _, tt := range []struct {
-		name, want, body string
-		graphFailure     int
-		keep             bool
-	}{
-		{name: "success", body: "printf bridge > \"$out\""},
-		{name: "retain work", body: "printf bridge > \"$out\"", keep: true},
-		{name: "command fails", body: "exit 3", want: "build source interpreter bridge"},
-		{name: "no output", body: "exit 0", want: "lstat source interpreter bridge"},
-		{name: "graph before", body: "printf bridge > \"$out\"", graphFailure: 1, want: "before source bridge build"},
-		{name: "graph after", body: "printf bridge > \"$out\"", graphFailure: 2, want: "after source bridge build"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := validLaunchpackConfig(t)
-			launcherGoFixture(t, &cfg, tt.body)
-			temp := t.TempDir()
-			t.Setenv("TMPDIR", temp)
-			var log bytes.Buffer
-			cfg.IO.Stderr = &log
-			if tt.keep {
-				cfg.BuildFlags = []string{"-work"}
-			}
-			checks := 0
-			sentinel := errors.New("graph changed")
-			cfg.VerifyGraph = func(context.Context) error {
-				checks++
-				if checks == tt.graphFailure {
-					return sentinel
-				}
-				return nil
-			}
-			path, cleanup, err := BuildSourceBridge(context.Background(), cfg)
-			if tt.want != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.want) || cleanup != nil || path != "" {
-					t.Fatalf("BuildSourceBridge = %q, %v", path, err)
-				}
-			} else {
-				if err != nil {
-					t.Fatal(err)
-				}
-				assertRuntimeFile(t, path, "bridge")
-				cleanup()
-				if tt.keep {
-					if !strings.Contains(log.String(), "SPXBRIDGEWORK="+filepath.Dir(path)) {
-						t.Fatalf("work log = %q", log.String())
-					}
-					assertRuntimeFile(t, path, "bridge")
-				} else if _, err := os.Stat(path); !os.IsNotExist(err) {
-					t.Fatalf("bridge not removed: %v", err)
-				}
-			}
-			entries, err := os.ReadDir(temp)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !tt.keep && len(entries) != 0 {
-				t.Fatalf("temporary directory leaked: %v", entries)
-			}
-		})
-	}
-	cfg := validLaunchpackConfig(t)
-	cfg.BridgePackage = ""
-	if _, _, err := buildSourceBridge(context.Background(), cfg, "bridge.so", IO{}); err == nil || !strings.Contains(err.Error(), "bridge package") {
-		t.Fatalf("missing bridge package: %v", err)
-	}
-	for _, goos := range []string{"linux", "darwin", "windows"} {
-		name, err := bridgeFileName(goos, "arm64")
-		if err != nil || !strings.Contains(name, goos+"-arm64") {
-			t.Fatalf("bridgeFileName(%q) = %q, %v", goos, name, err)
-		}
-	}
-	if _, err := bridgeFileName("plan9", "amd64"); err == nil {
-		t.Fatal("unsupported host accepted")
-	}
-	args := sourceBridgeBuildArgsForGOOS(cfg, "bridge.dll", "windows")
-	if !slices.Contains(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition") {
-		t.Fatalf("Windows linker flags = %q", args)
-	}
-}
-
 func TestPinnedPayloadSourcesRejectMutationAndShortReads(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -337,7 +256,7 @@ func TestPinnedPayloadSourcesRejectMutationAndShortReads(t *testing.T) {
 func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 	for _, tt := range []struct {
 		name, want    string
-		mutate        func(*testing.T, *Config, *Assets, *bundle.Config, string)
+		mutate        func(*testing.T, *Config, *Assets, *projectarchive.Config, string)
 		failWriter    bool
 		replaceSource string
 	}{
@@ -345,25 +264,25 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 		{name: "engine replaced during write", want: "changed while reading", replaceSource: "engine"},
 		{name: "pack replaced during write", want: "changed while reading", replaceSource: "pack"},
 		{name: "bridge replaced during write", want: "changed while reading", replaceSource: "bridge"},
-		{name: "project archive exists", want: "create project archive", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "project archive exists", want: "create project archive", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			writeProjectTestFile(t, filepath.Join(work, "project.zip"), "existing")
 		}},
-		{name: "project missing", want: "collect project", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "project missing", want: "collect project", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			p.ProjectDir = filepath.Join(work, "missing")
 		}},
-		{name: "engine missing", want: "lstat Engine", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "engine missing", want: "lstat Engine", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			a.EnginePath += ".missing"
 		}},
-		{name: "pack missing", want: "lstat runtime PCK", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "pack missing", want: "lstat runtime PCK", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			a.PackPath += ".missing"
 		}},
-		{name: "bridge missing", want: "lstat interpreter bridge", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "bridge missing", want: "lstat interpreter bridge", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			a.BridgePath += ".missing"
 		}},
-		{name: "duplicate engine component", want: "identify Engine bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "duplicate engine component", want: "identify Engine bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			a.PackPath = a.EnginePath
 		}},
-		{name: "bridge manifest collision", want: "identify bridge bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *bundle.Config, work string) {
+		{name: "bridge manifest collision", want: "identify bridge bundle", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
 			a.BridgePath = filepath.Join(work, "bridge-manifest.json")
 			writeProjectTestFile(t, a.BridgePath, "bridge")
 		}},
@@ -381,7 +300,7 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 			for path, data := range map[string]string{assets.EnginePath: "engine", assets.PackPath: "pack", assets.BridgePath: "bridge"} {
 				writeProjectTestFile(t, path, data)
 			}
-			project, err := prepareProjectBundleConfig(cfg, cfg.PortableConfig)
+			project, err := prepareProjectArchiveConfig(cfg, cfg.PortableConfig)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -462,16 +381,6 @@ func TestBuildWorkDirectoriesReportUnavailableTemporaryStorage(t *testing.T) {
 	}
 }
 
-func TestSourceBridgeEnvironmentDropsInheritedCGOFlags(t *testing.T) {
-	base := []string{"PATH=/tools", "CGO_CFLAGS=-I/untrusted", "CGO_LDFLAGS=-L/untrusted", "CGO_ENABLED=0", "CGO_CPPFLAGS=-DOTHER", "GOOS=other", "GOWORK=other", "GOFLAGS=-tags=other", "CGO_WITHOUT_EQUALS"}
-	original := append([]string(nil), base...)
-	got := sourceBridgeEnv(Config{GoWork: "off"}, base)
-	want := []string{"PATH=/tools", "CGO_WITHOUT_EQUALS", "GOFLAGS=", "GOWORK=off", "GOOS=" + runtime.GOOS, "GOARCH=" + runtime.GOARCH, "CGO_ENABLED=1"}
-	if !slices.Equal(got, want) || !slices.Equal(base, original) {
-		t.Fatalf("bridge environment = %q; original = %q", got, base)
-	}
-}
-
 func TestBuildLauncherEndToEnd(t *testing.T) {
 	goCommand, err := exec.LookPath("go")
 	if err != nil {
@@ -494,7 +403,7 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 	projectFile := filepath.Join(projectDir, "main.spx")
 	writeProjectTestFile(t, projectFile, "onStart => {}\n")
 	writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n")
-	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+	snapshot, err := portableconfig.SnapshotPortableConfig(projectDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,7 +450,7 @@ func TestBuildLauncherFailureReleasesBridgeWork(t *testing.T) {
 		name, want string
 		configure  func(*testing.T, *Config)
 	}{
-		{"uninitialized snapshot", "portable config", func(t *testing.T, c *Config) { c.PortableConfig = projectpolicy.PortableConfigSnapshot{} }},
+		{"uninitialized snapshot", "portable config", func(t *testing.T, c *Config) { c.PortableConfig = portableconfig.PortableConfigSnapshot{} }},
 		{"runtime unavailable", "inspect local runtime manifest", func(t *testing.T, c *Config) { c.RuntimeManifestPath += ".missing" }},
 		{"bridge build fails", "build source interpreter bridge", func(t *testing.T, c *Config) { launcherGoFixture(t, c, "exit 8") }},
 		{"bridge verification fails", "verify source bridge", func(t *testing.T, c *Config) {

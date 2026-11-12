@@ -27,18 +27,18 @@ type Color struct {
 }
 
 // HSB creates a color from HSB values.
-// h, s, b in range [0, 100], just like Scratch
-func HSB(h, s, b float64) Color {
-	color := mathf.NewColorHSV(h*3.6, s/100, b/100)
+// hue, saturation, brightness are in range [0, 100], just like Scratch
+func HSB(hue, saturation, brightness float64) Color {
+	color := mathf.NewColorHSV(hue*3.6, saturation/100, brightness/100)
 	color.A = 1
 	return toSpxColor(color)
 }
 
 // HSBA creates a color from HSBA values.
-// h, s, b, a in range [0, 100], just like Scratch
-func HSBA(h, s, b, a float64) Color {
-	color := HSB(h, s, b)
-	color.X_3 = a / 100
+// hue, saturation, brightness, alpha are in range [0, 100], just like Scratch
+func HSBA(hue, saturation, brightness, alpha float64) Color {
+	color := HSB(hue, saturation, brightness)
+	color.X_3 = alpha / 100
 	return color
 }
 

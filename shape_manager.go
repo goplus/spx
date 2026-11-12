@@ -21,10 +21,10 @@ import (
 	"slices"
 
 	"github.com/goplus/spx/v4/internal/base"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // Scratch renders the shared pen canvas above the backdrop and below every

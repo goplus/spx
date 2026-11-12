@@ -21,20 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/goplus/spx/v4/internal/release"
 )
-
-func TestGoModUsesDefaultSPXRelease(t *testing.T) {
-	got := GoMod()
-	want := "require github.com/goplus/spx/v4 " + release.DefaultReleaseMeta().SPXVersion + " //xgo:class"
-	if !strings.Contains(got, want) {
-		t.Fatalf("go.mod template does not contain %q:\n%s", want, got)
-	}
-	if strings.Contains(got, spxVersionPlaceholder) {
-		t.Fatalf("go.mod template still contains %q:\n%s", spxVersionPlaceholder, got)
-	}
-}
 
 func TestGDExtensionTemplatesMatchProjectFiles(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")

@@ -18,7 +18,7 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 // -----------------------------------------------------------------------------
@@ -28,12 +28,12 @@ func (p *SpriteImpl) DistanceTo__0(sprite Sprite) float64 {
 	return p.transform().distanceToTarget(sprite)
 }
 
-func (p *SpriteImpl) DistanceTo__1(sprite SpriteName) float64 {
-	return p.transform().distanceToTarget(sprite)
+func (p *SpriteImpl) DistanceTo__1(name SpriteName) float64 {
+	return p.transform().distanceToTarget(name)
 }
 
-func (p *SpriteImpl) DistanceTo__2(target specialObj) float64 {
-	return p.transform().distanceToTarget(target)
+func (p *SpriteImpl) DistanceTo__2(object specialObj) float64 {
+	return p.transform().distanceToTarget(object)
 }
 
 func (p *SpriteImpl) DistanceTo__3(pos Pos) float64 {
@@ -82,33 +82,33 @@ func (p *SpriteImpl) Move__1(step int) {
 	p.Move__0(float64(step))
 }
 
-func (p *SpriteImpl) Step__0(step float64) {
-	p.transform().step(step, 1, "")
+func (p *SpriteImpl) Step__0(distance float64) {
+	p.transform().step(distance, 1, "")
 }
 
-func (p *SpriteImpl) Step__1(step float64, speed float64) {
-	p.transform().step(step, speed, "")
+func (p *SpriteImpl) Step__1(distance float64, speed float64) {
+	p.transform().step(distance, speed, "")
 }
 
-func (p *SpriteImpl) Step__2(step float64, speed float64, animation SpriteAnimationName) {
-	p.transform().step(step, speed, animation)
+func (p *SpriteImpl) Step__2(distance float64, speed float64, animation SpriteAnimationName) {
+	p.transform().step(distance, speed, animation)
 }
 
-func (p *SpriteImpl) StepWith(step float64, __xgo_optional_opts *MotionOptions) {
+func (p *SpriteImpl) StepWith(distance float64, __xgo_optional_opts *MotionOptions) {
 	speed, animation := motionOptions(__xgo_optional_opts)
-	p.transform().step(step, speed, animation)
+	p.transform().step(distance, speed, animation)
 }
 
 func (p *SpriteImpl) StepTo__0(sprite Sprite) {
 	p.transform().stepToTarget(sprite, 1, "")
 }
 
-func (p *SpriteImpl) StepTo__1(sprite SpriteName) {
-	p.transform().stepToTarget(sprite, 1, "")
+func (p *SpriteImpl) StepTo__1(name SpriteName) {
+	p.transform().stepToTarget(name, 1, "")
 }
 
-func (p *SpriteImpl) StepTo__2(target specialObj) {
-	p.transform().stepToTarget(target, 1, "")
+func (p *SpriteImpl) StepTo__2(object specialObj) {
+	p.transform().stepToTarget(object, 1, "")
 }
 
 func (p *SpriteImpl) StepTo__3(x, y float64) {
@@ -119,12 +119,12 @@ func (p *SpriteImpl) StepTo__4(sprite Sprite, speed float64) {
 	p.transform().stepToTarget(sprite, speed, "")
 }
 
-func (p *SpriteImpl) StepTo__5(sprite SpriteName, speed float64) {
-	p.transform().stepToTarget(sprite, speed, "")
+func (p *SpriteImpl) StepTo__5(name SpriteName, speed float64) {
+	p.transform().stepToTarget(name, speed, "")
 }
 
-func (p *SpriteImpl) StepTo__6(target specialObj, speed float64) {
-	p.transform().stepToTarget(target, speed, "")
+func (p *SpriteImpl) StepTo__6(object specialObj, speed float64) {
+	p.transform().stepToTarget(object, speed, "")
 }
 
 func (p *SpriteImpl) StepTo__7(x, y, speed float64) {
@@ -135,12 +135,12 @@ func (p *SpriteImpl) StepTo__8(sprite Sprite, speed float64, animation SpriteAni
 	p.transform().stepToTarget(sprite, speed, animation)
 }
 
-func (p *SpriteImpl) StepTo__9(sprite SpriteName, speed float64, animation SpriteAnimationName) {
-	p.transform().stepToTarget(sprite, speed, animation)
+func (p *SpriteImpl) StepTo__9(name SpriteName, speed float64, animation SpriteAnimationName) {
+	p.transform().stepToTarget(name, speed, animation)
 }
 
-func (p *SpriteImpl) StepTo__a(target specialObj, speed float64, animation SpriteAnimationName) {
-	p.transform().stepToTarget(target, speed, animation)
+func (p *SpriteImpl) StepTo__a(object specialObj, speed float64, animation SpriteAnimationName) {
+	p.transform().stepToTarget(object, speed, animation)
 }
 
 func (p *SpriteImpl) StepTo__b(x, y, speed float64, animation SpriteAnimationName) {
@@ -171,24 +171,24 @@ func (p *SpriteImpl) StepToXYpos(x, y float64, __xgo_optional_opts *MotionOption
 	p.transform().stepToPos(x, y, speed, animation)
 }
 
-func (p *SpriteImpl) Glide__0(sprite Sprite, secs Seconds) {
-	p.transform().glideToTarget(sprite, secs)
+func (p *SpriteImpl) Glide__0(sprite Sprite, seconds Seconds) {
+	p.transform().glideToTarget(sprite, seconds)
 }
 
-func (p *SpriteImpl) Glide__1(sprite SpriteName, secs Seconds) {
-	p.transform().glideToTarget(sprite, secs)
+func (p *SpriteImpl) Glide__1(name SpriteName, seconds Seconds) {
+	p.transform().glideToTarget(name, seconds)
 }
 
-func (p *SpriteImpl) Glide__2(target specialObj, secs Seconds) {
-	p.transform().glideToTarget(target, secs)
+func (p *SpriteImpl) Glide__2(object specialObj, seconds Seconds) {
+	p.transform().glideToTarget(object, seconds)
 }
 
-func (p *SpriteImpl) Glide__3(pos Pos, secs Seconds) {
-	p.transform().glideToTarget(pos, secs)
+func (p *SpriteImpl) Glide__3(pos Pos, seconds Seconds) {
+	p.transform().glideToTarget(pos, seconds)
 }
 
-func (p *SpriteImpl) Glide__4(x, y float64, secs Seconds) {
-	p.transform().glide(x, y, secs)
+func (p *SpriteImpl) Glide__4(x, y float64, seconds Seconds) {
+	p.transform().glide(x, y, seconds)
 }
 
 func (p *SpriteImpl) GlideToTarget(target Target, secs Seconds) {
@@ -203,8 +203,8 @@ func (p *SpriteImpl) SetXYpos(x, y float64) {
 	p.transform().setPosition(x, y)
 }
 
-func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
-	p.transform().changePosition(dx, dy)
+func (p *SpriteImpl) ChangeXYpos(dX, dY float64) {
+	p.transform().changePosition(dX, dY)
 }
 
 func (p *SpriteImpl) Xpos() float64 {
@@ -215,8 +215,8 @@ func (p *SpriteImpl) SetXpos(x float64) {
 	p.transform().setX(x)
 }
 
-func (p *SpriteImpl) ChangeXpos(dx float64) {
-	p.transform().changeX(dx)
+func (p *SpriteImpl) ChangeXpos(dX float64) {
+	p.transform().changeX(dX)
 }
 
 func (p *SpriteImpl) Ypos() float64 {
@@ -227,8 +227,8 @@ func (p *SpriteImpl) SetYpos(y float64) {
 	p.transform().setY(y)
 }
 
-func (p *SpriteImpl) ChangeYpos(dy float64) {
-	p.transform().changeY(dy)
+func (p *SpriteImpl) ChangeYpos(dY float64) {
+	p.transform().changeY(dY)
 }
 
 // -----------------------------------------------------------------------------
@@ -242,69 +242,69 @@ func (p *SpriteImpl) Heading() Direction {
 	return p.transform().direction
 }
 
-func (p *SpriteImpl) Turn__0(dir Direction) {
-	p.transform().turn(dir, 1, "")
+func (p *SpriteImpl) Turn__0(direction Direction) {
+	p.transform().turn(direction, 1, "")
 }
 
-func (p *SpriteImpl) Turn__1(dir Direction, speed float64) {
-	p.transform().turn(dir, speed, "")
+func (p *SpriteImpl) Turn__1(direction Direction, speed float64) {
+	p.transform().turn(direction, speed, "")
 }
 
-func (p *SpriteImpl) Turn__2(dir Direction, speed float64, animation SpriteAnimationName) {
-	p.transform().turn(dir, speed, animation)
+func (p *SpriteImpl) Turn__2(direction Direction, speed float64, animation SpriteAnimationName) {
+	p.transform().turn(direction, speed, animation)
 }
 
-func (p *SpriteImpl) TurnWith(dir Direction, __xgo_optional_opts *MotionOptions) {
+func (p *SpriteImpl) TurnWith(direction Direction, __xgo_optional_opts *MotionOptions) {
 	speed, animation := motionOptions(__xgo_optional_opts)
-	p.transform().turn(dir, speed, animation)
+	p.transform().turn(direction, speed, animation)
 }
 
-func (p *SpriteImpl) TurnTo__0(target Sprite) {
-	p.transform().turnTo(target, 1, "")
+func (p *SpriteImpl) TurnTo__0(sprite Sprite) {
+	p.transform().turnTo(sprite, 1, "")
 }
 
-func (p *SpriteImpl) TurnTo__1(target SpriteName) {
-	p.transform().turnTo(target, 1, "")
+func (p *SpriteImpl) TurnTo__1(name SpriteName) {
+	p.transform().turnTo(name, 1, "")
 }
 
-func (p *SpriteImpl) TurnTo__2(dir Direction) {
-	p.transform().turnTo(dir, 1, "")
+func (p *SpriteImpl) TurnTo__2(direction Direction) {
+	p.transform().turnTo(direction, 1, "")
 }
 
-func (p *SpriteImpl) TurnTo__3(target specialObj) {
-	p.transform().turnTo(target, 1, "")
+func (p *SpriteImpl) TurnTo__3(object specialObj) {
+	p.transform().turnTo(object, 1, "")
 }
 
-func (p *SpriteImpl) TurnTo__4(target Sprite, speed float64) {
-	p.transform().turnTo(target, speed, "")
+func (p *SpriteImpl) TurnTo__4(sprite Sprite, speed float64) {
+	p.transform().turnTo(sprite, speed, "")
 }
 
-func (p *SpriteImpl) TurnTo__5(target SpriteName, speed float64) {
-	p.transform().turnTo(target, speed, "")
+func (p *SpriteImpl) TurnTo__5(name SpriteName, speed float64) {
+	p.transform().turnTo(name, speed, "")
 }
 
-func (p *SpriteImpl) TurnTo__6(dir Direction, speed float64) {
-	p.transform().turnTo(dir, speed, "")
+func (p *SpriteImpl) TurnTo__6(direction Direction, speed float64) {
+	p.transform().turnTo(direction, speed, "")
 }
 
-func (p *SpriteImpl) TurnTo__7(target specialObj, speed float64) {
-	p.transform().turnTo(target, speed, "")
+func (p *SpriteImpl) TurnTo__7(object specialObj, speed float64) {
+	p.transform().turnTo(object, speed, "")
 }
 
-func (p *SpriteImpl) TurnTo__8(target Sprite, speed float64, animation SpriteAnimationName) {
-	p.transform().turnTo(target, speed, animation)
+func (p *SpriteImpl) TurnTo__8(sprite Sprite, speed float64, animation SpriteAnimationName) {
+	p.transform().turnTo(sprite, speed, animation)
 }
 
-func (p *SpriteImpl) TurnTo__9(target SpriteName, speed float64, animation SpriteAnimationName) {
-	p.transform().turnTo(target, speed, animation)
+func (p *SpriteImpl) TurnTo__9(name SpriteName, speed float64, animation SpriteAnimationName) {
+	p.transform().turnTo(name, speed, animation)
 }
 
-func (p *SpriteImpl) TurnTo__a(dir Direction, speed float64, animation SpriteAnimationName) {
-	p.transform().turnTo(dir, speed, animation)
+func (p *SpriteImpl) TurnTo__a(direction Direction, speed float64, animation SpriteAnimationName) {
+	p.transform().turnTo(direction, speed, animation)
 }
 
-func (p *SpriteImpl) TurnTo__b(target specialObj, speed float64, animation SpriteAnimationName) {
-	p.transform().turnTo(target, speed, animation)
+func (p *SpriteImpl) TurnTo__b(object specialObj, speed float64, animation SpriteAnimationName) {
+	p.transform().turnTo(object, speed, animation)
 }
 
 func (p *SpriteImpl) TurnToDir(dir Direction, __xgo_optional_opts *MotionOptions) {
@@ -322,12 +322,12 @@ func (p *SpriteImpl) TurnToXYpos(x, y float64, __xgo_optional_opts *MotionOption
 	p.transform().turnToPos(x, y, speed, animation)
 }
 
-func (p *SpriteImpl) SetHeading(dir Direction) {
-	p.transform().setHeading(dir)
+func (p *SpriteImpl) SetHeading(direction Direction) {
+	p.transform().setHeading(direction)
 }
 
-func (p *SpriteImpl) ChangeHeading(dir Direction) {
-	p.transform().changeHeading(dir)
+func (p *SpriteImpl) ChangeHeading(degree Direction) {
+	p.transform().changeHeading(degree)
 }
 
 func (p *SpriteImpl) BounceOffEdge() {
@@ -345,8 +345,8 @@ func (p *SpriteImpl) SetSize(size float64) {
 	p.transform().setSize(size)
 }
 
-func (p *SpriteImpl) ChangeSize(delta float64) {
-	p.transform().changeSize(delta)
+func (p *SpriteImpl) ChangeSize(dSize float64) {
+	p.transform().changeSize(dSize)
 }
 
 // -----------------------------------------------------------------------------

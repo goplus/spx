@@ -25,7 +25,7 @@ import (
 	"syscall"
 
 	spxfs "github.com/goplus/spx/v4/fs"
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 type OpenedBuilderResources struct {

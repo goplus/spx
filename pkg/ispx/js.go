@@ -25,7 +25,7 @@ import (
 	_ "unsafe"
 
 	"github.com/goplus/spx/v4"
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 // JavaScript built-in types.

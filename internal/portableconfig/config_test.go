@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package projectpolicy
+package portableconfig
 
 import (
 	"crypto/sha256"
