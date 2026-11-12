@@ -27,7 +27,9 @@ make doctor
 
 # Discover and run repository demos.
 make list-demos
-make run DEMO_INDEX=1
+make runnative DEMO_INDEX=1
+# Or run the Web target.
+make runweb DEMO_INDEX=1
 ```
 
 Use `make help` for the supported entry points. To build the editor and all
@@ -37,8 +39,8 @@ runtime assets from local Godot source instead of downloading them:
 GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
 ```
 
-To run an existing game directly, change to its root directory and run
-`xgo run .`.
+To run an existing game locally, use `spx runnative --path /path/to/game`.
+For the Web target, use `spx runweb --path /path/to/game`.
 
 ## Project authoring skill
 
@@ -194,7 +196,7 @@ var (
 )
 ```
 
-`gid` is the only variable declared in this file. It starts at zero and supplies IDs for cloned `Calf` sprites. The `Arrow` and `Calf` sprites have their own `.spx` files and are listed in [assets/index.json](tutorial/03-Clone/assets/index.json). This project does not need explicit sprite declarations or a `run` call in `main.spx`; run it with `xgo run .` from `tutorial/03-Clone`.
+`gid` is the only variable declared in this file. It starts at zero and supplies IDs for cloned `Calf` sprites. The `Arrow` and `Calf` sprites have their own `.spx` files and are listed in [assets/index.json](tutorial/03-Clone/assets/index.json). This project does not need explicit sprite declarations or a `run` call in `main.spx`; run it locally with `spx runnative --path tutorial/03-Clone` or on the Web with `spx runweb --path tutorial/03-Clone`, from the repository root.
 
 Let's back to [Calf.spx](tutorial/03-Clone/Calf.spx) to see the full codes of `onCloned`:
 

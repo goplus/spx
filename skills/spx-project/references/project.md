@@ -64,12 +64,23 @@ For local development against a checkout, add a Go module `replace` for
 `github.com/goplus/spx/v4` pointing to that checkout. Do not run `spx init` over
 an existing game: it writes starter scripts and assets.
 
-With the matching toolchain and runtime installed, run a repository tutorial:
+With the matching toolchain and runtime installed, run a tutorial locally
+from the repository root:
 
 ```sh
-cd tutorial/03-Clone
-xgo run .
+spx runnative --path tutorial/03-Clone
 ```
+
+For the Web target:
+
+```sh
+spx runweb --path tutorial/03-Clone
+```
+
+For a standalone game, replace the `--path` value with its project directory.
+Although `.spx` uses XGo syntax, `xgo run .` is not currently supported for
+running these projects. Native and Web runs need their corresponding runtime
+and build dependencies; a successful compile alone does not verify either.
 
 The repository's `TestProjectTutorials` compiles all three examples through
 `pkg/ispx` without starting Godot. It does not validate graphics, audio, or

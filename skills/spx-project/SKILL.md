@@ -70,7 +70,8 @@ an API or silently using a different version.
 
 ## Finish
 
-Compile through the project's supported XGo or SPX interpreter workflow, then
-run the smallest gameplay check that exercises the change. Distinguish syntax
-and type checking from asset loading and visual behavior. Report changed
+Check syntax and types through the project's build or SPX interpreter checks.
+Run local gameplay with `spx runnative` and Web gameplay with `spx runweb`,
+using the `--path` examples in [project guidance](references/project.md).
+Distinguish compilation from asset loading and visual behavior. Report changed
 files, checks performed, and any runtime checks that were unavailable.
