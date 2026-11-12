@@ -18,3 +18,19 @@ godot --headless --path /path/to/project \
 ```
 
 The exporter writes SPX TileMap and decorator data under `res://_export`.
+It also provides a Python wrapper with scene selection and addon copying, plus
+TileMap PNG previews through the CLI and the editor's Ctrl+Shift+E shortcut.
+
+See the [exporter guide](addons/spx_tilemap_exporter/README.md) or
+[中文说明](addons/spx_tilemap_exporter/README.zh.md) for installation and usage.
+These features are ported from goplus/godot [#243](https://github.com/goplus/godot/pull/243)
+and [#244](https://github.com/goplus/godot/pull/244).
+
+Run exporter tests with a Godot editor executable:
+
+```sh
+GODOT_BIN=/path/to/godot python3 -m unittest discover -s tools/godot/tests -v
+```
+
+With a rendering display available, set `SPX_TEST_PREVIEW=1` as well to verify
+the exported PNG's dimensions, tile pixels and transparent background.
