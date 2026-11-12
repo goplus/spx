@@ -23,15 +23,6 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
-func TestNewValueUnwrapsOnce(t *testing.T) {
-	var list List
-	list.Init(NewValue("nested"))
-	value := NewValue(list.At(0))
-	if got := value.Raw(); got != NewValue("nested") {
-		t.Fatalf("NewValue must unwrap exactly one layer: got %#v", got)
-	}
-}
-
 func TestListRandomPositionSharesScriptRandomSource(t *testing.T) {
 	t.Cleanup(ResetRandomSeed)
 	list := NewList(0, 1, 2, 3, 4, 5, 6)

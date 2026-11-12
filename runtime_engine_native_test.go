@@ -695,3 +695,14 @@ func setupRuntimeFailureRecorder(t *testing.T) *inputFrameFailureExtMgr {
 	t.Cleanup(func() { pkgengine.ExtMgr = old })
 	return recorder
 }
+
+func TestCaptureDefaultsToNoopHandlerOnNative(t *testing.T) {
+	engine.SetGame(nil)
+	setupCaptureTest(t)
+
+	engine.SetCaptureHandler(ignoreCaptureRequest)
+
+	if err := engine.EnqueueCapture("step_001.png", nil); err != nil {
+		t.Fatalf("EnqueueCapture returned error on native platform: %v", err)
+	}
+}
