@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/collision"
 	"github.com/goplus/spx/v4/internal/engine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 type pendingCloneSensingVisibilityLease struct {

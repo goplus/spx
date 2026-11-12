@@ -23,92 +23,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v4/internal/launchpack/bundle"
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/launchpack/projectarchive"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
-func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, streams IO) (string, func(), error) {
-	if err := cfg.validateGraphInputs(); err != nil {
-		return "", nil, err
-	}
-	if err := cfg.verifyGraph(ctx, "before source bridge build"); err != nil {
-		return "", nil, err
-	}
-	if cfg.BridgePackage == "" {
-		return "", nil, fmt.Errorf("launchpack: bridge package is required")
-	}
-	workDir, err := os.MkdirTemp("", "spx-launchpack-bridge-")
-	if err != nil {
-		return "", nil, fmt.Errorf("launchpack: create source bridge work directory: %w", err)
-	}
-	keepWork := hasBuildFlag(cfg.BuildFlags, "work")
-	cleanup := func() { _ = os.RemoveAll(workDir) }
-	if keepWork {
-		cleanup = func() {}
-		if streams.Stderr != nil {
-			_, _ = fmt.Fprintf(streams.Stderr, "SPXBRIDGEWORK=%s\n", workDir)
-		}
-	}
-	bridgePath := filepath.Join(workDir, bridgeName)
-	args := sourceBridgeBuildArgs(cfg, bridgePath)
-	command := exec.CommandContext(ctx, cfg.GoCommand, args...)
-	command.Dir = cfg.WorkDir
-	command.Env = sourceBridgeEnv(cfg, streams.Env)
-	command.Stdin = streams.Stdin
-	command.Stdout = streams.Stdout
-	command.Stderr = streams.Stderr
-	if err := command.Run(); err != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("launchpack: build source interpreter bridge: %w", err)
-	}
-	if err := cfg.verifyGraph(ctx, "after source bridge build"); err != nil {
-		cleanup()
-		return "", nil, err
-	}
-	if err := validatePinnedFile("source interpreter bridge", bridgePath); err != nil {
-		cleanup()
-		return "", nil, err
-	}
-	return bridgePath, cleanup, nil
-}
-
-func sourceBridgeBuildArgs(cfg Config, bridgePath string) []string {
-	return sourceBridgeBuildArgsForGOOS(cfg, bridgePath, runtime.GOOS)
-}
-
-func sourceBridgeBuildArgsForGOOS(cfg Config, bridgePath, goos string) []string {
-	args := append([]string{"build"}, cfg.GraphFlags...)
-	args = append(args, normalizedGoBuildFlags(cfg.BuildFlags)...)
-	args = append(args, "-buildmode=c-shared")
-	if goos == "windows" {
-		args = append(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
-	}
-	return append(args, "-o", bridgePath, cfg.BridgePackage)
-}
-
-func bridgeFileName(goos, goarch string) (string, error) {
-	extension := ""
-	switch goos {
-	case "darwin":
-		extension = ".dylib"
-	case "linux":
-		extension = ".so"
-	case "windows":
-		extension = ".dll"
-	default:
-		return "", fmt.Errorf("launchpack: host platform %s/%s is not supported", goos, goarch)
-	}
-	return "gdspx-" + goos + "-" + goarch + extension, nil
-}
-
-func buildLauncher(ctx context.Context, cfg Config, assets Assets, configSnapshot projectpolicy.PortableConfigSnapshot, streams IO) (string, string, error) {
-	projectConfig, err := prepareProjectBundleConfig(cfg, configSnapshot)
+func buildLauncher(ctx context.Context, cfg Config, assets Assets, configSnapshot portableconfig.PortableConfigSnapshot, streams IO) (string, string, error) {
+	projectConfig, err := prepareProjectArchiveConfig(cfg, configSnapshot)
 	if err != nil {
 		return "", "", err
 	}
@@ -121,7 +46,7 @@ func buildLauncher(ctx context.Context, cfg Config, assets Assets, configSnapsho
 	return payloadDigest, manifestDigest, err
 }
 
-func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Assets, projectConfig bundle.Config, streams IO) (payloadDigest, manifestDigest string, err error) {
+func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Assets, projectConfig projectarchive.Config, streams IO) (payloadDigest, manifestDigest string, err error) {
 	projectPath := filepath.Join(workDir, "project.zip")
 	projectFile, err := os.OpenFile(projectPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -132,7 +57,7 @@ func writeLauncherPayload(workDir string, dst io.Writer, cfg Config, assets Asse
 			payloadDigest, manifestDigest, err = "", "", fmt.Errorf("launchpack: close project archive: %w", closeErr)
 		}
 	}()
-	projectDigest, err := bundle.WriteArchive(projectFile, projectConfig)
+	projectDigest, err := projectarchive.WriteArchive(projectFile, projectConfig)
 	if err != nil {
 		return "", "", fmt.Errorf("launchpack: collect project: %w", err)
 	}

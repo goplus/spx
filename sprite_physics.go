@@ -22,8 +22,8 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/engine"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 const minCircleRadius = 0.01

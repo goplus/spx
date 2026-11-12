@@ -26,8 +26,8 @@ import (
 	"text/template"
 
 	"github.com/goplus/spx/v4/internal/base/licenseheader"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 var codegenLogger = spxlog.NewWithOutputs("SPX-CODEGEN", spxlog.LevelInfo, os.Stdout, os.Stderr)

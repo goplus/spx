@@ -19,7 +19,7 @@ package spx
 import (
 	"github.com/goplus/spx/v4/internal/engine/ui"
 
-	spxlog "github.com/goplus/spx/v4/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 )
 
 // ============================================================================

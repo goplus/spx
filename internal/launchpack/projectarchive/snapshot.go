@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"crypto/sha256"
@@ -33,13 +33,13 @@ const (
 
 var (
 	// ErrInvalidPath reports an absolute, traversing, or non-canonical member path.
-	ErrInvalidPath = errors.New("projectbundle: invalid relative path")
+	ErrInvalidPath = errors.New("projectarchive: invalid relative path")
 	// ErrUnsafeFile reports a symlink, non-regular file, or file changed while read.
-	ErrUnsafeFile = errors.New("projectbundle: unsafe file")
+	ErrUnsafeFile = errors.New("projectarchive: unsafe file")
 	// ErrCollision reports duplicate, Unicode-canonical, or case-folded entry names.
-	ErrCollision = errors.New("projectbundle: entry name collision")
+	ErrCollision = errors.New("projectarchive: entry name collision")
 	// ErrLimit reports an entry-count or byte-size limit violation.
-	ErrLimit = errors.New("projectbundle: limit exceeded")
+	ErrLimit = errors.New("projectarchive: limit exceeded")
 )
 
 // Config defines the complete allowlist and limits for one project archive.
@@ -71,13 +71,13 @@ type collectedEntry struct {
 	data []byte
 }
 
-// bundle is an immutable in-memory snapshot of collected source files.
-type bundle struct {
+// snapshot is an immutable in-memory snapshot of collected source files.
+type snapshot struct {
 	entries []collectedEntry
 	limits  resolvedLimits
 }
 
-func collect(cfg Config) (*bundle, error) {
+func collect(cfg Config) (*snapshot, error) {
 	limits, err := resolveLimits(cfg.Limits)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func collect(cfg Config) (*bundle, error) {
 
 	projectRootObservation, err := observeRoot(cfg.ProjectDir)
 	if err != nil {
-		return nil, fmt.Errorf("projectbundle: observe ProjectDir: %w", err)
+		return nil, fmt.Errorf("projectarchive: observe ProjectDir: %w", err)
 	}
 	projectDir := projectRootObservation.path
 
@@ -117,7 +117,7 @@ func collect(cfg Config) (*bundle, error) {
 
 	projectRoot, err := openSafeRoot(projectDir, projectRootObservation.info)
 	if err != nil {
-		return nil, fmt.Errorf("projectbundle: open ProjectDir %q: %w", projectDir, err)
+		return nil, fmt.Errorf("projectarchive: open ProjectDir %q: %w", projectDir, err)
 	}
 	defer projectRoot.Close()
 
@@ -140,18 +140,18 @@ func collect(cfg Config) (*bundle, error) {
 	if packDir != "" {
 		root, err := projectRoot.OpenDir(filepath.FromSlash(packDir))
 		if err != nil {
-			return nil, fmt.Errorf("projectbundle: open PackDir %q: %w", packDir, err)
+			return nil, fmt.Errorf("projectarchive: open PackDir %q: %w", packDir, err)
 		}
 		if err := collector.addTree(root, packDir); err != nil {
 			root.Close()
 			return nil, err
 		}
 		if err := root.Close(); err != nil {
-			return nil, fmt.Errorf("projectbundle: close PackDir %q: %w", packDir, err)
+			return nil, fmt.Errorf("projectarchive: close PackDir %q: %w", packDir, err)
 		}
 	}
 	sort.Slice(collector.entries, func(i, j int) bool {
 		return collector.entries[i].name < collector.entries[j].name
 	})
-	return &bundle{entries: collector.entries, limits: limits}, nil
+	return &snapshot{entries: collector.entries, limits: limits}, nil
 }

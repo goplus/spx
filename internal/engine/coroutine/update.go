@@ -19,8 +19,8 @@ package coroutine
 import (
 	"time"
 
+	"github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
-	"github.com/goplus/spx/v4/internal/log"
 )
 
 type waitKind int

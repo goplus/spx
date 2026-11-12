@@ -21,8 +21,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v4/internal/interpruntime"
-	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/interpsession"
+	"github.com/goplus/spx/v4/internal/portableconfig"
 )
 
 type portableConfigOverlay struct {
@@ -30,8 +30,8 @@ type portableConfigOverlay struct {
 	data    []byte
 }
 
-func loadPortableConfigOverlay(env []string, roots interpruntime.Roots) (*portableConfigOverlay, error) {
-	configDir, expectedIdentity, found, err := interpruntime.PortableConfigFromEnv(env)
+func loadPortableConfigOverlay(env []string, roots interpsession.Roots) (*portableConfigOverlay, error) {
+	configDir, expectedIdentity, found, err := interpsession.PortableConfigFromEnv(env)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func loadPortableConfigOverlay(env []string, roots interpruntime.Roots) (*portab
 		return nil, err
 	}
 	defer configRoot.Close()
-	snapshot, err := projectpolicy.SnapshotPortableConfigRoot(configRoot)
+	snapshot, err := portableconfig.SnapshotPortableConfigRoot(configRoot)
 	if err != nil {
 		return nil, fmt.Errorf("ispxnative: load portable config snapshot: %w", err)
 	}

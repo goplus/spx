@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package projectpolicy contains validation for portable SPX projects.
-package projectpolicy
+// Package portableconfig validates and snapshots .config files for portable SPX projects.
+package portableconfig
 
 import (
 	"bytes"

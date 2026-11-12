@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func (c *collector) addFile(root *safeDir, sourcePath, archiveName string) error
 
 	file, err := root.OpenFile(filepath.FromSlash(sourcePath))
 	if err != nil {
-		return fmt.Errorf("projectbundle: open source %q: %w", sourcePath, err)
+		return fmt.Errorf("projectarchive: open source %q: %w", sourcePath, err)
 	}
 	defer file.Close()
 
@@ -90,7 +90,7 @@ func (c *collector) appendEntry(name string, data []byte, clone bool) error {
 func (c *collector) addTree(root *safeDir, prefix string) error {
 	entries, err := root.ReadDir()
 	if err != nil {
-		return fmt.Errorf("projectbundle: read PackDir %q: %w", prefix, err)
+		return fmt.Errorf("projectarchive: read PackDir %q: %w", prefix, err)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	for _, entry := range entries {
@@ -104,7 +104,7 @@ func (c *collector) addTree(root *safeDir, prefix string) error {
 		if entry.IsDir() {
 			child, err := root.OpenDir(entry.Name())
 			if err != nil {
-				return fmt.Errorf("projectbundle: open PackDir directory %q: %w", name, err)
+				return fmt.Errorf("projectarchive: open PackDir directory %q: %w", name, err)
 			}
 			err = c.addTree(child, name)
 			closeErr := child.Close()
@@ -112,7 +112,7 @@ func (c *collector) addTree(root *safeDir, prefix string) error {
 				return err
 			}
 			if closeErr != nil {
-				return fmt.Errorf("projectbundle: close PackDir directory %q: %w", name, closeErr)
+				return fmt.Errorf("projectarchive: close PackDir directory %q: %w", name, closeErr)
 			}
 			continue
 		}

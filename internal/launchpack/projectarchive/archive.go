@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bundle
+package projectarchive
 
 import (
 	"archive/zip"
@@ -36,11 +36,11 @@ type archiveLimitWriter struct {
 
 // WriteArchive collects cfg and writes its canonical ZIP to w.
 func WriteArchive(w io.Writer, cfg Config) (Digest, error) {
-	bundle, err := collect(cfg)
+	snapshot, err := collect(cfg)
 	if err != nil {
 		return Digest{}, err
 	}
-	return bundle.writeZIP(w)
+	return snapshot.writeZIP(w)
 }
 
 // String returns the lowercase hexadecimal SHA-256.
@@ -61,37 +61,37 @@ func (w *archiveLimitWriter) Write(data []byte) (int, error) {
 }
 
 // writeZIP writes the canonical ZIP to w. It does not close w.
-func (b *bundle) writeZIP(w io.Writer) (Digest, error) {
-	if b == nil {
-		return Digest{}, errors.New("projectbundle: nil bundle")
+func (s *snapshot) writeZIP(w io.Writer) (Digest, error) {
+	if s == nil {
+		return Digest{}, errors.New("projectarchive: nil snapshot")
 	}
 	if w == nil {
-		return Digest{}, errors.New("projectbundle: nil writer")
+		return Digest{}, errors.New("projectarchive: nil writer")
 	}
 
 	hasher := sha256.New()
-	limited := &archiveLimitWriter{writer: w, remaining: b.limits.maxArchiveBytes}
+	limited := &archiveLimitWriter{writer: w, remaining: s.limits.maxArchiveBytes}
 	writer := zip.NewWriter(io.MultiWriter(limited, hasher))
 	writer.RegisterCompressor(zip.Deflate, func(w io.Writer) (io.WriteCloser, error) {
 		return flate.NewWriter(w, flate.BestCompression)
 	})
 
-	for _, entry := range b.entries {
+	for _, entry := range s.entries {
 		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate}
 		header.Modified = canonicalZipTime.UTC()
 		header.SetMode(0o644)
 		output, err := writer.CreateHeader(header)
 		if err != nil {
 			_ = writer.Close()
-			return Digest{}, fmt.Errorf("projectbundle: create ZIP entry %q: %w", entry.name, err)
+			return Digest{}, fmt.Errorf("projectarchive: create ZIP entry %q: %w", entry.name, err)
 		}
 		if _, err := output.Write(entry.data); err != nil {
 			_ = writer.Close()
-			return Digest{}, fmt.Errorf("projectbundle: write ZIP entry %q: %w", entry.name, err)
+			return Digest{}, fmt.Errorf("projectarchive: write ZIP entry %q: %w", entry.name, err)
 		}
 	}
 	if err := writer.Close(); err != nil {
-		return Digest{}, fmt.Errorf("projectbundle: close ZIP: %w", err)
+		return Digest{}, fmt.Errorf("projectarchive: close ZIP: %w", err)
 	}
 
 	var digest Digest
