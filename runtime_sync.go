@@ -285,46 +285,6 @@ func (p *SpriteImpl) submitProxyForQueryOnMainThread() {
 	commitProxyChange(snapshot.change)
 }
 
-// Color queries sample every native scene sprite, so synchronize all queued
-// proxy changes before querying.
-func (p *Game) syncSpriteProxiesForQuery(owner *SpriteImpl) {
-	if len(p.shapeMgr.dirtySprites) == 0 &&
-		(owner == nil || !owner.needsQueryProxyUpdate()) {
-		return
-	}
-	engine.WaitMainThread(func() {
-		sprites := make([]*SpriteImpl, 0, len(p.shapeMgr.dirtySprites)+1)
-		seen := make(map[*SpriteImpl]struct{}, cap(sprites))
-		appendPending := func() {
-			for _, sprite := range p.shapeMgr.dirtySprites {
-				if _, ok := seen[sprite]; ok {
-					continue
-				}
-				seen[sprite] = struct{}{}
-				sprites = append(sprites, sprite)
-			}
-			if owner != nil && owner.needsQueryProxyUpdate() {
-				if _, ok := seen[owner]; !ok {
-					seen[owner] = struct{}{}
-					sprites = append(sprites, owner)
-				}
-			}
-		}
-
-		appendPending()
-		// Resource writes may synchronously dirty more sprites. Each sprite is
-		// prepared once, so the worklist remains bounded.
-		for i := 0; i < len(sprites); i++ {
-			sprites[i].prepareProxyForQueryOnMainThread()
-			appendPending()
-		}
-		// Capture transforms only after resource callbacks have completed.
-		for _, sprite := range sprites {
-			sprite.submitProxyForQueryOnMainThread()
-		}
-	})
-}
-
 func (p *SpriteImpl) prepareProxyUpdate() {
 	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
 		return
@@ -413,6 +373,46 @@ func (p *SpriteImpl) captureProxyVisual() preparedProxyVisual {
 // -----------------------------------------------------------------------------
 // Frame Sync
 // -----------------------------------------------------------------------------
+// Color queries sample every native scene sprite, so synchronize all queued
+// proxy changes before querying.
+func (p *Game) syncSpriteProxiesForQuery(owner *SpriteImpl) {
+	if len(p.shapeMgr.dirtySprites) == 0 &&
+		(owner == nil || !owner.needsQueryProxyUpdate()) {
+		return
+	}
+	engine.WaitMainThread(func() {
+		sprites := make([]*SpriteImpl, 0, len(p.shapeMgr.dirtySprites)+1)
+		seen := make(map[*SpriteImpl]struct{}, cap(sprites))
+		appendPending := func() {
+			for _, sprite := range p.shapeMgr.dirtySprites {
+				if _, ok := seen[sprite]; ok {
+					continue
+				}
+				seen[sprite] = struct{}{}
+				sprites = append(sprites, sprite)
+			}
+			if owner != nil && owner.needsQueryProxyUpdate() {
+				if _, ok := seen[owner]; !ok {
+					seen[owner] = struct{}{}
+					sprites = append(sprites, owner)
+				}
+			}
+		}
+
+		appendPending()
+		// Resource writes may synchronously dirty more sprites. Each sprite is
+		// prepared once, so the worklist remains bounded.
+		for i := 0; i < len(sprites); i++ {
+			sprites[i].prepareProxyForQueryOnMainThread()
+			appendPending()
+		}
+		// Capture transforms only after resource callbacks have completed.
+		for _, sprite := range sprites {
+			sprite.submitProxyForQueryOnMainThread()
+		}
+	})
+}
+
 func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
 	batch := proxyBatch{changes: p.shapeMgr.proxyChangeBuffer}
 	p.shapeMgr.proxyChangeBuffer = nil
@@ -459,23 +459,28 @@ func (p *Game) pullPhysicsPositions() {
 
 func (p *Game) processPhysicsTriggers() {
 	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents)
-	p.dispatchPhysicsTriggers()
+	p.dispatchTouchEvents()
 }
 
-// dispatchPhysicsTriggers keeps the batch intact if a touch dispatch panics.
-func (p *Game) dispatchPhysicsTriggers() {
+// dispatchTouchEvents keeps the batch intact if a touch dispatch panics.
+func (p *Game) dispatchTouchEvents() {
 	for _, pair := range p.triggerEvents {
 		if pair.Src == nil || pair.Dst == nil {
-			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
+			spxlog.Info("Touch event skipped: missing sprite proxy")
 			continue
 		}
 		src, ok1 := pair.Src.Target.(*SpriteImpl)
 		dst, ok2 := pair.Dst.Target.(*SpriteImpl)
 		if !ok1 || !ok2 {
-			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
+			spxlog.Info("Touch event skipped: invalid sprite target type")
 			continue
 		}
-		if !isSpriteTouchable(src) || !isSpriteTouchable(dst) {
+		if !src.isTouchable() || !dst.isTouchable() || dst.isDragging() {
+			continue
+		}
+		// Ignore queued shape events after geometry was removed, including
+		// residual native shapes explicitly re-enabled by the project.
+		if p.touchByShape && (!src.hasTouchShape() || !dst.hasTouchShape()) {
 			continue
 		}
 		src.doWhenTouchStart(dst)
@@ -570,8 +575,4 @@ func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
 		}
 		sprite.mergeEnginePosition(x, y)
 	}
-}
-
-func isSpriteTouchable(sprite *SpriteImpl) bool {
-	return sprite.spriteState.isVisible && !sprite.spriteState.isDying
 }

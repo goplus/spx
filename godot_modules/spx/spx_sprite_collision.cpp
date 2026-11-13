@@ -29,7 +29,6 @@
 /**************************************************************************/
 
 #include "spx_sprite.h"
-#include "spx_abi.h"
 
 #include "scene/2d/physics/area_2d.h"
 #include "scene/2d/physics/collision_shape_2d.h"
@@ -38,10 +37,10 @@
 #include "scene/resources/2d/convex_polygon_shape_2d.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
 
-#include <cstdint>
-
 #include "spx_abi.h"
 #include "spx_coordinate.h"
+
+#include <cstdint>
 
 namespace {
 
@@ -79,6 +78,12 @@ bool is_valid_collision_bits(GdInt p_value) {
 
 } // namespace
 
+void SpxSprite::on_set_visible(GdBool p_visible) {
+	(void)p_visible;
+	_update_collider_disabled_state();
+	_update_trigger_disabled_state();
+}
+
 void SpxSprite::set_trigger_layer(GdInt p_layer) {
 	ERR_FAIL_NULL_MSG(area2d, "SpxSprite: Area2D component is missing.");
 	ERR_FAIL_COND_MSG(!is_valid_collision_bits(p_layer), "SpxSprite: trigger layer must fit in 32 bits.");
@@ -101,16 +106,16 @@ GdInt SpxSprite::get_trigger_mask() {
 	return static_cast<GdInt>(area2d->get_collision_mask());
 }
 
+void SpxSprite::clear_collider_shape(GdBool p_is_trigger) {
+	if (CollisionShape2D *shape = get_collider(p_is_trigger)) {
+		shape->set_shape(Ref<Shape2D>());
+	}
+}
+
 void SpxSprite::set_collider_rect(GdVec2 p_center, GdVec2 p_size) {
 	Ref<RectangleShape2D> rect = memnew(RectangleShape2D);
 	rect->set_size(p_size);
 	apply_shape(collider2d, rect, p_center);
-}
-
-void SpxSprite::on_set_visible(GdBool p_visible) {
-	(void)p_visible;
-	_update_collider_disabled_state();
-	_update_trigger_disabled_state();
 }
 
 void SpxSprite::set_collider_circle(GdVec2 p_center, GdFloat p_radius) {
@@ -147,13 +152,6 @@ GdBool SpxSprite::is_collision_enabled() {
 	return _is_collision_enabled;
 }
 
-void SpxSprite::set_trigger_capsule(GdVec2 p_center, GdVec2 p_size) {
-	Ref<CapsuleShape2D> capsule = memnew(CapsuleShape2D);
-	capsule->set_radius(p_size.x / 2);
-	capsule->set_height(p_size.y);
-	apply_shape(trigger2d, capsule, p_center);
-}
-
 void SpxSprite::set_trigger_rect(GdVec2 p_center, GdVec2 p_size) {
 	Ref<RectangleShape2D> rect = memnew(RectangleShape2D);
 	rect->set_size(p_size);
@@ -164,6 +162,13 @@ void SpxSprite::set_trigger_circle(GdVec2 p_center, GdFloat p_radius) {
 	Ref<CircleShape2D> circle = memnew(CircleShape2D);
 	circle->set_radius(p_radius);
 	apply_shape(trigger2d, circle, p_center);
+}
+
+void SpxSprite::set_trigger_capsule(GdVec2 p_center, GdVec2 p_size) {
+	Ref<CapsuleShape2D> capsule = memnew(CapsuleShape2D);
+	capsule->set_radius(p_size.x / 2);
+	capsule->set_height(p_size.y);
+	apply_shape(trigger2d, capsule, p_center);
 }
 
 void SpxSprite::set_trigger_polygon(GdVec2 p_center, GdArray p_points) {

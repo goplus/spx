@@ -74,7 +74,7 @@ func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 	}
 	return DisplaySettings{
 		WindowScale: windowScale,
-		StretchMode: proj.StretchMode == nil || *proj.StretchMode,
+		StretchMode: base.OrDefault(proj.StretchMode, true),
 		Debug:       proj.Debug,
 	}
 }
@@ -97,6 +97,10 @@ func ResolveWorldWindowMetrics(worldWidth, worldHeight, windowWidth, windowHeigh
 		WindowWidth:  min(windowWidth, worldWidth),
 		WindowHeight: min(windowHeight, worldHeight),
 	}
+}
+
+func IsWindowWorldSizeEqual(worldWidth, worldHeight, windowWidth, windowHeight int) bool {
+	return worldHeight == windowHeight && worldWidth == windowWidth
 }
 
 func ResolvePlatformLayout(in PlatformLayoutInput) PlatformLayout {
@@ -122,10 +126,6 @@ func ResolvePlatformLayout(in PlatformLayoutInput) PlatformLayout {
 		layout.WindowHeight = int64(in.CurrentWindowSize.Y)
 	}
 	return layout
-}
-
-func IsWindowWorldSizeEqual(worldWidth, worldHeight, windowWidth, windowHeight int) bool {
-	return worldHeight == windowHeight && worldWidth == windowWidth
 }
 
 func ResolveBackdropLayout(imgW, imgH, dstW, dstH float64, mapMode int) BackdropLayout {

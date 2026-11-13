@@ -221,7 +221,7 @@ func (p *physicsComponent) setColliderShape(isTrigger bool, ctype ColliderShapeT
 
 	*config = candidate
 	if proxy := p.sprite.runtimeState.syncSprite; proxy != nil {
-		proxy.SetColliderEnabled(isTrigger, ctype != physicsColliderNone)
+		proxy.SetColliderEnabled(isTrigger, config.defaultEnabled(isTrigger, p.sprite))
 		config.applyShape(proxy, isTrigger, p.sprite)
 	}
 	return nil
@@ -280,6 +280,19 @@ func (p *physicsComponent) applyPhysicsProxyConfig(syncProxy *engine.Sprite) {
 	p.triggerInfo.syncToProxy(syncProxy, true, p.sprite)
 	syncProxy.SetGravityScale(p.gravity)
 	syncProxy.SetPhysicsMode(p.physicsMode)
+	p.autoShapesDirty = false
+}
+
+func (p *physicsComponent) markAutoShapesDirty() {
+	p.autoShapesDirty = true
+}
+
+func (p *physicsComponent) refreshAutoShapes(syncProxy *engine.Sprite) {
+	if !p.autoShapesDirty || syncProxy == nil {
+		return
+	}
+	p.triggerInfo.refreshAutoShape(syncProxy, true, p.sprite)
+	p.collisionInfo.refreshAutoShape(syncProxy, false, p.sprite)
 	p.autoShapesDirty = false
 }
 

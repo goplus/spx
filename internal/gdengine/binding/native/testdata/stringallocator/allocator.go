@@ -85,6 +85,7 @@ static int count_registrations(void) { return registration_count; }
 static int has_registration(void) { return registration_nonnull; }
 
 static void is_main_thread(GdBool *result) { *result = 1; }
+static void clear_collider_shape(GdObj object, GdBool is_trigger) {}
 
 static int invoke_callbacks(GdObj object, GdInt other, GdFloat delta, GdBool flag, GdString text) {
 	int calls = 0;
@@ -111,6 +112,7 @@ static GDExtensionInterfaceFunctionPtr resolve_builtin(const char *name) {
 	RESOLVE("spx_global_register_callbacks", register_callbacks);
 	RESOLVE("spx_global_free_string", release_string);
 	RESOLVE("spx_platform_is_main_thread", is_main_thread);
+	RESOLVE("spx_sprite_clear_collider_shape", clear_collider_shape);
 #undef RESOLVE
 	return NULL;
 }
@@ -123,6 +125,13 @@ static GDExtensionInterfaceFunctionPtr resolve_without_main_thread(const char *n
 }
 
 static GDExtensionInterfaceGetProcAddress resolver_without_main_thread(void) { return resolve_without_main_thread; }
+
+static GDExtensionInterfaceFunctionPtr resolve_without_clear_collider_shape(const char *name) {
+	if (strcmp(name, "spx_sprite_clear_collider_shape") == 0) return NULL;
+	return resolve_builtin(name);
+}
+
+static GDExtensionInterfaceGetProcAddress resolver_without_clear_collider_shape(void) { return resolve_without_clear_collider_shape; }
 
 static void invoke_lifecycle(GDExtensionInitialization *config, int level, int initializing) {
 	if (initializing) config->initialize(config->userdata, (GDExtensionInitializationLevel)level);
@@ -160,6 +169,10 @@ func Resolver() unsafe.Pointer {
 
 func ResolverWithoutMainThread() unsafe.Pointer {
 	return unsafe.Pointer(C.resolver_without_main_thread())
+}
+
+func ResolverWithoutClearColliderShape() unsafe.Pointer {
+	return unsafe.Pointer(C.resolver_without_clear_collider_shape())
 }
 
 func InvokeLifecycle(config unsafe.Pointer, level int, initializing bool) {

@@ -287,6 +287,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetTriggerLayer                    js.Value
 	SpxSpriteSetTriggerMask                     js.Value
 	SpxSpriteGetTriggerMask                     js.Value
+	SpxSpriteClearColliderShape                 js.Value
 	SpxSpriteSetColliderRect                    js.Value
 	SpxSpriteSetColliderCircle                  js.Value
 	SpxSpriteSetColliderCapsule                 js.Value
@@ -628,6 +629,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteGetTriggerLayer = resolveJSFunc("gdspx_sprite_get_trigger_layer")
 	x.SpxSpriteSetTriggerMask = resolveJSFunc("gdspx_sprite_set_trigger_mask")
 	x.SpxSpriteGetTriggerMask = resolveJSFunc("gdspx_sprite_get_trigger_mask")
+	x.SpxSpriteClearColliderShape = resolveJSFunc("gdspx_sprite_clear_collider_shape")
 	x.SpxSpriteSetColliderRect = resolveJSFunc("gdspx_sprite_set_collider_rect")
 	x.SpxSpriteSetColliderCircle = resolveJSFunc("gdspx_sprite_set_collider_circle")
 	x.SpxSpriteSetColliderCapsule = resolveJSFunc("gdspx_sprite_set_collider_capsule")

@@ -1600,6 +1600,12 @@ func (s *SpriteMgrImpl) GetTriggerMask(obj gdx.Object) int64 {
 		return binding.target().GetTriggerMask(obj)
 	})
 }
+func (s *SpriteMgrImpl) ClearColliderShape(obj gdx.Object, is_trigger bool) {
+	binding := s.resolve()
+	CallInMainThread(func() {
+		binding.target().ClearColliderShape(obj, is_trigger)
+	})
+}
 func (s *SpriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2) {
 	binding := s.resolve()
 	CallInMainThread(func() {
@@ -1690,10 +1696,10 @@ func (s *SpriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold fl
 		return binding.target().CheckCollisionByAlpha(obj, alpha_threshold)
 	})
 }
-func (s *SpriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (s *SpriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixels bool) bool {
 	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return binding.target().CheckCollisionWithSprite(obj, obj_b, alpha_threshold, use_pixel_perfect)
+		return binding.target().CheckCollisionWithSprite(obj, obj_b, alpha_threshold, use_pixels)
 	})
 }
 func (s *SpriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {

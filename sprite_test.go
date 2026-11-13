@@ -32,6 +32,43 @@ type layoutExtraBaseSprite struct {
 	value int
 }
 
+type polygonColliderSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	clearedShapes    []bool
+	collisionCenter  mathf.Vec2
+	collisionPoints  []float32
+	collisionEnabled []bool
+	collisionLayer   int64
+	collisionMask    int64
+	triggerCenter    mathf.Vec2
+	triggerPoints    []float32
+	triggerEnabled   []bool
+	triggerLayer     int64
+	triggerMask      int64
+	rectCalls        int
+	rectCenter       mathf.Vec2
+	rectSize         mathf.Vec2
+	rectIsTrigger    bool
+}
+
+type spritePhysicsAPIManager struct {
+	polygonColliderSpriteMgr
+	velocity, impulse mathf.Vec2
+	gravity           float64
+	floor             bool
+	circleRadius      float64
+	capsuleSize       mathf.Vec2
+	shapeCenter       mathf.Vec2
+	shapeTrigger      bool
+}
+
+type fakeEdgePhysicsMgr struct {
+	stageTouching  int64
+	cameraTouching int64
+	stageNearest   int64
+	cameraNearest  int64
+}
+
 func TestSpriteInitFromSelfPreservesStageCloneFamily(t *testing.T) {
 	template := &SpriteImpl{}
 	stage := &SpriteImpl{original: template}
@@ -183,10 +220,6 @@ func TestSpriteLayoutKeepsFirstImplementation(t *testing.T) {
 		t.Fatal("cloning did not invoke InitFrom for both SpriteImpl fields")
 	}
 }
-
-func (*shiftedSprite) Main() {}
-
-func (*layoutExtraBaseSprite) Main() {}
 
 func TestMotionInputsTreatNaNAsZero(t *testing.T) {
 	tests := []struct {
@@ -1113,57 +1146,6 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	scheduler.Join(thread)
 }
 
-func newTestTransformSprite(x, y float64) *SpriteImpl {
-	sprite := &SpriteImpl{
-		g:    &Game{},
-		name: "TestSprite",
-	}
-	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
-		X:             x,
-		Y:             y,
-		RotationStyle: "normal",
-		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
-		AnimBindings:  map[string]string{},
-	})
-	return sprite
-}
-
-type polygonColliderSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	collisionCenter  mathf.Vec2
-	collisionPoints  []float32
-	collisionEnabled []bool
-	collisionLayer   int64
-	collisionMask    int64
-	triggerCenter    mathf.Vec2
-	triggerPoints    []float32
-	triggerEnabled   []bool
-	triggerLayer     int64
-	triggerMask      int64
-	rectCalls        int
-	rectCenter       mathf.Vec2
-	rectSize         mathf.Vec2
-	rectIsTrigger    bool
-}
-
-type spritePhysicsAPIManager struct {
-	polygonColliderSpriteMgr
-	velocity, impulse mathf.Vec2
-	gravity           float64
-	floor             bool
-	circleRadius      float64
-	capsuleSize       mathf.Vec2
-	shapeCenter       mathf.Vec2
-	shapeTrigger      bool
-}
-
-type fakeEdgePhysicsMgr struct {
-	stageTouching  int64
-	cameraTouching int64
-	stageNearest   int64
-	cameraNearest  int64
-}
-
 func TestPhysicsLayersSurviveClone(t *testing.T) {
 	sprite, mgr := newPolygonColliderTestSprite(t)
 	sprite.SetCollisionLayer(2)
@@ -1186,6 +1168,34 @@ func TestPhysicsLayersSurviveClone(t *testing.T) {
 	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.syncSprite)
 	if mgr.collisionLayer != 2 || mgr.collisionMask != 4 || mgr.triggerLayer != 8 || mgr.triggerMask != 16 {
 		t.Fatalf("replayed layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
+	}
+}
+
+func TestPixelSensingNeedsNoTriggerShape(t *testing.T) {
+	for _, byShape := range []bool{false, true} {
+		sprite, mgr := newPolygonColliderTestSprite(t)
+		sprite.g.touchByShape = byShape
+		for _, trigger := range []bool{false, true} {
+			cfg := sprite.physics().colliderConfig(trigger)
+			cfg.Type = physicsColliderNone
+			cfg.syncShape(sprite.runtimeState.syncSprite, trigger, sprite)
+			if err := sprite.SetColliderShape(trigger, physicsColliderNone, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if want := []bool{false, false, true, true}; !slices.Equal(mgr.clearedShapes, want) {
+			t.Fatalf("cleared shapes = %v, want %v", mgr.clearedShapes, want)
+		}
+		if !slices.Equal(mgr.collisionEnabled, []bool{false, false}) {
+			t.Fatalf("body collider enabled = %v", mgr.collisionEnabled)
+		}
+		if want := []bool{!byShape, !byShape}; !slices.Equal(mgr.triggerEnabled, want) {
+			t.Fatalf("touchByShape=%v: trigger enabled = %v, want %v", byShape, mgr.triggerEnabled, want)
+		}
+		sprite.SetTriggerEnabled(false)
+		if mgr.triggerEnabled[len(mgr.triggerEnabled)-1] {
+			t.Fatal("explicit event disabling was ignored")
+		}
 	}
 }
 
@@ -1613,6 +1623,14 @@ func TestPhysicsComponentRejectsMalformedConfiguredShapes(t *testing.T) {
 	}
 }
 
+func (*shiftedSprite) Main() {}
+
+func (*layoutExtraBaseSprite) Main() {}
+
+func (m *polygonColliderSpriteMgr) ClearColliderShape(_ pkgengine.Object, trigger bool) {
+	m.clearedShapes = append(m.clearedShapes, trigger)
+}
+
 func (m *polygonColliderSpriteMgr) SetCollisionLayer(_ pkgengine.Object, layer int64) {
 	m.collisionLayer = layer
 }
@@ -1775,6 +1793,21 @@ func (f *fakeEdgePhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64
 
 func (f *fakeEdgePhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignoreSprites pkgengine.Array, collisionMask int64, collideWithAreas, collideWithBodies bool) pkgengine.Array {
 	return nil
+}
+
+func newTestTransformSprite(x, y float64) *SpriteImpl {
+	sprite := &SpriteImpl{
+		g:    &Game{},
+		name: "TestSprite",
+	}
+	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
+		X:             x,
+		Y:             y,
+		RotationStyle: "normal",
+		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
+		AnimBindings:  map[string]string{},
+	})
+	return sprite
 }
 
 func newPolygonColliderTestSprite(t *testing.T) (*SpriteImpl, *polygonColliderSpriteMgr) {

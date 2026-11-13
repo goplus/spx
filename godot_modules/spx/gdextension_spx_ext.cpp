@@ -1052,6 +1052,10 @@ static void gdextension_spx_sprite_get_trigger_mask(GdObj obj, GdInt *ret_val) {
 	*ret_val = spriteMgr->get_trigger_mask(obj);
 }
 
+static void gdextension_spx_sprite_clear_collider_shape(GdObj obj, GdBool is_trigger) {
+	spriteMgr->clear_collider_shape(obj, is_trigger);
+}
+
 static void gdextension_spx_sprite_set_collider_rect(GdObj obj, GdVec2 center, GdVec2 size) {
 	spriteMgr->set_collider_rect(obj, center, size);
 }
@@ -1112,8 +1116,8 @@ static void gdextension_spx_sprite_check_collision_by_alpha(GdObj obj, GdFloat a
 	*ret_val = spriteMgr->check_collision_by_alpha(obj, alpha_threshold);
 }
 
-static void gdextension_spx_sprite_check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision_with_sprite(obj, obj_b, alpha_threshold, use_pixel_perfect);
+static void gdextension_spx_sprite_check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixels, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision_with_sprite(obj, obj_b, alpha_threshold, use_pixels);
 }
 
 static void gdextension_spx_sprite_set_pixel_collision_sampling_step(GdInt step) {
@@ -1667,6 +1671,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_get_trigger_layer);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_trigger_mask);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_get_trigger_mask);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_clear_collider_shape);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_collider_rect);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_collider_circle);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_set_collider_capsule);

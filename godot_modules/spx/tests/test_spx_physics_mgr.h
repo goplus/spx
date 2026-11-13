@@ -188,8 +188,108 @@ TEST_CASE("[SceneTree][SPX] Physics queries respect masks, exclusions and SPX co
 	CHECK(empty->size == 0);
 }
 
+TEST_CASE("[SceneTree][SPX] Clearing collider geometry preserves pixel sensing without intercepting rays") {
+	TestSpx::TempDirectory files("spx_clear_collider");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString texture = files.file("solid.png").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *physics = scene.engine->get_physics();
+	auto *sprites = scene.engine->get_sprite();
+	const GdObj front = sprites->create_bare_sprite(Vector2(20, 0));
+	const GdObj behind = sprites->create_bare_sprite(Vector2(60, 0));
+	for (GdObj id : { front, behind }) {
+		sprites->set_physics_mode(id, SpxSprite::STATIC);
+		sprites->set_collision_layer(id, 4);
+		sprites->set_trigger_layer(id, id == front ? 4 : 0);
+		sprites->set_texture(id, texture.get_data());
+	}
+	auto ray_hit = [&]() -> GdObj {
+		SceneTree::get_singleton()->flush_transform_notifications();
+		PhysicsServer2D *server = PhysicsServer2D::get_singleton();
+		server->sync();
+		server->end_sync();
+		server->step(1.0 / 60);
+		server->sync();
+		struct SyncGuard {
+			~SyncGuard() { PhysicsServer2D::get_singleton()->end_sync(); }
+		} guard;
+		// Game.raycast includes areas. A residual trigger can hide the real body.
+		auto hit = TestSpx::take_array(physics->raycast_with_details(Vector2(), Vector2(100, 0), nullptr, 4, true, true));
+		REQUIRE(hit);
+		if (!hit) {
+			return 0;
+		}
+		REQUIRE(hit->size == 6);
+		if (hit->size != 6) {
+			return 0;
+		}
+		const GdInt *values = SpxAbi::get_array<GdInt>(hit.get(), 0);
+		REQUIRE(values);
+		if (!values) {
+			return 0;
+		}
+		CHECK(values[0] == 1);
+		return values[1];
+	};
+
+	bool trigger = false;
+	SUBCASE("body") {}
+	SUBCASE("trigger") { trigger = true; }
+	sprites->clear_collider_shape(front, !trigger);
+	for (bool authored : { false, true }) {
+		if (authored) {
+			if (trigger) {
+				sprites->set_trigger_rect(front, Vector2(), Vector2(8, 8));
+			} else {
+				sprites->set_collider_rect(front, Vector2(), Vector2(8, 8));
+			}
+		}
+		if (trigger) {
+			sprites->set_trigger_enabled(front, false);
+		} else {
+			sprites->set_collision_enabled(front, false);
+		}
+		CHECK(ray_hit() == behind);
+		if (trigger) {
+			sprites->set_trigger_enabled(front, true);
+		} else {
+			sprites->set_collision_enabled(front, true);
+		}
+		CHECK(ray_hit() == (trigger ? 0 : front));
+		sprites->clear_collider_shape(front, trigger);
+		sprites->clear_collider_shape(front, trigger); // Idempotent, including default geometry.
+		CHECK(sprites->get_sprite(front)->get_collider(trigger)->get_shape().is_null());
+		CHECK(sprites->is_collision_enabled(front));
+		CHECK(sprites->is_trigger_enabled(front));
+		CHECK(ray_hit() == behind);
+	}
+
+	// Pixel notifications and queries do not depend on either physical shape.
+	sprites->set_position(behind, Vector2(20, 0));
+	sprites->set_trigger_layer(behind, 4);
+	for (GdObj id : { front, behind }) {
+		sprites->clear_collider_shape(id, true);
+		sprites->clear_collider_shape(id, false);
+		sprites->set_trigger_mask(id, 4);
+	}
+	static int enters = 0;
+	enters = 0;
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) { ++enters; };
+	sprites->on_update(0.016);
+	CHECK(enters == 2);
+	CHECK(sprites->check_collision_with_sprite(front, behind, 0.007, true));
+	CHECK_FALSE(sprites->check_collision_with_sprite(front, behind, 0.007, false));
+	sprites->set_trigger_enabled(front, false);
+	sprites->on_update(0.016);
+	CHECK(enters == 2);
+	CHECK(sprites->check_collision_with_sprite(front, behind, 0.007, true));
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) {};
+}
+
 TEST_CASE("[SceneTree][SPX] Ground contact applies friction and consumes impulses once") {
 	TestSpx::EngineScene scene;
+	// Default pixel sensing does not disable solid-body response.
+	CHECK(scene.engine->get_physics()->is_collision_by_pixel);
 	auto *sprites = scene.engine->get_sprite();
 	const GdObj floor = sprites->create_bare_sprite(Vector2(0, -20));
 	sprites->set_collider_rect(floor, Vector2(), Vector2(256, 10));
@@ -201,6 +301,9 @@ TEST_CASE("[SceneTree][SPX] Ground contact applies friction and consumes impulse
 	if (!body) {
 		return;
 	}
+	// Trigger geometry is unnecessary for the floor's blocking contact.
+	sprites->get_sprite(floor)->get_trigger()->set_shape(Ref<Shape2D>());
+	body->get_trigger()->set_shape(Ref<Shape2D>());
 	body->set_physics_mode(SpxSprite::DYNAMIC);
 	body->set_mass(2);
 	body->set_drag(0);

@@ -56,6 +56,9 @@ func gdspx_init(resolver uintptr, _ unsafe.Pointer, configuration unsafe.Pointer
 	if api.SpxPlatformIsMainThread == nil {
 		panic("gdengine: spx_platform_is_main_thread is unavailable")
 	}
+	if api.SpxSpriteClearColliderShape == nil {
+		panic("gdengine: spx_sprite_clear_collider_shape is unavailable; update the SPX runtime")
+	}
 	init := (*initialization)(configuration)
 	*init = initialization{minimum_initialization_level: initializationLevelScene}
 	setupInitialization(init)

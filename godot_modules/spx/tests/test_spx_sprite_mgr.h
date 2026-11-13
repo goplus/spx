@@ -36,7 +36,9 @@
 #include "../spx_physics_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
+#include "core/error/error_macros.h"
 #include "core/object/script_language.h"
+#include "core/templates/hash_set.h"
 #include "scene/2d/visible_on_screen_notifier_2d.h"
 #include "scene/resources/2d/capsule_shape_2d.h"
 #include "scene/resources/2d/circle_shape_2d.h"
@@ -49,6 +51,22 @@
 #include "spx_test_fixtures.h"
 
 namespace TestSpxSpriteMgr {
+
+struct GodotErrorCounter {
+	int count = 0;
+	ErrorHandlerList handler;
+
+	GodotErrorCounter() {
+		handler.userdata = &count;
+		handler.errfunc = [](void *p_data, const char *, const char *, int, const char *, const char *, bool, ErrorHandlerType p_type) {
+			if (p_type == ERR_HANDLER_ERROR) {
+				++*static_cast<int *>(p_data);
+			}
+		};
+		add_error_handler(&handler);
+	}
+	~GodotErrorCounter() { remove_error_handler(&handler); }
+};
 
 struct ScriptLanguageFixture {
 	ScriptLanguage *language = nullptr;
@@ -179,7 +197,8 @@ TEST_CASE("[SceneTree][SPX] Destroyed sprite handles return defaults and cannot 
 			 &SpxSpriteMgr::set_debug_collision_visible, &SpxSpriteMgr::set_visible,
 			 &SpxSpriteMgr::set_anim_centered, &SpxSpriteMgr::set_anim_flip_h,
 			 &SpxSpriteMgr::set_anim_flip_v, &SpxSpriteMgr::set_use_gravity,
-			 &SpxSpriteMgr::set_collision_enabled, &SpxSpriteMgr::set_trigger_enabled }) {
+			 &SpxSpriteMgr::set_collision_enabled, &SpxSpriteMgr::set_trigger_enabled,
+			 &SpxSpriteMgr::clear_collider_shape }) {
 		(manager->*setter)(id, false);
 	}
 	for (auto setter : { &SpxSpriteMgr::set_position, &SpxSpriteMgr::set_scale,
@@ -1315,6 +1334,13 @@ TEST_CASE("[SceneTree][SPX] Pixel sensing skips hidden distant and unreadable vi
 	CHECK(manager->check_collision_by_color(self, Color(0, 0, 1), 0.1, 0.5));
 	CHECK_FALSE(manager->check_collision_by_color(self, Color(0, 1, 0), 0.1, 0.5));
 	ERR_PRINT_ON;
+	// NaN pixels must not pass either operand's alpha threshold.
+	Ref<Image> invalid_alpha = Image::create_empty(8, 8, false, Image::FORMAT_RGBAF);
+	invalid_alpha->fill(Color(1, 0, 0, NAN));
+	assign(self, SpxImageTexture::create_from_image(invalid_alpha));
+	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
+	CHECK_FALSE(manager->check_collision_with_sprite(near, self, 0.5, true));
+	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
 	assign(self, solid(Color(1, 0, 0, 0)));
 	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
 	assign(self, placeholder);
@@ -1429,13 +1455,104 @@ TEST_CASE("[SceneTree][SPX] Sprite physics controls preserve mode and velocity c
 	CHECK_FALSE(manager->is_sprite_alive(id));
 }
 
-TEST_CASE("[SceneTree][SPX] Pixel collision events track overlap, visibility and destroyed sprites") {
+TEST_CASE("[SPX] Sprite pairs normalize identity and distribute sequential IDs") {
+	CHECK(SpritePair(1, 2) == SpritePair(2, 1));
+	CHECK(SpritePair(1, 2).std_hash() == SpritePair(2, 1).std_hash());
+	HashSet<uint32_t> hashes;
+	constexpr int sprite_count = 128;
+	for (int first = 1; first <= sprite_count; ++first) {
+		for (int second = first + 1; second <= sprite_count; ++second) {
+			hashes.insert(static_cast<uint32_t>(SpritePair(first, second).std_hash()));
+		}
+	}
+	// Permit collisions, but reject XOR's severe clustering of sequential IDs.
+	CHECK(hashes.size() > sprite_count * (sprite_count - 1) / 2 * 9 / 10);
+}
+
+TEST_CASE("[SceneTree][SPX] Explicit shape sensing uses trigger shapes independently of body colliders") {
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	scene.engine->get_physics()->set_collision_system_type(false);
+	const GdObj bridge = manager->create_bare_sprite(Vector2());
+	const GdObj player = manager->create_bare_sprite(Vector2(12, 0));
+	for (GdObj id : { bridge, player }) {
+		manager->set_trigger_rect(id, Vector2(), Vector2(20, 10));
+	}
+	manager->set_physics_mode(bridge, SpxSprite::NO_PHYSICS);
+	manager->set_collision_enabled(bridge, false);
+	manager->set_physics_mode(player, SpxSprite::KINEMATIC);
+	manager->set_collider_rect(player, Vector2(), Vector2(2, 2));
+	// A sprite configured without a body collider can still raise touch events.
+	manager->get_sprite(bridge)->get_collider(false)->set_shape(Ref<Shape2D>());
+	CHECK_FALSE(manager->check_collision(bridge, player, false, false));
+	CHECK(manager->check_collision(bridge, player, true, true));
+	CHECK(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+	CHECK(manager->check_collision_with_sprite(player, bridge, 0.007, false));
+
+	// Enabled controls notifications, not whether valid geometry can be queried.
+	for (GdObj id : { bridge, player }) {
+		manager->set_trigger_enabled(id, false);
+		CHECK(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+		CHECK(manager->check_collision_with_sprite(player, bridge, 0.007, false));
+		manager->set_trigger_enabled(id, true);
+		auto *trigger = manager->get_sprite(id)->get_collider(true);
+		Ref<Shape2D> shape = trigger->get_shape();
+		trigger->set_shape(Ref<Shape2D>());
+		CHECK_FALSE(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+		CHECK_FALSE(manager->check_collision_with_sprite(player, bridge, 0.007, false));
+		trigger->set_shape(shape);
+		CHECK(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+		CHECK(manager->check_collision_with_sprite(player, bridge, 0.007, false));
+	}
+
+	static SpxSpriteMgr *callback_manager = nullptr;
+	static int enters = 0;
+	static bool touching_on_enter = false;
+	callback_manager = manager;
+	enters = 0;
+	touching_on_enter = false;
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj self, GdObj other) {
+		++enters;
+		touching_on_enter = callback_manager->check_collision_with_sprite(self, other, 0.007, false);
+	};
+	manager->on_trigger_enter(bridge, player);
+	CHECK(enters == 1);
+	CHECK(touching_on_enter);
+
+	// Residual or explicitly configured body shapes must not override triggers.
+	manager->set_collider_rect(bridge, Vector2(100, 0), Vector2(2, 2));
+	manager->set_collider_rect(player, Vector2(-100, 0), Vector2(2, 2));
+	CHECK_FALSE(manager->check_collision(bridge, player, false, false));
+	manager->on_trigger_enter(player, bridge);
+	CHECK(enters == 2);
+	CHECK(touching_on_enter);
+
+	// Conversely, overlapping body colliders do not imply touching when the
+	// trigger shapes are separated.
+	for (GdObj id : { bridge, player }) {
+		manager->set_collider_rect(id, Vector2(), Vector2(50, 50));
+	}
+	manager->set_position(player, Vector2(30, 0));
+	CHECK(manager->check_collision(bridge, player, false, false));
+	CHECK_FALSE(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+	CHECK_FALSE(manager->check_collision_with_sprite(player, bridge, 0.007, false));
+
+	manager->set_position(player, Vector2(12, 0));
+	CHECK(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+	for (GdObj id : { bridge, player }) {
+		manager->set_visible(id, false);
+		CHECK_FALSE(manager->check_collision_with_sprite(bridge, player, 0.007, false));
+		CHECK_FALSE(manager->check_collision_with_sprite(player, bridge, 0.007, false));
+		manager->set_visible(id, true);
+	}
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) {};
+	callback_manager = nullptr;
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel touch events track overlap, visibility and destroyed sprites") {
 	TestSpx::TempDirectory files("spx_pixel_events");
-	auto image = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0, 1));
-	REQUIRE(image->save_png(files.file("solid.png")) == OK);
-	image->fill(Color(1, 0, 0, 0));
-	REQUIRE(image->save_png(files.file("clear.png")) == OK);
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	files.write_png("clear.png", Vector2i(8, 8), Color(1, 0, 0, 0));
 	const CharString solid = files.file("solid.png").utf8(), clear = files.file("clear.png").utf8();
 	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
 	auto *manager = scene.engine->get_sprite();
@@ -1457,45 +1574,47 @@ TEST_CASE("[SceneTree][SPX] Pixel collision events track overlap, visibility and
 	CHECK_FALSE(manager->check_collision_with_point(a, Vector2(), true));
 	CHECK_FALSE(manager->check_collision_with_sprite(a, b, 0.5, true));
 	manager->set_visible(a, true);
-	static Vector<TriggerPair> enters, exits;
+	static Vector<SpritePair> enters, exits;
 	enters.clear();
 	exits.clear();
-	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj first, GdObj second) { enters.push_back(TriggerPair(first, second)); };
-	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj first, GdObj second) { exits.push_back(TriggerPair(first, second)); };
-	manager->on_trigger_enter(a, b);
-	manager->on_trigger_enter(b, a);
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj first, GdObj second) { enters.push_back(SpritePair(first, second)); };
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj first, GdObj second) { exits.push_back(SpritePair(first, second)); };
 	CHECK(enters.is_empty());
 	manager->on_update(0.016);
 	REQUIRE(enters.size() == 2);
-	CHECK(enters[0] == TriggerPair(a, b));
+	CHECK(enters[0] == SpritePair(a, b));
 	manager->on_update(0.016);
 	CHECK(enters.size() == 2);
+	manager->set_visible(a, false);
+	manager->on_update(0.016);
+	CHECK(exits.size() == 2);
+	manager->set_visible(a, true);
+	manager->on_update(0.016);
+	CHECK(enters.size() == 4);
 	manager->set_texture(b, clear.get_data());
 	CHECK_FALSE(manager->check_collision_with_sprite(a, b, 0.5, true));
 	manager->on_update(0.016);
-	CHECK(exits.size() == 2);
+	CHECK(exits.size() == 4);
 	manager->set_texture(b, solid.get_data());
 	manager->on_update(0.016);
-	CHECK(enters.size() == 4);
-	manager->on_trigger_exit(a, b);
-	CHECK(exits.size() == 4);
-	manager->on_trigger_exit(b, a);
-	CHECK(exits.size() == 4);
-	manager->on_trigger_enter(a, b);
+	CHECK(enters.size() == 6);
+	manager->set_position(b, Vector2(100, 0));
 	manager->on_update(0.016);
-	REQUIRE(enters.size() == 6);
+	CHECK(exits.size() == 6);
+	manager->set_position(b, Vector2(2, 0));
+	manager->on_update(0.016);
+	REQUIRE(enters.size() == 8);
 	auto *sprite = manager->get_sprite(b);
 	memdelete(sprite);
 	CHECK_FALSE(manager->is_sprite_alive(b));
-	CHECK(exits.size() == 5); // Only the surviving sprite receives exit.
-	manager->on_trigger_enter(a, b);
+	CHECK(exits.size() == 7); // Only the surviving sprite receives exit.
 	manager->on_update(0.016);
-	CHECK(enters.size() == 6);
+	CHECK(enters.size() == 8);
 	physics->set_collision_system_type(false);
 	manager->on_trigger_enter(a, 0);
 	manager->on_trigger_exit(a, 0);
-	CHECK(enters.size() == 7);
-	CHECK(exits.size() == 6);
+	CHECK(enters.size() == 9);
+	CHECK(exits.size() == 8);
 	manager->set_debug_collision_visible(a, true);
 	CHECK(manager->is_debug_collision_visible(a));
 	manager->set_debug_collision_visible(a, false);
@@ -1510,6 +1629,407 @@ TEST_CASE("[SceneTree][SPX] Pixel collision events track overlap, visibility and
 	CHECK(manager->check_collision_with_point(a, Vector2(), true));
 }
 
+TEST_CASE("[SceneTree][SPX] Pixel event candidates use visuals and directed notification filters") {
+	TestSpx::TempDirectory files("spx_visual_pixel_events");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString solid = files.file("solid.png").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	auto *physics = scene.engine->get_physics();
+	CHECK(physics->is_collision_by_pixel);
+	const GdObj a = manager->create_bare_sprite(Vector2());
+	const GdObj b = manager->create_bare_sprite(Vector2(2, 0));
+	for (GdObj id : { a, b }) {
+		manager->set_texture(id, solid.get_data());
+	}
+	manager->set_physics_mode(b, SpxSprite::KINEMATIC);
+	// Neither an absent trigger shape nor a tiny, displaced shape encloses
+	// these sprites' visible overlap. No Area2D enter is injected by this test.
+	manager->get_sprite(a)->get_trigger()->set_shape(Ref<Shape2D>());
+	manager->set_trigger_rect(b, Vector2(100, 100), Vector2(0.1, 0.1));
+	manager->set_trigger_layer(a, 1);
+	manager->set_trigger_layer(b, 2);
+	manager->set_trigger_mask(a, 2);
+	manager->set_trigger_mask(b, 0);
+	CHECK_FALSE(manager->check_collision(a, b, true, true));
+	CHECK(manager->check_collision_with_sprite(a, b, 0.007, true));
+
+	static SpxSpriteMgr *callback_manager = nullptr;
+	static Vector<GdObj> enters, exits;
+	static bool all_enters_touch = true;
+	callback_manager = manager;
+	enters.clear();
+	exits.clear();
+	all_enters_touch = true;
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj source, GdObj target) {
+		enters.push_back(source);
+		all_enters_touch &= callback_manager->check_collision_with_sprite(source, target, 0.007, true);
+	};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj source, GdObj) { exits.push_back(source); };
+	auto update = [&]() { manager->on_update(0.016); };
+	auto clear_events = [&]() {
+		enters.clear();
+		exits.clear();
+	};
+	update();
+	REQUIRE(enters.size() == 1);
+	CHECK(enters[0] == a);
+	update();
+	CHECK(enters.size() == 1);
+	// Area notifications cannot remove a visual contact in pixel mode.
+	manager->on_trigger_exit(a, b);
+	update();
+	CHECK(exits.is_empty());
+	CHECK(enters.size() == 1);
+
+	clear_events();
+	manager->set_trigger_mask(b, 1);
+	update();
+	REQUIRE(enters.size() == 1);
+	CHECK(enters[0] == b);
+	manager->set_trigger_mask(a, 0);
+	update();
+	REQUIRE(exits.size() == 1);
+	CHECK(exits[0] == a);
+	CHECK(manager->check_collision_with_sprite(a, b, 0.007, true));
+	// No remaining subscribed layer: the fast path must still emit exits.
+	manager->set_trigger_layer(a, 0);
+	update();
+	REQUIRE(exits.size() == 2);
+	CHECK(exits[1] == b);
+	clear_events();
+	manager->set_trigger_layer(a, 1);
+	manager->set_trigger_mask(a, 2);
+	update();
+	CHECK(enters.size() == 2);
+
+	clear_events();
+	manager->set_trigger_enabled(b, false);
+	update();
+	CHECK(exits.size() == 2);
+	CHECK(manager->check_collision_with_sprite(a, b, 0.007, true));
+	manager->set_trigger_enabled(b, true);
+	update();
+	CHECK(enters.size() == 2);
+
+	// Render-only transforms refresh candidates on the next update, without
+	// waiting for a physics tick or an Area2D overlap notification.
+	clear_events();
+	manager->set_pivot(b, Vector2(100, 0));
+	update();
+	CHECK(exits.size() == 2);
+	manager->set_pivot(b, Vector2());
+	update();
+	CHECK(enters.size() == 2);
+
+	clear_events();
+	physics->set_collision_system_type(false);
+	CHECK(exits.size() == 2);
+	update();
+	CHECK(enters.is_empty());
+	physics->set_collision_system_type(true);
+	update();
+	CHECK(enters.size() == 2);
+	CHECK(all_enters_touch);
+	clear_events();
+	memdelete(manager->get_sprite(b));
+	REQUIRE(exits.size() == 1);
+	CHECK(exits[0] == a);
+	update();
+	CHECK(enters.is_empty());
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) {};
+	callback_manager = nullptr;
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel callbacks can delete sprites and reenter updates") {
+	TestSpx::TempDirectory files("spx_pixel_callback_delete");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString texture = files.file("solid.png").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	const GdObj a = manager->create_bare_sprite(Vector2()), b = manager->create_bare_sprite(Vector2());
+	for (GdObj id : { a, b }) {
+		manager->set_texture(id, texture.get_data());
+	}
+	static SpxSpriteMgr *callback_manager = nullptr;
+	static Vector<GdObj> enters, exits;
+	callback_manager = manager;
+	enters.clear();
+	exits.clear();
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj source, GdObj target) {
+		enters.push_back(source);
+		memdelete(callback_manager->get_sprite(target));
+		callback_manager->on_update(0.016); // Reentry must not retain invalid pointers.
+	};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj source, GdObj) { exits.push_back(source); };
+	manager->on_update(0.016);
+	REQUIRE(enters.size() == 1);
+	REQUIRE(exits.size() == 1);
+	CHECK(enters[0] == a);
+	CHECK(exits[0] == a);
+	CHECK_FALSE(manager->is_sprite_alive(b));
+	manager->on_update(0.016);
+	CHECK(enters.size() == 1);
+
+	// Deletion outside an update is also safe when an exit callback starts a
+	// new candidate scan. The dying sprite must already be unregistered.
+	const GdObj c = manager->create_bare_sprite(Vector2(100, 0));
+	const GdObj d = manager->create_bare_sprite(Vector2(100, 0));
+	for (GdObj id : { c, d }) {
+		manager->set_texture(id, texture.get_data());
+	}
+	enters.clear();
+	exits.clear();
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj source, GdObj) { enters.push_back(source); };
+	manager->on_update(0.016);
+	CHECK(enters.size() == 2);
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj source, GdObj) {
+		exits.push_back(source);
+		callback_manager->on_update(0.016);
+	};
+	memdelete(manager->get_sprite(d));
+	REQUIRE(exits.size() == 1);
+	CHECK(exits[0] == c);
+	CHECK(enters.size() == 2);
+	CHECK_FALSE(manager->is_sprite_alive(d));
+
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) {};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj, GdObj) {};
+	callback_manager = nullptr;
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel candidate sorting preserves directed subscriptions and skips ineligible sprites") {
+	TestSpx::TempDirectory files("spx_pixel_candidate_filters");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString texture = files.file("solid.png").utf8();
+	files.write("incomplete.tscn", "[gd_scene format=3]\n[node name=\"Incomplete\" type=\"SpxSprite\"]\n[node name=\"Anim2D\" type=\"AnimatedSprite2D\" parent=\".\"]\n");
+	const CharString incomplete_path = files.file("incomplete.tscn").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	// Visual order is opposite to identity order. The mask's source must not
+	// change when the sweep normalizes its pair of IDs.
+	const GdObj right = manager->create_bare_sprite(Vector2(2, 0));
+	const GdObj left = manager->create_bare_sprite(Vector2());
+	const GdObj unsubscribed = manager->create_bare_sprite(Vector2());
+	const GdObj unrelated = manager->create_bare_sprite(Vector2());
+	const GdObj queued = manager->create_bare_sprite(Vector2());
+	const GdObj backdrop = manager->create_backdrop("");
+	const GdObj empty = manager->create_bare_sprite(Vector2());
+	CHECK(manager->get_sprite(empty)->get_anim2d()->get_sprite_frames()->get_frame_count("default") == 0);
+	// Invalid authored components report once during startup, not on every scan.
+	ERR_PRINT_OFF;
+	const GdObj incomplete = manager->create_sprite(incomplete_path.get_data(), Vector2());
+	ERR_PRINT_ON;
+	CHECK(manager->get_sprite(incomplete)->get_area2d() == nullptr);
+	for (GdObj id : { right, left, unsubscribed, unrelated, queued, backdrop, incomplete }) {
+		manager->set_texture(id, texture.get_data());
+	}
+	manager->set_trigger_layer(right, 1);
+	manager->set_trigger_mask(right, 2);
+	manager->set_trigger_layer(left, 2);
+	manager->set_trigger_mask(left, 0);
+	manager->set_trigger_layer(unsubscribed, 0);
+	manager->set_trigger_mask(unsubscribed, 0);
+	manager->set_trigger_layer(unrelated, 4);
+	manager->set_trigger_mask(unrelated, 4);
+	manager->destroy_sprite(queued);
+	CHECK_FALSE(manager->is_sprite_alive(queued));
+	GodotErrorCounter errors;
+	manager->clear_collider_shape(incomplete, true);
+	manager->clear_collider_shape(incomplete, false);
+	CHECK_FALSE(manager->check_collision_with_sprite(empty, right, 0.007, true));
+	CHECK_FALSE(manager->check_collision_with_sprite(right, empty, 0.007, true));
+	CHECK(manager->check_collision_with_sprite(incomplete, right, 0.007, true));
+	CHECK(errors.count == 0);
+	auto update = [&]() {
+		errors.count = 0;
+		manager->on_update(0.016);
+		CHECK(errors.count == 0);
+	};
+	static Vector<GdObj> sources, targets, exits;
+	sources.clear();
+	targets.clear();
+	exits.clear();
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj source, GdObj target) {
+		sources.push_back(source);
+		targets.push_back(target);
+	};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj source, GdObj) { exits.push_back(source); };
+	update();
+	REQUIRE(sources.size() == 1);
+	CHECK(sources[0] == right);
+	CHECK(targets[0] == left);
+	manager->set_trigger_mask(right, 0);
+	manager->set_trigger_mask(left, 1);
+	update();
+	REQUIRE(sources.size() == 2);
+	REQUIRE(exits.size() == 1);
+	CHECK(sources[1] == left);
+	CHECK(targets[1] == right);
+	CHECK(exits[0] == right);
+	update();
+	CHECK(sources.size() == 2);
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel reverse notifications recheck changes made by the first handler") {
+	TestSpx::TempDirectory files("spx_pixel_callback_filters");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString texture = files.file("solid.png").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	const GdObj a = manager->create_bare_sprite(Vector2()), b = manager->create_bare_sprite(Vector2());
+	for (GdObj id : { a, b }) {
+		manager->set_texture(id, texture.get_data());
+	}
+	static int change;
+	SUBCASE("hide the reverse source") { change = 0; }
+	SUBCASE("disable the reverse target") { change = 1; }
+	SUBCASE("unsubscribe the reverse source") { change = 2; }
+	SUBCASE("turn the reverse source into a backdrop") { change = 3; }
+	SUBCASE("remove the reverse source's Area2D") { change = 4; }
+	static SpxSpriteMgr *callback_manager;
+	static Vector<GdObj> enters, exits;
+	callback_manager = manager;
+	enters.clear();
+	exits.clear();
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj source, GdObj target) {
+		enters.push_back(source);
+		switch (change) {
+			case 0:
+				callback_manager->set_visible(target, false);
+				break;
+			case 1:
+				callback_manager->set_trigger_enabled(source, false);
+				break;
+			case 2:
+				callback_manager->set_trigger_mask(target, 0);
+				break;
+			case 3:
+				callback_manager->get_sprite(target)->set_backdrop(true);
+				break;
+			case 4: {
+				auto *sprite = callback_manager->get_sprite(target);
+				auto *area = sprite->get_area2d();
+				sprite->remove_child(area);
+				ERR_PRINT_OFF;
+				sprite->on_start();
+				ERR_PRINT_ON;
+				memdelete(area);
+				break;
+			}
+		}
+	};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj source, GdObj) { exits.push_back(source); };
+	GodotErrorCounter errors;
+	manager->on_update(0.016);
+	CHECK(errors.count == (change == 4 ? 1 : 0)); // Only the explicit startup retry reports missing components.
+	REQUIRE(enters.size() == 1);
+	CHECK(enters[0] == a);
+	CHECK(exits.is_empty()); // No exit is owed for the suppressed reverse enter.
+	errors.count = 0;
+	manager->on_update(0.016);
+	CHECK(errors.count == 0);
+	CHECK(enters.size() == 1);
+	CHECK(exits.size() == (change == 2 ? 0 : 1));
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) {};
+	callback_manager = nullptr;
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel notification batches stop after callbacks change their generation") {
+	TestSpx::TempDirectory files("spx_pixel_batch_generation");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString texture = files.file("solid.png").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	auto *physics = scene.engine->get_physics();
+	const GdObj center = manager->create_bare_sprite(Vector2());
+	const GdObj b = manager->create_bare_sprite(Vector2()), c = manager->create_bare_sprite(Vector2());
+	for (GdObj id : { center, b, c }) {
+		manager->set_texture(id, texture.get_data());
+		manager->set_trigger_layer(id, id == center ? 1 : 2);
+		manager->set_trigger_mask(id, id == center ? 2 : 1);
+	}
+	// Two bidirectional pairs share the center; b and c are not subscribed to
+	// each other. Each batch therefore has a second pair to cancel.
+	static int batch;
+	SUBCASE("enter batch") { batch = 0; }
+	SUBCASE("exit batch") { batch = 1; }
+	SUBCASE("clear batch") { batch = 2; }
+	SUBCASE("sprite removal batch") { batch = 3; }
+	static SpxSpriteMgr *callback_manager;
+	static bool interrupt_next;
+	static Vector<GdObj> enters, exits;
+	callback_manager = manager;
+	interrupt_next = batch == 0;
+	enters.clear();
+	exits.clear();
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj source, GdObj) {
+		enters.push_back(source);
+		if (batch == 0 && interrupt_next) {
+			interrupt_next = false;
+			SpxEngine::get_singleton()->get_physics()->set_collision_system_type(false);
+		}
+	};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj source, GdObj) {
+		exits.push_back(source);
+		if (batch != 0 && interrupt_next) {
+			interrupt_next = false;
+			auto *physics = SpxEngine::get_singleton()->get_physics();
+			if (batch != 2) {
+				physics->set_collision_system_type(false);
+			}
+			physics->set_collision_system_type(true);
+			callback_manager->on_update(0.016);
+		}
+	};
+	manager->on_update(0.016);
+	if (batch == 0) {
+		REQUIRE(enters.size() == 1);
+		CHECK(enters[0] == center);
+		CHECK(exits.size() == 1);
+		CHECK_FALSE(physics->is_collision_by_pixel);
+		enters.clear();
+		physics->set_collision_system_type(true);
+	} else {
+		REQUIRE(enters.size() == 4);
+		enters.clear();
+		exits.clear();
+		interrupt_next = true;
+		if (batch == 1) {
+			for (GdObj id : { center, b, c }) {
+				manager->set_trigger_mask(id, 0);
+			}
+			manager->on_update(0.016);
+			CHECK(enters.is_empty());
+			for (GdObj id : { center, b, c }) {
+				manager->set_trigger_mask(id, id == center ? 2 : 1);
+			}
+		} else if (batch == 2) {
+			physics->set_collision_system_type(false);
+			CHECK(enters.size() == 4); // Fresh generation, not the canceled batch.
+		} else {
+			memdelete(manager->get_sprite(center));
+			CHECK_FALSE(manager->is_sprite_alive(center));
+			CHECK(enters.is_empty());
+			REQUIRE(exits.size() == 1);
+			CHECK(exits[0] != center);
+			const GdObj replacement = manager->create_bare_sprite(Vector2());
+			manager->set_texture(replacement, texture.get_data());
+			manager->set_trigger_layer(replacement, 1);
+			manager->set_trigger_mask(replacement, 2);
+		}
+		CHECK(exits.size() == 1);
+		CHECK(physics->is_collision_by_pixel);
+	}
+	manager->on_update(0.016);
+	CHECK(enters.size() == 4);
+	manager->on_update(0.016);
+	CHECK(enters.size() == 4); // New contacts are retained, not retriggered.
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj, GdObj) {};
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj, GdObj) {};
+	callback_manager = nullptr;
+}
+
 TEST_CASE("[SceneTree][SPX] Destroying one collision pair preserves unrelated active pairs") {
 	TestSpx::TempDirectory files("spx_independent_pixel_pairs");
 	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
@@ -1518,18 +2038,17 @@ TEST_CASE("[SceneTree][SPX] Destroying one collision pair preserves unrelated ac
 	auto *manager = scene.engine->get_sprite();
 	const GdObj a = manager->create_bare_sprite(Vector2());
 	const GdObj b = manager->create_bare_sprite(Vector2());
-	const GdObj c = manager->create_bare_sprite(Vector2(100, 0));
-	const GdObj d = manager->create_bare_sprite(Vector2(100, 0));
+	// A vertical layout exercises the sweep's alternate axis.
+	const GdObj c = manager->create_bare_sprite(Vector2(0, 100));
+	const GdObj d = manager->create_bare_sprite(Vector2(0, 100));
 	for (GdObj id : { a, b, c, d }) {
 		manager->set_texture(id, texture.get_data());
 	}
-	static Vector<TriggerPair> enters, exits;
+	static Vector<SpritePair> enters, exits;
 	enters.clear();
 	exits.clear();
-	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj first, GdObj second) { enters.push_back(TriggerPair(first, second)); };
-	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj first, GdObj second) { exits.push_back(TriggerPair(first, second)); };
-	manager->on_trigger_enter(a, b);
-	manager->on_trigger_enter(c, d);
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj first, GdObj second) { enters.push_back(SpritePair(first, second)); };
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj first, GdObj second) { exits.push_back(SpritePair(first, second)); };
 	manager->on_update(0.016);
 	REQUIRE(enters.size() == 4);
 	// Pair cleanup happens on the actual PREDELETE notification, not when
@@ -1538,19 +2057,19 @@ TEST_CASE("[SceneTree][SPX] Destroying one collision pair preserves unrelated ac
 	CHECK_FALSE(manager->is_sprite_alive(b));
 	CHECK(exits.size() == 1);
 	if (exits.size() == 1) {
-		CHECK(exits[0] == TriggerPair(a, b));
+		CHECK(exits[0] == SpritePair(a, b));
 	}
 	manager->on_update(0.016);
 	CHECK(enters.size() == 4);
 	CHECK(exits.size() == 1);
-	// The surviving broad-phase pair must still be checked, and its active
+	// The surviving visual pair must still be checked, and its active
 	// pixel pair must not have been removed with the destroyed sprite.
 	manager->set_visible(d, false);
 	manager->on_update(0.016);
 	CHECK(exits.size() == 3);
 	if (exits.size() == 3) {
-		CHECK(exits[1] == TriggerPair(c, d));
-		CHECK(exits[2] == TriggerPair(c, d));
+		CHECK(exits[1] == SpritePair(c, d));
+		CHECK(exits[2] == SpritePair(c, d));
 	}
 	manager->set_visible(d, true);
 	manager->on_update(0.016);

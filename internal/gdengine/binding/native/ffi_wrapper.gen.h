@@ -1494,6 +1494,12 @@ void cgo_callfn_GDExtensionSpxSpriteGetTriggerMask(const GDExtensionSpxSpriteGet
 	}
 	fn(obj, ret_val);
 }
+void cgo_callfn_GDExtensionSpxSpriteClearColliderShape(const GDExtensionSpxSpriteClearColliderShape fn, GdObj obj, GdBool is_trigger) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, is_trigger);
+}
 void cgo_callfn_GDExtensionSpxSpriteSetColliderRect(const GDExtensionSpxSpriteSetColliderRect fn, GdObj obj, GdVec2 center, GdVec2 size) {
 	if (!fn) {
 		return;
@@ -1584,11 +1590,11 @@ void cgo_callfn_GDExtensionSpxSpriteCheckCollisionByAlpha(const GDExtensionSpxSp
 	}
 	fn(obj, alpha_threshold, ret_val);
 }
-void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(const GDExtensionSpxSpriteCheckCollisionWithSprite fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool* ret_val) {
+void cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(const GDExtensionSpxSpriteCheckCollisionWithSprite fn, GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixels, GdBool* ret_val) {
 	if (!fn) {
 		return;
 	}
-	fn(obj, obj_b, alpha_threshold, use_pixel_perfect, ret_val);
+	fn(obj, obj_b, alpha_threshold, use_pixels, ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteSetPixelCollisionSamplingStep(const GDExtensionSpxSpriteSetPixelCollisionSamplingStep fn, GdInt step) {
 	if (!fn) {

@@ -283,6 +283,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetTriggerLayer                    GDExtensionSpxSpriteGetTriggerLayer
 	SpxSpriteSetTriggerMask                     GDExtensionSpxSpriteSetTriggerMask
 	SpxSpriteGetTriggerMask                     GDExtensionSpxSpriteGetTriggerMask
+	SpxSpriteClearColliderShape                 GDExtensionSpxSpriteClearColliderShape
 	SpxSpriteSetColliderRect                    GDExtensionSpxSpriteSetColliderRect
 	SpxSpriteSetColliderCircle                  GDExtensionSpxSpriteSetColliderCircle
 	SpxSpriteSetColliderCapsule                 GDExtensionSpxSpriteSetColliderCapsule
@@ -624,6 +625,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteGetTriggerLayer = (GDExtensionSpxSpriteGetTriggerLayer)(resolveCFunc("spx_sprite_get_trigger_layer"))
 	x.SpxSpriteSetTriggerMask = (GDExtensionSpxSpriteSetTriggerMask)(resolveCFunc("spx_sprite_set_trigger_mask"))
 	x.SpxSpriteGetTriggerMask = (GDExtensionSpxSpriteGetTriggerMask)(resolveCFunc("spx_sprite_get_trigger_mask"))
+	x.SpxSpriteClearColliderShape = (GDExtensionSpxSpriteClearColliderShape)(resolveCFunc("spx_sprite_clear_collider_shape"))
 	x.SpxSpriteSetColliderRect = (GDExtensionSpxSpriteSetColliderRect)(resolveCFunc("spx_sprite_set_collider_rect"))
 	x.SpxSpriteSetColliderCircle = (GDExtensionSpxSpriteSetColliderCircle)(resolveCFunc("spx_sprite_set_collider_circle"))
 	x.SpxSpriteSetColliderCapsule = (GDExtensionSpxSpriteSetColliderCapsule)(resolveCFunc("spx_sprite_set_collider_capsule"))

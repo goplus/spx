@@ -1518,6 +1518,11 @@ func (s *spriteMgr) GetTriggerMask(obj Object) int64 {
 	retValue := CallSpriteGetTriggerMask(arg0)
 	return ToInt64(retValue)
 }
+func (s *spriteMgr) ClearColliderShape(obj Object, is_trigger bool) {
+	arg0 := ToGdObj(obj)
+	arg1 := ToGdBool(is_trigger)
+	CallSpriteClearColliderShape(arg0, arg1)
+}
 func (s *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdVec2(center)
@@ -1623,11 +1628,11 @@ func (s *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) b
 	retValue := CallSpriteCheckCollisionByAlpha(arg0, arg1)
 	return ToBool(retValue)
 }
-func (s *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (s *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixels bool) bool {
 	arg0 := ToGdObj(obj)
 	arg1 := ToGdObj(obj_b)
 	arg2 := ToGdFloat(alpha_threshold)
-	arg3 := ToGdBool(use_pixel_perfect)
+	arg3 := ToGdBool(use_pixels)
 	retValue := CallSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3)
 	return ToBool(retValue)
 }

@@ -148,7 +148,8 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 // -----------------------------------------------------------------------------
 func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	p.isAutoSetCollisionLayer = settings.AutoSetCollisionLayer
-	spxlog.Debug("IsCollisionByPixel: %v", settings.CollisionByPixel)
+	p.touchByShape = settings.TouchByShape
+	spxlog.Debug("TouchByShape: %v", settings.TouchByShape)
 	spxlog.Debug("IsAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
 
 	engine.Managers().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
@@ -156,7 +157,7 @@ func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	engine.Managers().PhysicsMgr.SetGlobalGravity(settings.GlobalGravity)
 	engine.Managers().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
 	engine.Managers().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
-	engine.Managers().PhysicsMgr.SetCollisionSystemType(settings.CollisionByPixel)
+	engine.Managers().PhysicsMgr.SetCollisionSystemType(!settings.TouchByShape)
 
 	p.resetCollisionLayerState()
 	if p.isAutoSetCollisionLayer {

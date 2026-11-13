@@ -82,6 +82,19 @@ Collider shape and trigger/sensor behavior are independent from visual appearanc
 
 Queries cover common needs such as checking contacts, ray/shape tests, finding nearby objects, and obtaining collision details. Query results must use SPX world coordinates and stable sprite identities rather than leaking Godot node pointers.
 
+Sprite sensing is independent of physical response:
+
+- By default (`touchByShape: false`), `touching(sprite)`, `touching(name)` and `onTouchStart` use the same costume-pixel overlap test, whether `physics` is enabled or not. Body colliders still control movement and blocking; a sprite with `collisionShapeType: "none"` can still be sensed.
+- Setting either shape type to `"none"` removes its native geometry, including from raycasts. Re-enabling it does not restore a previous shape; configure a shape to restore it. Pixel sensing still works without geometry.
+- With `touchByShape: true`, sprite sensing uses trigger shapes instead. This is useful for detection zones extending beyond a costume. Body colliders do not define the sensing area. `triggerShapeType: "none"` supplies no sensing geometry, so queries and touch events exclude that sprite; enabling notifications does not create a shape. Disabling notifications for an existing shape does not remove it from explicit queries.
+- Pixel events find candidates from current visual bounds, not custom trigger shapes. A small, offset or absent trigger cannot cut off visible pixel contact. `SetTriggerEnabled(false)` and trigger layers/masks filter event notifications; an explicit `touching` query does not require an event subscription or matching masks. A dragged target is excluded from queries and event dispatch, but can still sense other sprites itself. Releasing a drag does not replay an overlap event suppressed during the drag.
+
+`onTouchStart` reports an overlap transition, not a physics-solver contact. For example, a body can rest on a floor without overlapping its pixels; use `IsOnFloor` for grounded state. Queries use the current state, so moving or hiding a sprite after contact detection can change the result. Pixel precision applies to both sensing APIs; lower precision can miss small overlaps.
+
+The shape-clearing binding requires a matching native/Web runtime. Older native runtimes are rejected during initialization rather than calling a missing function.
+
+**Migration:** Earlier versions implicitly selected shape events whenever `physics` was enabled, while sprite queries checked body colliders. Physics projects that need shape-based detection zones must now set `touchByShape: true` explicitly and configure their trigger shapes. Non-physics defaults are unchanged. The setting now selects the same geometry for events and queries; the old event/query disagreement is not preserved.
+
 ### Tile maps
 
 Tile-map APIs should support reading/writing tiles, converting between cell and world coordinates, configuring collision, and applying bulk edits efficiently. Web builds should batch large edits rather than making one bridge call per tile.

@@ -86,6 +86,7 @@ type Game struct {
 	pathfindingState gamePathfindingState
 	audioState       gameAudioState
 	physicsEnabled   bool
+	touchByShape     bool
 
 	Camera Camera
 	camera *cameraImpl

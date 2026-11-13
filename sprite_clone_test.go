@@ -1476,6 +1476,8 @@ func (s *spyCloneSpriteMgr) SetCollisionLayer(obj pkgengine.Object, layer int64)
 
 func (s *spyCloneSpriteMgr) SetCollisionMask(obj pkgengine.Object, mask int64) {}
 
+func (s *spyCloneSpriteMgr) ClearColliderShape(pkgengine.Object, bool) {}
+
 func (s *spyCloneSpriteMgr) SetTriggerEnabled(obj pkgengine.Object, trigger bool) {}
 
 func (s *spyCloneSpriteMgr) SetCollisionEnabled(obj pkgengine.Object, enabled bool) {}

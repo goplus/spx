@@ -50,9 +50,9 @@ type SystemSettings struct {
 	PathCellSizeY           int
 	AudioAttenuation        float64
 	AudioMaxDistance        float64
-	CollisionByPixel        bool
-	AutoSetCollisionLayer   bool
+	TouchByShape            bool
 	PixelCollisionPrecision int64
+	AutoSetCollisionLayer   bool
 	GlobalGravity           float64
 	GlobalFriction          float64
 	GlobalAirDrag           float64
@@ -110,9 +110,9 @@ func ResolveSystemSettings(proj *ProjectConfig) SystemSettings {
 		PathCellSizeY:           base.OrDefault(proj.PathCellSizeY, DefaultPathCellSize),
 		AudioAttenuation:        base.OrDefault(proj.AudioAttenuation, 0),
 		AudioMaxDistance:        base.OrDefault(proj.AudioMaxDistance, float64(DefaultAudioMaxDistance)),
-		CollisionByPixel:        !proj.CollisionByShape && !proj.Physics,
-		AutoSetCollisionLayer:   proj.AutoSetCollisionLayer == nil || *proj.AutoSetCollisionLayer,
+		TouchByShape:            base.OrDefault(proj.TouchByShape, false),
 		PixelCollisionPrecision: collision.ParsePixelCollisionPrecision(proj.PixelCollisionPrecision),
+		AutoSetCollisionLayer:   base.OrDefault(proj.AutoSetCollisionLayer, true),
 		GlobalGravity:           base.OrDefault(proj.GlobalGravity, 1),
 		GlobalFriction:          base.OrDefault(proj.GlobalFriction, 1),
 		GlobalAirDrag:           base.OrDefault(proj.GlobalAirDrag, 1),

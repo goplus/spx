@@ -224,6 +224,7 @@ public:
 	GdInt get_trigger_layer();
 	void set_trigger_mask(GdInt p_mask);
 	GdInt get_trigger_mask();
+	void clear_collider_shape(GdBool p_is_trigger);
 	void set_collider_rect(GdVec2 p_center, GdVec2 p_size);
 	void set_collider_circle(GdVec2 p_center, GdFloat p_radius);
 	void set_collider_capsule(GdVec2 p_center, GdVec2 p_size);
