@@ -27,9 +27,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
                          ["dry-run", "publish-runtime", "publish-release", "publish-dev-npm"])
         self.assertEqual(self.workflow["concurrency"], {"group": "spx-release", "cancel-in-progress": "false"})
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
-        for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release"):
+        for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release", "run-spxbench-suite"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "write"})
-        self.assertEqual(self.jobs["run-spxbench-suite"]["permissions"], {"contents": "write"})
         # npm trusted publishing keeps release.yml as its direct caller.
         for name in ("publish-npm", "publish-dev-npm"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "read", "id-token": "write"})

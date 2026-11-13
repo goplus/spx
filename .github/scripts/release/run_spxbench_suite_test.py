@@ -10,7 +10,7 @@ from run_spxbench_suite import (SpxbenchSuiteError, SpxbenchSuiteGate, failing_c
 
 
 CANDIDATE_ENV = {"SPXBENCH_URL": "http://127.0.0.1", "SPXBENCH_API_TOKEN": "t",
-                 "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": "0.0.1-rc.1.1"}
+                 "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": "0.0.1-rc.1.1", "GITHUB_SHA": "abc123"}
 
 
 class FindSuiteIdTest(unittest.TestCase):
@@ -39,24 +39,18 @@ class FailingCasesTest(unittest.TestCase):
 
 class RequireEnvTest(unittest.TestCase):
     def test_missing_variable_raises(self):
-        os.environ.pop("SPXBENCH_SUITE_TEST_VAR", None)
-        with self.assertRaises(SpxbenchSuiteError):
-            require_env("SPXBENCH_SUITE_TEST_VAR")
-
-    def test_blank_value_raises(self):
-        os.environ["SPXBENCH_SUITE_TEST_VAR"] = "   "
-        try:
+        with mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(SpxbenchSuiteError):
                 require_env("SPXBENCH_SUITE_TEST_VAR")
-        finally:
-            os.environ.pop("SPXBENCH_SUITE_TEST_VAR", None)
+
+    def test_blank_value_raises(self):
+        with mock.patch.dict(os.environ, {"SPXBENCH_SUITE_TEST_VAR": "   "}):
+            with self.assertRaises(SpxbenchSuiteError):
+                require_env("SPXBENCH_SUITE_TEST_VAR")
 
     def test_value_is_trimmed(self):
-        os.environ["SPXBENCH_SUITE_TEST_VAR"] = " x "
-        try:
+        with mock.patch.dict(os.environ, {"SPXBENCH_SUITE_TEST_VAR": " x "}):
             self.assertEqual(require_env("SPXBENCH_SUITE_TEST_VAR"), "x")
-        finally:
-            os.environ.pop("SPXBENCH_SUITE_TEST_VAR", None)
 
 
 class JobVerdictTest(unittest.TestCase):
@@ -101,28 +95,94 @@ class SuiteRunConflictTest(unittest.TestCase):
         self.assertFalse(is_run_slot_busy({"error": "boom"}))
 
     def test_success_without_job_id_fails_immediately(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV), \
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {})):
             gate = SpxbenchSuiteGate()
             with self.assertRaisesRegex(SpxbenchSuiteError, "missing jobId"):
                 gate.start_suite_run(7)
 
+    def test_permanent_conflicts_and_http_errors_do_not_retry(self):
+        cases = ((409, " no ready cases ", "run rejected: no ready cases"),
+                 (409, {"error": "boom"}, 'run rejected: {"error": "boom"}'),
+                 (500, "unavailable", "run failed: HTTP 500: unavailable"))
+        for status, body, message in cases:
+            with self.subTest(status=status, body=body), \
+                 mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+                 mock.patch.object(SpxbenchSuiteGate, "request", return_value=(status, body)) as requested, \
+                 mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
+                with self.assertRaises(SpxbenchSuiteError) as caught:
+                    SpxbenchSuiteGate().start_suite_run(7)
+                self.assertEqual(str(caught.exception), message)
+                requested.assert_called_once_with("/__e2e/api/run?suite=7&spxVersion=0.0.1-rc.1.1", method="POST")
+                sleep.assert_not_called()
+
+
+class CandidateInstallTest(unittest.TestCase):
     def test_install_response_must_include_candidate(self):
-        with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx"}), \
+        with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx"}, clear=True), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {"versions": []})):
             gate = SpxbenchSuiteGate()
             with self.assertRaisesRegex(SpxbenchSuiteError, "did not include candidate"):
                 gate.install_candidate()
 
 
+class SuiteJobPollingTest(unittest.TestCase):
+    def test_only_the_requested_finished_job_is_returned(self):
+        states = [{"jobId": 12, "running": False},
+                  {"jobId": 11, "running": True},
+                  {"jobId": 11, "running": False}]
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+             mock.patch.object(run_spxbench_suite.time, "monotonic", return_value=100), \
+             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep, \
+             mock.patch.object(SpxbenchSuiteGate, "request",
+                               side_effect=[(200, state) for state in states]) as requested:
+            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), states[-1])
+        self.assertEqual(requested.call_args_list, [mock.call("/__e2e/api/state?job=11")] * 3)
+        self.assertEqual(sleep.call_args_list, [mock.call(30)] * 2)
+
+
+class DeleteCandidateReleaseTest(unittest.TestCase):
+    def test_command_results_preserve_failure_detail_and_logs(self):
+        cases = (
+            (0, "ignored", "ignored", None),
+            (1, " denied ", "fallback", "denied"),
+            (2, "", " missing ", "missing"),
+            (3, "", "", "gh exited 3"),
+            (4, "   ", "ignored", "gh exited 4"),
+        )
+        for code, stderr, stdout, failure in cases:
+            with self.subTest(code=code), \
+                 mock.patch.object(run_spxbench_suite, "run_command",
+                                   return_value=mock.Mock(returncode=code, stderr=stderr, stdout=stdout)) as command, \
+                 mock.patch.object(run_spxbench_suite, "log") as log:
+                self.assertEqual(run_spxbench_suite.delete_candidate_release("vtest"), failure)
+                command.assert_called_once_with("gh", "release", "delete", "vtest",
+                                                "--cleanup-tag", "--yes", check=False)
+                expected = [mock.call("deleting candidate prerelease vtest")]
+                if failure is not None:
+                    expected.append(mock.call(f"candidate prerelease deletion failed: {failure}"))
+                self.assertEqual(log.call_args_list, expected)
+
+    def test_os_error_is_reported_without_raising(self):
+        for message in ("gh unavailable", ""):
+            with self.subTest(message=message), \
+                 mock.patch.object(run_spxbench_suite, "run_command", side_effect=OSError(message)), \
+                 mock.patch.object(run_spxbench_suite, "log") as log:
+                self.assertEqual(run_spxbench_suite.delete_candidate_release("vtest"), message)
+                self.assertEqual(log.call_args_list, [
+                    mock.call("deleting candidate prerelease vtest"),
+                    mock.call(f"candidate prerelease deletion failed: {message}"),
+                ])
+
+
 class TimeoutTest(unittest.TestCase):
     def test_invalid_timeout_is_reported_as_configuration_error(self):
-        with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "SPXBENCH_TIMEOUT_MINUTES": "zero"}):
+        with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "SPXBENCH_TIMEOUT_MINUTES": "zero"}, clear=True):
             with self.assertRaisesRegex(SpxbenchSuiteError, "positive integer"):
                 SpxbenchSuiteGate()
 
     def test_busy_retry_stops_at_deadline(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV), \
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
              mock.patch.object(SpxbenchSuiteGate, "request",
                                return_value=(409, "a test run is already in progress")):
             gate = SpxbenchSuiteGate()
@@ -134,7 +194,7 @@ class TimeoutTest(unittest.TestCase):
             sleep.assert_called_once_with(1)
 
     def test_api_request_uses_remaining_budget(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV):
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True):
             gate = SpxbenchSuiteGate()
             gate.deadline = 105
             with mock.patch.object(run_spxbench_suite.time, "monotonic", return_value=100), \
@@ -149,7 +209,7 @@ class TimeoutTest(unittest.TestCase):
 
 class CandidateReleaseCleanupTest(unittest.TestCase):
     def test_creation_failure_still_cleans_up(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV), \
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
              mock.patch.object(run_spxbench_suite, "create_candidate_release",
                                side_effect=SpxbenchSuiteError("boom")), \
              mock.patch.object(run_spxbench_suite, "delete_candidate_release") as deleted:
@@ -158,7 +218,7 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
             deleted.assert_called_once_with("v0.0.1-rc.1.1")
 
     def test_cleanup_failure_does_not_hide_creation_failure(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV), \
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
              mock.patch.object(run_spxbench_suite, "create_candidate_release",
                                side_effect=SpxbenchSuiteError("release creation failed")), \
              mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value="release not found"):
@@ -166,7 +226,7 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
                 run_spxbench_suite.main()
 
     def test_successful_validation_fails_if_cleanup_fails(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV), \
+        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
              mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
              mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value="permission denied"), \
              mock.patch.object(SpxbenchSuiteGate, "resolve_suite", return_value=7), \
@@ -184,7 +244,7 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
                      (200, {"jobId": 11, "running": False, "summary": "passed", "total": 1,
                             "completed": 1, "passed": 1, "cases": [{"name": "smoke", "status": "pass"}]})]
         with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx",
-                                       "GITHUB_SHA": "abc123"}), \
+                                       "GITHUB_SHA": "abc123"}, clear=True), \
              mock.patch.object(run_spxbench_suite, "create_candidate_release") as created, \
              mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value=None) as deleted, \
              mock.patch.object(SpxbenchSuiteGate, "request", side_effect=responses) as requested:

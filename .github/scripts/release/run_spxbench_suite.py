@@ -146,14 +146,13 @@ def delete_candidate_release(candidate_tag):
     try:
         result = run_command("gh", "release", "delete", candidate_tag, "--cleanup-tag", "--yes", check=False)
     except OSError as error:
-        log(f"candidate prerelease deletion failed: {error}")
-        return str(error)
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip()
-        failure = detail or f"gh exited {result.returncode}"
-        log(f"candidate prerelease deletion failed: {failure}")
-        return failure
-    return None
+        failure = str(error)
+    else:
+        if result.returncode == 0:
+            return None
+        failure = (result.stderr or result.stdout or "").strip() or f"gh exited {result.returncode}"
+    log(f"candidate prerelease deletion failed: {failure}")
+    return failure
 
 
 class SpxbenchSuiteGate:
