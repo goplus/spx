@@ -41,6 +41,44 @@ jobs:
       release_tag: ${{ inputs.release_tag }}
       platforms: ${{ inputs.platforms }}
 
+  run-spxbench-suite:
+    name: Check release candidate with spxbench suite
+    needs: build-release
+    if: ${{ !cancelled() && inputs.operation == 'dry-run' && needs.build-release.result == 'success' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      CANDIDATE_VERSION: ${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - name: Check out release scripts
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download assembled SPX product release
+        uses: actions/download-artifact@v8
+        with:
+          name: spx-product-release-${{ needs.build-release.outputs.version }}
+          path: dist
+
+      - name: Run spxbench regression suite
+        shell: bash
+        env:
+          SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          WEB_ARCHIVE_PATH: dist/spx_web.zip
+          GITHUB_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/release/run_spxbench_suite.py
+
+      - name: Retry candidate prerelease cleanup after failure or cancellation
+        if: ${{ failure() || cancelled() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: v${{ env.CANDIDATE_VERSION }}
+        run: gh release delete "$CANDIDATE_TAG" --cleanup-tag --yes || true
+
   publish-runtime:
     name: Publish or reuse runtime release
     needs: build-release
@@ -199,6 +237,7 @@ jobs:
       - prepare-spx-release
       - publish-npm
       - publish-spx-release
+      - run-spxbench-suite
       - validate-dev-npm
       - publish-dev-npm
     if: ${{ !cancelled() }}
@@ -215,7 +254,7 @@ jobs:
 
           operation = os.environ["OPERATION"]
           required = {
-              "dry-run": ("build-release",),
+              "dry-run": ("build-release", "run-spxbench-suite"),
               "publish-runtime": ("build-release", "publish-runtime"),
               "publish-release": ("build-release", "publish-runtime", "prepare-spx-release", "publish-npm", "publish-spx-release"),
               "publish-dev-npm": ("validate-dev-npm", "publish-dev-npm"),
