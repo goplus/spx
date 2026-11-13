@@ -175,6 +175,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "./internal/gdengine/binding/web", "./internal/gdengine/impl", "./internal/engine/wrap",
                 "./pkg/ispx", "./internal/engine/coroutine",
             ],
+            "coverage-web-touch.out": ["."],
             "coverage-web-engine.out": ["./internal/engine"],
         },
         "web-process": {
@@ -234,11 +235,11 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                         options.append("-coverpkg=" + ",".join(packages))
                     if suite in ("native", "tools", "macos", "windows"):
                         options.append("-v")
-                    if suite in ("macos", "windows", "web-process") or profile == "coverage-web-engine.out":
+                    if suite in ("macos", "windows", "web-process") or profile in ("coverage-web-touch.out", "coverage-web-engine.out"):
                         self.assertIn("-run", args)
                         for option in options:
                             self.assertIn(option, args)
-                        self.assertEqual([arg for arg in args if arg.startswith(("./", "github.com/"))], packages)
+                        self.assertEqual([arg for arg in args if arg == "." or arg.startswith(("./", "github.com/"))], packages)
                         self.assertEqual([arg for arg in args if arg.startswith("-coverprofile=")], [options[0]])
                         self.assertFalse(any(arg.endswith(".go") for arg in args))
                     else:

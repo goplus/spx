@@ -1,8 +1,10 @@
 package spx
 
 import (
+	"bytes"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -10,7 +12,9 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
@@ -32,27 +36,31 @@ type layoutExtraBaseSprite struct {
 	value int
 }
 
-type polygonColliderSpriteMgr struct {
+type colliderSpy struct {
 	wrap.SpriteMgrImpl
-	clearedShapes    []bool
-	collisionCenter  mathf.Vec2
-	collisionPoints  []float32
-	collisionEnabled []bool
-	collisionLayer   int64
-	collisionMask    int64
-	triggerCenter    mathf.Vec2
-	triggerPoints    []float32
-	triggerEnabled   []bool
-	triggerLayer     int64
-	triggerMask      int64
-	rectCalls        int
-	rectCenter       mathf.Vec2
-	rectSize         mathf.Vec2
-	rectIsTrigger    bool
+	clearedShapes         []bool
+	collisionCenter       mathf.Vec2
+	collisionPoints       []float32
+	collisionEnabled      []bool
+	collisionLayer        int64
+	collisionMask         int64
+	collisionFilterWrites int
+	triggerCenter         mathf.Vec2
+	triggerPoints         []float32
+	triggerEnabled        []bool
+	triggerLayer          int64
+	triggerMask           int64
+	triggerLayerWrites    int
+	triggerMaskWrites     int
+	physicsWrites         int
+	rectCalls             int
+	rectCenter            mathf.Vec2
+	rectSize              mathf.Vec2
+	rectIsTrigger         bool
 }
 
 type spritePhysicsAPIManager struct {
-	polygonColliderSpriteMgr
+	colliderSpy
 	velocity, impulse mathf.Vec2
 	gravity           float64
 	floor             bool
@@ -104,8 +112,8 @@ func TestSpriteTouchStartOverloadsFilterNamedTargets(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("touch callbacks = %v, want %v", got, want)
 	}
-	if targets := source.physics().collisionTargets; len(targets) != 2 || !targets["first"] || !targets["second"] {
-		t.Fatalf("collision targets = %v, want first and second", targets)
+	if targets := source.physics().touchTargets; len(targets) != 2 || !targets["first"] || !targets["second"] {
+		t.Fatalf("touch targets = %v, want first and second", targets)
 	}
 }
 
@@ -670,9 +678,9 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 	sprite.runtimeState.scale = 1
 	sprite.runtimeState.syncSprite = &engine.Sprite{}
 	sprite.transform().direction = 90
-	sprite.physics().triggerInfo.Type = physicsColliderAuto
-	sprite.physics().triggerInfo.Pivot = mathf.NewVec2(0.25, 0)
-	sprite.physics().triggerInfo.Params = []float64{29.5, 29}
+	sprite.physics().triggerCollider.Type = collision.ColliderAuto
+	sprite.physics().triggerCollider.Pivot = mathf.NewVec2(0.25, 0)
+	sprite.physics().triggerCollider.Params = []float64{29.5, 29}
 
 	gotX, gotY := sprite.transform().fixWorldRange(1000, 0)
 	if gotX != 253 || gotY != 0 {
@@ -1146,8 +1154,8 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	scheduler.Join(thread)
 }
 
-func TestPhysicsLayersSurviveClone(t *testing.T) {
-	sprite, mgr := newPolygonColliderTestSprite(t)
+func TestPhysicsComponentCloneCopiesFilters(t *testing.T) {
+	sprite, mgr := newColliderTestSprite(t)
 	sprite.SetCollisionLayer(2)
 	sprite.SetCollisionMask(4)
 	sprite.SetTriggerLayer(8)
@@ -1157,29 +1165,110 @@ func TestPhysicsLayersSurviveClone(t *testing.T) {
 		t.Fatalf("proxy layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
 	}
 
-	clone := sprite.physics().cloneFor(&SpriteImpl{})
-	if clone.collisionInfo.Layer != 2 || clone.collisionInfo.Mask != 4 || clone.triggerInfo.Layer != 8 || clone.triggerInfo.Mask != 16 {
-		t.Fatalf("clone layers = (%d, %d, %d, %d)", clone.collisionInfo.Layer, clone.collisionInfo.Mask, clone.triggerInfo.Layer, clone.triggerInfo.Mask)
+	clone := sprite.physics().cloneFor(&SpriteImpl{g: sprite.g})
+	if clone.bodyCollider.Layer != 2 || clone.bodyCollider.Mask != 4 || clone.triggerCollider.Layer != 8 || clone.triggerCollider.Mask != 16 {
+		t.Fatalf("clone layers = (%d, %d, %d, %d)", clone.bodyCollider.Layer, clone.bodyCollider.Mask, clone.triggerCollider.Layer, clone.triggerCollider.Mask)
 	}
 
 	mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask = 0, 0, 0, 0
-	sprite.physics().collisionInfo.Type = physicsColliderNone
-	sprite.physics().triggerInfo.Type = physicsColliderNone
-	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.syncSprite)
+	clone.bodyCollider.Type = collision.ColliderNone
+	clone.triggerCollider.Type = collision.ColliderNone
+	clone.initializeProxy(&engine.Sprite{Sprite: pkgengine.Sprite{Id: 2}})
 	if mgr.collisionLayer != 2 || mgr.collisionMask != 4 || mgr.triggerLayer != 8 || mgr.triggerMask != 16 {
-		t.Fatalf("replayed layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
+		t.Fatalf("clone proxy filters = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
+	}
+}
+
+func TestTouchSubscriptionsRefreshOnlyTriggerFilters(t *testing.T) {
+	for _, byShape := range []bool{false, true} {
+		t.Run(fmt.Sprintf("shape=%v", byShape), func(t *testing.T) {
+			setupRuntimeScheduler(t)
+			sprite, mgr := newColliderTestSprite(t)
+			sprite.name = "A"
+			game := sprite.g
+			game.autoTouchLayers = true
+			game.touchByShape = byShape
+			game.touchFilters = map[string]*touchFilter{
+				"A": {Layer: 1},
+				"B": {Layer: 2},
+				"C": {Layer: 4},
+			}
+			game.touchEntries = []touchEntry{{sprite: sprite, filter: game.touchFilters["A"]}}
+			sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+			sprite.physics().initializeProxy(sprite.runtimeState.syncSprite)
+			if mgr.collisionLayer != 0 || mgr.collisionMask != 0 {
+				t.Fatal("automatic initialization must clear body filters")
+			}
+			sprite.SetPhysicsMode(KinematicPhysics)
+			if err := sprite.SetColliderShape(false, RectCollider, []float64{4, 5}); err != nil {
+				t.Fatal(err)
+			}
+			sprite.SetCollisionLayer(8)
+			sprite.SetCollisionMask(16)
+			sprite.SetCollisionEnabled(false)
+			sprite.SetTriggerEnabled(false)
+			sprite.SetColliderPivot(true, 100, 200)
+			sprite.markAutoPhysicsShapesDirty()
+			physics := sprite.physics()
+			wantCollision, wantTrigger := physics.bodyCollider, physics.triggerCollider
+			wantTrigger.Mask = 6
+			wantBackend := *mgr
+			wantBackend.triggerMask = 6
+			wantBackend.triggerLayerWrites++
+			wantBackend.triggerMaskWrites++
+
+			sprite.OnTouchStart__3([]SpriteName{"B", "B", "C"}, func(Sprite) {})
+			if !reflect.DeepEqual(*mgr, wantBackend) {
+				t.Fatalf("subscription must update only trigger filters once: got %+v, want %+v", *mgr, wantBackend)
+			}
+			if !reflect.DeepEqual(physics.bodyCollider, wantCollision) || !reflect.DeepEqual(physics.triggerCollider, wantTrigger) || !physics.autoShapesDirty {
+				t.Fatalf("subscription changed shape state: collision=%v trigger=%v dirty=%v", physics.bodyCollider, physics.triggerCollider, physics.autoShapesDirty)
+			}
+			sprite.OnTouchStart__3([]SpriteName{"B", "C"}, func(Sprite) {})
+			sprite.OnTouchStart__3(nil, func(Sprite) {})
+			if !reflect.DeepEqual(*mgr, wantBackend) || len(physics.touchTargets) != 2 {
+				t.Fatal("unchanged subscriptions refreshed filters")
+			}
+		})
+	}
+}
+
+func TestTouchSubscriptionsPreserveManualFilters(t *testing.T) {
+	for _, byShape := range []bool{false, true} {
+		t.Run(fmt.Sprintf("shape=%v", byShape), func(t *testing.T) {
+			setupRuntimeScheduler(t)
+			sprite, mgr := newColliderTestSprite(t)
+			sprite.g.touchByShape = byShape
+			sprite.scriptEventBindings.bind(&sprite.g.scriptEvents, sprite)
+			sprite.SetCollisionLayer(2)
+			sprite.SetCollisionMask(4)
+			sprite.SetTriggerLayer(8)
+			sprite.SetTriggerMask(16)
+			physics := sprite.physics()
+			wantCollision, wantTrigger := physics.bodyCollider, physics.triggerCollider
+			wantBackend := *mgr
+
+			sprite.OnTouchStart__3([]SpriteName{"B", "C"}, func(Sprite) {})
+			if !reflect.DeepEqual(*mgr, wantBackend) ||
+				!reflect.DeepEqual(physics.bodyCollider, wantCollision) || !reflect.DeepEqual(physics.triggerCollider, wantTrigger) {
+				t.Fatal("touch subscription changed manual filters")
+			}
+			if len(physics.touchTargets) != 2 || !physics.touchTargets["B"] || !physics.touchTargets["C"] {
+				t.Fatalf("touch targets = %v, want B and C", physics.touchTargets)
+			}
+		})
 	}
 }
 
 func TestPixelSensingNeedsNoTriggerShape(t *testing.T) {
 	for _, byShape := range []bool{false, true} {
-		sprite, mgr := newPolygonColliderTestSprite(t)
+		sprite, mgr := newColliderTestSprite(t)
 		sprite.g.touchByShape = byShape
 		for _, trigger := range []bool{false, true} {
 			cfg := sprite.physics().colliderConfig(trigger)
-			cfg.Type = physicsColliderNone
-			cfg.syncShape(sprite.runtimeState.syncSprite, trigger, sprite)
-			if err := sprite.SetColliderShape(trigger, physicsColliderNone, nil); err != nil {
+			cfg.Type = collision.ColliderNone
+			cfg.initializeShape(sprite.runtimeState.syncSprite, trigger, sprite)
+			if err := sprite.SetColliderShape(trigger, collision.ColliderNone, nil); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -1200,14 +1289,14 @@ func TestPixelSensingNeedsNoTriggerShape(t *testing.T) {
 }
 
 func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
-	sprite, mgr := newPolygonColliderTestSprite(t)
+	sprite, mgr := newColliderTestSprite(t)
 	points := []float64{-1, -2, 3, -4, 5, 6}
 
-	sprite.physics().collisionInfo.Pivot = mathf.NewVec2(2, 3)
+	sprite.physics().bodyCollider.Pivot = mathf.NewVec2(2, 3)
 	if err := sprite.SetColliderShape(false, PolygonCollider, points); err != nil {
 		t.Fatalf("SetColliderShape(collision) failed: %v", err)
 	}
-	sprite.physics().triggerInfo.Pivot = mathf.NewVec2(-2, 1)
+	sprite.physics().triggerCollider.Pivot = mathf.NewVec2(-2, 1)
 	if err := sprite.SetColliderShape(true, PolygonCollider, points); err != nil {
 		t.Fatalf("SetColliderShape(trigger) failed: %v", err)
 	}
@@ -1238,7 +1327,7 @@ func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
 }
 
 func TestShapeRefreshKeepsCollidersDisabled(t *testing.T) {
-	sprite, mgr := newPolygonColliderTestSprite(t)
+	sprite, mgr := newColliderTestSprite(t)
 	params := []float64{-1, -2, 3, -4, 5, 6}
 	for _, trigger := range []bool{false, true} {
 		if err := sprite.SetColliderShape(trigger, PolygonCollider, params); err != nil {
@@ -1265,14 +1354,14 @@ func TestShapeRefreshKeepsCollidersDisabled(t *testing.T) {
 }
 
 func TestProxyCollectionRefreshesAutoShapesWithoutTransformChanges(t *testing.T) {
-	sprite, mgr := newPolygonColliderTestSprite(t)
+	sprite, mgr := newColliderTestSprite(t)
 	sprite.costumes[0].atlas = false
 	previous := cachedBounds
 	cachedBounds = map[string]mathf.Rect2{
 		sprite.costumes[0].path: {Size: mathf.NewVec2(20, 30)},
 	}
 	t.Cleanup(func() { cachedBounds = previous })
-	sprite.physics().triggerInfo.Params = []float64{1, 1}
+	sprite.physics().triggerCollider.Params = []float64{1, 1}
 	sprite.SetTriggerEnabled(false)
 
 	sprite.markAutoPhysicsShapesDirty()
@@ -1288,7 +1377,7 @@ func TestProxyCollectionRefreshesAutoShapesWithoutTransformChanges(t *testing.T)
 }
 
 func TestSetColliderShapeRejectsInvalidParamsAtomically(t *testing.T) {
-	sprite, mgr := newPolygonColliderTestSprite(t)
+	sprite, mgr := newColliderTestSprite(t)
 	valid := []float64{-1, -2, 3, -4, 5, 6}
 	if err := sprite.SetColliderShape(false, PolygonCollider, valid); err != nil {
 		t.Fatalf("SetColliderShape(collision) failed: %v", err)
@@ -1303,14 +1392,15 @@ func TestSetColliderShapeRejectsInvalidParamsAtomically(t *testing.T) {
 	triggerPoints := slices.Clone(mgr.triggerPoints)
 	collisionEnabledCalls := slices.Clone(mgr.collisionEnabled)
 	triggerEnabledCalls := slices.Clone(mgr.triggerEnabled)
-	collisionParamsStorage := &sprite.physics().collisionInfo.Params[0]
-	triggerParamsStorage := &sprite.physics().triggerInfo.Params[0]
+	collisionParamsStorage := &sprite.physics().bodyCollider.Params[0]
+	triggerParamsStorage := &sprite.physics().triggerCollider.Params[0]
 
-	if err := sprite.SetColliderShape(false, PolygonCollider, []float64{1, 2, 3, 4, 5}); err == nil {
-		t.Fatal("SetColliderShape(collision) accepted an invalid polygon")
+	wantErr := "invalid polygon: want at least 3 coordinate pairs, got 5 values"
+	if err := sprite.SetColliderShape(false, PolygonCollider, []float64{1, 2, 3, 4, 5}); err == nil || err.Error() != wantErr {
+		t.Fatalf("SetColliderShape(collision) error = %v, want %q", err, wantErr)
 	}
-	if err := sprite.SetColliderShape(true, PolygonCollider, []float64{1, 2, 3, 4, 5}); err == nil {
-		t.Fatal("SetColliderShape(trigger) accepted an invalid polygon")
+	if err := sprite.SetColliderShape(true, PolygonCollider, []float64{1, 2, 3, 4, 5}); err == nil || err.Error() != wantErr {
+		t.Fatalf("SetColliderShape(trigger) error = %v, want %q", err, wantErr)
 	}
 
 	gotCollisionType, gotCollisionParams := sprite.ColliderShape(false)
@@ -1321,7 +1411,7 @@ func TestSetColliderShapeRejectsInvalidParamsAtomically(t *testing.T) {
 	if gotTriggerType != triggerType || !slices.Equal(gotTriggerParams, triggerParams) {
 		t.Fatalf("trigger shape changed after rejection: type=%d params=%v, want type=%d params=%v", gotTriggerType, gotTriggerParams, triggerType, triggerParams)
 	}
-	if &sprite.physics().collisionInfo.Params[0] != collisionParamsStorage || &sprite.physics().triggerInfo.Params[0] != triggerParamsStorage {
+	if &sprite.physics().bodyCollider.Params[0] != collisionParamsStorage || &sprite.physics().triggerCollider.Params[0] != triggerParamsStorage {
 		t.Fatal("rejected shape replaced live parameter storage")
 	}
 	if !slices.Equal(mgr.collisionPoints, collisionPoints) || !slices.Equal(mgr.triggerPoints, triggerPoints) {
@@ -1377,13 +1467,13 @@ func TestPhysicsConfigDimensions(t *testing.T) {
 		kind                ColliderShapeType
 		one, full, negative mathf.Vec2
 	}{
-		{"rect", physicsColliderRect, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
-		{"auto", physicsColliderAuto, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
-		{"none", physicsColliderNone, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
-		{"polygon", physicsColliderPolygon, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"rect", collision.ColliderRect, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"auto", collision.ColliderAuto, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"none", collision.ColliderNone, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"polygon", collision.ColliderPolygon, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
 		{"unknown", 99, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
-		{"circle", physicsColliderCircle, mathf.NewVec2(4, 4), mathf.NewVec2(4, 4), mathf.Vec2{}},
-		{"capsule", physicsColliderCapsule, mathf.Vec2{}, mathf.NewVec2(4, 3), mathf.NewVec2(0, 3)},
+		{"circle", collision.ColliderCircle, mathf.NewVec2(4, 4), mathf.NewVec2(4, 4), mathf.Vec2{}},
+		{"capsule", collision.ColliderCapsule, mathf.Vec2{}, mathf.NewVec2(4, 3), mathf.NewVec2(0, 3)},
 	} {
 		t.Run(shape.name, func(t *testing.T) {
 			for _, tt := range []struct {
@@ -1399,7 +1489,7 @@ func TestPhysicsConfigDimensions(t *testing.T) {
 				{"negative", []float64{-2, 3}, shape.negative},
 			} {
 				t.Run(tt.name, func(t *testing.T) {
-					cfg := physicConfig{Type: shape.kind, Params: tt.params}
+					cfg := colliderConfig{Type: shape.kind, Params: tt.params}
 					x, y := cfg.getDimensions()
 					if got := mathf.NewVec2(x, y); got != tt.want {
 						t.Fatalf("dimensions = %v, want %v", got, tt.want)
@@ -1416,15 +1506,15 @@ func TestPhysicsApplyRectAndAutoShapes(t *testing.T) {
 		kind  ColliderShapeType
 		pivot mathf.Vec2
 	}{
-		{"rect", physicsColliderRect, mathf.NewVec2(6, 8)},
-		{"auto", physicsColliderAuto, mathf.NewVec2(80, -40)},
+		{"rect", collision.ColliderRect, mathf.NewVec2(6, 8)},
+		{"auto", collision.ColliderAuto, mathf.NewVec2(80, -40)},
 	} {
 		for _, trigger := range []bool{false, true} {
 			for _, params := range [][]float64{nil, {}, {2}, {2, 3}, {-2, 3, 4}} {
 				t.Run(fmt.Sprintf("%s/trigger=%t/params=%#v", shape.name, trigger, params), func(t *testing.T) {
-					sprite, mgr := newPolygonColliderTestSprite(t)
-					cfg := physicConfig{Type: shape.kind, Pivot: mathf.NewVec2(3, 4), Params: params}
-					cfg.applyShape(sprite.runtimeState.syncSprite, trigger, sprite)
+					sprite, mgr := newColliderTestSprite(t)
+					cfg := colliderConfig{Type: shape.kind, Pivot: mathf.NewVec2(3, 4), Params: params}
+					cfg.syncShape(sprite.runtimeState.syncSprite, trigger, sprite)
 					if len(params) < 2 {
 						if mgr.rectCalls != 0 {
 							t.Fatalf("short params caused %d rect calls", mgr.rectCalls)
@@ -1443,7 +1533,7 @@ func TestPhysicsApplyRectAndAutoShapes(t *testing.T) {
 
 func TestSpritePhysicsAPIKeepsBackendAndColliderState(t *testing.T) {
 	setupImmediateEngineCalls(t)
-	sprite, _ := newPolygonColliderTestSprite(t)
+	sprite, _ := newColliderTestSprite(t)
 	mgr := &spritePhysicsAPIManager{floor: true}
 	pkgengine.SpriteMgr = mgr
 	sprite.SetVelocity(3, 4)
@@ -1465,7 +1555,7 @@ func TestSpritePhysicsAPIKeepsBackendAndColliderState(t *testing.T) {
 		for _, tt := range []struct {
 			kind   ColliderShapeType
 			params []float64
-		}{{physicsColliderCircle, []float64{3}}, {physicsColliderCapsule, []float64{3, 8}}} {
+		}{{collision.ColliderCircle, []float64{3}}, {collision.ColliderCapsule, []float64{3, 8}}} {
 			if err := sprite.SetColliderShape(trigger, tt.kind, tt.params); err != nil {
 				t.Fatal(err)
 			}
@@ -1476,36 +1566,44 @@ func TestSpritePhysicsAPIKeepsBackendAndColliderState(t *testing.T) {
 			if mgr.shapeCenter != mathf.NewVec2(6, 8) || mgr.shapeTrigger != trigger {
 				t.Fatalf("shape center=%v, trigger=%v", mgr.shapeCenter, mgr.shapeTrigger)
 			}
-			if tt.kind == physicsColliderCircle && mgr.circleRadius != 6 {
+			if tt.kind == collision.ColliderCircle && mgr.circleRadius != 6 {
 				t.Fatalf("scaled circle radius=%v,want6", mgr.circleRadius)
 			}
-			if tt.kind == physicsColliderCapsule && mgr.capsuleSize != mathf.NewVec2(12, 16) {
+			if tt.kind == collision.ColliderCapsule && mgr.capsuleSize != mathf.NewVec2(12, 16) {
 				t.Fatalf("scaled capsule=%v,want(12,16)", mgr.capsuleSize)
 			}
 		}
-	}
-	cfg := physicConfig{Layer: 2, Mask: 4, Type: physicsColliderCircle, Params: []float64{3}, Pivot: mathf.NewVec2(1, 2)}
-	if got := cfg.String(); !strings.Contains(got, "Mask: 4, Layer: 2") || !strings.Contains(got, "Params: [3]") || !strings.Contains(got, fmt.Sprint(cfg.Pivot)) {
-		t.Fatalf("missing config diagnostics: %s", got)
 	}
 	sprite.runtimeState.syncSprite = nil
 	sprite.updatePhysicsShapesScale()
 }
 
-func TestPhysicsShapeValidationRejectsWrongArity(t *testing.T) {
+func TestPhysicsShapeValidation(t *testing.T) {
 	for _, tt := range []struct {
-		kind   ColliderShapeType
-		params []float64
-		valid  bool
+		kind    ColliderShapeType
+		params  []float64
+		wantErr string
 	}{
-		{physicsColliderRect, []float64{2, 3}, true}, {physicsColliderRect, []float64{2}, false},
-		{physicsColliderCircle, []float64{2}, true}, {physicsColliderCircle, []float64{2, 3}, false},
-		{physicsColliderCapsule, []float64{2, 3}, true}, {physicsColliderCapsule, []float64{2}, false},
-		{ColliderShapeType(99), nil, false},
+		{collision.ColliderNone, nil, ""}, {collision.ColliderAuto, nil, ""},
+		{collision.ColliderRect, []float64{2, 3}, ""},
+		{collision.ColliderRect, []float64{2}, "invalid rect parameter count: got 1, want 2"},
+		{collision.ColliderCircle, []float64{2}, ""},
+		{collision.ColliderCircle, []float64{2, 3}, "invalid circle parameter count: got 2, want 1"},
+		{collision.ColliderCapsule, []float64{2, 3}, ""},
+		{collision.ColliderCapsule, []float64{2}, "invalid capsule parameter count: got 1, want 2"},
+		{collision.ColliderPolygon, []float64{0, 0, 1, 0, 0, 1}, ""},
+		{collision.ColliderPolygon, []float64{0, 0, 1, 0}, "invalid polygon: want at least 3 coordinate pairs, got 4 values"},
+		{collision.ColliderPolygon, []float64{0, 0, 1, 0, 0, 1, 2}, "invalid polygon: want at least 3 coordinate pairs, got 7 values"},
+		{ColliderShapeType(99), nil, "unknown collider shape type: 99"},
 	} {
-		cfg := physicConfig{Type: tt.kind, Params: tt.params}
-		if got := cfg.validateShape(); got != tt.valid {
-			t.Errorf("shape %v valid=%v,want%v", cfg, got, tt.valid)
+		cfg := colliderConfig{Type: tt.kind, Params: tt.params}
+		err := cfg.validateShape()
+		if tt.wantErr == "" {
+			if err != nil {
+				t.Errorf("shape %v: %v", cfg, err)
+			}
+		} else if err == nil || err.Error() != tt.wantErr {
+			t.Errorf("shape %v error = %v, want %q", cfg, err, tt.wantErr)
 		}
 	}
 	for name, want := range map[string]PhysicsMode{"kinematic": KinematicPhysics, "dynamic": DynamicPhysics, "static": StaticPhysics, "no": NoPhysics, "unknown": NoPhysics} {
@@ -1604,22 +1702,25 @@ func TestSpriteBounceOffEdgeWithCameraArea(t *testing.T) {
 }
 
 func TestPhysicsComponentRejectsMalformedConfiguredShapes(t *testing.T) {
+	var warnings bytes.Buffer
+	spxlog.SetStdoutOutput(&warnings)
+	t.Cleanup(func() { spxlog.SetStdoutOutput(os.Stdout) })
+
 	sprite := &SpriteImpl{g: &Game{}, name: "invalid"}
 	component := &physicsComponent{}
 	component.initialize(sprite, &coreproject.SpriteConfig{
 		CollisionShapeType: "rect", CollisionShapeParams: []float64{1},
 		TriggerShapeType: "circle", TriggerShapeParams: []float64{1, 2},
 	})
-	if component.collisionInfo.Type != physicsColliderNone || component.collisionInfo.Params != nil ||
-		component.triggerInfo.Type != physicsColliderAuto || component.triggerInfo.Params != nil {
-		t.Fatalf("invalid shapes were retained: collision=%+v trigger=%+v", component.collisionInfo, component.triggerInfo)
+	if component.bodyCollider.Type != collision.ColliderNone || component.bodyCollider.Params != nil ||
+		component.triggerCollider.Type != collision.ColliderAuto || component.triggerCollider.Params != nil {
+		t.Fatalf("invalid shapes were retained: collision=%+v trigger=%+v", component.bodyCollider, component.triggerCollider)
 	}
-	sprite.g.physicsEnabled = true
-	sprite.g.isAutoSetCollisionLayer = true
-	sprite.g.sprCollisionInfos = map[string]*spriteCollisionInfo{"invalid": {Layer: 4, Mask: 10}}
-	component.initCollisionParams()
-	if component.collisionInfo.Layer != 4 || component.collisionInfo.Mask != 10 || component.triggerInfo.Layer != 4 || component.triggerInfo.Mask != 10 {
-		t.Fatal("automatic physical collision groups did not match the configured sprite groups")
+	output := warnings.String()
+	if strings.Count(output, "[WARN]") != 2 ||
+		!strings.Contains(output, "Invalid collider for sprite invalid: invalid rect parameter count: got 1, want 2; using none") ||
+		!strings.Contains(output, "Invalid trigger for sprite invalid: invalid circle parameter count: got 2, want 1; using auto") {
+		t.Fatalf("warnings must report each shape's error and fallback once: %q", output)
 	}
 }
 
@@ -1627,54 +1728,62 @@ func (*shiftedSprite) Main() {}
 
 func (*layoutExtraBaseSprite) Main() {}
 
-func (m *polygonColliderSpriteMgr) ClearColliderShape(_ pkgengine.Object, trigger bool) {
+func (m *colliderSpy) ClearColliderShape(_ pkgengine.Object, trigger bool) {
 	m.clearedShapes = append(m.clearedShapes, trigger)
 }
 
-func (m *polygonColliderSpriteMgr) SetCollisionLayer(_ pkgengine.Object, layer int64) {
+func (m *colliderSpy) SetCollisionLayer(_ pkgengine.Object, layer int64) {
 	m.collisionLayer = layer
+	m.collisionFilterWrites++
 }
 
-func (m *polygonColliderSpriteMgr) SetCollisionMask(_ pkgengine.Object, mask int64) {
+func (m *colliderSpy) SetCollisionMask(_ pkgengine.Object, mask int64) {
 	m.collisionMask = mask
+	m.collisionFilterWrites++
 }
 
-func (m *polygonColliderSpriteMgr) SetTriggerLayer(_ pkgengine.Object, layer int64) {
+func (m *colliderSpy) SetTriggerLayer(_ pkgengine.Object, layer int64) {
 	m.triggerLayer = layer
+	m.triggerLayerWrites++
 }
 
-func (m *polygonColliderSpriteMgr) SetTriggerMask(_ pkgengine.Object, mask int64) {
+func (m *colliderSpy) SetTriggerMask(_ pkgengine.Object, mask int64) {
 	m.triggerMask = mask
+	m.triggerMaskWrites++
 }
 
-func (m *polygonColliderSpriteMgr) SetGravityScale(pkgengine.Object, float64) {}
+func (m *colliderSpy) SetGravityScale(pkgengine.Object, float64) {
+	m.physicsWrites++
+}
 
-func (m *polygonColliderSpriteMgr) SetPhysicsMode(pkgengine.Object, int64) {}
+func (m *colliderSpy) SetPhysicsMode(pkgengine.Object, int64) {
+	m.physicsWrites++
+}
 
-func (m *polygonColliderSpriteMgr) SetColliderPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
+func (m *colliderSpy) SetColliderPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
 	m.collisionCenter = center
 	m.collisionPoints = slices.Clone(points.([]float32))
 }
 
-func (m *polygonColliderSpriteMgr) SetCollisionEnabled(_ pkgengine.Object, enabled bool) {
+func (m *colliderSpy) SetCollisionEnabled(_ pkgengine.Object, enabled bool) {
 	m.collisionEnabled = append(m.collisionEnabled, enabled)
 }
 
-func (m *polygonColliderSpriteMgr) SetTriggerPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
+func (m *colliderSpy) SetTriggerPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
 	m.triggerCenter = center
 	m.triggerPoints = slices.Clone(points.([]float32))
 }
 
-func (m *polygonColliderSpriteMgr) SetTriggerEnabled(_ pkgengine.Object, enabled bool) {
+func (m *colliderSpy) SetTriggerEnabled(_ pkgengine.Object, enabled bool) {
 	m.triggerEnabled = append(m.triggerEnabled, enabled)
 }
 
-func (m *polygonColliderSpriteMgr) SetTriggerRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
+func (m *colliderSpy) SetTriggerRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
 	m.rectCalls++
 	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, true
 }
 
-func (m *polygonColliderSpriteMgr) SetColliderRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
+func (m *colliderSpy) SetColliderRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
 	m.rectCalls++
 	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, false
 }
@@ -1810,10 +1919,10 @@ func newTestTransformSprite(x, y float64) *SpriteImpl {
 	return sprite
 }
 
-func newPolygonColliderTestSprite(t *testing.T) (*SpriteImpl, *polygonColliderSpriteMgr) {
+func newColliderTestSprite(t *testing.T) (*SpriteImpl, *colliderSpy) {
 	t.Helper()
 	original := pkgengine.SpriteMgr
-	mgr := &polygonColliderSpriteMgr{}
+	mgr := &colliderSpy{}
 	pkgengine.SpriteMgr = mgr
 	t.Cleanup(func() {
 		pkgengine.SpriteMgr = original

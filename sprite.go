@@ -415,7 +415,7 @@ type Sprite interface {
 	IsOnFloor() bool
 
 	// Collider Methods
-	SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error
+	SetColliderShape(isTrigger bool, shapeType ColliderShapeType, params []float64) error
 	ColliderShape(isTrigger bool) (ColliderShapeType, []float64)
 	SetColliderPivot(isTrigger bool, offsetX, offsetY float64)
 	ColliderPivot(isTrigger bool) (offsetX, offsetY float64)
@@ -429,7 +429,7 @@ type Sprite interface {
 	CollisionEnabled() bool
 
 	// Trigger Methods
-	SetTriggerEnabled(trigger bool)
+	SetTriggerEnabled(enabled bool)
 	SetTriggerLayer(layer int64)
 	SetTriggerMask(mask int64)
 	TriggerLayer() int64

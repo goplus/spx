@@ -18,50 +18,38 @@ package spx
 
 import (
 	"fmt"
+	"math/bits"
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
-	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-// -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
-const (
-	physicsColliderNone    = collision.ColliderNone
-	physicsColliderAuto    = collision.ColliderAuto
-	physicsColliderCircle  = collision.ColliderCircle
-	physicsColliderRect    = collision.ColliderRect
-	physicsColliderCapsule = collision.ColliderCapsule
-	physicsColliderPolygon = collision.ColliderPolygon
-)
+const touchLayerCount = 32 // Godot trigger layer bit count.
 
-const collisionLayerCount = 32 // Engine limit: max 32 collision layers
-
-type rayCastResult struct {
-	Hited    bool
-	SpriteId int64
+type raycastResult struct {
+	Hit      bool
+	SpriteID int64
 	PosX     float64
 	PosY     float64
 }
 
-type spriteCollisionInfo struct {
-	layerIndex int
-	Layer      int64
-	Mask       int64
+type touchFilter struct {
+	Layer int64
+	Mask  int64
 }
 
-type spriteCollisionData struct {
+func (f *touchFilter) layerIndex() int {
+	return max(0, bits.Len64(uint64(f.Layer))-1)
+}
+
+type touchEntry struct {
 	sprite *SpriteImpl
-	info   *spriteCollisionInfo
+	filter *touchFilter
 }
 
-// -----------------------------------------------------------------------------
-// Detection
-// -----------------------------------------------------------------------------
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
 	ary := engine.Managers().PhysicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
 	return p.checkCollision(ary)
@@ -72,9 +60,6 @@ func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
 	return p.checkCollision(ary)
 }
 
-// -----------------------------------------------------------------------------
-// Raycast
-// -----------------------------------------------------------------------------
 func (p *Game) Raycast__0(fromX, fromY, toX, toY float64) (hit bool, sprite Sprite, hitX, hitY float64) {
 	return p.Raycast__2(fromX, fromY, toX, toY, nil)
 }
@@ -103,9 +88,9 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 	if result == nil {
 		return false, nil, 0, 0
 	}
-	var target Sprite = nil
-	if result.Hited {
-		sprite := engine.GetSprite(result.SpriteId)
+	var target Sprite
+	if result.Hit {
+		sprite := engine.GetSprite(result.SpriteID)
 		if sprite != nil {
 			impl := sprite.Target.(*SpriteImpl)
 			if impl != nil {
@@ -113,12 +98,9 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 			}
 		}
 	}
-	return result.Hited, target, result.PosX, result.PosY
+	return result.Hit, target, result.PosX, result.PosY
 }
 
-// -----------------------------------------------------------------------------
-// Debug Draw
-// -----------------------------------------------------------------------------
 func (p *Game) DebugDrawRect(posX, posY, width, height float64, color Color) {
 	engine.Managers().DebugMgr.DebugDrawRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), toMathfColor(color))
 }
@@ -143,14 +125,11 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Setup
-// -----------------------------------------------------------------------------
 func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
-	p.isAutoSetCollisionLayer = settings.AutoSetCollisionLayer
+	p.autoTouchLayers = settings.AutoSetCollisionLayer // Legacy name for automatic touch filtering.
 	p.touchByShape = settings.TouchByShape
 	spxlog.Debug("TouchByShape: %v", settings.TouchByShape)
-	spxlog.Debug("IsAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
+	spxlog.Debug("AutoTouchLayers: %v", p.autoTouchLayers)
 
 	engine.Managers().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
 
@@ -159,97 +138,84 @@ func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	engine.Managers().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
 	engine.Managers().PhysicsMgr.SetCollisionSystemType(!settings.TouchByShape)
 
-	p.resetCollisionLayerState()
-	if p.isAutoSetCollisionLayer {
-		p.sprCollisionInfos = p.buildSpriteCollisionInfos()
+	p.touchFilters = nil
+	p.touchEntries = nil
+	if p.autoTouchLayers {
+		p.touchFilters = p.buildTouchFilters()
 	}
 }
 
-func (p *Game) resetCollisionLayerState() {
-	p.sprCollisionInfos = nil
-	p.sprCollisionData = nil
-}
-
-func (p *Game) buildSpriteCollisionInfos() map[string]*spriteCollisionInfo {
-	infos := make(map[string]*spriteCollisionInfo, len(p.typs))
-	idx := 0
-	for name := range p.typs {
-		layerIndex := idx % collisionLayerCount
-		infos[name] = &spriteCollisionInfo{layerIndex: layerIndex, Layer: 1 << layerIndex}
-		idx++
-	}
-	return infos
-}
-
-func (p *Game) setupCollisionData(inits []Sprite) {
-	if !p.isAutoSetCollisionLayer {
-		p.resetCollisionLayerState()
+func (p *Game) setupTouchEntries(inits []Sprite) {
+	if !p.autoTouchLayers {
+		p.touchFilters = nil
+		p.touchEntries = nil
 		return
 	}
 
-	p.sprCollisionData = p.buildSpriteCollisionData(inits)
-}
-
-func (p *Game) refreshCollisionLayers() {
-	if !p.isAutoSetCollisionLayer {
-		return
-	}
-
-	p.applyCollisionLayers(p.sprCollisionData)
-}
-
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
-	if info, ok := p.sprCollisionInfos[name]; ok {
-		return info
-	}
-	engine.Panic("Unknown sprite " + name)
-	return &spriteCollisionInfo{}
-}
-
-func (p *Game) buildSpriteCollisionData(inits []Sprite) []spriteCollisionData {
-	spriteData := make([]spriteCollisionData, 0, len(inits))
+	entries := make([]touchEntry, 0, len(inits))
 	for _, ini := range inits {
 		spr := spriteOf(ini)
 		if spr == nil {
 			continue
 		}
-		info := p.getSpriteCollisionInfo(spr.name)
-		spriteData = append(spriteData, spriteCollisionData{
+		entries = append(entries, touchEntry{
 			sprite: spr,
-			info:   info,
+			filter: p.getTouchFilter(spr.name),
 		})
 	}
-	return spriteData
+	p.touchEntries = entries
 }
 
-func (p *Game) applyCollisionLayers(spriteData []spriteCollisionData) {
-	if len(spriteData) == 0 {
+func (p *Game) refreshTouchFilters() {
+	if !p.autoTouchLayers || len(p.touchEntries) == 0 {
 		return
 	}
 
-	var masksByLayer [collisionLayerCount]int64
+	entries := p.touchEntries
+	var masksByLayer [touchLayerCount]int64
 
-	for _, data := range spriteData {
-		data.info.Mask = 0
-		for target := range data.sprite.physics().collisionTargets {
-			targetInfo := p.getSpriteCollisionInfo(target)
-			masksByLayer[data.info.layerIndex] |= targetInfo.Layer
+	// Reused layers need the union of their subscriptions.
+	for _, entry := range entries {
+		for target := range entry.sprite.physics().touchTargets {
+			filter, ok := p.touchFilters[target]
+			if !ok {
+				engine.Panic("Unknown sprite " + target)
+				return
+			}
+			masksByLayer[entry.filter.layerIndex()] |= filter.Layer
 		}
 	}
 
-	for _, data := range spriteData {
-		data.info.Mask = masksByLayer[data.info.layerIndex]
-		spxlog.Debug("Init sprite collision info: name=%s, layer=%d, mask=%d", data.sprite.name, data.info.Layer, data.info.Mask)
+	// Commit all validated masks before proxy writes.
+	for _, entry := range entries {
+		entry.filter.Mask = masksByLayer[entry.filter.layerIndex()]
+		spxlog.Debug("Touch filter: name=%s, layer=%d, mask=%d", entry.sprite.name, entry.filter.Layer, entry.filter.Mask)
 	}
 
 	engine.WaitMainThread(func() {
-		for _, data := range spriteData {
-			data.sprite.applyPhysicsProxyConfig()
+		for _, entry := range entries {
+			if proxy := entry.sprite.runtimeState.syncSprite; proxy != nil {
+				entry.sprite.physics().syncTriggerFilters(proxy)
+			}
 		}
 	})
+}
+
+func (p *Game) buildTouchFilters() map[string]*touchFilter {
+	filters := make(map[string]*touchFilter, len(p.typs))
+	for name := range p.typs {
+		layerIndex := len(filters) % touchLayerCount
+		filters[name] = &touchFilter{Layer: 1 << layerIndex}
+	}
+	return filters
+}
+
+func (p *Game) getTouchFilter(name string) *touchFilter {
+	if filter, ok := p.touchFilters[name]; ok {
+		return filter
+	}
+	engine.Panic("Unknown sprite " + name)
+	return &touchFilter{}
 }
 
 func (p *Game) checkCollision(ary any) []Sprite {
@@ -270,8 +236,7 @@ func (p *Game) checkCollision(ary any) []Sprite {
 	return sprites
 }
 
-// raycast performs a raycast query.
-func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
+func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *raycastResult {
 	ary := engine.Managers().PhysicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
 	result, err := tryRaycastResult(ary)
 	if err != nil {
@@ -280,8 +245,7 @@ func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *
 	return result
 }
 
-// tryRaycastResult attempts to parse raycast result from array.
-func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
+func tryRaycastResult(ary engine.Array) (*raycastResult, error) {
 	dataAry, succ := ary.([]int64)
 	if !succ {
 		return nil, fmt.Errorf("array type error: expected []int64 but got %T", ary)
@@ -290,9 +254,9 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	if len(dataAry) != 6 {
 		return nil, fmt.Errorf("array len error: expected 6 but got %d", len(dataAry))
 	}
-	return &rayCastResult{
-		Hited:    dataAry[0] != 0,
-		SpriteId: dataAry[1],
+	return &raycastResult{
+		Hit:      dataAry[0] != 0,
+		SpriteID: dataAry[1],
 		PosX:     engine.ConvertToFloat64(dataAry[2]),
 		PosY:     engine.ConvertToFloat64(dataAry[3]),
 	}, nil

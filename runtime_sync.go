@@ -160,7 +160,7 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	p.runtimeState.syncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.runtimeState.syncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
 	p.runtimeState.syncSprite.MirrorPosition = p.mirrorPosition
-	p.applyPhysicsProxyConfig()
+	p.physics().initializeProxy(p.runtimeState.syncSprite)
 	p.runtimeState.syncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.syncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)
@@ -213,13 +213,6 @@ func (p *SpriteImpl) handleAnimationLooped() {
 // -----------------------------------------------------------------------------
 // Sprite Sync
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) applyPhysicsProxyConfig() {
-	if p.runtimeState.syncSprite == nil {
-		return
-	}
-	p.physics().applyPhysicsProxyConfig(p.runtimeState.syncSprite)
-}
-
 func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
 	return p.runtimeState.syncSprite != nil && p.PhysicsMode() != NoPhysics
 }
@@ -457,12 +450,12 @@ func (p *Game) pullPhysicsPositions() {
 	applyPhysicsPositions(pull.sprites, pull.query.GetPositions(pull.ids))
 }
 
-func (p *Game) processPhysicsTriggers() {
+func (p *Game) processTouchEvents() {
 	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents)
 	p.dispatchTouchEvents()
 }
 
-// dispatchTouchEvents keeps the batch intact if a touch dispatch panics.
+// dispatchTouchEvents retains the batch on panic.
 func (p *Game) dispatchTouchEvents() {
 	for _, pair := range p.triggerEvents {
 		if pair.Src == nil || pair.Dst == nil {
@@ -478,8 +471,7 @@ func (p *Game) dispatchTouchEvents() {
 		if !src.isTouchable() || !dst.isTouchable() || dst.isDragging() {
 			continue
 		}
-		// Ignore queued shape events after geometry was removed, including
-		// residual native shapes explicitly re-enabled by the project.
+		// Geometry may disappear between detection and dispatch.
 		if p.touchByShape && (!src.hasTouchShape() || !dst.hasTouchShape()) {
 			continue
 		}

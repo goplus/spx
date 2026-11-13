@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/wrap"
@@ -370,14 +371,14 @@ func TestMergeEnginePositionInvalidatesVisualsOnlyWhenChanged(t *testing.T) {
 }
 
 func TestDispatchTouchEventsFiltersPairs(t *testing.T) {
-	game := newPhysicsTriggerTestGame(t)
-	source := newPhysicsTriggerTestSprite(game, "source")
-	target := newPhysicsTriggerTestSprite(game, "target")
-	hidden := newPhysicsTriggerTestSprite(game, "hidden")
+	game := newTouchDispatchGame(t)
+	source := newTouchDispatchSprite(game, "source")
+	target := newTouchDispatchSprite(game, "target")
+	hidden := newTouchDispatchSprite(game, "hidden")
 	hidden.spriteState.isVisible = false
-	dying := newPhysicsTriggerTestSprite(game, "dying")
+	dying := newTouchDispatchSprite(game, "dying")
 	dying.spriteState.isDying = true
-	noHandler := newPhysicsTriggerTestSprite(game, "no-handler")
+	noHandler := newTouchDispatchSprite(game, "no-handler")
 	var nilSprite *SpriteImpl
 	typedNil := &engine.Sprite{Target: nilSprite}
 	wrongType := &engine.Sprite{Target: "not a sprite"}
@@ -432,9 +433,9 @@ func TestDispatchTouchEventsFiltersPairs(t *testing.T) {
 }
 
 func TestDispatchTouchEventsIgnoresDraggedTargetOnly(t *testing.T) {
-	game := newPhysicsTriggerTestGame(t)
-	source := newPhysicsTriggerTestSprite(game, "source")
-	target := newPhysicsTriggerTestSprite(game, "target")
+	game := newTouchDispatchGame(t)
+	source := newTouchDispatchSprite(game, "source")
+	target := newTouchDispatchSprite(game, "target")
 	game.inputMgr.drag.target = &target.SpriteImpl
 	game.inputMgr.drag.active = true
 	var calls []string
@@ -457,13 +458,13 @@ func TestDispatchTouchEventsRequiresShapeGeometry(t *testing.T) {
 	for _, byShape := range []bool{false, true} {
 		for _, missing := range []string{"neither", "source", "target"} {
 			t.Run(fmt.Sprintf("byShape=%v/%s", byShape, missing), func(t *testing.T) {
-				game := newPhysicsTriggerTestGame(t)
+				game := newTouchDispatchGame(t)
 				game.touchByShape = byShape
-				source := newPhysicsTriggerTestSprite(game, "source")
-				target := newPhysicsTriggerTestSprite(game, "target")
+				source := newTouchDispatchSprite(game, "source")
+				target := newTouchDispatchSprite(game, "target")
 				for _, sprite := range []*touchEventSprite{source, target} {
 					sprite.components.physics = &physicsComponent{
-						sprite: &sprite.SpriteImpl, triggerInfo: physicConfig{Type: physicsColliderRect},
+						sprite: &sprite.SpriteImpl, triggerCollider: colliderConfig{Type: collision.ColliderRect},
 					}
 				}
 				calls := 0
@@ -471,9 +472,9 @@ func TestDispatchTouchEventsRequiresShapeGeometry(t *testing.T) {
 				game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 				// Geometry may disappear after the native event was queued.
 				if missing == "source" {
-					source.physics().triggerInfo.Type = physicsColliderNone
+					source.physics().triggerCollider.Type = collision.ColliderNone
 				} else if missing == "target" {
-					target.physics().triggerInfo.Type = physicsColliderNone
+					target.physics().triggerCollider.Type = collision.ColliderNone
 				}
 				game.dispatchTouchEvents()
 				want := 1
@@ -489,10 +490,10 @@ func TestDispatchTouchEventsRequiresShapeGeometry(t *testing.T) {
 }
 
 func TestDispatchTouchEventsOrderAndBufferReuse(t *testing.T) {
-	game := newPhysicsTriggerTestGame(t)
-	first := newPhysicsTriggerTestSprite(game, "first")
-	second := newPhysicsTriggerTestSprite(game, "second")
-	last := newPhysicsTriggerTestSprite(game, "last")
+	game := newTouchDispatchGame(t)
+	first := newTouchDispatchSprite(game, "first")
+	second := newTouchDispatchSprite(game, "second")
+	last := newTouchDispatchSprite(game, "last")
 	var calls []string
 	for _, sprite := range []*touchEventSprite{first, second, last} {
 		sprite.addTouchStartHandler(func(other Sprite) {
@@ -535,10 +536,10 @@ func TestDispatchTouchEventsOrderAndBufferReuse(t *testing.T) {
 func TestDispatchTouchEventsRechecksTouchability(t *testing.T) {
 	for _, dying := range []bool{false, true} {
 		t.Run(fmt.Sprintf("dying=%v", dying), func(t *testing.T) {
-			game := newPhysicsTriggerTestGame(t)
-			source := newPhysicsTriggerTestSprite(game, "source")
-			target := newPhysicsTriggerTestSprite(game, "target")
-			last := newPhysicsTriggerTestSprite(game, "last")
+			game := newTouchDispatchGame(t)
+			source := newTouchDispatchSprite(game, "source")
+			target := newTouchDispatchSprite(game, "target")
+			last := newTouchDispatchSprite(game, "last")
 			var calls []Sprite
 			source.addTouchStartHandler(func(other Sprite) {
 				calls = append(calls, other)
@@ -567,11 +568,11 @@ func TestDispatchTouchEventsRechecksTouchability(t *testing.T) {
 func TestDispatchTouchEventsPanicRetainsBatch(t *testing.T) {
 	for _, name := range []string{"callback", "typed nil source", "typed nil destination", "typed nil source before hidden destination"} {
 		t.Run(name, func(t *testing.T) {
-			game := newPhysicsTriggerTestGame(t)
-			source := newPhysicsTriggerTestSprite(game, "source")
-			target := newPhysicsTriggerTestSprite(game, "target")
-			panicking := newPhysicsTriggerTestSprite(game, "panicking")
-			hidden := newPhysicsTriggerTestSprite(game, "hidden")
+			game := newTouchDispatchGame(t)
+			source := newTouchDispatchSprite(game, "source")
+			target := newTouchDispatchSprite(game, "target")
+			panicking := newTouchDispatchSprite(game, "panicking")
+			hidden := newTouchDispatchSprite(game, "hidden")
 			hidden.spriteState.isVisible = false
 			var nilSprite *SpriteImpl
 			typedNil := &engine.Sprite{Target: nilSprite}
@@ -1827,7 +1828,7 @@ func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
 	return sprite
 }
 
-func newPhysicsTriggerTestGame(t *testing.T) *Game {
+func newTouchDispatchGame(t *testing.T) *Game {
 	t.Helper()
 	previous := scheduler
 	scheduler = nil
@@ -1837,7 +1838,7 @@ func newPhysicsTriggerTestGame(t *testing.T) *Game {
 	return game
 }
 
-func newPhysicsTriggerTestSprite(game *Game, name string) *touchEventSprite {
+func newTouchDispatchSprite(game *Game, name string) *touchEventSprite {
 	sprite := newTouchEventSprite(game, name)
 	sprite.spriteState.isVisible = true
 	sprite.runtimeState.syncSprite = &engine.Sprite{Target: &sprite.SpriteImpl, MirrorPosition: sprite.mirrorPosition}

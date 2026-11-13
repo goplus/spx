@@ -136,27 +136,27 @@ func (p *SpriteImpl) renderBounds() (mathf.Rect2, bool) {
 }
 
 func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {
-	triggerInfo := p.physics().colliderConfig(true)
+	triggerCollider := &p.physics().triggerCollider
 
-	if triggerInfo.Type == physicsColliderNone {
+	if triggerCollider.Type == collision.ColliderNone {
 		applyRenderOffset(p, x, y)
 		width, height := p.costumes[p.costumeIndex].sizeInSPX()
 		return width * p.runtimeState.scale, height * p.runtimeState.scale
 	}
 
-	if triggerInfo.Type == physicsColliderAuto && p.runtimeState.syncSprite == nil {
+	if triggerCollider.Type == collision.ColliderAuto && p.runtimeState.syncSprite == nil {
 		center, size := getCostumeBoundByAlpha(p)
-		triggerInfo.Pivot = center
-		triggerInfo.Params = []float64{size.X, size.Y}
+		triggerCollider.Pivot = center
+		triggerCollider.Params = []float64{size.X, size.Y}
 	}
-	if triggerInfo.Type == physicsColliderAuto {
+	if triggerCollider.Type == collision.ColliderAuto {
 		applyRenderOffset(p, x, y)
 	}
 
-	*x += triggerInfo.Pivot.X * p.runtimeState.scale
-	*y += triggerInfo.Pivot.Y * p.runtimeState.scale
+	*x += triggerCollider.Pivot.X * p.runtimeState.scale
+	*y += triggerCollider.Pivot.Y * p.runtimeState.scale
 
-	w, h := triggerInfo.getDimensions()
+	w, h := triggerCollider.getDimensions()
 	return w * p.runtimeState.scale, h * p.runtimeState.scale
 }
 
@@ -235,9 +235,9 @@ func (p *SpriteImpl) isTouchable() bool {
 	return p.spriteState.isVisible && !p.spriteState.isDying
 }
 
-// hasTouchShape checks logical trigger geometry, independently of notification enablement.
+// hasTouchShape ignores notification enablement.
 func (p *SpriteImpl) hasTouchShape() bool {
-	return p.physics().triggerInfo.Type != physicsColliderNone
+	return p.physics().triggerCollider.Type != collision.ColliderNone
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
@@ -245,7 +245,6 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 		return false
 	}
 	usePixels := !p.g.touchByShape
-	// A disabled native proxy may still retain its default or previous shape.
 	if !usePixels && (!p.hasTouchShape() || !dst.hasTouchShape()) {
 		return false
 	}
@@ -281,9 +280,9 @@ func (p *SpriteImpl) touchBounds(usePixels bool) (collision.AABB, bool) {
 		return p.costumeTouchBounds(false)
 	}
 
-	cfg := &p.physics().triggerInfo
+	cfg := &p.physics().triggerCollider
 	box, ok := cfg.worldBounds(p)
-	if !ok || cfg.Type != physicsColliderAuto {
+	if !ok || cfg.Type != collision.ColliderAuto {
 		return box, ok
 	}
 

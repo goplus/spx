@@ -300,7 +300,7 @@ void SpxPhysicsMgr::set_collision_system_type(GdBool is_collision_by_alpha) {
 		return;
 	}
 	is_collision_by_pixel = is_collision_by_alpha;
-	spriteMgr->reset_pixel_touch_events();
+	spriteMgr->reset_pixel_touches();
 }
 
 void SpxPhysicsMgr::set_global_gravity(GdFloat gravity) {

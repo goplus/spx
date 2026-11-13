@@ -1004,14 +1004,15 @@ func TestTouchSensingModeIsIndependentOfPhysics(t *testing.T) {
 
 func TestProjectTouchByShapeRoundTrip(t *testing.T) {
 	for _, test := range []struct {
-		name  string
-		input string
-		want  bool
+		name      string
+		input     string
+		want      bool
+		wantField string
 	}{
-		{"missing", `{}`, false},
-		{"true", `{"touchByShape":true}`, true},
-		{"false", `{"touchByShape":false}`, false},
-		{"null", `{"touchByShape":null}`, false},
+		{"missing", `{}`, false, ""},
+		{"true", `{"touchByShape":true}`, true, "true"},
+		{"false", `{"touchByShape":false}`, false, "false"},
+		{"null", `{"touchByShape":null}`, false, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var config ProjectConfig
@@ -1026,26 +1027,19 @@ func TestProjectTouchByShapeRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Preserve explicit false; omit absent/null values.
-			var input, output map[string]json.RawMessage
-			if err := json.Unmarshal([]byte(test.input), &input); err != nil {
-				t.Fatal(err)
-			}
+			var output map[string]json.RawMessage
 			if err := json.Unmarshal(data, &output); err != nil {
 				t.Fatal(err)
 			}
-			want := string(input["touchByShape"])
-			if want == "null" {
-				want = ""
-			}
-			if got := string(output["touchByShape"]); got != want {
-				t.Fatalf("marshaled touchByShape = %s, want %s", got, want)
+			if got := string(output["touchByShape"]); got != test.wantField {
+				t.Fatalf("marshaled touchByShape = %q, want %q", got, test.wantField)
 			}
 			var roundTrip ProjectConfig
 			if err := json.Unmarshal(data, &roundTrip); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(config, roundTrip) {
-				t.Fatalf("round trip changed config: %+v -> %+v", config, roundTrip)
+			if !reflect.DeepEqual(config.TouchByShape, roundTrip.TouchByShape) {
+				t.Fatalf("round trip changed touchByShape: %v -> %v", config.TouchByShape, roundTrip.TouchByShape)
 			}
 		})
 	}

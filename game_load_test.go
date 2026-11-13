@@ -33,6 +33,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
@@ -226,22 +227,22 @@ func TestPrepareStageBootstrapKeepsManualCameraFollowLast(t *testing.T) {
 	}
 }
 
-func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testing.T) {
+func TestRefreshTouchFiltersUsesCurrentTargets(t *testing.T) {
 	game := &collisionLayerOrderGame{}
-	game.isAutoSetCollisionLayer = true
-	game.sprCollisionInfos = map[string]*spriteCollisionInfo{
-		"SpriteA": {layerIndex: 0, Layer: 1 << 0},
-		"SpriteB": {layerIndex: 1, Layer: 1 << 1},
+	game.autoTouchLayers = true
+	game.touchFilters = map[string]*touchFilter{
+		"SpriteA": {Layer: 1 << 0},
+		"SpriteB": {Layer: 1 << 1},
 	}
 
 	var spriteA *collisionLayerOrderSprite
 	spriteA = newCollisionLayerOrderSprite(&game.Game, "SpriteA", func() {
-		delete(spriteA.physics().collisionTargets, "SpriteB")
+		delete(spriteA.physics().touchTargets, "SpriteB")
 	})
 	spriteB := newCollisionLayerOrderSprite(&game.Game, "SpriteB", nil)
 
-	spriteA.physics().addCollisionTarget("SpriteB")
-	spriteB.physics().addCollisionTarget("SpriteA")
+	spriteA.physics().addTouchTargets("SpriteB")
+	spriteB.physics().addTouchTargets("SpriteA")
 
 	generation := game.bootstrapGeneration()
 	game.prepareStageBootstrap(
@@ -251,25 +252,25 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 		generation,
 	)
 	game.runBootstrapTasks(generation)
-	game.refreshCollisionLayers()
+	game.refreshTouchFilters()
 
-	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
-		t.Fatalf("SpriteA collision mask = %d, want 0", got)
+	if got := game.touchFilters["SpriteA"].Mask; got != 0 {
+		t.Fatalf("SpriteA touch mask = %d, want 0", got)
 	}
-	if got := game.sprCollisionInfos["SpriteB"].Mask; got != game.sprCollisionInfos["SpriteA"].Layer {
-		t.Fatalf("SpriteB collision mask = %d, want %d", got, game.sprCollisionInfos["SpriteA"].Layer)
+	if got := game.touchFilters["SpriteB"].Mask; got != game.touchFilters["SpriteA"].Layer {
+		t.Fatalf("SpriteB touch mask = %d, want %d", got, game.touchFilters["SpriteA"].Layer)
 	}
 }
 
-func TestPrepareStageBootstrapRefreshesCollisionLayersRegisteredInMain(t *testing.T) {
+func TestBootstrapAppliesTouchTargetsFromMain(t *testing.T) {
 	setupRuntimeScheduler(t)
 
 	game := &collisionLayerOrderGame{}
 	game.initShapeMgr()
-	game.isAutoSetCollisionLayer = true
-	game.sprCollisionInfos = map[string]*spriteCollisionInfo{
-		"SpriteA": {layerIndex: 0, Layer: 1 << 0},
-		"SpriteB": {layerIndex: 1, Layer: 1 << 1},
+	game.autoTouchLayers = true
+	game.touchFilters = map[string]*touchFilter{
+		"SpriteA": {Layer: 1 << 0},
+		"SpriteB": {Layer: 1 << 1},
 	}
 
 	var spriteA *collisionLayerOrderSprite
@@ -289,11 +290,11 @@ func TestPrepareStageBootstrapRefreshesCollisionLayersRegisteredInMain(t *testin
 	)
 	runBootstrapTasksWithScheduler(t, &game.Game, generation)
 
-	if got := game.sprCollisionInfos["SpriteA"].Mask; got != game.sprCollisionInfos["SpriteB"].Layer {
-		t.Fatalf("SpriteA collision mask = %d, want %d", got, game.sprCollisionInfos["SpriteB"].Layer)
+	if got := game.touchFilters["SpriteA"].Mask; got != game.touchFilters["SpriteB"].Layer {
+		t.Fatalf("SpriteA touch mask = %d, want %d", got, game.touchFilters["SpriteB"].Layer)
 	}
-	if got := game.sprCollisionInfos["SpriteB"].Mask; got != 0 {
-		t.Fatalf("SpriteB collision mask = %d, want 0", got)
+	if got := game.touchFilters["SpriteB"].Mask; got != 0 {
+		t.Fatalf("SpriteB touch mask = %d, want 0", got)
 	}
 }
 
@@ -339,8 +340,8 @@ func TestLoadStageEntriesAssignsContiguousLayersToExpandedStageSprites(t *testin
 	game.Middle = newCollisionLayerOrderSprite(&game.Game, "Middle", nil)
 	groupProto := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
 	groupProto.baseObj.initWithSize(1, 1)
-	groupProto.physics().collisionInfo.Type = physicsColliderNone
-	groupProto.physics().triggerInfo.Type = physicsColliderNone
+	groupProto.physics().bodyCollider.Type = collision.ColliderNone
+	groupProto.physics().triggerCollider.Type = collision.ColliderNone
 	game.sprs = map[string]Sprite{
 		"Back":                      back,
 		"Front":                     front,
