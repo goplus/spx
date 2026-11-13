@@ -199,7 +199,7 @@ func (p *physicsComponent) addTouchTargets(targets ...string) {
 	}
 }
 
-func (p *physicsComponent) applyPhysicsProxyConfig(syncProxy *engine.Sprite) {
+func (p *physicsComponent) initializePhysicsProxy(syncProxy *engine.Sprite) {
 	if p.sprite.g.autoTouchLayers {
 		p.collisionInfo.Layer = 0
 		p.collisionInfo.Mask = 0

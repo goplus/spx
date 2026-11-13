@@ -764,8 +764,8 @@ func TestTouchFilterFailurePreservesMasks(t *testing.T) {
 			if got := []int64{game.touchFilters["A"].Mask, game.touchFilters["B"].Mask, game.touchFilters["C"].Mask}; !slices.Equal(got, want) {
 				t.Fatalf("masks after failure = %v, want %v", got, want)
 			}
-			if mgr.triggerMaskWrites != 0 {
-				t.Fatal("failed refresh wrote proxy masks")
+			if mgr.triggerLayerWrites != 0 || mgr.triggerMaskWrites != 0 || mgr.collisionFilterWrites != 0 {
+				t.Fatal("failed refresh wrote proxy filters")
 			}
 			var wantExits []int64
 			if !abort {

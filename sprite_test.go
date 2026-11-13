@@ -50,6 +50,7 @@ type polygonColliderSpriteMgr struct {
 	triggerEnabled        []bool
 	triggerLayer          int64
 	triggerMask           int64
+	triggerLayerWrites    int
 	triggerMaskWrites     int
 	physicsWrites         int
 	rectCalls             int
@@ -1172,7 +1173,7 @@ func TestPhysicsLayersSurviveClone(t *testing.T) {
 	mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask = 0, 0, 0, 0
 	sprite.physics().collisionInfo.Type = collision.ColliderNone
 	sprite.physics().triggerInfo.Type = collision.ColliderNone
-	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.syncSprite)
+	sprite.physics().initializePhysicsProxy(sprite.runtimeState.syncSprite)
 	if mgr.collisionLayer != 2 || mgr.collisionMask != 4 || mgr.triggerLayer != 8 || mgr.triggerMask != 16 {
 		t.Fatalf("replayed layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
 	}
@@ -1194,7 +1195,7 @@ func TestTouchSubscriptionsRefreshOnlyTriggerFilters(t *testing.T) {
 			}
 			game.touchEntries = []touchEntry{{sprite: sprite, filter: game.touchFilters["A"]}}
 			sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
-			sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.syncSprite)
+			sprite.physics().initializePhysicsProxy(sprite.runtimeState.syncSprite)
 			if mgr.collisionLayer != 0 || mgr.collisionMask != 0 {
 				t.Fatal("automatic initialization must clear body filters")
 			}
@@ -1213,6 +1214,7 @@ func TestTouchSubscriptionsRefreshOnlyTriggerFilters(t *testing.T) {
 			wantTrigger.Mask = 6
 			wantBackend := *mgr
 			wantBackend.triggerMask = 6
+			wantBackend.triggerLayerWrites++
 			wantBackend.triggerMaskWrites++
 
 			sprite.OnTouchStart__3([]SpriteName{"B", "B", "C"}, func(Sprite) {})
@@ -1572,10 +1574,6 @@ func TestSpritePhysicsAPIKeepsBackendAndColliderState(t *testing.T) {
 			}
 		}
 	}
-	cfg := colliderConfig{Layer: 2, Mask: 4, Type: collision.ColliderCircle, Params: []float64{3}, Pivot: mathf.NewVec2(1, 2)}
-	if got := cfg.String(); !strings.Contains(got, "Mask: 4, Layer: 2") || !strings.Contains(got, "Params: [3]") || !strings.Contains(got, fmt.Sprint(cfg.Pivot)) {
-		t.Fatalf("missing config diagnostics: %s", got)
-	}
 	sprite.runtimeState.syncSprite = nil
 	sprite.updatePhysicsShapesScale()
 }
@@ -1746,6 +1744,7 @@ func (m *polygonColliderSpriteMgr) SetCollisionMask(_ pkgengine.Object, mask int
 
 func (m *polygonColliderSpriteMgr) SetTriggerLayer(_ pkgengine.Object, layer int64) {
 	m.triggerLayer = layer
+	m.triggerLayerWrites++
 }
 
 func (m *polygonColliderSpriteMgr) SetTriggerMask(_ pkgengine.Object, mask int64) {

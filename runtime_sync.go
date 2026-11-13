@@ -160,7 +160,7 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	p.runtimeState.syncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.runtimeState.syncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
 	p.runtimeState.syncSprite.MirrorPosition = p.mirrorPosition
-	p.physics().applyPhysicsProxyConfig(p.runtimeState.syncSprite)
+	p.physics().initializePhysicsProxy(p.runtimeState.syncSprite)
 	p.runtimeState.syncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.syncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)

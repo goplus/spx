@@ -176,10 +176,6 @@ func (p *SpriteImpl) updatePhysicsShapesScale() {
 	physics.collisionInfo.applyShape(p.runtimeState.syncSprite, false, p)
 }
 
-func (cfg *colliderConfig) String() string {
-	return fmt.Sprintf("Mask: %d, Layer: %d, Type: %d, Pivot: %v, Params: %v", cfg.Mask, cfg.Layer, cfg.Type, cfg.Pivot, cfg.Params)
-}
-
 func (cfg *colliderConfig) copyFrom(src *colliderConfig) {
 	*cfg = *src
 	cfg.Params = slices.Clone(src.Params)
