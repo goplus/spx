@@ -23,6 +23,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
@@ -159,6 +160,9 @@ func (p *SpriteImpl) TriggerEnabled() bool {
 	return p.physics().isTriggerEnabled()
 }
 
+// -----------------------------------------------------------------------------
+// Internal Physics
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) markAutoPhysicsShapesDirty() {
 	if physics := p.physics(); physics != nil {
 		physics.markAutoShapesDirty()
@@ -182,7 +186,7 @@ func (p *SpriteImpl) updatePhysicsShapesScale() {
 }
 
 // -----------------------------------------------------------------------------
-// Internal Physics
+// Physics Configuration
 // -----------------------------------------------------------------------------
 func (cfg *physicConfig) String() string {
 	return fmt.Sprintf("Mask: %d, Layer: %d, Type: %d, Pivot: %v, Params: %v", cfg.Mask, cfg.Layer, cfg.Type, cfg.Pivot, cfg.Params)
@@ -252,6 +256,61 @@ func (cfg *physicConfig) getDimensions() (float64, float64) {
 	return 0, 0
 }
 
+func (cfg *physicConfig) worldBounds(sprite *SpriteImpl) (collision.AABB, bool) {
+	local, ok := cfg.localBounds()
+	if !ok || !sprite.hasCostume() {
+		return collision.AABB{}, false
+	}
+
+	rotation, flipX, flipY := getRenderRotationAndScale(sprite)
+	sin, cos := math.Sincos(-engine.DegToRad(rotation))
+	scale := sprite.runtimeState.scale
+	pivot := cfg.shapePivot(sprite)
+	centerX := (pivot.X + (local.MinX+local.MaxX)*scale/2) * flipX
+	centerY := (pivot.Y + (local.MinY+local.MaxY)*scale/2) * flipY
+	x, y := sprite.getXY()
+	x += centerX*cos - centerY*sin
+	y += centerX*sin + centerY*cos
+	halfX := math.Abs((local.MaxX-local.MinX)*scale) / 2
+	halfY := math.Abs((local.MaxY-local.MinY)*scale) / 2
+	extentX := math.Abs(cos)*halfX + math.Abs(sin)*halfY
+	extentY := math.Abs(sin)*halfX + math.Abs(cos)*halfY
+	if cfg.Type == physicsColliderCircle {
+		extentX = math.Max(cfg.Params[0]*scale, minCircleRadius)
+		extentY = extentX
+	}
+	return collision.AABB{MinX: x - extentX, MinY: y - extentY, MaxX: x + extentX, MaxY: y + extentY}, true
+}
+
+func (cfg *physicConfig) localBounds() (collision.AABB, bool) {
+	var minX, minY, maxX, maxY float64
+	switch cfg.Type {
+	case physicsColliderAuto, physicsColliderRect, physicsColliderCircle, physicsColliderCapsule:
+		width, height := cfg.getDimensions()
+		if width <= 0 || height <= 0 {
+			return collision.AABB{}, false
+		}
+		if cfg.Type == physicsColliderCapsule && height < width {
+			height = width
+		}
+		minX, maxX = -width/2, width/2
+		minY, maxY = -height/2, height/2
+	case physicsColliderPolygon:
+		if len(cfg.Params) < 6 || len(cfg.Params)%2 != 0 {
+			return collision.AABB{}, false
+		}
+		minX, maxX = cfg.Params[0], cfg.Params[0]
+		minY, maxY = cfg.Params[1], cfg.Params[1]
+		for i := 2; i < len(cfg.Params); i += 2 {
+			minX, maxX = math.Min(minX, cfg.Params[i]), math.Max(maxX, cfg.Params[i])
+			minY, maxY = math.Min(minY, cfg.Params[i+1]), math.Max(maxY, cfg.Params[i+1])
+		}
+	default:
+		return collision.AABB{}, false
+	}
+	return collision.AABB{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}, true
+}
+
 func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if isTrigger {
 		syncProxy.SetTriggerLayer(cfg.Layer)
@@ -267,8 +326,14 @@ func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, spr
 	if cfg.Type == physicsColliderAuto {
 		cfg.updateAutoBounds(sprite, isTrigger)
 	}
-	syncProxy.SetColliderEnabled(isTrigger, cfg.Type != physicsColliderNone)
+	syncProxy.SetColliderEnabled(isTrigger, cfg.defaultEnabled(isTrigger, sprite))
 	cfg.applyShape(syncProxy, isTrigger, sprite)
+}
+
+func (cfg *physicConfig) defaultEnabled(isTrigger bool, sprite *SpriteImpl) bool {
+	// Pixel events need no trigger geometry; explicit SetTriggerEnabled still
+	// controls notification delivery. Body colliders keep their own enable state.
+	return cfg.Type != physicsColliderNone || isTrigger && !sprite.g.touchByShape
 }
 
 func (cfg *physicConfig) updateAutoBounds(sprite *SpriteImpl, isTrigger bool) {
@@ -286,6 +351,8 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sp
 	scale := sprite.runtimeState.scale
 
 	switch cfg.Type {
+	case physicsColliderNone:
+		syncProxy.ClearColliderShape(isTrigger)
 	case physicsColliderCircle:
 		if len(cfg.Params) >= 1 {
 			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
@@ -326,33 +393,20 @@ func (cfg *physicConfig) refreshAutoShape(syncProxy *engine.Sprite, isTrigger bo
 	cfg.applyShape(syncProxy, isTrigger, sprite)
 }
 
-func (p *physicsComponent) markAutoShapesDirty() {
-	p.autoShapesDirty = true
-}
-
-func (p *physicsComponent) refreshAutoShapes(syncProxy *engine.Sprite) {
-	if !p.autoShapesDirty || syncProxy == nil {
-		return
-	}
-	p.triggerInfo.refreshAutoShape(syncProxy, true, p.sprite)
-	p.collisionInfo.refreshAutoShape(syncProxy, false, p.sprite)
-	p.autoShapesDirty = false
-}
-
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 // toPhysicsMode converts string to PhysicsMode.
 func toPhysicsMode(mode string) PhysicsMode {
-	if mode == "" {
-		return NoPhysics
-	}
 	switch mode {
+	case "", "no":
+		return NoPhysics
 	case "kinematic":
 		return KinematicPhysics
 	case "dynamic":
 		return DynamicPhysics
 	case "static":
 		return StaticPhysics
-	case "no":
-		return NoPhysics
 	}
 	spxlog.Warn("Config error: unknown physics mode %s", mode)
 	return NoPhysics

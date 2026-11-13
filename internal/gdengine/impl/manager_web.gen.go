@@ -1306,6 +1306,10 @@ func (s *spriteMgr) GetTriggerMask(obj Object) int64 {
 	_result := API.SpxSpriteGetTriggerMask.Invoke(arg0Low, arg0High)
 	return JSToGdInt(_result)
 }
+func (s *spriteMgr) ClearColliderShape(obj Object, is_trigger bool) {
+	arg0Low, arg0High := JSSplitGdObj(obj)
+	API.SpxSpriteClearColliderShape.Invoke(arg0Low, arg0High, is_trigger)
+}
 func (s *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
 	arg0Low, arg0High := JSSplitGdObj(obj)
 	arg1 := JSFromGdVec2(center)
@@ -1388,10 +1392,10 @@ func (s *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) b
 	_result := API.SpxSpriteCheckCollisionByAlpha.Invoke(arg0Low, arg0High, float32(alpha_threshold))
 	return JSToGdBool(_result)
 }
-func (s *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (s *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixels bool) bool {
 	arg0Low, arg0High := JSSplitGdObj(obj)
 	arg1Low, arg1High := JSSplitGdObj(obj_b)
-	_result := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(alpha_threshold), use_pixel_perfect)
+	_result := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(alpha_threshold), use_pixels)
 	return JSToGdBool(_result)
 }
 func (s *spriteMgr) SetPixelCollisionSamplingStep(step int64) {

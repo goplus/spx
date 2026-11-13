@@ -206,7 +206,6 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if !p.prepareSceneColorQuery() {
 		return false
 	}
-	p.g.flushPenCommands()
 	return engine.Managers().SpriteMgr.CheckCollisionByColor(p.runtimeState.syncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
@@ -214,7 +213,6 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 	if !p.prepareSceneColorQuery() {
 		return false
 	}
-	p.g.flushPenCommands()
 	return engine.Managers().SpriteMgr.CheckCollisionByColors(
 		p.runtimeState.syncSprite.GetId(),
 		spriteColor,
@@ -229,20 +227,34 @@ func (p *SpriteImpl) prepareSceneColorQuery() bool {
 		return false
 	}
 	p.g.syncSpriteProxiesForQuery(p)
+	p.g.flushPenCommands()
 	return true
+}
+
+func (p *SpriteImpl) isTouchable() bool {
+	return p.spriteState.isVisible && !p.spriteState.isDying
+}
+
+// hasTouchShape checks logical trigger geometry, independently of notification enablement.
+func (p *SpriteImpl) hasTouchShape() bool {
+	return p.physics().triggerInfo.Type != physicsColliderNone
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
 		return false
 	}
-	usePixelPerfect := !p.g.physicsEnabled
+	usePixels := !p.g.touchByShape
+	// A disabled native proxy may still retain its default or previous shape.
+	if !usePixels && (!p.hasTouchShape() || !dst.hasTouchShape()) {
+		return false
+	}
 	if !p.isCloneProxyPublicationBlocked() && !dst.isCloneProxyPublicationBlocked() {
 		return engine.Managers().SpriteMgr.CheckCollisionWithSprite(
 			p.runtimeState.syncSprite.GetId(),
 			dst.runtimeState.syncSprite.GetId(),
 			alphaThreshold,
-			usePixelPerfect,
+			usePixels,
 		)
 	}
 	for _, sprite := range []*SpriteImpl{p, dst} {
@@ -257,11 +269,52 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 			touching = p.runtimeState.syncSprite.CheckCollisionWithSprite(
 				dst.runtimeState.syncSprite.GetId(),
 				alphaThreshold,
-				usePixelPerfect,
+				usePixels,
 			)
 		})
 	})
 	return touching
+}
+
+func (p *SpriteImpl) touchBounds(usePixels bool) (collision.AABB, bool) {
+	if usePixels {
+		return p.costumeTouchBounds(false)
+	}
+
+	cfg := &p.physics().triggerInfo
+	box, ok := cfg.worldBounds(p)
+	if !ok || cfg.Type != physicsColliderAuto {
+		return box, ok
+	}
+
+	costumeBox, ok := p.costumeTouchBounds(true)
+	if !ok {
+		return collision.AABB{}, false
+	}
+	// Include explicit auto-shape edits and any costume refresh still pending.
+	box.MinX, box.MinY = math.Min(box.MinX, costumeBox.MinX), math.Min(box.MinY, costumeBox.MinY)
+	box.MaxX, box.MaxY = math.Max(box.MaxX, costumeBox.MaxX), math.Max(box.MaxY, costumeBox.MaxY)
+	return box, true
+}
+
+func (p *SpriteImpl) costumeTouchBounds(withTriggerPadding bool) (collision.AABB, bool) {
+	bounds, ok := p.renderBounds()
+	if !ok {
+		return collision.AABB{}, false
+	}
+	padding := 0.0
+	if withTriggerPadding {
+		// Auto triggers extend beyond the costume, including after rotation.
+		rotation, _, _ := getRenderRotationAndScale(p)
+		sin, cos := math.Sincos(toRadian(rotation))
+		padding = TriggerExtraPixel * math.Abs(p.runtimeState.scale) * (math.Abs(sin) + math.Abs(cos)) / 2
+	}
+	return collision.AABB{
+		MinX: bounds.Position.X - padding,
+		MinY: bounds.Position.Y - padding,
+		MaxX: bounds.Position.X + bounds.Size.X + padding,
+		MaxY: bounds.Position.Y + bounds.Size.Y + padding,
+	}, true
 }
 
 func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {
@@ -289,80 +342,20 @@ func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
 	}
 }
 
-func (sp *SpriteImpl) queryBounds(pixel bool) (collision.AABB, bool) {
-	cfg := &sp.physics().collisionInfo
-	if pixel || cfg.Type == physicsColliderAuto {
-		bounds, ok := sp.renderBounds()
-		if !ok {
-			return collision.AABB{}, false
-		}
-		return collision.AABB{
-			MinX: bounds.Position.X,
-			MinY: bounds.Position.Y,
-			MaxX: bounds.Position.X + bounds.Size.X,
-			MaxY: bounds.Position.Y + bounds.Size.Y,
-		}, true
-	}
-
-	var minX, minY, maxX, maxY float64
-	switch cfg.Type {
-	case physicsColliderRect, physicsColliderCircle, physicsColliderCapsule:
-		width, height := cfg.getDimensions()
-		if width <= 0 || height <= 0 {
-			return collision.AABB{}, false
-		}
-		if cfg.Type == physicsColliderCapsule && height < width {
-			height = width
-		}
-		minX, maxX = -width/2, width/2
-		minY, maxY = -height/2, height/2
-	case physicsColliderPolygon:
-		if len(cfg.Params) < 6 || len(cfg.Params)%2 != 0 {
-			return collision.AABB{}, false
-		}
-		minX, maxX = cfg.Params[0], cfg.Params[0]
-		minY, maxY = cfg.Params[1], cfg.Params[1]
-		for i := 2; i < len(cfg.Params); i += 2 {
-			minX, maxX = math.Min(minX, cfg.Params[i]), math.Max(maxX, cfg.Params[i])
-			minY, maxY = math.Min(minY, cfg.Params[i+1]), math.Max(maxY, cfg.Params[i+1])
-		}
-	default:
-		return collision.AABB{}, false
-	}
-	if !sp.hasCostume() {
-		return collision.AABB{}, false
-	}
-
-	rotation, flipX, flipY := getRenderRotationAndScale(sp)
-	sin, cos := math.Sincos(-engine.DegToRad(rotation))
-	scale := sp.runtimeState.scale
-	centerX := (cfg.Pivot.X + (minX+maxX)/2) * scale * flipX
-	centerY := (cfg.Pivot.Y + (minY+maxY)/2) * scale * flipY
-	x, y := sp.getXY()
-	x += centerX*cos - centerY*sin
-	y += centerX*sin + centerY*cos
-	halfX := math.Abs((maxX-minX)*scale) / 2
-	halfY := math.Abs((maxY-minY)*scale) / 2
-	extentX := math.Abs(cos)*halfX + math.Abs(sin)*halfY
-	extentY := math.Abs(sin)*halfX + math.Abs(cos)*halfY
-	if cfg.Type == physicsColliderCircle {
-		extentX = math.Max(cfg.Params[0]*scale, minCircleRadius)
-		extentY = extentX
-	}
-	return collision.AABB{MinX: x - extentX, MinY: y - extentY, MaxX: x + extentX, MaxY: y + extentY}, true
-}
-
+// -----------------------------------------------------------------------------
+// Game Queries
+// -----------------------------------------------------------------------------
 func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil || dst.runtimeState.syncSprite == nil {
 		return nil
 	}
-	pixel := !p.physicsEnabled
-	dstBox, dstBounded := dst.queryBounds(pixel)
+	usePixels := !p.touchByShape
+	dstBox, dstBounded := dst.touchBounds(usePixels)
 	for _, sp := range p.shapeMgr.spritesNamed(name) {
-		if sp == dst || !sp.spriteState.isVisible || sp.spriteState.isDying || sp.isDragging() || sp.runtimeState.syncSprite == nil {
+		if sp == dst || !sp.isTouchable() || sp.isDragging() || sp.runtimeState.syncSprite == nil {
 			continue
 		}
-		if box, bounded := sp.queryBounds(pixel); dstBounded && bounded && !dstBox.Intersects(box) {
+		if box, bounded := sp.touchBounds(usePixels); dstBounded && bounded && !dstBox.Intersects(box) {
 			continue
 		}
 		if sp.touchingSprite(dst) {
@@ -372,6 +365,9 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	return nil
 }
 
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 // withPendingCloneSensingVisibility makes logical visibility queryable without
 // making a pending clone renderable. The native visibility bit is leased only
 // inside one main-thread callback, so rendering and physics cannot interleave

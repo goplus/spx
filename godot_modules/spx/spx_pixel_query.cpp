@@ -48,7 +48,8 @@ Ref<Texture2D> frame_texture(AnimatedSprite2D *p_anim2d) {
 
 	const StringName current_animation = p_anim2d->get_animation();
 	const int current_frame = p_anim2d->get_frame();
-	if (!frames->has_animation(current_animation)) {
+	if (!frames->has_animation(current_animation) || current_frame < 0 ||
+			current_frame >= frames->get_frame_count(current_animation)) {
 		return Ref<Texture2D>();
 	}
 

@@ -206,6 +206,33 @@ func TestPackedResourcesKeepSourceReaderOwnership(t *testing.T) {
 	}
 }
 
+func TestPackedProjectTouchByShapePrecedence(t *testing.T) {
+	for _, test := range []struct {
+		name, source, packed string
+		want                 bool
+		wantNil              bool
+	}{
+		{"source retained", `{"touchByShape":true}`, `{}`, true, false},
+		{"packed true", `{"touchByShape":false}`, `{"touchByShape":true}`, true, false},
+		{"packed false", `{"touchByShape":true}`, `{"touchByShape":false}`, false, false},
+		{"packed null", `{"touchByShape":true}`, `{"touchByShape":null}`, false, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			index, err := parsePackedConfigIndex([]byte(test.packed), []byte(test.source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config ProjectConfig
+			if err := json.Unmarshal(index.projectRaw, &config); err != nil {
+				t.Fatal(err)
+			}
+			if (config.TouchByShape == nil) != test.wantNil || ResolveSystemSettings(&config).TouchByShape != test.want {
+				t.Fatalf("unexpected merged shape setting: %s", index.projectRaw)
+			}
+		})
+	}
+}
+
 func (panicPathDir) Open(string) (io.ReadCloser, error) {
 	panic("base Open called for packed config")
 }

@@ -128,24 +128,49 @@ func TestNativeInitialization(t *testing.T) {
 	}
 }
 
-func TestNativeInitializationRejectsMissingMainThreadAPI(t *testing.T) {
-	bindNativeBuiltinFixture(t)
-	configuration := initialization{}
-	gdspx_init(uintptr(stringallocator.Resolver()), nil, unsafe.Pointer(&configuration))
-	// A previous link must not mask a missing required symbol in the next one.
-	configuration = initialization{minimum_initialization_level: initializationLevelScene + 1}
-	defer func() {
-		if got := recover(); got != "gdengine: spx_platform_is_main_thread is unavailable" {
-			t.Fatalf("missing main-thread API panic = %v", got)
-		}
-		if api.SpxPlatformIsMainThread != nil || stringallocator.RegistrationCount() != 1 {
-			t.Fatal("failed startup reused a stale symbol or registered callbacks")
-		}
-		if configuration.minimum_initialization_level != initializationLevelScene+1 || configuration.initialize != nil || configuration.deinitialize != nil {
-			t.Fatal("failed startup published initialization hooks")
-		}
-	}()
-	gdspx_init(uintptr(stringallocator.ResolverWithoutMainThread()), nil, unsafe.Pointer(&configuration))
+func TestNativeInitializationRejectsMissingRequiredAPI(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		resolver func() unsafe.Pointer
+		missing  func() bool
+		message  string
+	}{
+		{
+			name:     "main thread",
+			resolver: stringallocator.ResolverWithoutMainThread,
+			missing:  func() bool { return api.SpxPlatformIsMainThread == nil },
+			message:  "gdengine: spx_platform_is_main_thread is unavailable",
+		},
+		{
+			name:     "clear collider shape",
+			resolver: stringallocator.ResolverWithoutClearColliderShape,
+			missing:  func() bool { return api.SpxSpriteClearColliderShape == nil },
+			message:  "gdengine: spx_sprite_clear_collider_shape is unavailable; update the SPX runtime",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bindNativeBuiltinFixture(t)
+			configuration := initialization{}
+			gdspx_init(uintptr(stringallocator.Resolver()), nil, unsafe.Pointer(&configuration))
+			if test.missing() {
+				t.Fatal("valid startup did not resolve required symbol")
+			}
+			// A previous link must not mask a missing required symbol in the next one.
+			configuration = initialization{minimum_initialization_level: initializationLevelScene + 1}
+			defer func() {
+				if got := recover(); got != test.message {
+					t.Fatalf("missing required API panic = %v, want %q", got, test.message)
+				}
+				if !test.missing() || stringallocator.RegistrationCount() != 1 {
+					t.Fatal("failed startup reused a stale symbol or registered callbacks")
+				}
+				if configuration.minimum_initialization_level != initializationLevelScene+1 || configuration.initialize != nil || configuration.deinitialize != nil {
+					t.Fatal("failed startup published initialization hooks")
+				}
+			}()
+			gdspx_init(uintptr(test.resolver()), nil, unsafe.Pointer(&configuration))
+		})
+	}
 }
 
 func TestNativeRegisteredCallbacksCrossCABI(t *testing.T) {

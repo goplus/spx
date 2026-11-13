@@ -296,7 +296,11 @@ GdInt SpxPhysicsMgr::check_nearest_touched_stage_boundary(GdObj obj) {
 
 //
 void SpxPhysicsMgr::set_collision_system_type(GdBool is_collision_by_alpha) {
-	this->is_collision_by_pixel = is_collision_by_alpha;
+	if (is_collision_by_pixel == bool(is_collision_by_alpha)) {
+		return;
+	}
+	is_collision_by_pixel = is_collision_by_alpha;
+	spriteMgr->reset_pixel_touch_events();
 }
 
 void SpxPhysicsMgr::set_global_gravity(GdFloat gravity) {

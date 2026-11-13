@@ -299,6 +299,7 @@ type GDExtensionSpxSpriteSetTriggerLayer C.GDExtensionSpxSpriteSetTriggerLayer
 type GDExtensionSpxSpriteGetTriggerLayer C.GDExtensionSpxSpriteGetTriggerLayer
 type GDExtensionSpxSpriteSetTriggerMask C.GDExtensionSpxSpriteSetTriggerMask
 type GDExtensionSpxSpriteGetTriggerMask C.GDExtensionSpxSpriteGetTriggerMask
+type GDExtensionSpxSpriteClearColliderShape C.GDExtensionSpxSpriteClearColliderShape
 type GDExtensionSpxSpriteSetColliderRect C.GDExtensionSpxSpriteSetColliderRect
 type GDExtensionSpxSpriteSetColliderCircle C.GDExtensionSpxSpriteSetColliderCircle
 type GDExtensionSpxSpriteSetColliderCapsule C.GDExtensionSpxSpriteSetColliderCapsule
@@ -2943,6 +2944,17 @@ func CallSpriteGetTriggerMask(
 
 	return (GdInt)(ret_val)
 }
+func CallSpriteClearColliderShape(
+	obj GdObj,
+	is_trigger GdBool,
+) {
+	arg0 := (C.GDExtensionSpxSpriteClearColliderShape)(api.SpxSpriteClearColliderShape)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdBool)(is_trigger)
+
+	C.cgo_callfn_GDExtensionSpxSpriteClearColliderShape(arg0, arg1, arg2)
+
+}
 func CallSpriteSetColliderRect(
 	obj GdObj,
 	center GdVec2,
@@ -3139,13 +3151,13 @@ func CallSpriteCheckCollisionWithSprite(
 	obj GdObj,
 	obj_b GdObj,
 	alpha_threshold GdFloat,
-	use_pixel_perfect GdBool,
+	use_pixels GdBool,
 ) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteCheckCollisionWithSprite)(api.SpxSpriteCheckCollisionWithSprite)
 	arg1 := (C.GdObj)(obj)
 	arg2 := (C.GdObj)(obj_b)
 	arg3 := (C.GdFloat)(alpha_threshold)
-	arg4 := (C.GdBool)(use_pixel_perfect)
+	arg4 := (C.GdBool)(use_pixels)
 	var ret_val C.GdBool
 	C.cgo_callfn_GDExtensionSpxSpriteCheckCollisionWithSprite(arg0, arg1, arg2, arg3, arg4, &ret_val)
 

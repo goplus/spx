@@ -967,7 +967,7 @@ func TestResolveSystemSettings(t *testing.T) {
 	if settings.AudioMaxDistance != float64(DefaultAudioMaxDistance) {
 		t.Fatalf("unexpected audio defaults: %+v", settings)
 	}
-	if !settings.CollisionByPixel || !settings.AutoSetCollisionLayer {
+	if settings.TouchByShape || !settings.AutoSetCollisionLayer {
 		t.Fatalf("unexpected collision defaults: %+v", settings)
 	}
 	if settings.PixelCollisionPrecision != collision.PixelPrecisionHigh {
@@ -975,18 +975,101 @@ func TestResolveSystemSettings(t *testing.T) {
 	}
 
 	auto := false
+	byShape := true
 	precision := "high"
 	settings = ResolveSystemSettings(&ProjectConfig{
-		CollisionByShape:        true,
+		TouchByShape:            &byShape,
 		Physics:                 true,
 		AutoSetCollisionLayer:   &auto,
 		PixelCollisionPrecision: &precision,
 	})
-	if settings.CollisionByPixel || settings.AutoSetCollisionLayer {
+	if !settings.TouchByShape || settings.AutoSetCollisionLayer {
 		t.Fatalf("unexpected collision overrides: %+v", settings)
 	}
 	if settings.PixelCollisionPrecision == 0 {
 		t.Fatalf("expected parsed precision: %+v", settings)
+	}
+}
+
+func TestTouchSensingModeIsIndependentOfPhysics(t *testing.T) {
+	for _, physics := range []bool{false, true} {
+		for _, byShape := range []bool{false, true} {
+			settings := ResolveSystemSettings(&ProjectConfig{Physics: physics, TouchByShape: &byShape})
+			if settings.TouchByShape != byShape {
+				t.Fatalf("physics=%v, touchByShape=%v: shape=%v", physics, byShape, settings.TouchByShape)
+			}
+		}
+	}
+}
+
+func TestProjectTouchByShapeRoundTrip(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"missing", `{}`, false},
+		{"true", `{"touchByShape":true}`, true},
+		{"false", `{"touchByShape":false}`, false},
+		{"null", `{"touchByShape":null}`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var config ProjectConfig
+			if err := json.Unmarshal([]byte(test.input), &config); err != nil {
+				t.Fatal(err)
+			}
+			if ResolveSystemSettings(&config).TouchByShape != test.want {
+				t.Fatalf("resolved shape mode != %v", test.want)
+			}
+			data, err := json.Marshal(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Preserve explicit false; omit absent/null values.
+			var input, output map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(test.input), &input); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(data, &output); err != nil {
+				t.Fatal(err)
+			}
+			want := string(input["touchByShape"])
+			if want == "null" {
+				want = ""
+			}
+			if got := string(output["touchByShape"]); got != want {
+				t.Fatalf("marshaled touchByShape = %s, want %s", got, want)
+			}
+			var roundTrip ProjectConfig
+			if err := json.Unmarshal(data, &roundTrip); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(config, roundTrip) {
+				t.Fatalf("round trip changed config: %+v -> %+v", config, roundTrip)
+			}
+		})
+	}
+}
+
+func TestProjectTouchByShapeDecodePreservesOtherSettings(t *testing.T) {
+	byShape := true
+	config := ProjectConfig{TouchByShape: &byShape, MaxFPS: 30}
+	if err := json.Unmarshal([]byte(`{"physics":true,"map":{"width":100},"bgm":"music"}`), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.TouchByShape == nil || !*config.TouchByShape || config.MaxFPS != 30 || !config.Physics || config.Map.Width != 100 || config.Bgm != "music" {
+		t.Fatalf("unexpected decoded settings: %+v", config)
+	}
+	if err := json.Unmarshal([]byte(`{"touchByShape":null}`), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.TouchByShape != nil || ResolveSystemSettings(&config).TouchByShape {
+		t.Fatal("null must clear the shape setting and restore the pixel default")
+	}
+	for _, input := range []string{`{"touchByShape":"true"}`, `{"touchByShape":1}`} {
+		if err := json.Unmarshal([]byte(input), &config); err == nil {
+			t.Fatalf("accepted invalid shape mode: %s", input)
+		}
 	}
 }
 

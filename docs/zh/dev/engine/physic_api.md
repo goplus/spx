@@ -25,6 +25,19 @@ func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64)
 
 `Raycast`、`IntersectRect`、`IntersectCircle` 和 Tilemap 方法也已在运行时实现，但它们的重载由 XGo 生成，不能把本文的默认参数示例直接当作 Go 代码编译。
 
+精灵感知与实体物理响应相互独立：
+
+- 默认 `touchByShape: false` 时，`touching(sprite)`、`touching(name)` 和 `onTouchStart` 使用相同的造型像素重叠判定，不因 `physics` 开关改变。实体碰撞体仍负责运动阻挡；`collisionShapeType: "none"` 的精灵也可以被感知。
+- 将实体碰撞体或触发器形状设为 `"none"` 会移除其底层几何，也不再阻挡射线。重新启用不会恢复旧形状，需要重新配置形状；像素感知不依赖这些几何。
+- 设置 `touchByShape: true` 时，两种感知接口都使用触发器形状，适合超出造型范围的检测区域。感知区域不是实体碰撞体。`triggerShapeType: "none"` 表示没有感知几何，因此查询和触碰事件都排除该精灵；开启通知不会创建形状。已有形状仅关闭通知时，仍可被显式查询。
+- 像素事件从当前视觉包围框生成候选，不依赖自定义触发器几何。触发器较小、偏移或没有形状都不会截掉像素接触。`SetTriggerEnabled(false)` 及触发层/掩码控制事件通知；显式 `touching` 查询不要求注册事件或匹配掩码。正在拖拽的目标会被查询和事件派发过滤，但它仍可以感知其他精灵。松手不会补发拖拽期间被过滤的重叠事件。
+
+`onTouchStart` 表示开始重叠，不表示物理求解器接触。例如角色可以站在地板上，但两者像素没有重叠；判断落地应使用 `IsOnFloor`。查询使用当前状态，事件检测后再移动或隐藏精灵可能改变结果。像素精度设置同时作用于事件和查询；低精度可能漏掉小范围重叠。
+
+清空形状的绑定需要配套的 native/Web runtime。旧 native runtime 会在初始化时明确报错，而不会调用缺失的函数。
+
+**迁移：** 旧版本在 `physics` 开启时隐式使用形状事件，而精灵查询检查实体碰撞体。依赖形状检测区域的物理项目现在应显式设置 `touchByShape: true`，并配置触发器形状。普通模式默认行为不变。此设置现在为事件和查询选择相同几何，不保留旧版本两者不一致的行为。
+
 ## 设计理念
 
 采用CodeMonkey风格的极简API设计，只保留最核心的8个方法，覆盖80%的游戏物理需求。简洁、直观、易用。

@@ -47,6 +47,102 @@ type mainThreadTestPlatform struct {
 	gdx.IPlatformMgr
 }
 
+type targetPropertyActor struct {
+	Score int
+	Power float64
+}
+
+type targetLookupSprite struct {
+	SpriteImpl
+}
+
+type targetPropertyGame struct {
+	Game
+	StageScore int
+	Actor      targetPropertyActor
+	Wrapped    Value
+}
+
+type stagePlanGame struct {
+	Game
+	Value    collisionLayerOrderSprite
+	Pointer  *collisionLayerOrderSprite
+	Dynamic  Sprite
+	values   []collisionLayerOrderSprite
+	pointers []*collisionLayerOrderSprite
+}
+
+type gameNavigationMgr struct {
+	gdx.INavigationMgr
+	grid, cell, from, to mathf.Vec2
+	jump, debug          bool
+	setups               int
+}
+
+type gameBackdropSpriteMgr struct {
+	gdx.ISpriteMgr
+	repeat        mathf.Vec4
+	position      mathf.Vec2
+	positionCalls int
+}
+
+type gameQueryPhysicsMgr struct {
+	gdx.IPhysicsMgr
+	result        engine.Array
+	from, to      mathf.Vec2
+	radius        float64
+	mask          int64
+	ignore        []int64
+	areas, bodies bool
+}
+
+type gameDebugDrawMgr struct {
+	gdx.IDebugMgr
+	lines  [][2]mathf.Vec2
+	colors []mathf.Color
+}
+
+type collisionLayerSpriteMgr struct {
+	spyCloneSpriteMgr
+	onLayer func(gdx.Object, int64)
+	onMask  func(gdx.Object, int64)
+}
+
+type tilemapUnloadSceneMgr struct {
+	gdx.ISceneMgr
+	clearCalls int
+}
+
+type tilemapAPIMgr struct {
+	gdx.ITilemapMgr
+	positions []float32
+	path      string
+	pos       mathf.Vec2
+	layer     int64
+	erased    bool
+	collision []float32
+}
+
+type decoratorSceneMgr struct {
+	gdx.ISceneMgr
+	path                                  string
+	position, pivot, scale, colliderPivot mathf.Vec2
+	rotation                              float64
+	layer, collider                       int64
+	params                                []float64
+}
+
+type decoratorResMgr struct{ gdx.IResMgr }
+
+type cameraTestMgr struct {
+	gdx.ICameraMgr
+	position, zoom mathf.Vec2
+	viewport       mathf.Rect2
+	limits         map[int64]int64
+	smoothing      bool
+	positionWrites int
+}
+
 // TestMain supplies the raw manager normally installed by gdengine.Link.
 func TestMain(m *testing.M) {
 	gdx.PlatformMgr = mainThreadTestPlatform{}
@@ -318,16 +414,6 @@ func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
 	}
 }
 
-func (mainThreadTestPlatform) IsMainThread() bool {
-	return true
-}
-
-func setupImmediateEngineCalls(t testing.TB) {
-	t.Helper()
-	wrap.Init(func(call func()) { call() })
-	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
-}
-
 func TestDisplaySizesDefaultToBackdropAndPreserveConfiguredValues(t *testing.T) {
 	for _, tt := range []struct {
 		name          string
@@ -455,45 +541,6 @@ func TestSetupWorldAndWindowClampsBackdropWindowToWorld(t *testing.T) {
 	if game.displayState.MapMode != coreproject.MapModeRepeat {
 		t.Fatalf("map mode = %d, want %d", game.displayState.MapMode, coreproject.MapModeRepeat)
 	}
-}
-
-type targetPropertyActor struct {
-	Score int
-	Power float64
-}
-
-type targetLookupSprite struct {
-	SpriteImpl
-}
-
-type targetPropertyGame struct {
-	Game
-	StageScore int
-	Actor      targetPropertyActor
-	Wrapped    Value
-}
-
-type stagePlanGame struct {
-	Game
-	Value    collisionLayerOrderSprite
-	Pointer  *collisionLayerOrderSprite
-	Dynamic  Sprite
-	values   []collisionLayerOrderSprite
-	pointers []*collisionLayerOrderSprite
-}
-
-type gameNavigationMgr struct {
-	gdx.INavigationMgr
-	grid, cell, from, to mathf.Vec2
-	jump, debug          bool
-	setups               int
-}
-
-type gameBackdropSpriteMgr struct {
-	gdx.ISpriteMgr
-	repeat        mathf.Vec4
-	position      mathf.Vec2
-	positionCalls int
 }
 
 func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
@@ -1177,70 +1224,6 @@ func TestParseSpritePropertiesRejectsWrongTypes(t *testing.T) {
 	}
 }
 
-func (*targetLookupSprite) Main() {}
-
-func (a *targetPropertyActor) Health() float64 {
-	return a.Power
-}
-
-func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
-	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
-	m.setups++
-}
-
-func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) gdx.Array {
-	m.from, m.to, m.jump = from, to, jump
-	return []float32{1, 2, 3, 4}
-}
-
-func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ gdx.Object, effect string, x, y, z, w float64) {
-	if effect == "repeat_scale" {
-		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
-	}
-}
-
-func (m *gameBackdropSpriteMgr) SetPosition(_ gdx.Object, pos mathf.Vec2) {
-	m.position = pos
-	m.positionCalls++
-}
-
-// Stage-focused tests execute the same prepare/apply phases as project loading,
-// while retaining the already-live sprite fixtures they supply.
-func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
-	plan := projectPlan{sprites: make(map[string]spritePlan)}
-	var err error
-	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
-	if err != nil {
-		return nil, err
-	}
-	return p.applyStageEntries(gamer, &plan), nil
-}
-
-func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
-	sprite := &targetLookupSprite{}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.spriteState.cloned = cloned
-	return sprite
-}
-
-type gameQueryPhysicsMgr struct {
-	gdx.IPhysicsMgr
-	result        engine.Array
-	from, to      mathf.Vec2
-	radius        float64
-	mask          int64
-	ignore        []int64
-	areas, bodies bool
-}
-
-type gameDebugDrawMgr struct {
-	gdx.IDebugMgr
-	lines  [][2]mathf.Vec2
-	colors []mathf.Color
-}
-
 func TestGameIntersectionQueriesResolveLiveSprites(t *testing.T) {
 	game, manager, sprite := setupGameQueryPhysics(t)
 	// A missing engine object is ignored while the registered sprite is retained.
@@ -1439,76 +1422,22 @@ func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
 	mgr := gdx.PhysicsMgr.(*gameTestPhysicsMgr)
 	spriteMgr := gdx.SpriteMgr.(*gameTestSpriteMgr)
 	spriteMgr.pixelCollisionSamplingSteps = nil
-	want := []bool{true, false, true}
-	for _, byPixel := range want {
+	for _, byShape := range []bool{false, true, false} {
 		game.applyPhysicsSettings(coreproject.SystemSettings{
-			CollisionByPixel:        byPixel,
+			TouchByShape:            byShape,
 			PixelCollisionPrecision: collision.PixelPrecisionHigh,
 		})
+		if game.touchByShape != byShape {
+			t.Fatalf("runtime shape mode = %v, want %v", game.touchByShape, byShape)
+		}
 	}
-	if !slices.Equal(mgr.collisionModes, want) {
-		t.Fatalf("collision modes = %v, want %v", mgr.collisionModes, want)
+	// The native API takes pixel mode, so only that boundary inverts the setting.
+	if want := []bool{true, false, true}; !slices.Equal(mgr.collisionModes, want) {
+		t.Fatalf("native pixel modes = %v, want %v", mgr.collisionModes, want)
 	}
 	if wantSteps := []int64{collision.PixelPrecisionHigh, collision.PixelPrecisionHigh, collision.PixelPrecisionHigh}; !slices.Equal(spriteMgr.pixelCollisionSamplingSteps, wantSteps) {
 		t.Fatalf("pixel collision sampling steps = %v, want %v", spriteMgr.pixelCollisionSamplingSteps, wantSteps)
 	}
-}
-
-func (m *gameQueryPhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, mask int64) engine.Array {
-	m.from, m.to, m.mask = pos, size, mask
-	return m.result
-}
-
-func (m *gameQueryPhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, mask int64) engine.Array {
-	m.from, m.radius, m.mask = pos, radius, mask
-	return m.result
-}
-
-func (m *gameQueryPhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignore engine.Array, mask int64, areas, bodies bool) engine.Array {
-	m.from, m.to, m.mask = from, to, mask
-	m.ignore = ignore.([]int64)
-	m.areas, m.bodies = areas, bodies
-	return m.result
-}
-
-func (m *gameDebugDrawMgr) DebugDrawLine(from, to mathf.Vec2, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{from, to})
-	m.colors = append(m.colors, color)
-}
-
-func (m *gameDebugDrawMgr) DebugDrawRect(pos, size mathf.Vec2, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{pos, size})
-	m.colors = append(m.colors, color)
-}
-
-func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{pos, mathf.NewVec2(radius, radius)})
-	m.colors = append(m.colors, color)
-}
-
-func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLookupSprite) {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	previous := gdx.PhysicsMgr
-	manager := &gameQueryPhysicsMgr{}
-	gdx.PhysicsMgr = manager
-	t.Cleanup(func() { gdx.PhysicsMgr = previous })
-	game := &Game{}
-	sprite := newTargetLookupSprite(game, "target", false)
-	const id = 89001
-	proxy := &engine.Sprite{Sprite: gdx.Sprite{Id: id}, Target: &sprite.SpriteImpl}
-	sprite.runtimeState.syncSprite = proxy
-	registry := gdx.Sprites()
-	old, existed := registry[id]
-	registry[id] = proxy
-	t.Cleanup(func() {
-		if existed {
-			registry[id] = old
-		} else {
-			delete(registry, id)
-		}
-	})
-	return game, manager, sprite
 }
 
 func TestCollisionLayersReuseSlotsAndCurrentTargets(t *testing.T) {
@@ -1623,46 +1552,6 @@ func TestCollisionLayersCommitAllMasksBeforeProxyWrites(t *testing.T) {
 		t.Fatalf("proxy IDs = %v, masks = %v; want [1 2], [2 1]", layerWrites, writes)
 	}
 }
-
-type collisionLayerSpriteMgr struct {
-	spyCloneSpriteMgr
-	onLayer func(gdx.Object, int64)
-	onMask  func(gdx.Object, int64)
-}
-
-func (m *collisionLayerSpriteMgr) SetTriggerMask(id gdx.Object, mask int64) {
-	m.onMask(id, mask)
-}
-
-func (m *collisionLayerSpriteMgr) SetCollisionLayer(id gdx.Object, layer int64) {
-	m.onLayer(id, layer)
-}
-
-type tilemapUnloadSceneMgr struct {
-	gdx.ISceneMgr
-	clearCalls int
-}
-
-type tilemapAPIMgr struct {
-	gdx.ITilemapMgr
-	positions []float32
-	path      string
-	pos       mathf.Vec2
-	layer     int64
-	erased    bool
-	collision []float32
-}
-
-type decoratorSceneMgr struct {
-	gdx.ISceneMgr
-	path                                  string
-	position, pivot, scale, colliderPivot mathf.Vec2
-	rotation                              float64
-	layer, collider                       int64
-	params                                []float64
-}
-
-type decoratorResMgr struct{ gdx.IResMgr }
 
 func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
 	for _, test := range []struct{ name, decorators string }{
@@ -1816,56 +1705,6 @@ func TestTilemapLoadAndEmptyBounds(t *testing.T) {
 		}
 	}()
 	game.tilemapMgr.loadMap("missing.json")
-}
-
-func (m *tilemapUnloadSceneMgr) ClearPureSprites() { m.clearCalls++ }
-
-func (m *tilemapAPIMgr) PlaceTiles(positions gdx.Array, path string) {
-	m.positions = positions.([]float32)
-	m.path = path
-}
-
-func (m *tilemapAPIMgr) PlaceTile(pos mathf.Vec2, path string) {
-	m.pos, m.path, m.erased = pos, path, false
-}
-
-func (m *tilemapAPIMgr) EraseTile(pos mathf.Vec2) { m.pos, m.erased = pos, true }
-
-func (m *tilemapAPIMgr) EraseTileWithLayer(pos mathf.Vec2, layer int64) {
-	m.pos, m.layer, m.erased = pos, layer, true
-}
-
-func (m *tilemapAPIMgr) GetTile(pos mathf.Vec2) string {
-	m.pos = pos
-	if m.erased {
-		return ""
-	}
-	return m.path
-}
-
-func (m *tilemapAPIMgr) GetTileWithLayer(pos mathf.Vec2, layer int64) string {
-	m.layer = layer
-	return m.GetTile(pos)
-}
-
-func (m *tilemapAPIMgr) SetTileWithCollisionInfo(path string, points gdx.Array) {
-	m.path, m.collision = path, points.([]float32)
-}
-
-func (m *decoratorSceneMgr) CreateStaticSprite(path string, pos mathf.Vec2, rotation float64, scale mathf.Vec2, layer int64, pivot mathf.Vec2, collider int64, colliderPivot mathf.Vec2, params gdx.Array) gdx.Object {
-	m.path, m.position, m.rotation, m.scale, m.layer, m.pivot, m.collider, m.colliderPivot, m.params = path, pos, rotation, scale, layer, pivot, collider, colliderPivot, params.([]float64)
-	return 991
-}
-
-func (*decoratorResMgr) GetImageSize(string) mathf.Vec2 { return mathf.NewVec2(20, 10) }
-
-type cameraTestMgr struct {
-	gdx.ICameraMgr
-	position, zoom mathf.Vec2
-	viewport       mathf.Rect2
-	limits         map[int64]int64
-	smoothing      bool
-	positionWrites int
 }
 
 func TestCameraCoordinatesAndWindowScale(t *testing.T) {
@@ -2030,6 +1869,130 @@ func TestCameraFollowObservesMousePositionChanges(t *testing.T) {
 	}
 }
 
+func (mainThreadTestPlatform) IsMainThread() bool {
+	return true
+}
+
+func (*targetLookupSprite) Main() {}
+
+func (a *targetPropertyActor) Health() float64 {
+	return a.Power
+}
+
+func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
+	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
+	m.setups++
+}
+
+func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) gdx.Array {
+	m.from, m.to, m.jump = from, to, jump
+	return []float32{1, 2, 3, 4}
+}
+
+func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ gdx.Object, effect string, x, y, z, w float64) {
+	if effect == "repeat_scale" {
+		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
+	}
+}
+
+func (m *gameBackdropSpriteMgr) SetPosition(_ gdx.Object, pos mathf.Vec2) {
+	m.position = pos
+	m.positionCalls++
+}
+
+// Stage-focused tests execute the same prepare/apply phases as project loading,
+// while retaining the already-live sprite fixtures they supply.
+func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
+	plan := projectPlan{sprites: make(map[string]spritePlan)}
+	var err error
+	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
+	if err != nil {
+		return nil, err
+	}
+	return p.applyStageEntries(gamer, &plan), nil
+}
+
+func (m *gameQueryPhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, mask int64) engine.Array {
+	m.from, m.to, m.mask = pos, size, mask
+	return m.result
+}
+
+func (m *gameQueryPhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, mask int64) engine.Array {
+	m.from, m.radius, m.mask = pos, radius, mask
+	return m.result
+}
+
+func (m *gameQueryPhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignore engine.Array, mask int64, areas, bodies bool) engine.Array {
+	m.from, m.to, m.mask = from, to, mask
+	m.ignore = ignore.([]int64)
+	m.areas, m.bodies = areas, bodies
+	return m.result
+}
+
+func (m *gameDebugDrawMgr) DebugDrawLine(from, to mathf.Vec2, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{from, to})
+	m.colors = append(m.colors, color)
+}
+
+func (m *gameDebugDrawMgr) DebugDrawRect(pos, size mathf.Vec2, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{pos, size})
+	m.colors = append(m.colors, color)
+}
+
+func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{pos, mathf.NewVec2(radius, radius)})
+	m.colors = append(m.colors, color)
+}
+
+func (m *collisionLayerSpriteMgr) SetTriggerMask(id gdx.Object, mask int64) {
+	m.onMask(id, mask)
+}
+
+func (m *collisionLayerSpriteMgr) SetCollisionLayer(id gdx.Object, layer int64) {
+	m.onLayer(id, layer)
+}
+
+func (m *tilemapUnloadSceneMgr) ClearPureSprites() { m.clearCalls++ }
+
+func (m *tilemapAPIMgr) PlaceTiles(positions gdx.Array, path string) {
+	m.positions = positions.([]float32)
+	m.path = path
+}
+
+func (m *tilemapAPIMgr) PlaceTile(pos mathf.Vec2, path string) {
+	m.pos, m.path, m.erased = pos, path, false
+}
+
+func (m *tilemapAPIMgr) EraseTile(pos mathf.Vec2) { m.pos, m.erased = pos, true }
+
+func (m *tilemapAPIMgr) EraseTileWithLayer(pos mathf.Vec2, layer int64) {
+	m.pos, m.layer, m.erased = pos, layer, true
+}
+
+func (m *tilemapAPIMgr) GetTile(pos mathf.Vec2) string {
+	m.pos = pos
+	if m.erased {
+		return ""
+	}
+	return m.path
+}
+
+func (m *tilemapAPIMgr) GetTileWithLayer(pos mathf.Vec2, layer int64) string {
+	m.layer = layer
+	return m.GetTile(pos)
+}
+
+func (m *tilemapAPIMgr) SetTileWithCollisionInfo(path string, points gdx.Array) {
+	m.path, m.collision = path, points.([]float32)
+}
+
+func (m *decoratorSceneMgr) CreateStaticSprite(path string, pos mathf.Vec2, rotation float64, scale mathf.Vec2, layer int64, pivot mathf.Vec2, collider int64, colliderPivot mathf.Vec2, params gdx.Array) gdx.Object {
+	m.path, m.position, m.rotation, m.scale, m.layer, m.pivot, m.collider, m.colliderPivot, m.params = path, pos, rotation, scale, layer, pivot, collider, colliderPivot, params.([]float64)
+	return 991
+}
+
+func (*decoratorResMgr) GetImageSize(string) mathf.Vec2 { return mathf.NewVec2(20, 10) }
+
 func (m *cameraTestMgr) GetCameraPosition() mathf.Vec2 { return m.position }
 
 func (m *cameraTestMgr) SetCameraPosition(pos mathf.Vec2) {
@@ -2046,6 +2009,46 @@ func (m *cameraTestMgr) GetGlobalCameraRect() mathf.Rect2 { return m.viewport }
 func (m *cameraTestMgr) SetCameraLimit(side, value int64) { m.limits[side] = value }
 
 func (m *cameraTestMgr) SetCameraSmoothing(enabled bool) { m.smoothing = enabled }
+
+func setupImmediateEngineCalls(t testing.TB) {
+	t.Helper()
+	wrap.Init(func(call func()) { call() })
+	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
+}
+
+func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
+	sprite := &targetLookupSprite{}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.spriteState.cloned = cloned
+	return sprite
+}
+
+func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLookupSprite) {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	previous := gdx.PhysicsMgr
+	manager := &gameQueryPhysicsMgr{}
+	gdx.PhysicsMgr = manager
+	t.Cleanup(func() { gdx.PhysicsMgr = previous })
+	game := &Game{}
+	sprite := newTargetLookupSprite(game, "target", false)
+	const id = 89001
+	proxy := &engine.Sprite{Sprite: gdx.Sprite{Id: id}, Target: &sprite.SpriteImpl}
+	sprite.runtimeState.syncSprite = proxy
+	registry := gdx.Sprites()
+	old, existed := registry[id]
+	registry[id] = proxy
+	t.Cleanup(func() {
+		if existed {
+			registry[id] = old
+		} else {
+			delete(registry, id)
+		}
+	})
+	return game, manager, sprite
+}
 
 func setupCameraTestMgr(t *testing.T) *cameraTestMgr {
 	t.Helper()

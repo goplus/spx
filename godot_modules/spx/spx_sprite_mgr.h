@@ -31,30 +31,30 @@
 #ifndef SPX_SPRITE_MGR_H
 #define SPX_SPRITE_MGR_H
 
-#include "core/templates/hash_map.h"
+#include "core/templates/hashfuncs.h"
+#include "core/templates/rb_map.h"
 #include "gdextension_spx_ext.h"
 #include "scene/2d/animated_sprite_2d.h"
-#include "spx_manager.h"
 #include "spx_layer_sorter.h"
+#include "spx_manager.h"
+#include <cstdint>
 #include <functional>
-#include <unordered_set>
+#include <unordered_map>
 
-using ColorCheckFunc = std::function<bool(GdColor, GdColor)>;
 using ColorMatchFunc = std::function<bool(GdColor)>;
 
 class SpxSprite;
 class ISortableSprite;
 
-class TriggerPair {
+class SpritePair {
 public:
 	GdObj id1;
 	GdObj id2;
 
-public:
-	TriggerPair() :
+	SpritePair() :
 			id1(0), id2(0) {}
 
-	TriggerPair(GdObj p_id1, GdObj p_id2) {
+	SpritePair(GdObj p_id1, GdObj p_id2) {
 		id1 = p_id1;
 		id2 = p_id2;
 		if (p_id1 > p_id2) {
@@ -62,27 +62,28 @@ public:
 			id2 = p_id1;
 		}
 	}
-	bool operator<(const TriggerPair &p_other) const {
+	bool operator<(const SpritePair &p_other) const {
 		return id1 < p_other.id1 || (id1 == p_other.id1 && id2 < p_other.id2);
 	}
 
-	bool operator==(const TriggerPair &p_other) const {
+	bool operator==(const SpritePair &p_other) const {
 		return id1 == p_other.id1 && id2 == p_other.id2;
 	}
 
-	bool operator!=(const TriggerPair &p_other) const {
+	bool operator!=(const SpritePair &p_other) const {
 		return !(*this == p_other);
 	}
 
 	size_t std_hash() const {
-		return static_cast<size_t>(id1) ^ static_cast<size_t>(id2);
+		const uint32_t hash = hash_murmur3_one_64(static_cast<uint64_t>(id1));
+		return hash_fmix32(hash_murmur3_one_64(static_cast<uint64_t>(id2), hash));
 	}
 };
 
 namespace std {
 template <>
-struct hash<TriggerPair> {
-	size_t operator()(const TriggerPair &pair) const {
+struct hash<SpritePair> {
+	size_t operator()(const SpritePair &pair) const {
 		return pair.std_hash();
 	}
 };
@@ -90,10 +91,14 @@ struct hash<TriggerPair> {
 
 class SpxSpriteMgr : public SpxManager {
 private:
+	using PixelTouchPairs = std::unordered_map<SpritePair, uint8_t>;
+
 	RBMap<GdObj, SpxSprite *> id_objects;
 
-	std::unordered_set<TriggerPair> bounding_collision_pairs;
-	std::unordered_set<TriggerPair> pixel_collision_pairs;
+	// Bits identify the subscribed directions: id1 -> id2 and id2 -> id1.
+	PixelTouchPairs pixel_touch_pairs;
+	uint64_t pixel_touch_generation = 0;
+	bool checking_pixel_touches = false;
 
 	Node *dont_destroy_root = nullptr;
 	Node *sprite_root = nullptr;
@@ -106,13 +111,12 @@ private:
 	int pixel_collision_sampling_step;
 
 	static void _apply_transform(SpxSprite *sprite, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot);
-	GdBool _check_collision(GdObj obj, ColorCheckFunc check_func);
 	GdBool _check_scene_color_collision(GdObj obj, ColorMatchFunc self_matches, ColorMatchFunc scene_matches);
-	void _notify_pixel_collision_enter(const TriggerPair &pair);
-	void _notify_pixel_collision_exit(const TriggerPair &pair, GdObj skip_id = NULL_OBJECT_ID);
-	bool _erase_pixel_collision_pair(const TriggerPair &pair);
-	void _remove_collision_pairs_for_sprite(GdObj obj);
-	void _check_pixel_collision_events();
+	void _remove_pixel_touch_pairs_for_sprite(GdObj obj);
+	void _check_pixel_touch_events();
+	PixelTouchPairs _find_pixel_touch_pairs();
+	void _notify_pixel_touch_enter(const SpritePair &pair, uint8_t directions);
+	void _notify_pixel_touch_exit(const SpritePair &pair, uint8_t directions, GdObj skip_id = NULL_OBJECT_ID);
 
 protected:
 	void _register_sprite(SpxSprite *p_sprite);
@@ -129,6 +133,7 @@ public:
 	void on_sprite_destroy(SpxSprite *sprite);
 	void on_trigger_enter(GdInt self_id, GdInt other_id);
 	void on_trigger_exit(GdInt self_id, GdInt other_id);
+	void reset_pixel_touch_events();
 	GdObj _create_sprite(GdString path, GdVec2 pos, GdBool is_backdrop);
 	void destroy_all_sprites();
 	void collect_sortable_sprites(Vector<ISortableSprite *> &out);
@@ -266,6 +271,7 @@ public:
 	SPX_BIND void set_trigger_mask(GdObj obj, GdInt mask);
 	SPX_BIND GdInt get_trigger_mask(GdObj obj);
 
+	SPX_BIND void clear_collider_shape(GdObj obj, GdBool is_trigger);
 	SPX_BIND void set_collider_rect(GdObj obj, GdVec2 center, GdVec2 size);
 	SPX_BIND void set_collider_circle(GdObj obj, GdVec2 center, GdFloat radius);
 	SPX_BIND void set_collider_capsule(GdObj obj, GdVec2 center, GdVec2 size);
@@ -286,7 +292,7 @@ public:
 	// Matches both source and target pixel colors using the same RGBA distance threshold on each side.
 	SPX_BIND GdBool check_collision_by_colors(GdObj obj, GdColor sprite_color, GdColor target_color, GdFloat color_threshold, GdFloat alpha_threshold);
 	SPX_BIND GdBool check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold);
-	SPX_BIND GdBool check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect);
+	SPX_BIND GdBool check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixels);
 
 	// pixel collision sampling configuration
 	SPX_BIND void set_pixel_collision_sampling_step(GdInt step);

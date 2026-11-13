@@ -74,8 +74,12 @@ func (s *Sprite) CheckCollisionWithPoint(point Vec2, is_click_query bool) bool {
 	return SpriteMgr.CheckCollisionWithPoint(s.Id, point, is_click_query)
 }
 
-func (s *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
-	return SpriteMgr.CheckCollisionWithSprite(s.Id, obj_b, alpha_threshold, use_pixel_perfect)
+func (s *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixels bool) bool {
+	return SpriteMgr.CheckCollisionWithSprite(s.Id, obj_b, alpha_threshold, use_pixels)
+}
+
+func (s *Sprite) ClearColliderShape(is_trigger bool) {
+	SpriteMgr.ClearColliderShape(s.Id, is_trigger)
 }
 
 func (s *Sprite) CloneSprite() Object {

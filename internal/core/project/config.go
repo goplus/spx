@@ -66,15 +66,16 @@ type ProjectConfig struct {
 	StretchMode *bool   `json:"stretchMode"`
 	WindowScale float64 `json:"windowScale"`
 	MaxFPS      int     `json:"maxFPS"`
+	FullScreen  bool    `json:"fullscreen"`
 
-	AutoSetCollisionLayer *bool `json:"autoSetCollisionLayer"`
-	CollisionByShape      bool  `json:"collisionByShape"`
-	FullScreen            bool  `json:"fullscreen"`
+	TouchByShape            *bool   `json:"touchByShape,omitempty"`
+	PixelCollisionPrecision *string `json:"pixelCollisionPrecision"`
 
-	Physics        bool     `json:"physics"`
-	GlobalGravity  *float64 `json:"globalGravity"`
-	GlobalFriction *float64 `json:"globalFriction"`
-	GlobalAirDrag  *float64 `json:"globalAirDrag"`
+	Physics               bool     `json:"physics"`
+	AutoSetCollisionLayer *bool    `json:"autoSetCollisionLayer"`
+	GlobalGravity         *float64 `json:"globalGravity"`
+	GlobalFriction        *float64 `json:"globalFriction"`
+	GlobalAirDrag         *float64 `json:"globalAirDrag"`
 
 	PathCellSizeX *int `json:"pathCellSizeX"`
 	PathCellSizeY *int `json:"pathCellSizeY"`
@@ -84,8 +85,6 @@ type ProjectConfig struct {
 
 	TilemapPath   string `json:"tilemapPath"`
 	LayerSortMode string `json:"layerSortMode"`
-
-	PixelCollisionPrecision *string `json:"pixelCollisionPrecision"`
 }
 
 type CostumeSetRect struct {
@@ -225,6 +224,18 @@ type SoundConfig struct {
 	SampleCount int    `json:"sampleCount"`
 }
 
+func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
+	return p.Backdrops
+}
+
+func (p *ProjectConfig) GetBackdropIndex() int {
+	return p.BackdropIndex
+}
+
+func (p *SpriteConfig) GetCostumeIndex() int {
+	return p.CostumeIndex
+}
+
 func ToMapMode(mode string) int {
 	switch mode {
 	case "repeat":
@@ -237,16 +248,4 @@ func ToMapMode(mode string) int {
 		return MapModeFillRatio
 	}
 	return MapModeFill
-}
-
-func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
-	return p.Backdrops
-}
-
-func (p *ProjectConfig) GetBackdropIndex() int {
-	return p.BackdropIndex
-}
-
-func (p *SpriteConfig) GetCostumeIndex() int {
-	return p.CostumeIndex
 }

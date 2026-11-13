@@ -48,6 +48,7 @@ type touchingSyncSpriteMgr struct {
 	setTextureDirectCalls   map[pkgengine.Object]int
 	setTextureAtlasPathByID map[pkgengine.Object]string
 	collisionChecks         int
+	lastUsePixels           bool
 	onCollision             func()
 	collisionResult         func(pkgengine.Object, pkgengine.Object) bool
 	onColorCollision        func()
@@ -304,6 +305,98 @@ func TestTouchingSpriteSyncsDirtyTransformImmediately(t *testing.T) {
 	mover.collectProxyUpdate(buffer)
 	if got := buffer.UpdateCount(); got != 0 {
 		t.Fatalf("collectProxyUpdate() batched %d updates, want 0 after immediate query sync", got)
+	}
+}
+
+func TestTouchingModeIsIndependentOfPhysics(t *testing.T) {
+	for _, physics := range []bool{false, true} {
+		for _, byShape := range []bool{false, true} {
+			game, mgr, receiver, target := newTouchingPair(t, byShape)
+			game.physicsEnabled = physics
+			for _, query := range []func() bool{
+				func() bool { return receiver.Touching__0(target) },
+				func() bool { return receiver.Touching__1("target") },
+			} {
+				if !query() || mgr.lastUsePixels == byShape {
+					t.Fatalf("physics=%v, touchByShape=%v: query pixel=%v", physics, byShape, mgr.lastUsePixels)
+				}
+			}
+		}
+	}
+}
+
+func TestShapeTouchingRequiresTriggerGeometry(t *testing.T) {
+	for _, missing := range []string{"receiver", "target"} {
+		for _, setup := range []string{"initial", "runtime"} {
+			t.Run(missing+"/"+setup, func(t *testing.T) {
+				game, mgr, receiver, target := newTouchingPair(t, true)
+				game.physicsEnabled = true
+				for _, sprite := range []*touchingQuerySprite{receiver, target} {
+					if err := sprite.SetColliderShape(true, RectCollider, []float64{8, 8}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				// Model a native proxy retaining its default or previously assigned
+				// shape. Logical none must not query that residual geometry.
+				mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+				check := func(want bool) {
+					t.Helper()
+					before := mgr.collisionChecks
+					for _, query := range []func() bool{
+						func() bool { return receiver.Touching__0(target) },
+						func() bool { return receiver.Touching__1("target") },
+						func() bool { return target.Touching__0(receiver) },
+						func() bool { return target.Touching__1("receiver") },
+					} {
+						if got := query(); got != want {
+							t.Fatalf("touching = %v, want %v", got, want)
+						}
+					}
+					if !want && mgr.collisionChecks != before {
+						t.Fatal("none reached the native shape query")
+					}
+				}
+				sprite := receiver
+				if missing == "target" {
+					sprite = target
+				}
+				if setup == "initial" {
+					sprite.physics().initTriggerConfig(&sprite.SpriteImpl, &coreproject.SpriteConfig{TriggerShapeType: "none"})
+					sprite.physics().triggerInfo.syncShape(sprite.runtimeState.syncSprite, true, &sprite.SpriteImpl)
+				} else {
+					check(true)
+					if err := sprite.SetColliderShape(true, physicsColliderNone, nil); err != nil {
+						t.Fatal(err)
+					}
+				}
+				check(false)
+				sprite.SetTriggerEnabled(true)
+				check(false) // Notification enablement does not create geometry.
+				game.touchByShape = false
+				check(true) // Pixel sensing needs no trigger shape.
+				game.touchByShape = true
+				if err := sprite.SetColliderShape(true, RectCollider, []float64{8, 8}); err != nil {
+					t.Fatal(err)
+				}
+				sprite.SetTriggerEnabled(false)
+				check(true) // Geometry remains queryable without notifications.
+			})
+		}
+	}
+}
+
+func TestTouchingNameUsesVisualBoundsWithPhysics(t *testing.T) {
+	game, mgr, receiver, target := newTouchingPair(t, false)
+	game.physicsEnabled = true
+	for _, sprite := range []*touchingQuerySprite{receiver, target} {
+		sprite.costumes = []*costume{{atlas: true, frame: costumeFrame{Width: 40, Height: 40, BitmapResolution: 1}}}
+		sprite.physics().triggerInfo = physicConfig{Type: physicsColliderRect, Params: []float64{1, 1}}
+		sprite.physics().collisionInfo.Type = physicsColliderNone
+	}
+	target.SetXpos(20)
+	mgr.collisionResult = func(_, _ pkgengine.Object) bool { return true }
+	if !receiver.Touching__1("target") || !mgr.lastUsePixels {
+		t.Fatal("physics or small trigger shapes excluded an overlapping visual candidate")
 	}
 }
 
@@ -573,6 +666,10 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 }
 
 func TestSpriteSensingWithoutProxyAndInvalidTargets(t *testing.T) {
+	var game Game
+	if game.touchingSpriteBy(nil, "target") != nil || game.touchingSpriteBy(&SpriteImpl{}, "target") != nil {
+		t.Fatal("unbound receiver participated in collision query")
+	}
 	sprite := newTestTransformSprite(0, 0)
 	if sprite.bounds() != nil {
 		t.Fatal("sprite without costume has bounds")
@@ -700,22 +797,25 @@ func TestTouchingNameUsesRotatedCostume(t *testing.T) {
 	}
 }
 
-func TestTouchingNameUsesPhysicsShape(t *testing.T) {
+func TestTouchingNameUsesTriggerShape(t *testing.T) {
 	_, mgr, receiver, target := newTouchingPair(t, true)
-	receiver.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{1, 1}}
-	target.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 10}}
+	receiver.physics().triggerInfo = physicConfig{Type: physicsColliderRect, Params: []float64{1, 1}}
+	target.physics().triggerInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 10}}
+	for _, sprite := range []*touchingQuerySprite{receiver, target} {
+		sprite.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{1, 1}}
+	}
 	receiver.SetXYpos(4, 0)
 	target.transform().direction = 90
 	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
 	if receiver.Touching__1("target") {
-		t.Fatal("unrotated collider touched receiver")
+		t.Fatal("unrotated trigger touched receiver")
 	}
 	target.transform().direction = 0
 	target.markProxyDirty()
 	if !receiver.Touching__1("target") {
-		t.Fatal("rotated collider overlap was culled")
+		t.Fatal("rotated trigger overlap was culled")
 	}
-	target.physics().collisionInfo = physicConfig{
+	target.physics().triggerInfo = physicConfig{
 		Type:   physicsColliderPolygon,
 		Params: []float64{-5, -1, 5, -1, 0, 1},
 	}
@@ -724,6 +824,89 @@ func TestTouchingNameUsesPhysicsShape(t *testing.T) {
 	if !receiver.Touching__1("target") {
 		t.Fatal("polygon overlap was culled")
 	}
+}
+
+func TestTouchingNameIncludesAutoTriggerPadding(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		scale, heading float64
+		style          RotationStyle
+	}{
+		{"unrotated", 1, 90, Normal},
+		{"scaled and rotated", 2, 45, Normal},
+		{"left right", 2, -45, LeftRight},
+		{"no rotation", 0.5, 45, None},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, mgr, receiver, target := newTouchingPair(t, true)
+			for _, sprite := range []*touchingQuerySprite{receiver, target} {
+				sprite.runtimeState.scale = tc.scale
+				sprite.transform().direction = tc.heading
+				sprite.transform().rotationStyle = tc.style
+				sprite.physics().triggerInfo.Params = []float64{1 + TriggerExtraPixel, 1 + TriggerExtraPixel}
+			}
+			bounds, ok := target.renderBounds()
+			if !ok {
+				t.Fatal("missing render bounds")
+			}
+			rotation, _, _ := getRenderRotationAndScale(&target.SpriteImpl)
+			sin, cos := math.Sincos(toRadian(rotation))
+			padding := TriggerExtraPixel * tc.scale * (math.Abs(sin) + math.Abs(cos))
+			// Rendered costumes are apart, but their inflated trigger boxes overlap.
+			target.SetXYpos(bounds.Size.X+padding*0.9, 0)
+			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+			if !receiver.Touching__0(target) || !receiver.Touching__1("target") {
+				t.Fatal("auto-trigger overlap was culled")
+			}
+			checks := mgr.collisionChecks
+			target.SetXYpos(bounds.Size.X+padding+1, 0)
+			if receiver.Touching__1("target") || mgr.collisionChecks != checks {
+				t.Fatal("separated auto triggers were not culled")
+			}
+		})
+	}
+}
+
+func TestTouchingNameUsesCurrentAutoTriggerBounds(t *testing.T) {
+	t.Run("explicit shape and pivot", func(t *testing.T) {
+		_, mgr, receiver, target := newTouchingPair(t, true)
+		receiver.physics().triggerInfo.Params = []float64{3, 3}
+		target.physics().triggerInfo.Params = []float64{3, 3}
+		receiver.SetXYpos(100, 0)
+		target.transform().direction = 90
+		target.SetColliderPivot(true, 100, 0)
+		mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+		if !receiver.Touching__1("target") {
+			t.Fatal("explicit auto-trigger pivot was culled")
+		}
+		target.SetColliderPivot(true, 0, 0)
+		shape, _ := target.ColliderShape(true)
+		if err := target.SetColliderShape(true, shape, []float64{220, 3}); err != nil {
+			t.Fatal(err)
+		}
+		if !receiver.Touching__1("target") {
+			t.Fatal("explicit auto-trigger dimensions were culled")
+		}
+	})
+	t.Run("pending costume refresh", func(t *testing.T) {
+		_, mgr, receiver, target := newTouchingPair(t, true)
+		receiver.physics().triggerInfo.Params = []float64{3, 3}
+		target.physics().triggerInfo.Params = []float64{3, 3}
+		target.costumes = []*costume{
+			{name: "small", atlas: true, frame: newSizedCostumeFrame(1, 1)},
+			{name: "wide", atlas: true, frame: newSizedCostumeFrame(40, 1)},
+		}
+		target.transform().direction = 90
+		target.SetXYpos(20, 0)
+		mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+		if receiver.Touching__1("target") {
+			t.Fatal("small trigger touched receiver")
+		}
+		target.SetCostume__0("wide")
+		if !receiver.Touching__1("target") {
+			t.Fatal("same-frame auto-trigger enlargement was culled")
+		}
+	})
 }
 
 func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
@@ -738,11 +921,11 @@ func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, mgr, receiver, target := newTouchingPair(t, true)
-			target.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 2}}
+			target.physics().triggerInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 2}}
 			target.runtimeState.isCostumeDirty = false
 			tc.breakCostume(target)
 			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
-			if _, bounded := target.queryBounds(false); bounded {
+			if _, bounded := target.touchBounds(false); bounded {
 				t.Fatal("invalid costume produced a query bound")
 			}
 			if !receiver.Touching__1("target") {
@@ -752,10 +935,10 @@ func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
 	}
 }
 
-func TestPhysicsQueryBoundsRespectRotationStyle(t *testing.T) {
+func TestTriggerQueryBoundsRespectRotationStyle(t *testing.T) {
 	sp := newTouchingQuerySprite("target", 100, 50, 2)
 	sp.runtimeState.scale = 2
-	sp.physics().collisionInfo = physicConfig{
+	sp.physics().triggerInfo = physicConfig{
 		Type:   physicsColliderRect,
 		Pivot:  mathf.NewVec2(10, 2),
 		Params: []float64{2, 4},
@@ -771,11 +954,61 @@ func TestPhysicsQueryBoundsRespectRotationStyle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sp.transform().rotationStyle = tc.style
 			sp.transform().direction = -30
-			got, bounded := sp.queryBounds(false)
+			got, bounded := sp.touchBounds(false)
 			if !bounded || got != tc.want {
-				t.Fatalf("physics query bounds = %+v, %t; want %+v, true", got, bounded, tc.want)
+				t.Fatalf("trigger query bounds = %+v, %t; want %+v, true", got, bounded, tc.want)
 			}
 		})
+	}
+}
+
+func TestTouchingNameUsesMinimumCircleRadius(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		radius, scale float64
+	}{
+		{"small radius", 0.001, 1},
+		{"small scale", 1, 0.001},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, mgr, receiver, target := newTouchingPair(t, true)
+			for _, sp := range []*touchingQuerySprite{receiver, target} {
+				sp.physics().triggerInfo = physicConfig{Type: physicsColliderCircle, Params: []float64{tc.radius}}
+				sp.runtimeState.scale = tc.scale
+			}
+			target.SetXYpos(0.015, 0)
+			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+			if !receiver.Touching__1("target") {
+				t.Fatal("minimum-radius circle overlap was culled")
+			}
+		})
+	}
+}
+
+func TestTouchBoundsGeometryEdgeCases(t *testing.T) {
+	_, _, receiver, _ := newTouchingPair(t, true)
+	sprite := &receiver.SpriteImpl
+	for _, cfg := range []physicConfig{
+		{Type: physicsColliderRect, Params: []float64{0, 1}},
+		{Type: physicsColliderCircle, Params: []float64{0}},
+		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1}},
+		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1, 2, 2, 3}},
+	} {
+		sprite.physics().triggerInfo = cfg
+		if _, bounded := sprite.touchBounds(false); bounded {
+			t.Errorf("invalid geometry %v produced usable bounds", cfg)
+		}
+	}
+	sprite.physics().triggerInfo = physicConfig{Type: physicsColliderCapsule, Params: []float64{3, 2}}
+	sprite.runtimeState.scale = 1
+	sprite.transform().direction = 90
+	box, bounded := sprite.touchBounds(false)
+	if !bounded || box != (collision.AABB{MinX: -3, MinY: -3, MaxX: 3, MaxY: 3}) {
+		t.Fatalf("short capsule bounds = %v, %v, want diameter-sized square", box, bounded)
+	}
+	sprite.costumes = nil
+	if _, bounded := sprite.touchBounds(true); bounded {
+		t.Fatal("pixel bounds without costume should be unavailable")
 	}
 }
 
@@ -874,59 +1107,6 @@ func BenchmarkTouchingName(b *testing.B) {
 	}
 }
 
-func TestTouchingNameUsesMinimumCircleRadius(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		radius, scale float64
-	}{
-		{"small radius", 0.001, 1},
-		{"small scale", 1, 0.001},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, mgr, receiver, target := newTouchingPair(t, true)
-			for _, sp := range []*touchingQuerySprite{receiver, target} {
-				sp.physics().collisionInfo = physicConfig{Type: physicsColliderCircle, Params: []float64{tc.radius}}
-				sp.runtimeState.scale = tc.scale
-			}
-			target.SetXYpos(0.015, 0)
-			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
-			if !receiver.Touching__1("target") {
-				t.Fatal("minimum-radius circle overlap was culled")
-			}
-		})
-	}
-}
-
-func TestCollisionQueriesRejectUnavailableOrInvalidGeometry(t *testing.T) {
-	game, _, receiver, _ := newTouchingPair(t, true)
-	if game.touchingSpriteBy(nil, "target") != nil || game.touchingSpriteBy(&SpriteImpl{}, "target") != nil {
-		t.Fatal("unbound receiver participated in collision query")
-	}
-	sprite := &receiver.SpriteImpl
-	for _, cfg := range []physicConfig{
-		{Type: physicsColliderRect, Params: []float64{0, 1}},
-		{Type: physicsColliderCircle, Params: []float64{0}},
-		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1}},
-		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1, 2, 2, 3}},
-	} {
-		sprite.physics().collisionInfo = cfg
-		if _, bounded := sprite.queryBounds(false); bounded {
-			t.Errorf("invalid geometry %v produced usable bounds", cfg)
-		}
-	}
-	sprite.physics().collisionInfo = physicConfig{Type: physicsColliderCapsule, Params: []float64{3, 2}}
-	sprite.runtimeState.scale = 1
-	sprite.transform().direction = 90
-	box, bounded := sprite.queryBounds(false)
-	if !bounded || box != (collision.AABB{MinX: -3, MinY: -3, MaxX: 3, MaxY: 3}) {
-		t.Fatalf("short capsule bounds = %v, %v, want diameter-sized square", box, bounded)
-	}
-	sprite.costumes = nil
-	if _, bounded := sprite.queryBounds(true); bounded {
-		t.Fatal("pixel bounds without costume should be unavailable")
-	}
-}
-
 func (s *touchingSyncSpriteMgr) SetTransform(
 	obj pkgengine.Object,
 	pos mathf.Vec2,
@@ -999,15 +1179,20 @@ func (s *touchingSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
 func (s *touchingSyncSpriteMgr) SetMaterialParamsVec(pkgengine.Object, string, float64, float64, float64, float64) {
 }
 
+func (s *touchingSyncSpriteMgr) ClearColliderShape(pkgengine.Object, bool) {}
+
 func (s *touchingSyncSpriteMgr) SetTriggerEnabled(pkgengine.Object, bool) {}
+
+func (s *touchingSyncSpriteMgr) SetTriggerRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {}
 
 func (s *touchingSyncSpriteMgr) SetCollisionEnabled(pkgengine.Object, bool) {}
 
 func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effect string, vec4 mathf.Vec4) {
 }
 
-func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
+func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixels bool) bool {
 	s.collisionChecks++
+	s.lastUsePixels = usePixels
 	if call := s.onCollision; call != nil {
 		s.onCollision = nil
 		call()
@@ -1187,11 +1372,11 @@ func newPendingCloneSensingPair(t *testing.T) (*touchingSyncSpriteMgr, *touching
 	return mgr, receiver, target
 }
 
-func newTouchingPair(t *testing.T, physics bool) (*Game, *touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
+func newTouchingPair(t *testing.T, byShape bool) (*Game, *touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
 	t.Helper()
 	mgr := newTouchingSyncSpriteMgr()
 	installTouchingSyncSpriteMgr(t, mgr)
-	game := &Game{physicsEnabled: physics}
+	game := &Game{touchByShape: byShape}
 	game.initShapeMgr()
 	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
 	target := newTouchingQuerySprite("target", 0, 0, 2)

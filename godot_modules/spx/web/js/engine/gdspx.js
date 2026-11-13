@@ -2379,6 +2379,10 @@ gdspx_sprite_get_trigger_mask(obj_low,obj_high) {
 		if (_resultPtr) FreeGdInt(_resultPtr);
 	}
 }
+gdspx_sprite_clear_collider_shape(obj_low,obj_high,is_trigger) {
+	var _call = Module['_gdspx_sprite_clear_collider_shape'];
+	_call(GdInt64FromParts(obj_low, obj_high), is_trigger ? 1 : 0);
+}
 gdspx_sprite_set_collider_rect(obj_low,obj_high,center,size) {
 	var _call = Module['_gdspx_sprite_set_collider_rect'];
 	var _arg1;
@@ -2549,12 +2553,12 @@ gdspx_sprite_check_collision_by_alpha(obj_low,obj_high,alpha_threshold) {
 		if (_resultPtr) FreeGdBool(_resultPtr);
 	}
 }
-gdspx_sprite_check_collision_with_sprite(obj_low,obj_high,obj_b_low,obj_b_high,alpha_threshold,use_pixel_perfect) {
+gdspx_sprite_check_collision_with_sprite(obj_low,obj_high,obj_b_low,obj_b_high,alpha_threshold,use_pixels) {
 	var _call = Module['_gdspx_sprite_check_collision_with_sprite'];
 	var _resultPtr;
 	try {
 		_resultPtr = AllocGdBool();
-		_call(GdInt64FromParts(obj_low, obj_high), GdInt64FromParts(obj_b_low, obj_b_high), alpha_threshold, use_pixel_perfect ? 1 : 0, _resultPtr);
+		_call(GdInt64FromParts(obj_low, obj_high), GdInt64FromParts(obj_b_low, obj_b_high), alpha_threshold, use_pixels ? 1 : 0, _resultPtr);
 		return ToJsBool(_resultPtr);
 	} finally {
 		if (_resultPtr) FreeGdBool(_resultPtr);
@@ -3564,6 +3568,7 @@ GdspxFuncs.prototype['gdspx_sprite_set_trigger_layer'] = GdspxFuncs.prototype.gd
 GdspxFuncs.prototype['gdspx_sprite_get_trigger_layer'] = GdspxFuncs.prototype.gdspx_sprite_get_trigger_layer;
 GdspxFuncs.prototype['gdspx_sprite_set_trigger_mask'] = GdspxFuncs.prototype.gdspx_sprite_set_trigger_mask;
 GdspxFuncs.prototype['gdspx_sprite_get_trigger_mask'] = GdspxFuncs.prototype.gdspx_sprite_get_trigger_mask;
+GdspxFuncs.prototype['gdspx_sprite_clear_collider_shape'] = GdspxFuncs.prototype.gdspx_sprite_clear_collider_shape;
 GdspxFuncs.prototype['gdspx_sprite_set_collider_rect'] = GdspxFuncs.prototype.gdspx_sprite_set_collider_rect;
 GdspxFuncs.prototype['gdspx_sprite_set_collider_circle'] = GdspxFuncs.prototype.gdspx_sprite_set_collider_circle;
 GdspxFuncs.prototype['gdspx_sprite_set_collider_capsule'] = GdspxFuncs.prototype.gdspx_sprite_set_collider_capsule;

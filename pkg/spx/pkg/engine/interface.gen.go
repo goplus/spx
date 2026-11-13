@@ -329,6 +329,7 @@ type ISpriteMgr interface {
 	GetTriggerLayer(obj Object) int64
 	SetTriggerMask(obj Object, mask int64)
 	GetTriggerMask(obj Object) int64
+	ClearColliderShape(obj Object, is_trigger bool)
 	SetColliderRect(obj Object, center Vec2, size Vec2)
 	SetColliderCircle(obj Object, center Vec2, radius float64)
 	SetColliderCapsule(obj Object, center Vec2, size Vec2)
@@ -344,7 +345,7 @@ type ISpriteMgr interface {
 	CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool
 	CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool
 	CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool
-	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool
+	CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixels bool) bool
 	SetPixelCollisionSamplingStep(step int64)
 	GetPixelCollisionSamplingStep() int64
 	BatchUpdateTransforms(buffer []float32)

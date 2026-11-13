@@ -32,7 +32,6 @@
 
 #include "core/math/math_funcs.h"
 #include "core/os/thread.h"
-#include "core/templates/rb_map.h"
 #include "core/typedefs.h"
 #include "scene/2d/animated_sprite_2d.h"
 #include "scene/2d/physics/area_2d.h"
@@ -62,11 +61,6 @@
 #include <functional>
 #include <vector>
 
-#define DEFAULT_COLLISION_ALPHA_THRESHOLD 0.007
-
-
-StringName SpxSpriteMgr::default_texture_anim;
-
 // Checked main-thread lookup with each API's existing default return value.
 #define SPX_REQUIRE_SPRITE_VOID() \
 	SPX_SPRITE_LOOKUP_VOID(obj, __func__)
@@ -80,24 +74,25 @@ StringName SpxSpriteMgr::default_texture_anim;
 #define SPX_REQUIRE_TARGET_SPRITE_RETURN(TARGET, VALUE) \
 	SPX_TARGET_SPRITE_LOOKUP_RETURN(TARGET, __func__, VALUE)
 
-static _FORCE_INLINE_ GdFloat color_rgb_distance_squared(const GdColor &p_a, const GdColor &p_b) {
-	const GdFloat dr = p_a.r - p_b.r;
-	const GdFloat dg = p_a.g - p_b.g;
-	const GdFloat db = p_a.b - p_b.b;
-	return dr * dr + dg * dg + db * db;
-}
-
 namespace {
 
 using SpxPixelQuery::Layer;
 using SpxPixelQuery::SamplePointMode;
 using SpxPixelQuery::Snapshot;
 
+constexpr GdFloat DEFAULT_COLLISION_ALPHA_THRESHOLD = 0.007;
 constexpr int DEFAULT_PIXEL_COLLISION_SAMPLING_STEP = 1;
 constexpr int PIXEL_QUERY_TILE_SIZE = 32;
 constexpr int PIXEL_QUERY_MIN_PARALLEL_TILES = 4;
 // Sensing uses integer world coordinates; keep the phase choice explicit.
 constexpr SamplePointMode SENSING_POINT_MODE = SamplePointMode::INTEGER;
+
+static _FORCE_INLINE_ GdFloat color_rgb_distance_squared(const GdColor &p_a, const GdColor &p_b) {
+	const GdFloat dr = p_a.r - p_b.r;
+	const GdFloat dg = p_a.g - p_b.g;
+	const GdFloat db = p_a.b - p_b.b;
+	return dr * dr + dg * dg + db * db;
+}
 
 bool capture_sprite_pixels(SpxSprite &p_sprite, Snapshot &r_snapshot, bool p_require_visible, bool p_apply_collision_alpha) {
 	if (p_require_visible && !p_sprite.is_visible_in_tree()) {
@@ -163,27 +158,29 @@ bool parallel_any_sample_point(const Rect2i &p_rect, SamplePointMode p_mode, int
 	return found.load(std::memory_order_relaxed);
 }
 
-bool check_pixel_collision(SpxSprite &p_a, SpxSprite &p_b, GdFloat p_alpha_threshold, SamplePointMode p_mode, int p_step, SpxPixelQuery::ImageCache *p_cache = nullptr) {
-	Snapshot query_a;
-	Snapshot query_b;
-	if (!capture_sprite_pixels(p_a, query_a, true, false) ||
-			!capture_sprite_pixels(p_b, query_b, true, false)) {
+bool check_pixel_collision(Snapshot &p_a, Snapshot &p_b, GdFloat p_alpha_threshold, int p_step, SpxPixelQuery::ImageCache *p_cache = nullptr) {
+	const Rect2i overlap_rect = SpxPixelQuery::overlap(p_a.bounds, p_b.bounds, SENSING_POINT_MODE);
+	if (!overlap_rect.has_area() || !SpxPixelQuery::load_image(p_a, p_cache) || !SpxPixelQuery::load_image(p_b, p_cache)) {
 		return false;
 	}
-
-	const Rect2i overlap_rect = SpxPixelQuery::overlap(query_a.bounds, query_b.bounds, p_mode);
-	if (!overlap_rect.has_area() || !SpxPixelQuery::load_image(query_a, p_cache) || !SpxPixelQuery::load_image(query_b, p_cache)) {
-		return false;
-	}
-	return parallel_any_sample_point(overlap_rect, p_mode, p_step, [&](const Vector2 &sample_pos) {
-		if (SpxPixelQuery::silhouette_alpha(query_a, sample_pos) <= p_alpha_threshold) {
-			return false;
-		}
-		return SpxPixelQuery::silhouette_alpha(query_b, sample_pos) > p_alpha_threshold;
+	return parallel_any_sample_point(overlap_rect, SENSING_POINT_MODE, p_step, [&](const Vector2 &sample_pos) {
+		return SpxPixelQuery::silhouette_alpha(p_a, sample_pos) > p_alpha_threshold &&
+				SpxPixelQuery::silhouette_alpha(p_b, sample_pos) > p_alpha_threshold;
 	}, String("SPXAlphaCollision"));
 }
 
+bool can_notify_pixel_touch(SpxSprite *p_source, SpxSprite *p_target) {
+	return p_source != nullptr && p_target != nullptr &&
+			p_source->get_area2d() != nullptr && p_target->get_area2d() != nullptr &&
+			!p_source->is_backdrop_sprite() && !p_target->is_backdrop_sprite() &&
+			p_source->is_visible_in_tree() && p_target->is_visible_in_tree() &&
+			p_source->is_trigger_enabled() && p_target->is_trigger_enabled() &&
+			(p_source->get_trigger_mask() & p_target->get_trigger_layer()) != 0;
+}
+
 } // namespace
+
+StringName SpxSpriteMgr::default_texture_anim;
 
 void SpxSpriteMgr::on_awake() {
 	default_texture_anim = "default";
@@ -216,8 +213,8 @@ void SpxSpriteMgr::on_start() {
 
 void SpxSpriteMgr::on_destroy() {
 	id_objects.clear();
-	bounding_collision_pairs.clear();
-	pixel_collision_pairs.clear();
+	pixel_touch_pairs.clear();
+	++pixel_touch_generation;
 	if (sprite_root != nullptr) {
 		sprite_root->queue_free();
 		sprite_root = nullptr;
@@ -229,7 +226,7 @@ void SpxSpriteMgr::on_destroy() {
 }
 
 void SpxSpriteMgr::on_update(float delta) {
-	_check_pixel_collision_events();
+	_check_pixel_touch_events();
 	auto &sorter = SpxLayerSorter::instance();
 	if (!sorter.is_enabled()) {
 		return;
@@ -282,9 +279,13 @@ void SpxSpriteMgr::_register_sprite(SpxSprite *p_sprite) {
 }
 
 void SpxSpriteMgr::on_sprite_destroy(SpxSprite *sprite) {
-	_remove_collision_pairs_for_sprite(sprite->get_gid());
-	if (id_objects.erase(sprite->get_gid())) {
-		SPX_CALLBACK->func_on_sprite_destroyed(sprite->get_gid());
+	const GdObj id = sprite->get_gid();
+	const bool registered = id_objects.erase(id);
+	// Exit callbacks may run another update. Remove the dying sprite from
+	// candidate discovery before allowing user code to run.
+	_remove_pixel_touch_pairs_for_sprite(id);
+	if (registered) {
+		SPX_CALLBACK->func_on_sprite_destroyed(id);
 	}
 }
 
@@ -479,8 +480,8 @@ void SpxSpriteMgr::destroy_all_sprites() {
 	get_spx_root()->add_child(sprite_root);
 
 	id_objects.clear();
-	bounding_collision_pairs.clear();
-	pixel_collision_pairs.clear();
+	pixel_touch_pairs.clear();
+	++pixel_touch_generation;
 }
 
 GdInt SpxSpriteMgr::clone_sprite(GdObj obj) {
@@ -552,6 +553,16 @@ GdFloat SpxSpriteMgr::get_rotation(GdObj obj) {
 GdVec2 SpxSpriteMgr::get_scale(GdObj obj) {
 	SPX_REQUIRE_SPRITE_RETURN(GdVec2())
 	return sprite->get_scale();
+}
+
+void SpxSpriteMgr::set_pivot(GdObj obj, GdVec2 pivot) {
+	SPX_REQUIRE_SPRITE_VOID()
+	sprite->set_render_offset(spx_to_godot_vec2(pivot));
+}
+
+GdVec2 SpxSpriteMgr::get_pivot(GdObj obj) {
+	SPX_REQUIRE_SPRITE_RETURN(GdVec2())
+	return godot_to_spx_vec2(sprite->get_render_offset());
 }
 
 void SpxSpriteMgr::set_render_scale(GdObj obj, GdVec2 scale) {
@@ -959,6 +970,11 @@ GdInt SpxSpriteMgr::get_trigger_mask(GdObj obj) {
 	return sprite->get_trigger_mask();
 }
 
+void SpxSpriteMgr::clear_collider_shape(GdObj obj, GdBool is_trigger) {
+	SPX_REQUIRE_SPRITE_VOID()
+	sprite->clear_collider_shape(is_trigger);
+}
+
 void SpxSpriteMgr::set_collider_rect(GdObj obj, GdVec2 center, GdVec2 size) {
 	SPX_REQUIRE_SPRITE_VOID()
 	sprite->set_collider_rect(center, size);
@@ -1018,19 +1034,24 @@ GdBool SpxSpriteMgr::is_trigger_enabled(GdObj obj) {
 	return sprite->is_trigger_enabled();
 }
 
-GdBool SpxSpriteMgr::check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect) {
+GdBool SpxSpriteMgr::check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixels) {
 	SPX_REQUIRE_SPRITE_RETURN(false)
 	SPX_REQUIRE_TARGET_SPRITE_RETURN(obj_b, false)
 	if (!sprite->is_visible_in_tree() || !sprite_target->is_visible_in_tree()) {
 		return false;
 	}
 
-	// If not using pixel-perfect collision, use simple collider2d collision detection
-	if (!use_pixel_perfect) {
-		return sprite->check_collision(sprite_target, false, false);
+	// Touch sensing uses the same trigger shapes as on_trigger_enter. Body
+	// colliders may be smaller or absent for sprites with physics disabled.
+	if (!use_pixels) {
+		return sprite->check_collision(sprite_target, true, true);
 	}
 
-	return check_pixel_collision(*sprite, *sprite_target, alpha_threshold, SENSING_POINT_MODE, pixel_collision_sampling_step);
+	Snapshot self_query;
+	Snapshot target_query;
+	return capture_sprite_pixels(*sprite, self_query, false, false) &&
+			capture_sprite_pixels(*sprite_target, target_query, false, false) &&
+			check_pixel_collision(self_query, target_query, alpha_threshold, pixel_collision_sampling_step);
 }
 
 GdBool SpxSpriteMgr::check_collision_by_color(GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold) {
@@ -1048,9 +1069,27 @@ GdBool SpxSpriteMgr::check_collision_by_colors(GdObj obj, GdColor sprite_color, 
 }
 
 GdBool SpxSpriteMgr::check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold) {
-	return _check_collision(obj, [alpha_threshold](GdColor a, GdColor b) -> bool {
-		return a.a > alpha_threshold && b.a > alpha_threshold;
-	});
+	SPX_REQUIRE_SPRITE_RETURN(false)
+
+	Snapshot self_query;
+	// Scratch uses the caller's silhouette/color as the mask even when ghosted or hidden.
+	if (!capture_sprite_pixels(*sprite, self_query, false, false) || !SpxPixelQuery::load_image(self_query)) {
+		return false;
+	}
+
+	for (const auto &item : id_objects) {
+		SpxSprite *candidate = item.value;
+		if (candidate == nullptr || candidate == sprite || candidate->is_queued_for_deletion()) {
+			continue;
+		}
+
+		Snapshot target_query;
+		if (capture_sprite_pixels(*candidate, target_query, true, true) &&
+				check_pixel_collision(self_query, target_query, alpha_threshold, pixel_collision_sampling_step)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self_matches, ColorMatchFunc scene_matches) {
@@ -1058,10 +1097,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 
 	Snapshot self_query;
 	// Scratch uses the caller's silhouette/color as the query mask even when ghosted or hidden.
-	if (!capture_sprite_pixels(*sprite, self_query, false, false)) {
-		return false;
-	}
-	if (!SpxPixelQuery::load_image(self_query)) {
+	if (!capture_sprite_pixels(*sprite, self_query, false, false) || !SpxPixelQuery::load_image(self_query)) {
 		return false;
 	}
 	std::vector<Layer> scene_queries;
@@ -1106,156 +1142,212 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 	}, String("SPXSceneColorCollision"));
 }
 
-GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
-	SPX_REQUIRE_SPRITE_RETURN(false) // Ensure sprite exists
-
-	Snapshot query1;
-	// Scratch uses the caller's silhouette/color as the mask even when ghosted or hidden.
-	if (!capture_sprite_pixels(*sprite, query1, false, false)) {
-		return false;
-	}
-	if (!SpxPixelQuery::load_image(query1)) {
-		return false;
-	}
-
-	// Iterate through all objects
-	for (const auto &item : id_objects) {
-		SpxSprite *sp2 = item.value;
-		if (sprite == sp2 || sp2 == nullptr || sp2->is_queued_for_deletion()) {
-			continue; // Skip itself
-		}
-
-		Snapshot query2;
-		if (!capture_sprite_pixels(*sp2, query2, true, true)) {
-			continue;
-		}
-
-		const Rect2i overlap_rect = SpxPixelQuery::overlap(query1.bounds, query2.bounds, SENSING_POINT_MODE);
-		if (!overlap_rect.has_area()) {
-			continue;
-		}
-		if (!SpxPixelQuery::load_image(query2)) {
-			continue;
-		}
-		if (parallel_any_sample_point(overlap_rect, SENSING_POINT_MODE, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
-				Color color1;
-				Color color2;
-				color1.a = SpxPixelQuery::silhouette_alpha(query1, sample_pos);
-				color2.a = SpxPixelQuery::silhouette_alpha(query2, sample_pos);
-				return check_func(color1, color2);
-			}, String("SPXColorCollision"))) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void SpxSpriteMgr::on_trigger_enter(GdInt self_id, GdInt other_id) {
-	if (physicsMgr->is_collision_by_pixel) {
-		bounding_collision_pairs.insert(TriggerPair(self_id, other_id));
-	} else {
+	// Shape mode keeps Godot's Area2D notifications. Pixel candidates are
+	// independent of user-configured trigger geometry and physics tick timing.
+	if (!physicsMgr->is_collision_by_pixel) {
 		SPX_CALLBACK->func_on_trigger_enter(self_id, other_id);
 	}
 }
+
 void SpxSpriteMgr::on_trigger_exit(GdInt self_id, GdInt other_id) {
-	if (physicsMgr->is_collision_by_pixel) {
-		const TriggerPair pair(self_id, other_id);
-		// Trigger separation ends the broad-phase candidate pair, so pixel collision
-		// tracking must stop immediately instead of waiting for another pixel check.
-		bounding_collision_pairs.erase(pair);
-		if (_erase_pixel_collision_pair(pair)) {
-			_notify_pixel_collision_exit(pair);
-		}
-	} else {
+	if (!physicsMgr->is_collision_by_pixel) {
 		SPX_CALLBACK->func_on_trigger_exit(self_id, other_id);
 	}
 }
 
-void SpxSpriteMgr::_notify_pixel_collision_enter(const TriggerPair &pair) {
-	SPX_CALLBACK->func_on_trigger_enter(pair.id1, pair.id2);
-	SPX_CALLBACK->func_on_trigger_enter(pair.id2, pair.id1);
-}
-
-void SpxSpriteMgr::_notify_pixel_collision_exit(const TriggerPair &pair, GdObj skip_id) {
-	if (pair.id1 != skip_id) {
-		SPX_CALLBACK->func_on_trigger_exit(pair.id1, pair.id2);
+void SpxSpriteMgr::reset_pixel_touch_events() {
+	auto exits = std::move(pixel_touch_pairs);
+	pixel_touch_pairs.clear();
+	++pixel_touch_generation;
+	const uint64_t generation = pixel_touch_generation;
+	for (const auto &entry : exits) {
+		if (generation != pixel_touch_generation) {
+			break;
+		}
+		_notify_pixel_touch_exit(entry.first, entry.second);
 	}
-	if (pair.id2 != skip_id) {
-		SPX_CALLBACK->func_on_trigger_exit(pair.id2, pair.id1);
-	}
 }
 
-bool SpxSpriteMgr::_erase_pixel_collision_pair(const TriggerPair &pair) {
-	return pixel_collision_pairs.erase(pair) > 0;
-}
-
-void SpxSpriteMgr::_remove_collision_pairs_for_sprite(GdObj obj) {
-	Vector<TriggerPair> exit_triggers;
-	for (auto it = pixel_collision_pairs.begin(); it != pixel_collision_pairs.end();) {
-		if (it->id1 == obj || it->id2 == obj) {
-			exit_triggers.push_back(*it);
-			it = pixel_collision_pairs.erase(it);
+void SpxSpriteMgr::_remove_pixel_touch_pairs_for_sprite(GdObj obj) {
+	const uint64_t generation = pixel_touch_generation;
+	std::vector<std::pair<SpritePair, uint8_t>> exits;
+	for (auto it = pixel_touch_pairs.begin(); it != pixel_touch_pairs.end();) {
+		if (it->first.id1 == obj || it->first.id2 == obj) {
+			exits.push_back(*it);
+			it = pixel_touch_pairs.erase(it);
 		} else {
 			++it;
 		}
 	}
-
-	for (auto it = bounding_collision_pairs.begin(); it != bounding_collision_pairs.end();) {
-		if (it->id1 == obj || it->id2 == obj) {
-			it = bounding_collision_pairs.erase(it);
-		} else {
-			++it;
+	for (const auto &entry : exits) {
+		if (generation != pixel_touch_generation) {
+			break;
 		}
-	}
-
-	for (const auto &pair : exit_triggers) {
-		_notify_pixel_collision_exit(pair, obj);
+		_notify_pixel_touch_exit(entry.first, entry.second, obj);
 	}
 }
 
-void SpxSpriteMgr::_check_pixel_collision_events() {
-	if (!physicsMgr->is_collision_by_pixel || bounding_collision_pairs.empty()) {
+void SpxSpriteMgr::_check_pixel_touch_events() {
+	if (!physicsMgr->is_collision_by_pixel || checking_pixel_touches) {
 		return;
 	}
+	checking_pixel_touches = true;
+	struct CheckGuard {
+		bool &checking;
+		~CheckGuard() { checking = false; }
+	} guard{ checking_pixel_touches };
+	const uint64_t generation = pixel_touch_generation;
 
-	Vector<TriggerPair> enter_triggers;
-	Vector<TriggerPair> exit_triggers;
-	SpxPixelQuery::ImageCache image_cache;
+	const PixelTouchPairs next_pairs = _find_pixel_touch_pairs();
 
-	for (auto it = bounding_collision_pairs.begin(); it != bounding_collision_pairs.end();) {
-		const TriggerPair trigger = *it;
-		SpxSprite *sprite1 = get_sprite(trigger.id1);
-		SpxSprite *sprite2 = get_sprite(trigger.id2);
-		if (sprite1 == nullptr || sprite2 == nullptr) {
-			_erase_pixel_collision_pair(trigger);
-			it = bounding_collision_pairs.erase(it);
+	std::vector<std::pair<SpritePair, uint8_t>> enters, exits;
+	for (const auto &entry : next_pairs) {
+		const auto old = pixel_touch_pairs.find(entry.first);
+		const uint8_t old_directions = old == pixel_touch_pairs.end() ? 0 : old->second;
+		const uint8_t added = entry.second & ~old_directions;
+		if (added != 0) {
+			enters.emplace_back(entry.first, added);
+		}
+	}
+	for (auto it = pixel_touch_pairs.begin(); it != pixel_touch_pairs.end();) {
+		const auto next = next_pairs.find(it->first);
+		const uint8_t next_directions = next == next_pairs.end() ? 0 : next->second;
+		const uint8_t removed = it->second & ~next_directions;
+		if (removed != 0) {
+			exits.emplace_back(it->first, removed);
+		}
+		it->second &= next_directions;
+		if (it->second == 0) {
+			it = pixel_touch_pairs.erase(it);
+		} else {
+			++it;
+		}
+	}
+	// No map iterators or sprite pointers survive callbacks. Sort by identity
+	// so hash iteration does not decide which user handler runs first.
+	auto by_pair = [](const auto &a, const auto &b) { return a.first < b.first; };
+	std::sort(exits.begin(), exits.end(), by_pair);
+	std::sort(enters.begin(), enters.end(), by_pair);
+	for (const auto &entry : exits) {
+		if (generation != pixel_touch_generation) {
+			break;
+		}
+		_notify_pixel_touch_exit(entry.first, entry.second);
+	}
+	for (const auto &entry : enters) {
+		if (generation != pixel_touch_generation) {
+			break; // A callback reset the scene or changed collision modes.
+		}
+		_notify_pixel_touch_enter(entry.first, entry.second);
+	}
+}
+
+SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_find_pixel_touch_pairs() {
+	struct Candidate {
+		GdObj id;
+		Snapshot pixels;
+		GdInt layer;
+		GdInt mask;
+	};
+	std::vector<Candidate> candidates;
+	candidates.reserve(id_objects.size());
+	Rect2 sweep_bounds;
+	GdInt layers = 0, masks = 0;
+	for (const auto &item : id_objects) {
+		SpxSprite *sprite = item.value;
+		if (sprite == nullptr || sprite->is_queued_for_deletion() || sprite->is_backdrop_sprite() ||
+				sprite->get_area2d() == nullptr || !sprite->is_trigger_enabled()) {
 			continue;
 		}
-
-		if (check_pixel_collision(*sprite1, *sprite2, DEFAULT_COLLISION_ALPHA_THRESHOLD, SENSING_POINT_MODE, pixel_collision_sampling_step, &image_cache)) {
-			if (pixel_collision_pairs.insert(trigger).second) {
-				enter_triggers.push_back(trigger);
-			}
-		} else if (_erase_pixel_collision_pair(trigger)) {
-			exit_triggers.push_back(trigger);
+		Candidate candidate;
+		candidate.id = item.key;
+		candidate.layer = sprite->get_trigger_layer();
+		candidate.mask = sprite->get_trigger_mask();
+		if ((candidate.layer == 0 && candidate.mask == 0) ||
+				!capture_sprite_pixels(*sprite, candidate.pixels, true, false) ||
+				!candidate.pixels.bounds.has_area()) {
+			continue;
 		}
-
-		++it;
+		layers |= candidate.layer;
+		masks |= candidate.mask;
+		sweep_bounds = candidates.empty() ? candidate.pixels.bounds : sweep_bounds.merge(candidate.pixels.bounds);
+		candidates.push_back(std::move(candidate));
+	}
+	PixelTouchPairs pairs;
+	// With no subscribed layers, no pair can deliver a notification.
+	if ((layers & masks) == 0) {
+		return pairs;
 	}
 
-	for (const auto &trigger : exit_triggers) {
-		_notify_pixel_collision_exit(trigger);
+	SpxPixelQuery::ImageCache image_cache;
+	const int axis = sweep_bounds.size.y > sweep_bounds.size.x ? 1 : 0;
+	std::sort(candidates.begin(), candidates.end(), [axis](const Candidate &a, const Candidate &b) {
+		if (a.pixels.bounds.position[axis] == b.pixels.bounds.position[axis]) {
+			return a.id < b.id;
+		}
+		return a.pixels.bounds.position[axis] < b.pixels.bounds.position[axis];
+	});
+
+	// Sweep visual bounds, not Area2D trigger bounds. Work after sorting is
+	// proportional to candidates overlapping on the wider scene axis. Dense
+	// scenes can still be quadratic.
+	for (size_t i = 0; i < candidates.size(); ++i) {
+		Candidate &a = candidates[i];
+		const real_t end = a.pixels.bounds.position[axis] + a.pixels.bounds.size[axis];
+		for (size_t j = i + 1; j < candidates.size(); ++j) {
+			Candidate &b = candidates[j];
+			if (b.pixels.bounds.position[axis] > end) {
+				break;
+			}
+			uint8_t directions = ((a.mask & b.layer) != 0 ? 1 : 0) | ((b.mask & a.layer) != 0 ? 2 : 0);
+			if (directions == 0 || !check_pixel_collision(a.pixels, b.pixels, DEFAULT_COLLISION_ALPHA_THRESHOLD, pixel_collision_sampling_step, &image_cache)) {
+				continue;
+			}
+			const SpritePair pair(a.id, b.id);
+			if (a.id != pair.id1) {
+				directions = ((directions & 1) << 1) | ((directions & 2) >> 1);
+			}
+			pairs.emplace(pair, directions);
+		}
 	}
-	for (const auto &trigger : enter_triggers) {
-		_notify_pixel_collision_enter(trigger);
+	return pairs;
+}
+
+void SpxSpriteMgr::_notify_pixel_touch_enter(const SpritePair &pair, uint8_t directions) {
+	const uint64_t generation = pixel_touch_generation;
+	for (uint8_t bit : { uint8_t(1), uint8_t(2) }) {
+		if (generation != pixel_touch_generation) {
+			return;
+		}
+		if ((directions & bit) == 0 || !physicsMgr->is_collision_by_pixel) {
+			continue;
+		}
+		const GdObj source = bit == 1 ? pair.id1 : pair.id2;
+		const GdObj target = bit == 1 ? pair.id2 : pair.id1;
+		// Earlier callbacks can remove sprites or change their subscriptions.
+		if (!can_notify_pixel_touch(get_sprite(source), get_sprite(target))) {
+			continue;
+		}
+		{
+			auto &active_directions = pixel_touch_pairs[pair];
+			if ((active_directions & bit) != 0) {
+				continue;
+			}
+			// Publish only the direction being delivered. A callback deleting the
+			// other sprite must not emit an exit for an enter not yet delivered.
+			active_directions |= bit;
+		}
+		SPX_CALLBACK->func_on_trigger_enter(source, target);
 	}
 }
 
-void SpxSpriteMgr::set_pivot(GdObj obj, GdVec2 pivot) {
-	SPX_REQUIRE_SPRITE_VOID()
-	sprite->set_render_offset(spx_to_godot_vec2(pivot));
-}
-GdVec2 SpxSpriteMgr::get_pivot(GdObj obj) {
-	SPX_REQUIRE_SPRITE_RETURN(GdVec2())
-	return godot_to_spx_vec2(sprite->get_render_offset());
+void SpxSpriteMgr::_notify_pixel_touch_exit(const SpritePair &pair, uint8_t directions, GdObj skip_id) {
+	const uint64_t generation = pixel_touch_generation;
+	if ((directions & 1) != 0 && pair.id1 != skip_id && get_sprite(pair.id1) != nullptr) {
+		SPX_CALLBACK->func_on_trigger_exit(pair.id1, pair.id2);
+	}
+	if (generation == pixel_touch_generation && (directions & 2) != 0 && pair.id2 != skip_id && get_sprite(pair.id2) != nullptr) {
+		SPX_CALLBACK->func_on_trigger_exit(pair.id2, pair.id1);
+	}
 }
