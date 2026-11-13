@@ -54,14 +54,9 @@ public:
 	SpritePair() :
 			id1(0), id2(0) {}
 
-	SpritePair(GdObj p_id1, GdObj p_id2) {
-		id1 = p_id1;
-		id2 = p_id2;
-		if (p_id1 > p_id2) {
-			id1 = p_id2;
-			id2 = p_id1;
-		}
-	}
+	SpritePair(GdObj p_id1, GdObj p_id2) :
+			id1(p_id1 < p_id2 ? p_id1 : p_id2),
+			id2(p_id1 < p_id2 ? p_id2 : p_id1) {}
 	bool operator<(const SpritePair &p_other) const {
 		return id1 < p_other.id1 || (id1 == p_other.id1 && id2 < p_other.id2);
 	}
@@ -95,26 +90,22 @@ private:
 
 	RBMap<GdObj, SpxSprite *> id_objects;
 
-	// Bits identify the subscribed directions: id1 -> id2 and id2 -> id1.
-	PixelTouchPairs pixel_touch_pairs;
+	// Bridge enters already started, retained until exit processing.
+	PixelTouchPairs active_pixel_touches;
 	uint64_t pixel_touch_generation = 0;
-	bool checking_pixel_touches = false;
+	bool updating_pixel_touches = false;
 
 	Node *dont_destroy_root = nullptr;
 	Node *sprite_root = nullptr;
 
-	// Pixel-perfect collision sampling step: check every N pixels instead of every pixel
-	// Higher values = better performance but lower accuracy
-	// 1 = check every pixel (most accurate, slowest)
-	// 2 = check every 2 pixels (good balance)
-	// 3+ = faster but may miss small collisions
+	// Sample every N pixels; larger steps may miss small overlaps.
 	int pixel_collision_sampling_step;
 
 	static void _apply_transform(SpxSprite *sprite, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot);
 	GdBool _check_scene_color_collision(GdObj obj, ColorMatchFunc self_matches, ColorMatchFunc scene_matches);
-	void _remove_pixel_touch_pairs_for_sprite(GdObj obj);
-	void _check_pixel_touch_events();
-	PixelTouchPairs _find_pixel_touch_pairs();
+	void _remove_pixel_touches(GdObj obj);
+	void _update_pixel_touches();
+	PixelTouchPairs _detect_pixel_touches();
 	void _notify_pixel_touch_enter(const SpritePair &pair, uint8_t directions);
 	void _notify_pixel_touch_exit(const SpritePair &pair, uint8_t directions, GdObj skip_id = NULL_OBJECT_ID);
 
@@ -133,7 +124,7 @@ public:
 	void on_sprite_destroy(SpxSprite *sprite);
 	void on_trigger_enter(GdInt self_id, GdInt other_id);
 	void on_trigger_exit(GdInt self_id, GdInt other_id);
-	void reset_pixel_touch_events();
+	void reset_pixel_touches();
 	GdObj _create_sprite(GdString path, GdVec2 pos, GdBool is_backdrop);
 	void destroy_all_sprites();
 	void collect_sortable_sprites(Vector<ISortableSprite *> &out);

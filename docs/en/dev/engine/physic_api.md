@@ -93,8 +93,6 @@ Sprite sensing is independent of physical response:
 
 The shape-clearing binding requires a matching native/Web runtime. Older native runtimes are rejected during initialization rather than calling a missing function.
 
-**Migration:** Earlier versions implicitly selected shape events whenever `physics` was enabled, while sprite queries checked body colliders. Physics projects that need shape-based detection zones must now set `touchByShape: true` explicitly and configure their trigger shapes. Non-physics defaults are unchanged. The setting now selects the same geometry for events and queries; the old event/query disagreement is not preserved.
-
 ### Tile maps
 
 Tile-map APIs should support reading/writing tiles, converting between cell and world coordinates, configuring collision, and applying bulk edits efficiently. Web builds should batch large edits rather than making one bridge call per tile.

@@ -136,20 +136,20 @@ func (p *SpriteImpl) renderBounds() (mathf.Rect2, bool) {
 }
 
 func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {
-	triggerInfo := p.physics().colliderConfig(true)
+	triggerInfo := &p.physics().triggerInfo
 
-	if triggerInfo.Type == physicsColliderNone {
+	if triggerInfo.Type == collision.ColliderNone {
 		applyRenderOffset(p, x, y)
 		width, height := p.costumes[p.costumeIndex].sizeInSPX()
 		return width * p.runtimeState.scale, height * p.runtimeState.scale
 	}
 
-	if triggerInfo.Type == physicsColliderAuto && p.runtimeState.syncSprite == nil {
+	if triggerInfo.Type == collision.ColliderAuto && p.runtimeState.syncSprite == nil {
 		center, size := getCostumeBoundByAlpha(p)
 		triggerInfo.Pivot = center
 		triggerInfo.Params = []float64{size.X, size.Y}
 	}
-	if triggerInfo.Type == physicsColliderAuto {
+	if triggerInfo.Type == collision.ColliderAuto {
 		applyRenderOffset(p, x, y)
 	}
 
@@ -235,9 +235,9 @@ func (p *SpriteImpl) isTouchable() bool {
 	return p.spriteState.isVisible && !p.spriteState.isDying
 }
 
-// hasTouchShape checks logical trigger geometry, independently of notification enablement.
+// hasTouchShape ignores notification enablement.
 func (p *SpriteImpl) hasTouchShape() bool {
-	return p.physics().triggerInfo.Type != physicsColliderNone
+	return p.physics().triggerInfo.Type != collision.ColliderNone
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
@@ -245,7 +245,6 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 		return false
 	}
 	usePixels := !p.g.touchByShape
-	// A disabled native proxy may still retain its default or previous shape.
 	if !usePixels && (!p.hasTouchShape() || !dst.hasTouchShape()) {
 		return false
 	}
@@ -283,7 +282,7 @@ func (p *SpriteImpl) touchBounds(usePixels bool) (collision.AABB, bool) {
 
 	cfg := &p.physics().triggerInfo
 	box, ok := cfg.worldBounds(p)
-	if !ok || cfg.Type != physicsColliderAuto {
+	if !ok || cfg.Type != collision.ColliderAuto {
 		return box, ok
 	}
 

@@ -37,6 +37,7 @@ import (
 	spxfs "github.com/goplus/spx/v4/fs"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	"github.com/goplus/spx/v4/internal/core/clock"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/engine"
@@ -163,9 +164,9 @@ func TestLoadGameAppliesPhysicsBeforeLoadingSprites(t *testing.T) {
 				if sprite == nil || sprite.g != base {
 					t.Fatal("loaded sprite is not bound to its game")
 				}
-				wantCollider := int64(physicsColliderNone)
+				wantCollider := collision.ColliderNone
 				if physics {
-					wantCollider = physicsColliderAuto
+					wantCollider = collision.ColliderAuto
 				}
 				if got := sprite.physics().collisionInfo.Type; got != wantCollider {
 					t.Fatalf("default collider = %d, want %d", got, wantCollider)
@@ -505,14 +506,14 @@ func TestGameInitializationReportsClaimedInput(t *testing.T) {
 	}
 }
 
-func TestUnknownSpriteCollisionReportsRuntimeFailure(t *testing.T) {
+func TestUnknownTouchTargetReportsRuntimeFailure(t *testing.T) {
 	recorder := setupRuntimeFailureRecorder(t)
 	currentScheduler := scheduler
 	engine.SetScheduler(nil)
 	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
-	info := new(Game).getSpriteCollisionInfo("missing")
-	if *info != (spriteCollisionInfo{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
-		t.Fatalf("unknown collision=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
+	info := new(Game).getTouchFilter("missing")
+	if *info != (touchFilter{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("unknown touch filter=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
 	}
 }
 
@@ -715,11 +716,11 @@ func isolatedGameTest(t *testing.T) bool {
 	return true
 }
 
-func TestCollisionLayerFailurePreservesObservableMaskReset(t *testing.T) {
+func TestTouchFilterFailurePreservesMasks(t *testing.T) {
 	for _, abort := range []bool{false, true} {
 		t.Run(fmt.Sprintf("callback panics=%v", abort), func(t *testing.T) {
 			recorder := setupRuntimeFailureRecorder(t)
-			game := &Game{isAutoSetCollisionLayer: true, sprCollisionInfos: map[string]*spriteCollisionInfo{
+			game := &Game{autoTouchLayers: true, touchFilters: map[string]*touchFilter{
 				"A": {layerIndex: 0, Layer: 1, Mask: 8},
 				"B": {layerIndex: 1, Layer: 2, Mask: 16},
 				"C": {layerIndex: 2, Layer: 4, Mask: 32},
@@ -727,22 +728,29 @@ func TestCollisionLayerFailurePreservesObservableMaskReset(t *testing.T) {
 			a := newCollisionLayerOrderSprite(game, "A", nil)
 			b := newCollisionLayerOrderSprite(game, "B", nil)
 			c := newCollisionLayerOrderSprite(game, "C", nil)
-			a.physics().collisionTargets["C"] = true
-			b.physics().collisionTargets["missing"] = true
+			previous := pkgengine.SpriteMgr
+			mgr := &polygonColliderSpriteMgr{}
+			pkgengine.SpriteMgr = mgr
+			t.Cleanup(func() { pkgengine.SpriteMgr = previous })
+			for i, sprite := range []*collisionLayerOrderSprite{a, b, c} {
+				sprite.runtimeState.syncSprite = &engine.Sprite{Sprite: pkgengine.Sprite{Id: int64(i + 1)}}
+			}
+			a.physics().touchTargets["C"] = true
+			b.physics().touchTargets["missing"] = true
 			var callbacks int
-			pkgengine.ExtMgr = &collisionLayerPanicObserver{IExtMgr: recorder, observe: func(message string) {
+			pkgengine.ExtMgr = &touchFilterPanicObserver{IExtMgr: recorder, observe: func(message string) {
 				callbacks++
 				if !strings.Contains(message, "Unknown sprite missing") {
 					t.Fatalf("panic message = %q", message)
 				}
-				if got := []int64{game.sprCollisionInfos["A"].Mask, game.sprCollisionInfos["B"].Mask, game.sprCollisionInfos["C"].Mask}; !slices.Equal(got, []int64{0, 0, 32}) {
-					t.Fatalf("masks during panic = %v, want [0 0 32]", got)
+				if got := []int64{game.touchFilters["A"].Mask, game.touchFilters["B"].Mask, game.touchFilters["C"].Mask}; !slices.Equal(got, []int64{8, 16, 32}) {
+					t.Fatalf("masks during panic = %v, want [8 16 32]", got)
 				}
 				if abort {
 					panic("stop collision refresh")
 				}
 			}}
-			game.setupCollisionData([]Sprite{a, b, c})
+			game.setupTouchEntries([]Sprite{a, b, c})
 			func() {
 				defer func() {
 					got := recover()
@@ -750,14 +758,14 @@ func TestCollisionLayerFailurePreservesObservableMaskReset(t *testing.T) {
 						t.Fatalf("refresh panic = %v", got)
 					}
 				}()
-				game.refreshCollisionLayers()
+				game.refreshTouchFilters()
 			}()
-			want := []int64{4, 0, 0}
-			if abort {
-				want = []int64{0, 0, 32}
-			}
-			if got := []int64{game.sprCollisionInfos["A"].Mask, game.sprCollisionInfos["B"].Mask, game.sprCollisionInfos["C"].Mask}; !slices.Equal(got, want) {
+			want := []int64{8, 16, 32}
+			if got := []int64{game.touchFilters["A"].Mask, game.touchFilters["B"].Mask, game.touchFilters["C"].Mask}; !slices.Equal(got, want) {
 				t.Fatalf("masks after failure = %v, want %v", got, want)
+			}
+			if mgr.triggerMaskWrites != 0 {
+				t.Fatal("failed refresh wrote proxy masks")
 			}
 			var wantExits []int64
 			if !abort {
@@ -770,12 +778,12 @@ func TestCollisionLayerFailurePreservesObservableMaskReset(t *testing.T) {
 	}
 }
 
-type collisionLayerPanicObserver struct {
+type touchFilterPanicObserver struct {
 	pkgengine.IExtMgr
 	observe func(string)
 }
 
-func (m *collisionLayerPanicObserver) OnRuntimePanic(message string) { m.observe(message) }
+func (m *touchFilterPanicObserver) OnRuntimePanic(message string) { m.observe(message) }
 
 type configTestResMgr struct {
 	pkgengine.IResMgr

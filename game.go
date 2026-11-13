@@ -95,11 +95,11 @@ type Game struct {
 	sprs   map[string]Sprite
 	sounds map[string]sound
 
-	scriptEvents            scriptEventRegistry
-	gamer                   Gamer
-	sprCollisionInfos       map[string]*spriteCollisionInfo
-	sprCollisionData        []spriteCollisionData
-	isAutoSetCollisionLayer bool
+	scriptEvents    scriptEventRegistry
+	gamer           Gamer
+	touchFilters    map[string]*touchFilter
+	touchEntries    []touchEntry
+	autoTouchLayers bool
 
 	inputMgr       inputManager
 	inputSessionMu sync.RWMutex
@@ -194,7 +194,8 @@ func (p *Game) reset() {
 	p.sprs = make(map[string]Sprite)
 
 	p.abortInputSession("game reset")
-	p.resetCollisionLayerState()
+	p.touchFilters = nil
+	p.touchEntries = nil
 	costumeSizeCache.Clear()
 	p.inputMgr.init(p)
 

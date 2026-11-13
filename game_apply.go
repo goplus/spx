@@ -205,7 +205,7 @@ func (p *Game) prepareStageBootstrap(sprites []Sprite, proj *coreproject.Project
 		p.Camera.Follow__1(proj.Camera.On)
 	}
 	p.queueBootstrap(generation, func() {
-		p.setupCollisionData(sprites)
+		p.setupTouchEntries(sprites)
 	})
 	for _, sprite := range sprites {
 		if spr := spriteOf(sprite); spr != nil {

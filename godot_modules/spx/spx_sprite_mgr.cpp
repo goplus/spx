@@ -87,6 +87,10 @@ constexpr int PIXEL_QUERY_MIN_PARALLEL_TILES = 4;
 // Sensing uses integer world coordinates; keep the phase choice explicit.
 constexpr SamplePointMode SENSING_POINT_MODE = SamplePointMode::INTEGER;
 
+// Direction bits always follow SpritePair's normalized ID order.
+constexpr uint8_t FIRST_TO_SECOND = 1;
+constexpr uint8_t SECOND_TO_FIRST = 2;
+
 static _FORCE_INLINE_ GdFloat color_rgb_distance_squared(const GdColor &p_a, const GdColor &p_b) {
 	const GdFloat dr = p_a.r - p_b.r;
 	const GdFloat dg = p_a.g - p_b.g;
@@ -213,7 +217,7 @@ void SpxSpriteMgr::on_start() {
 
 void SpxSpriteMgr::on_destroy() {
 	id_objects.clear();
-	pixel_touch_pairs.clear();
+	active_pixel_touches.clear();
 	++pixel_touch_generation;
 	if (sprite_root != nullptr) {
 		sprite_root->queue_free();
@@ -226,7 +230,7 @@ void SpxSpriteMgr::on_destroy() {
 }
 
 void SpxSpriteMgr::on_update(float delta) {
-	_check_pixel_touch_events();
+	_update_pixel_touches();
 	auto &sorter = SpxLayerSorter::instance();
 	if (!sorter.is_enabled()) {
 		return;
@@ -283,7 +287,7 @@ void SpxSpriteMgr::on_sprite_destroy(SpxSprite *sprite) {
 	const bool registered = id_objects.erase(id);
 	// Exit callbacks may run another update. Remove the dying sprite from
 	// candidate discovery before allowing user code to run.
-	_remove_pixel_touch_pairs_for_sprite(id);
+	_remove_pixel_touches(id);
 	if (registered) {
 		SPX_CALLBACK->func_on_sprite_destroyed(id);
 	}
@@ -480,7 +484,7 @@ void SpxSpriteMgr::destroy_all_sprites() {
 	get_spx_root()->add_child(sprite_root);
 
 	id_objects.clear();
-	pixel_touch_pairs.clear();
+	active_pixel_touches.clear();
 	++pixel_touch_generation;
 }
 
@@ -1143,8 +1147,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 }
 
 void SpxSpriteMgr::on_trigger_enter(GdInt self_id, GdInt other_id) {
-	// Shape mode keeps Godot's Area2D notifications. Pixel candidates are
-	// independent of user-configured trigger geometry and physics tick timing.
+	// Area2D drives shape events; pixel events use the visual sweep.
 	if (!physicsMgr->is_collision_by_pixel) {
 		SPX_CALLBACK->func_on_trigger_enter(self_id, other_id);
 	}
@@ -1156,9 +1159,9 @@ void SpxSpriteMgr::on_trigger_exit(GdInt self_id, GdInt other_id) {
 	}
 }
 
-void SpxSpriteMgr::reset_pixel_touch_events() {
-	auto exits = std::move(pixel_touch_pairs);
-	pixel_touch_pairs.clear();
+void SpxSpriteMgr::reset_pixel_touches() {
+	auto exits = std::move(active_pixel_touches);
+	active_pixel_touches.clear();
 	++pixel_touch_generation;
 	const uint64_t generation = pixel_touch_generation;
 	for (const auto &entry : exits) {
@@ -1169,13 +1172,13 @@ void SpxSpriteMgr::reset_pixel_touch_events() {
 	}
 }
 
-void SpxSpriteMgr::_remove_pixel_touch_pairs_for_sprite(GdObj obj) {
+void SpxSpriteMgr::_remove_pixel_touches(GdObj obj) {
 	const uint64_t generation = pixel_touch_generation;
 	std::vector<std::pair<SpritePair, uint8_t>> exits;
-	for (auto it = pixel_touch_pairs.begin(); it != pixel_touch_pairs.end();) {
+	for (auto it = active_pixel_touches.begin(); it != active_pixel_touches.end();) {
 		if (it->first.id1 == obj || it->first.id2 == obj) {
 			exits.push_back(*it);
-			it = pixel_touch_pairs.erase(it);
+			it = active_pixel_touches.erase(it);
 		} else {
 			++it;
 		}
@@ -1188,44 +1191,43 @@ void SpxSpriteMgr::_remove_pixel_touch_pairs_for_sprite(GdObj obj) {
 	}
 }
 
-void SpxSpriteMgr::_check_pixel_touch_events() {
-	if (!physicsMgr->is_collision_by_pixel || checking_pixel_touches) {
+void SpxSpriteMgr::_update_pixel_touches() {
+	if (!physicsMgr->is_collision_by_pixel || updating_pixel_touches) {
 		return;
 	}
-	checking_pixel_touches = true;
-	struct CheckGuard {
-		bool &checking;
-		~CheckGuard() { checking = false; }
-	} guard{ checking_pixel_touches };
+	updating_pixel_touches = true;
+	struct UpdateGuard {
+		bool &updating;
+		~UpdateGuard() { updating = false; }
+	} guard{ updating_pixel_touches };
 	const uint64_t generation = pixel_touch_generation;
 
-	const PixelTouchPairs next_pairs = _find_pixel_touch_pairs();
+	const PixelTouchPairs detected_touches = _detect_pixel_touches();
 
 	std::vector<std::pair<SpritePair, uint8_t>> enters, exits;
-	for (const auto &entry : next_pairs) {
-		const auto old = pixel_touch_pairs.find(entry.first);
-		const uint8_t old_directions = old == pixel_touch_pairs.end() ? 0 : old->second;
+	for (const auto &entry : detected_touches) {
+		const auto old = active_pixel_touches.find(entry.first);
+		const uint8_t old_directions = old == active_pixel_touches.end() ? 0 : old->second;
 		const uint8_t added = entry.second & ~old_directions;
 		if (added != 0) {
 			enters.emplace_back(entry.first, added);
 		}
 	}
-	for (auto it = pixel_touch_pairs.begin(); it != pixel_touch_pairs.end();) {
-		const auto next = next_pairs.find(it->first);
-		const uint8_t next_directions = next == next_pairs.end() ? 0 : next->second;
+	for (auto it = active_pixel_touches.begin(); it != active_pixel_touches.end();) {
+		const auto next = detected_touches.find(it->first);
+		const uint8_t next_directions = next == detected_touches.end() ? 0 : next->second;
 		const uint8_t removed = it->second & ~next_directions;
 		if (removed != 0) {
 			exits.emplace_back(it->first, removed);
 		}
 		it->second &= next_directions;
 		if (it->second == 0) {
-			it = pixel_touch_pairs.erase(it);
+			it = active_pixel_touches.erase(it);
 		} else {
 			++it;
 		}
 	}
-	// No map iterators or sprite pointers survive callbacks. Sort by identity
-	// so hash iteration does not decide which user handler runs first.
+	// Snapshot IDs before callbacks; sort for stable notification order.
 	auto by_pair = [](const auto &a, const auto &b) { return a.first < b.first; };
 	std::sort(exits.begin(), exits.end(), by_pair);
 	std::sort(enters.begin(), enters.end(), by_pair);
@@ -1237,13 +1239,13 @@ void SpxSpriteMgr::_check_pixel_touch_events() {
 	}
 	for (const auto &entry : enters) {
 		if (generation != pixel_touch_generation) {
-			break; // A callback reset the scene or changed collision modes.
+			break; // Scene or mode changed in a callback.
 		}
 		_notify_pixel_touch_enter(entry.first, entry.second);
 	}
 }
 
-SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_find_pixel_touch_pairs() {
+SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_detect_pixel_touches() {
 	struct Candidate {
 		GdObj id;
 		Snapshot pixels;
@@ -1275,7 +1277,7 @@ SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_find_pixel_touch_pairs() {
 		candidates.push_back(std::move(candidate));
 	}
 	PixelTouchPairs pairs;
-	// With no subscribed layers, no pair can deliver a notification.
+	// No matching subscriptions means no notifications.
 	if ((layers & masks) == 0) {
 		return pairs;
 	}
@@ -1289,9 +1291,7 @@ SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_find_pixel_touch_pairs() {
 		return a.pixels.bounds.position[axis] < b.pixels.bounds.position[axis];
 	});
 
-	// Sweep visual bounds, not Area2D trigger bounds. Work after sorting is
-	// proportional to candidates overlapping on the wider scene axis. Dense
-	// scenes can still be quadratic.
+	// Sweep the wider visual axis; dense scenes can still be quadratic.
 	for (size_t i = 0; i < candidates.size(); ++i) {
 		Candidate &a = candidates[i];
 		const real_t end = a.pixels.bounds.position[axis] + a.pixels.bounds.size[axis];
@@ -1300,13 +1300,13 @@ SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_find_pixel_touch_pairs() {
 			if (b.pixels.bounds.position[axis] > end) {
 				break;
 			}
-			uint8_t directions = ((a.mask & b.layer) != 0 ? 1 : 0) | ((b.mask & a.layer) != 0 ? 2 : 0);
+			const SpritePair pair(a.id, b.id);
+			const Candidate &first = a.id == pair.id1 ? a : b;
+			const Candidate &second = a.id == pair.id1 ? b : a;
+			const uint8_t directions = ((first.mask & second.layer) != 0 ? FIRST_TO_SECOND : 0) |
+					((second.mask & first.layer) != 0 ? SECOND_TO_FIRST : 0);
 			if (directions == 0 || !check_pixel_collision(a.pixels, b.pixels, DEFAULT_COLLISION_ALPHA_THRESHOLD, pixel_collision_sampling_step, &image_cache)) {
 				continue;
-			}
-			const SpritePair pair(a.id, b.id);
-			if (a.id != pair.id1) {
-				directions = ((directions & 1) << 1) | ((directions & 2) >> 1);
 			}
 			pairs.emplace(pair, directions);
 		}
@@ -1316,26 +1316,25 @@ SpxSpriteMgr::PixelTouchPairs SpxSpriteMgr::_find_pixel_touch_pairs() {
 
 void SpxSpriteMgr::_notify_pixel_touch_enter(const SpritePair &pair, uint8_t directions) {
 	const uint64_t generation = pixel_touch_generation;
-	for (uint8_t bit : { uint8_t(1), uint8_t(2) }) {
+	for (uint8_t bit : { FIRST_TO_SECOND, SECOND_TO_FIRST }) {
 		if (generation != pixel_touch_generation) {
 			return;
 		}
 		if ((directions & bit) == 0 || !physicsMgr->is_collision_by_pixel) {
 			continue;
 		}
-		const GdObj source = bit == 1 ? pair.id1 : pair.id2;
-		const GdObj target = bit == 1 ? pair.id2 : pair.id1;
-		// Earlier callbacks can remove sprites or change their subscriptions.
+		const GdObj source = bit == FIRST_TO_SECOND ? pair.id1 : pair.id2;
+		const GdObj target = bit == FIRST_TO_SECOND ? pair.id2 : pair.id1;
+		// Callbacks may remove sprites or change subscriptions.
 		if (!can_notify_pixel_touch(get_sprite(source), get_sprite(target))) {
 			continue;
 		}
 		{
-			auto &active_directions = pixel_touch_pairs[pair];
+			auto &active_directions = active_pixel_touches[pair];
 			if ((active_directions & bit) != 0) {
 				continue;
 			}
-			// Publish only the direction being delivered. A callback deleting the
-			// other sprite must not emit an exit for an enter not yet delivered.
+			// Register only this direction: callbacks may suppress the reverse enter.
 			active_directions |= bit;
 		}
 		SPX_CALLBACK->func_on_trigger_enter(source, target);
@@ -1344,10 +1343,10 @@ void SpxSpriteMgr::_notify_pixel_touch_enter(const SpritePair &pair, uint8_t dir
 
 void SpxSpriteMgr::_notify_pixel_touch_exit(const SpritePair &pair, uint8_t directions, GdObj skip_id) {
 	const uint64_t generation = pixel_touch_generation;
-	if ((directions & 1) != 0 && pair.id1 != skip_id && get_sprite(pair.id1) != nullptr) {
+	if ((directions & FIRST_TO_SECOND) != 0 && pair.id1 != skip_id && get_sprite(pair.id1) != nullptr) {
 		SPX_CALLBACK->func_on_trigger_exit(pair.id1, pair.id2);
 	}
-	if (generation == pixel_touch_generation && (directions & 2) != 0 && pair.id2 != skip_id && get_sprite(pair.id2) != nullptr) {
+	if (generation == pixel_touch_generation && (directions & SECOND_TO_FIRST) != 0 && pair.id2 != skip_id && get_sprite(pair.id2) != nullptr) {
 		SPX_CALLBACK->func_on_trigger_exit(pair.id2, pair.id1);
 	}
 }

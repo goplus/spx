@@ -102,7 +102,7 @@ type gameDebugDrawMgr struct {
 	colors []mathf.Color
 }
 
-type collisionLayerSpriteMgr struct {
+type touchFilterSpriteMgr struct {
 	spyCloneSpriteMgr
 	onLayer func(gdx.Object, int64)
 	onMask  func(gdx.Object, int64)
@@ -712,8 +712,8 @@ func TestStageUsesDirectFieldsAndPreservesSpriteOrder(t *testing.T) {
 	front := newCollisionLayerOrderSprite(&game.Game, "Front", nil)
 	prototype := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
 	prototype.baseObj.initWithSize(1, 1)
-	prototype.physics().collisionInfo.Type = physicsColliderNone
-	prototype.physics().triggerInfo.Type = physicsColliderNone
+	prototype.physics().collisionInfo.Type = collision.ColliderNone
+	prototype.physics().triggerInfo.Type = collision.ColliderNone
 	game.sprs = map[string]Sprite{"Back": back, "Front": front, "collisionLayerOrderSprite": prototype}
 	raw := []any{
 		"Back",
@@ -1313,22 +1313,22 @@ func TestGameDebugDrawLinesValidatesCompleteSegments(t *testing.T) {
 	}
 }
 
-func TestGameResetCollisionLayerStateClearsCollisionLayerState(t *testing.T) {
-	var g Game
-	g.sprCollisionInfos = map[string]*spriteCollisionInfo{
+func TestManualModeClearsAutoTouchSetup(t *testing.T) {
+	g := Game{physicsEnabled: true}
+	g.touchFilters = map[string]*touchFilter{
 		"SpriteA": {layerIndex: 0, Layer: 1 << 0, Mask: 1 << 1},
 	}
-	g.sprCollisionData = []spriteCollisionData{{
-		info: g.sprCollisionInfos["SpriteA"],
+	g.touchEntries = []touchEntry{{
+		filter: g.touchFilters["SpriteA"],
 	}}
 
-	g.resetCollisionLayerState()
+	g.setupTouchEntries(nil)
 
-	if g.sprCollisionInfos != nil {
-		t.Fatalf("sprCollisionInfos = %#v, want nil", g.sprCollisionInfos)
+	if g.touchFilters != nil {
+		t.Fatalf("touchFilters = %#v, want nil", g.touchFilters)
 	}
-	if g.sprCollisionData != nil {
-		t.Fatalf("sprCollisionData = %#v, want nil", g.sprCollisionData)
+	if g.touchEntries != nil {
+		t.Fatalf("touchEntries = %#v, want nil", g.touchEntries)
 	}
 }
 
@@ -1336,7 +1336,7 @@ func TestTryRaycastResult(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		data    engine.Array
-		want    rayCastResult
+		want    raycastResult
 		wantErr string
 	}{
 		{
@@ -1346,18 +1346,18 @@ func TestTryRaycastResult(t *testing.T) {
 				engine.ConvertToInt64(12.5), engine.ConvertToInt64(-7.25),
 				engine.ConvertToInt64(0.6), engine.ConvertToInt64(0.8),
 			},
-			want: rayCastResult{Hited: true, SpriteId: 42, PosX: 12.5, PosY: -7.25},
+			want: raycastResult{Hit: true, SpriteID: 42, PosX: 12.5, PosY: -7.25},
 		},
 		{
 			name: "negative hit marker",
 			data: []int64{-2, 43, 0, 0, 0, 0},
-			want: rayCastResult{Hited: true, SpriteId: 43},
+			want: raycastResult{Hit: true, SpriteID: 43},
 		},
 		{name: "no hit", data: make([]int64, 6)},
 		{
 			name: "no hit retains payload",
 			data: []int64{0, 44, engine.ConvertToInt64(-5), engine.ConvertToInt64(9), 0, 0},
-			want: rayCastResult{SpriteId: 44, PosX: -5, PosY: 9},
+			want: raycastResult{SpriteID: 44, PosX: -5, PosY: 9},
 		},
 		{name: "nil", wantErr: "array type error: expected []int64 but got <nil>"},
 		{name: "wrong type", data: make([]float64, 6), wantErr: "array type error: expected []int64 but got []float64"},
@@ -1408,7 +1408,9 @@ func TestGameDebugDrawingPrimitives(t *testing.T) {
 
 func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 	game, _, sprite := setupGameQueryPhysics(t)
-	if got := game.buildSpriteCollisionData([]Sprite{nil}); len(got) != 0 {
+	game.autoTouchLayers = true
+	game.setupTouchEntries([]Sprite{nil})
+	if got := game.touchEntries; len(got) != 0 {
 		t.Fatalf("nil sprite collision=%v", got)
 	}
 	sprite.runtimeState.syncSprite.Target = (*SpriteImpl)(nil)
@@ -1440,17 +1442,17 @@ func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
 	}
 }
 
-func TestCollisionLayersReuseSlotsAndCurrentTargets(t *testing.T) {
+func TestTouchFiltersReuseLayersAndCurrentTargets(t *testing.T) {
 	for _, count := range []int{0, 1, 32, 33, 64, 65} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			setupRuntimeScheduler(t)
-			game := &Game{isAutoSetCollisionLayer: true, typs: make(map[string]reflect.Type)}
+			game := &Game{autoTouchLayers: true, typs: make(map[string]reflect.Type)}
 			for i := range count {
 				game.typs[fmt.Sprintf("Sprite%d", i)] = reflect.TypeFor[collisionLayerOrderSprite]()
 			}
-			game.sprCollisionInfos = game.buildSpriteCollisionInfos()
+			game.touchFilters = game.buildTouchFilters()
 			groups := make(map[int64][]string)
-			for name, info := range game.sprCollisionInfos {
+			for name, info := range game.touchFilters {
 				if info.Layer <= 0 || info.Layer > 1<<31 || bits.OnesCount64(uint64(info.Layer)) != 1 {
 					t.Fatalf("%s layer = %d, want one of the 32 engine bits", name, info.Layer)
 				}
@@ -1470,23 +1472,23 @@ func TestCollisionLayersReuseSlotsAndCurrentTargets(t *testing.T) {
 				for instance, name := range groups[1<<slot] {
 					sprite := newCollisionLayerOrderSprite(game, name, nil)
 					target := groups[1<<((slot+instance+1)%min(count, 32))][0]
-					sprite.physics().collisionTargets[target] = true
+					sprite.physics().touchTargets[target] = true
 					sprites = append(sprites, sprite)
 				}
 			}
 			if count > 0 {
 				// A second instance of the same type contributes to the same shared info.
 				sprite := newCollisionLayerOrderSprite(game, groups[1][0], nil)
-				sprite.physics().collisionTargets[groups[1<<(min(count, 32)-1)][0]] = true
+				sprite.physics().touchTargets[groups[1<<(min(count, 32)-1)][0]] = true
 				sprites = append(sprites, sprite)
 			}
-			game.setupCollisionData(append(sprites, nil))
-			if len(game.sprCollisionData) != len(sprites) {
-				t.Fatalf("collision records = %d, want %d", len(game.sprCollisionData), len(sprites))
+			game.setupTouchEntries(append(sprites, nil))
+			if len(game.touchEntries) != len(sprites) {
+				t.Fatalf("touch entries = %d, want %d", len(game.touchEntries), len(sprites))
 			}
-			for i, data := range game.sprCollisionData {
-				if data.sprite != spriteOf(sprites[i]) || data.info != game.sprCollisionInfos[data.sprite.name] {
-					t.Fatal("collision records lost sprite order or shared info")
+			for i, entry := range game.touchEntries {
+				if entry.sprite != spriteOf(sprites[i]) || entry.filter != game.touchFilters[entry.sprite.name] {
+					t.Fatal("touch entries lost sprite order or shared filters")
 				}
 			}
 			checkMasks := func() {
@@ -1494,45 +1496,45 @@ func TestCollisionLayersReuseSlotsAndCurrentTargets(t *testing.T) {
 				want := make(map[int64]int64)
 				for _, sprite := range sprites {
 					spr := spriteOf(sprite)
-					layer := game.sprCollisionInfos[spr.name].Layer
-					for target := range spr.physics().collisionTargets {
-						want[layer] |= game.sprCollisionInfos[target].Layer
+					layer := game.touchFilters[spr.name].Layer
+					for target := range spr.physics().touchTargets {
+						want[layer] |= game.touchFilters[target].Layer
 					}
 				}
-				for name, info := range game.sprCollisionInfos {
+				for name, info := range game.touchFilters {
 					if info.Mask != want[info.Layer] {
 						t.Fatalf("%s mask = %#x, want %#x", name, info.Mask, want[info.Layer])
 					}
 				}
 			}
-			game.refreshCollisionLayers()
+			game.refreshTouchFilters()
 			checkMasks()
 			if count > 0 {
 				spr := spriteOf(sprites[0])
-				spr.physics().addCollisionTarget(spr.name)
+				spr.physics().addTouchTargets(spr.name)
 				checkMasks()
-				clear(spr.physics().collisionTargets)
-				game.refreshCollisionLayers()
+				clear(spr.physics().touchTargets)
+				game.refreshTouchFilters()
 				checkMasks()
 			}
 		})
 	}
 }
 
-func TestCollisionLayersCommitAllMasksBeforeProxyWrites(t *testing.T) {
+func TestTouchFiltersCommitBeforeProxyWrites(t *testing.T) {
 	setupRuntimeScheduler(t)
 	setupImmediateEngineCalls(t)
-	game := &Game{isAutoSetCollisionLayer: true, sprCollisionInfos: map[string]*spriteCollisionInfo{
+	game := &Game{autoTouchLayers: true, touchFilters: map[string]*touchFilter{
 		"A": {layerIndex: 0, Layer: 1}, "B": {layerIndex: 1, Layer: 2},
 	}}
 	a := newCollisionLayerOrderSprite(game, "A", nil)
 	b := newCollisionLayerOrderSprite(game, "B", nil)
-	a.physics().collisionTargets["B"] = true
-	b.physics().collisionTargets["A"] = true
+	a.physics().touchTargets["B"] = true
+	b.physics().touchTargets["A"] = true
 	var writes []int64
 	var layerWrites []gdx.Object
-	manager := &collisionLayerSpriteMgr{onLayer: func(id gdx.Object, _ int64) {
-		if game.sprCollisionInfos["A"].Mask != 2 || game.sprCollisionInfos["B"].Mask != 1 {
+	manager := &touchFilterSpriteMgr{onLayer: func(id gdx.Object, _ int64) {
+		if game.touchFilters["A"].Mask != 2 || game.touchFilters["B"].Mask != 1 {
 			t.Fatal("proxy write preceded complete mask commit")
 		}
 		layerWrites = append(layerWrites, id)
@@ -1543,11 +1545,11 @@ func TestCollisionLayersCommitAllMasksBeforeProxyWrites(t *testing.T) {
 	gdx.SpriteMgr = manager
 	t.Cleanup(func() { gdx.SpriteMgr = previous })
 	for i, sprite := range []*collisionLayerOrderSprite{a, b} {
-		sprite.physics().triggerInfo.Type = physicsColliderNone
+		sprite.physics().triggerInfo.Type = collision.ColliderNone
 		sprite.runtimeState.syncSprite = &engine.Sprite{Sprite: gdx.Sprite{Id: int64(i + 1)}}
 	}
-	game.setupCollisionData([]Sprite{a, b})
-	game.refreshCollisionLayers()
+	game.setupTouchEntries([]Sprite{a, b})
+	game.refreshTouchFilters()
 	if !slices.Equal(layerWrites, []gdx.Object{1, 2}) || !slices.Equal(writes, []int64{2, 1}) {
 		t.Fatalf("proxy IDs = %v, masks = %v; want [1 2], [2 1]", layerWrites, writes)
 	}
@@ -1670,7 +1672,7 @@ func TestTilemapDecoratorCoordinates(t *testing.T) {
 	var game Game
 	game.tilemapMgr = gameTilemapMgr{g: &game, useNewLoader: true, tilemapDir: "tilemaps/map", decoratorDatas: &DecoratorJSON{Decorators: []tm.DecoratorNode{{Path: "tree.png", Position: tm.Vec2{X: 3, Y: 4}, Pivot: tm.Vec2{X: 12, Y: 8}, Scale: tm.Vec2{X: 2, Y: 3}, Ratation: 120, ZIndex: 7, ColliderType: "rect", ColliderPivot: tm.Vec2{X: 1, Y: 2}, ColliderParams: []float64{4, 5}}}}}
 	game.tilemapMgr.parseTilemap()
-	if scene.path != engine.ToAssetPath("tilemaps/map/tree.png") || scene.position != mathf.NewVec2(3, 4) || scene.pivot != mathf.NewVec2(2, 3) || scene.rotation != 30 || scene.scale != mathf.NewVec2(2, 3) || scene.layer != 7 || scene.collider != physicsColliderRect || scene.colliderPivot != mathf.NewVec2(13, 10) || !reflect.DeepEqual(scene.params, []float64{4, 5}) {
+	if scene.path != engine.ToAssetPath("tilemaps/map/tree.png") || scene.position != mathf.NewVec2(3, 4) || scene.pivot != mathf.NewVec2(2, 3) || scene.rotation != 30 || scene.scale != mathf.NewVec2(2, 3) || scene.layer != 7 || scene.collider != collision.ColliderRect || scene.colliderPivot != mathf.NewVec2(13, 10) || !reflect.DeepEqual(scene.params, []float64{4, 5}) {
 		t.Fatalf("decorator=%+v", scene)
 	}
 }
@@ -1944,11 +1946,11 @@ func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color
 	m.colors = append(m.colors, color)
 }
 
-func (m *collisionLayerSpriteMgr) SetTriggerMask(id gdx.Object, mask int64) {
+func (m *touchFilterSpriteMgr) SetTriggerMask(id gdx.Object, mask int64) {
 	m.onMask(id, mask)
 }
 
-func (m *collisionLayerSpriteMgr) SetCollisionLayer(id gdx.Object, layer int64) {
+func (m *touchFilterSpriteMgr) SetTriggerLayer(id gdx.Object, layer int64) {
 	m.onLayer(id, layer)
 }
 

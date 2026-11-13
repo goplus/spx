@@ -36,8 +36,6 @@ func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64)
 
 清空形状的绑定需要配套的 native/Web runtime。旧 native runtime 会在初始化时明确报错，而不会调用缺失的函数。
 
-**迁移：** 旧版本在 `physics` 开启时隐式使用形状事件，而精灵查询检查实体碰撞体。依赖形状检测区域的物理项目现在应显式设置 `touchByShape: true`，并配置触发器形状。普通模式默认行为不变。此设置现在为事件和查询选择相同几何，不保留旧版本两者不一致的行为。
-
 ## 设计理念
 
 采用CodeMonkey风格的极简API设计，只保留最核心的8个方法，覆盖80%的游戏物理需求。简洁、直观、易用。

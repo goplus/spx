@@ -96,7 +96,7 @@ func (p *Game) OnEngineUpdate(float64) {
 		p.dispatchShapeUpdates()
 		p.dispatchFrameEvents()
 		// Register retained bootstrap contacts before OnStart.
-		p.processPhysicsTriggers()
+		p.processTouchEvents()
 		p.dispatchStartEventIfNeeded()
 	})
 }

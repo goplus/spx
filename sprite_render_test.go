@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/core/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 )
@@ -583,12 +584,12 @@ func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
 	sprite := newRenderOffsetTestSprite()
 	sprite.runtimeState.scale = 2
 
-	config := physicConfig{Pivot: mathf.NewVec2(3, 4), Type: physicsColliderRect}
+	config := colliderConfig{Pivot: mathf.NewVec2(3, 4), Type: collision.ColliderRect}
 	if got, want := config.shapePivot(sprite), mathf.NewVec2(6, 8); got != want {
 		t.Fatalf("explicit shape pivot = %v, want %v", got, want)
 	}
 
-	config.Type = physicsColliderAuto
+	config.Type = collision.ColliderAuto
 	if got, want := config.shapePivot(sprite), mathf.NewVec2(80, -40); got != want {
 		t.Fatalf("auto shape pivot = %v, want %v", got, want)
 	}

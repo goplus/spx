@@ -429,7 +429,7 @@ type Sprite interface {
 	CollisionEnabled() bool
 
 	// Trigger Methods
-	SetTriggerEnabled(trigger bool)
+	SetTriggerEnabled(enabled bool)
 	SetTriggerLayer(layer int64)
 	SetTriggerMask(mask int64)
 	TriggerLayer() int64

@@ -32,34 +32,29 @@ const minCircleRadius = 0.01
 type PhysicsMode = int64
 
 const (
-	NoPhysics        PhysicsMode = 0 // Pure visual, no collision, best performance (current default) eg: decorators
-	KinematicPhysics PhysicsMode = 1 // Code-controlled movement with collision detection eg: player
-	DynamicPhysics   PhysicsMode = 2 // Affected by physics, automatic gravity and collision eg: items
-	StaticPhysics    PhysicsMode = 3 // Static immovable, but has collision, affects other objects : eg: walls
+	NoPhysics        PhysicsMode = 0 // No physical response; touch sensing remains available.
+	KinematicPhysics PhysicsMode = 1 // Script-controlled movement with collision response.
+	DynamicPhysics   PhysicsMode = 2 // Movement driven by forces and gravity.
+	StaticPhysics    PhysicsMode = 3 // Fixed body that blocks other bodies.
 )
 
 type ColliderShapeType = int64
 
 const (
-	RectCollider      ColliderShapeType = ColliderShapeType(physicsColliderRect)
-	CircleCollider    ColliderShapeType = ColliderShapeType(physicsColliderCircle)
-	CapsuleCollider   ColliderShapeType = ColliderShapeType(physicsColliderCapsule)
-	PolygonCollider   ColliderShapeType = ColliderShapeType(physicsColliderPolygon)
+	RectCollider      ColliderShapeType = collision.ColliderRect
+	CircleCollider    ColliderShapeType = collision.ColliderCircle
+	CapsuleCollider   ColliderShapeType = collision.ColliderCapsule
+	PolygonCollider   ColliderShapeType = collision.ColliderPolygon
 	TriggerExtraPixel float64           = 2.0
 )
 
-// physicConfig common structure for physics configuration.
-type physicConfig struct {
-	Mask   int64             // collision/trigger mask
-	Layer  int64             // collision/trigger layer
-	Type   ColliderShapeType // collider/trigger type
-	Pivot  mathf.Vec2        // pivot position
-	Params []float64         // shape parameters
+type colliderConfig struct {
+	Mask   int64
+	Layer  int64
+	Type   ColliderShapeType
+	Pivot  mathf.Vec2
+	Params []float64
 }
-
-// -----------------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {
 	p.physics().setPhysicsMode(mode)
@@ -69,12 +64,12 @@ func (p *SpriteImpl) PhysicsMode() PhysicsMode {
 	return p.physics().getPhysicsMode()
 }
 
-func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
-	return p.physics().getVelocity()
-}
-
 func (p *SpriteImpl) SetVelocity(vx, vy float64) {
 	p.physics().setVelocity(vx, vy)
+}
+
+func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
+	return p.physics().getVelocity()
 }
 
 // AddImpulse applies a one-shot momentum change on the next dynamic physics tick.
@@ -88,12 +83,60 @@ func (p *SpriteImpl) IsOnFloor() bool {
 	return p.physics().isOnFloor()
 }
 
+func (p *SpriteImpl) SetGravity(g float64) {
+	p.physics().setGravity(g)
+}
+
 func (p *SpriteImpl) Gravity() float64 {
 	return p.physics().getGravity()
 }
 
-func (p *SpriteImpl) SetGravity(g float64) {
-	p.physics().setGravity(g)
+func (p *SpriteImpl) SetCollisionLayer(layer int64) {
+	p.physics().setCollisionLayer(layer)
+}
+
+func (p *SpriteImpl) CollisionLayer() int64 {
+	return p.physics().getCollisionLayer()
+}
+
+func (p *SpriteImpl) SetCollisionMask(mask int64) {
+	p.physics().setCollisionMask(mask)
+}
+
+func (p *SpriteImpl) CollisionMask() int64 {
+	return p.physics().getCollisionMask()
+}
+
+func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
+	p.physics().setCollisionEnabled(enabled)
+}
+
+func (p *SpriteImpl) CollisionEnabled() bool {
+	return p.physics().isCollisionEnabled()
+}
+
+func (p *SpriteImpl) SetTriggerLayer(layer int64) {
+	p.physics().setTriggerLayer(layer)
+}
+
+func (p *SpriteImpl) TriggerLayer() int64 {
+	return p.physics().getTriggerLayer()
+}
+
+func (p *SpriteImpl) SetTriggerMask(mask int64) {
+	p.physics().setTriggerMask(mask)
+}
+
+func (p *SpriteImpl) TriggerMask() int64 {
+	return p.physics().getTriggerMask()
+}
+
+func (p *SpriteImpl) SetTriggerEnabled(enabled bool) {
+	p.physics().setTriggerEnabled(enabled)
+}
+
+func (p *SpriteImpl) TriggerEnabled() bool {
+	return p.physics().isTriggerEnabled()
 }
 
 func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
@@ -112,60 +155,9 @@ func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
 	return p.physics().getColliderPivot(isTrigger)
 }
 
-func (p *SpriteImpl) SetCollisionLayer(layer int64) {
-	p.physics().setCollisionLayer(layer)
-}
-
-func (p *SpriteImpl) SetCollisionMask(mask int64) {
-	p.physics().setCollisionMask(mask)
-}
-
-func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
-	p.physics().setCollisionEnabled(enabled)
-}
-
-func (p *SpriteImpl) CollisionLayer() int64 {
-	return p.physics().getCollisionLayer()
-}
-
-func (p *SpriteImpl) CollisionMask() int64 {
-	return p.physics().getCollisionMask()
-}
-
-func (p *SpriteImpl) CollisionEnabled() bool {
-	return p.physics().isCollisionEnabled()
-}
-
-func (p *SpriteImpl) SetTriggerEnabled(trigger bool) {
-	p.physics().setTriggerEnabled(trigger)
-}
-
-func (p *SpriteImpl) SetTriggerLayer(layer int64) {
-	p.physics().setTriggerLayer(layer)
-}
-
-func (p *SpriteImpl) SetTriggerMask(mask int64) {
-	p.physics().setTriggerMask(mask)
-}
-
-func (p *SpriteImpl) TriggerLayer() int64 {
-	return p.physics().getTriggerLayer()
-}
-
-func (p *SpriteImpl) TriggerMask() int64 {
-	return p.physics().getTriggerMask()
-}
-
-func (p *SpriteImpl) TriggerEnabled() bool {
-	return p.physics().isTriggerEnabled()
-}
-
-// -----------------------------------------------------------------------------
-// Internal Physics
-// -----------------------------------------------------------------------------
 func (p *SpriteImpl) markAutoPhysicsShapesDirty() {
 	if physics := p.physics(); physics != nil {
-		physics.markAutoShapesDirty()
+		physics.autoShapesDirty = true
 	}
 }
 
@@ -175,88 +167,95 @@ func (p *SpriteImpl) syncAutoPhysicsShapesAfterCostumeChange() {
 	}
 }
 
-// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
 func (p *SpriteImpl) updatePhysicsShapesScale() {
 	if p.runtimeState.syncSprite == nil {
 		return
 	}
 	physics := p.physics()
-	physics.colliderConfig(true).applyShape(p.runtimeState.syncSprite, true, p)
-	physics.colliderConfig(false).applyShape(p.runtimeState.syncSprite, false, p)
+	physics.triggerInfo.applyShape(p.runtimeState.syncSprite, true, p)
+	physics.collisionInfo.applyShape(p.runtimeState.syncSprite, false, p)
 }
 
-// -----------------------------------------------------------------------------
-// Physics Configuration
-// -----------------------------------------------------------------------------
-func (cfg *physicConfig) String() string {
+func (cfg *colliderConfig) String() string {
 	return fmt.Sprintf("Mask: %d, Layer: %d, Type: %d, Pivot: %v, Params: %v", cfg.Mask, cfg.Layer, cfg.Type, cfg.Pivot, cfg.Params)
 }
 
-func (cfg *physicConfig) copyFrom(src *physicConfig) {
+func (cfg *colliderConfig) copyFrom(src *colliderConfig) {
 	*cfg = *src
 	cfg.Params = slices.Clone(src.Params)
 }
 
-// validateShape validates if shape parameters match the type.
-func (cfg *physicConfig) validateShape() bool {
-	if cfg.Type == physicsColliderNone || cfg.Type == physicsColliderAuto {
-		return true
+func (cfg *colliderConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+	if cfg.Type == collision.ColliderAuto {
+		cfg.updateAutoBounds(sprite, isTrigger)
 	}
-
-	var expectedLen int
-	var typeName string
-
-	switch cfg.Type {
-	case physicsColliderRect:
-		expectedLen = 2
-		typeName = "RectTrigger"
-	case physicsColliderCircle:
-		expectedLen = 1
-		typeName = "CircleTrigger"
-	case physicsColliderCapsule:
-		expectedLen = 2
-		typeName = "CapsuleTrigger"
-	case physicsColliderPolygon:
-		if len(cfg.Params) < 6 || len(cfg.Params)%2 != 0 {
-			spxlog.Warn("Shape validation error: PolygonTrigger requires at least 6 parameters (3 vertices) and even count, got %d", len(cfg.Params))
-			return false
-		}
-		return true
-	default:
-		spxlog.Warn("Shape validation error: unknown trigger type: %d", cfg.Type)
-		return false
-	}
-
-	if len(cfg.Params) != expectedLen {
-		spxlog.Warn("Shape validation error: %s requires exactly %d parameters, got %d", typeName, expectedLen, len(cfg.Params))
-		return false
-	}
-	return true
+	syncProxy.SetColliderEnabled(isTrigger, cfg.defaultEnabled(isTrigger, sprite))
+	cfg.applyShape(syncProxy, isTrigger, sprite)
 }
 
-// getDimensions calculates width and height based on type and shape parameters.
-func (cfg *physicConfig) getDimensions() (float64, float64) {
+func (cfg *colliderConfig) refreshAutoShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+	if cfg.Type != collision.ColliderAuto || len(cfg.Params) < 2 {
+		return
+	}
+	cfg.updateAutoBounds(sprite, isTrigger)
+	cfg.applyShape(syncProxy, isTrigger, sprite)
+}
+
+func (cfg *colliderConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+	pivot := cfg.shapePivot(sprite)
+	scale := sprite.runtimeState.scale
+
 	switch cfg.Type {
-	case physicsColliderCircle:
+	case collision.ColliderNone:
+		syncProxy.ClearColliderShape(isTrigger)
+	case collision.ColliderCircle:
 		if len(cfg.Params) >= 1 {
-			radius := math.Max(cfg.Params[0], 0)
-			return radius * 2, radius * 2
+			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
 		}
-	case physicsColliderCapsule:
+	case collision.ColliderRect, collision.ColliderAuto:
 		if len(cfg.Params) >= 2 {
-			radius := math.Max(cfg.Params[0], 0)
-			height := math.Max(cfg.Params[1], 0)
-			return radius * 2, height
+			syncProxy.SetColliderShapeRect(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale, cfg.Params[1]*scale))
 		}
-	default:
+	case collision.ColliderCapsule:
 		if len(cfg.Params) >= 2 {
-			return math.Max(cfg.Params[0], 0), math.Max(cfg.Params[1], 0)
+			syncProxy.SetColliderShapeCapsule(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale*2, cfg.Params[1]*scale))
+		}
+	case collision.ColliderPolygon:
+		if len(cfg.Params) >= 6 && len(cfg.Params)%2 == 0 {
+			points := make([]float64, len(cfg.Params))
+			for i, coordinate := range cfg.Params {
+				points[i] = coordinate * scale
+			}
+			syncProxy.SetColliderShapePolygon(isTrigger, pivot, points)
 		}
 	}
-	return 0, 0
 }
 
-func (cfg *physicConfig) worldBounds(sprite *SpriteImpl) (collision.AABB, bool) {
+func (cfg *colliderConfig) defaultEnabled(isTrigger bool, sprite *SpriteImpl) bool {
+	// Pixel notifications need no trigger geometry.
+	return cfg.Type != collision.ColliderNone || isTrigger && !sprite.g.touchByShape
+}
+
+func (cfg *colliderConfig) updateAutoBounds(sprite *SpriteImpl, isTrigger bool) {
+	pivot, size := getCostumeBoundByAlpha(sprite)
+	if isTrigger {
+		size.X += TriggerExtraPixel
+		size.Y += TriggerExtraPixel
+	}
+	cfg.Pivot = pivot
+	cfg.Params = []float64{size.X, size.Y}
+}
+
+func (cfg *colliderConfig) shapePivot(sprite *SpriteImpl) mathf.Vec2 {
+	pivot := cfg.Pivot.Mulf(sprite.runtimeState.scale)
+	if cfg.Type == collision.ColliderAuto {
+		offsetX, offsetY := getRenderOffset(sprite)
+		pivot = pivot.Add(mathf.NewVec2(offsetX, offsetY))
+	}
+	return pivot
+}
+
+func (cfg *colliderConfig) worldBounds(sprite *SpriteImpl) (collision.AABB, bool) {
 	local, ok := cfg.localBounds()
 	if !ok || !sprite.hasCostume() {
 		return collision.AABB{}, false
@@ -275,27 +274,27 @@ func (cfg *physicConfig) worldBounds(sprite *SpriteImpl) (collision.AABB, bool) 
 	halfY := math.Abs((local.MaxY-local.MinY)*scale) / 2
 	extentX := math.Abs(cos)*halfX + math.Abs(sin)*halfY
 	extentY := math.Abs(sin)*halfX + math.Abs(cos)*halfY
-	if cfg.Type == physicsColliderCircle {
+	if cfg.Type == collision.ColliderCircle {
 		extentX = math.Max(cfg.Params[0]*scale, minCircleRadius)
 		extentY = extentX
 	}
 	return collision.AABB{MinX: x - extentX, MinY: y - extentY, MaxX: x + extentX, MaxY: y + extentY}, true
 }
 
-func (cfg *physicConfig) localBounds() (collision.AABB, bool) {
+func (cfg *colliderConfig) localBounds() (collision.AABB, bool) {
 	var minX, minY, maxX, maxY float64
 	switch cfg.Type {
-	case physicsColliderAuto, physicsColliderRect, physicsColliderCircle, physicsColliderCapsule:
+	case collision.ColliderAuto, collision.ColliderRect, collision.ColliderCircle, collision.ColliderCapsule:
 		width, height := cfg.getDimensions()
 		if width <= 0 || height <= 0 {
 			return collision.AABB{}, false
 		}
-		if cfg.Type == physicsColliderCapsule && height < width {
+		if cfg.Type == collision.ColliderCapsule && height < width {
 			height = width
 		}
 		minX, maxX = -width/2, width/2
 		minY, maxY = -height/2, height/2
-	case physicsColliderPolygon:
+	case collision.ColliderPolygon:
 		if len(cfg.Params) < 6 || len(cfg.Params)%2 != 0 {
 			return collision.AABB{}, false
 		}
@@ -311,92 +310,58 @@ func (cfg *physicConfig) localBounds() (collision.AABB, bool) {
 	return collision.AABB{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}, true
 }
 
-func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
-	if isTrigger {
-		syncProxy.SetTriggerLayer(cfg.Layer)
-		syncProxy.SetTriggerMask(cfg.Mask)
-	} else {
-		syncProxy.SetCollisionLayer(cfg.Layer)
-		syncProxy.SetCollisionMask(cfg.Mask)
+func (cfg *colliderConfig) getDimensions() (float64, float64) {
+	switch cfg.Type {
+	case collision.ColliderCircle:
+		if len(cfg.Params) >= 1 {
+			radius := math.Max(cfg.Params[0], 0)
+			return radius * 2, radius * 2
+		}
+	case collision.ColliderCapsule:
+		if len(cfg.Params) >= 2 {
+			radius := math.Max(cfg.Params[0], 0)
+			height := math.Max(cfg.Params[1], 0)
+			return radius * 2, height
+		}
+	default:
+		if len(cfg.Params) >= 2 {
+			return math.Max(cfg.Params[0], 0), math.Max(cfg.Params[1], 0)
+		}
 	}
-	cfg.syncShape(syncProxy, isTrigger, sprite)
+	return 0, 0
 }
 
-func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
-	if cfg.Type == physicsColliderAuto {
-		cfg.updateAutoBounds(sprite, isTrigger)
-	}
-	syncProxy.SetColliderEnabled(isTrigger, cfg.defaultEnabled(isTrigger, sprite))
-	cfg.applyShape(syncProxy, isTrigger, sprite)
-}
-
-func (cfg *physicConfig) defaultEnabled(isTrigger bool, sprite *SpriteImpl) bool {
-	// Pixel events need no trigger geometry; explicit SetTriggerEnabled still
-	// controls notification delivery. Body colliders keep their own enable state.
-	return cfg.Type != physicsColliderNone || isTrigger && !sprite.g.touchByShape
-}
-
-func (cfg *physicConfig) updateAutoBounds(sprite *SpriteImpl, isTrigger bool) {
-	pivot, size := getCostumeBoundByAlpha(sprite)
-	if isTrigger {
-		size.X += TriggerExtraPixel
-		size.Y += TriggerExtraPixel
-	}
-	cfg.Pivot = pivot
-	cfg.Params = []float64{size.X, size.Y}
-}
-
-func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
-	pivot := cfg.shapePivot(sprite)
-	scale := sprite.runtimeState.scale
+func (cfg *colliderConfig) validateShape() error {
+	var expectedLen int
+	var typeName string
 
 	switch cfg.Type {
-	case physicsColliderNone:
-		syncProxy.ClearColliderShape(isTrigger)
-	case physicsColliderCircle:
-		if len(cfg.Params) >= 1 {
-			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
+	case collision.ColliderNone, collision.ColliderAuto:
+		return nil
+	case collision.ColliderRect:
+		expectedLen = 2
+		typeName = "rect"
+	case collision.ColliderCircle:
+		expectedLen = 1
+		typeName = "circle"
+	case collision.ColliderCapsule:
+		expectedLen = 2
+		typeName = "capsule"
+	case collision.ColliderPolygon:
+		if len(cfg.Params) < 6 || len(cfg.Params)%2 != 0 {
+			return fmt.Errorf("invalid polygon: want at least 3 coordinate pairs, got %d values", len(cfg.Params))
 		}
-	case physicsColliderRect, physicsColliderAuto:
-		if len(cfg.Params) >= 2 {
-			syncProxy.SetColliderShapeRect(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale, cfg.Params[1]*scale))
-		}
-	case physicsColliderCapsule:
-		if len(cfg.Params) >= 2 {
-			syncProxy.SetColliderShapeCapsule(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale*2, cfg.Params[1]*scale))
-		}
-	case physicsColliderPolygon:
-		if len(cfg.Params) >= 6 && len(cfg.Params)%2 == 0 {
-			points := make([]float64, len(cfg.Params))
-			for i, coordinate := range cfg.Params {
-				points[i] = coordinate * scale
-			}
-			syncProxy.SetColliderShapePolygon(isTrigger, pivot, points)
-		}
+		return nil
+	default:
+		return fmt.Errorf("unknown collider shape type: %d", cfg.Type)
 	}
+
+	if len(cfg.Params) != expectedLen {
+		return fmt.Errorf("invalid %s parameter count: got %d, want %d", typeName, len(cfg.Params), expectedLen)
+	}
+	return nil
 }
 
-func (cfg *physicConfig) shapePivot(sprite *SpriteImpl) mathf.Vec2 {
-	pivot := cfg.Pivot.Mulf(sprite.runtimeState.scale)
-	if cfg.Type == physicsColliderAuto {
-		offsetX, offsetY := getRenderOffset(sprite)
-		pivot = pivot.Add(mathf.NewVec2(offsetX, offsetY))
-	}
-	return pivot
-}
-
-func (cfg *physicConfig) refreshAutoShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
-	if cfg.Type != physicsColliderAuto || len(cfg.Params) < 2 {
-		return
-	}
-	cfg.updateAutoBounds(sprite, isTrigger)
-	cfg.applyShape(syncProxy, isTrigger, sprite)
-}
-
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-// toPhysicsMode converts string to PhysicsMode.
 func toPhysicsMode(mode string) PhysicsMode {
 	switch mode {
 	case "", "no":
