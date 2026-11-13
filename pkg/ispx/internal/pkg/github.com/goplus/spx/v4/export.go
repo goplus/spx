@@ -76,6 +76,7 @@ func init() {
 			"io":            "io",
 			"maps":          "maps",
 			"math":          "math",
+			"math/bits":     "bits",
 			"math/rand":     "rand",
 			"os":            "os",
 			"path":          "path",
