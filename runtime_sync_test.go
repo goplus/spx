@@ -464,7 +464,7 @@ func TestDispatchTouchEventsRequiresShapeGeometry(t *testing.T) {
 				target := newTouchDispatchSprite(game, "target")
 				for _, sprite := range []*touchEventSprite{source, target} {
 					sprite.components.physics = &physicsComponent{
-						sprite: &sprite.SpriteImpl, triggerInfo: colliderConfig{Type: collision.ColliderRect},
+						sprite: &sprite.SpriteImpl, triggerCollider: colliderConfig{Type: collision.ColliderRect},
 					}
 				}
 				calls := 0
@@ -472,9 +472,9 @@ func TestDispatchTouchEventsRequiresShapeGeometry(t *testing.T) {
 				game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 				// Geometry may disappear after the native event was queued.
 				if missing == "source" {
-					source.physics().triggerInfo.Type = collision.ColliderNone
+					source.physics().triggerCollider.Type = collision.ColliderNone
 				} else if missing == "target" {
-					target.physics().triggerInfo.Type = collision.ColliderNone
+					target.physics().triggerCollider.Type = collision.ColliderNone
 				}
 				game.dispatchTouchEvents()
 				want := 1

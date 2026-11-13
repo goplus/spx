@@ -139,8 +139,8 @@ func (p *SpriteImpl) TriggerEnabled() bool {
 	return p.physics().isTriggerEnabled()
 }
 
-func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	return p.physics().setColliderShape(isTrigger, ctype, params)
+func (p *SpriteImpl) SetColliderShape(isTrigger bool, shapeType ColliderShapeType, params []float64) error {
+	return p.physics().setColliderShape(isTrigger, shapeType, params)
 }
 
 func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
@@ -172,49 +172,49 @@ func (p *SpriteImpl) updatePhysicsShapesScale() {
 		return
 	}
 	physics := p.physics()
-	physics.triggerInfo.applyShape(p.runtimeState.syncSprite, true, p)
-	physics.collisionInfo.applyShape(p.runtimeState.syncSprite, false, p)
+	physics.triggerCollider.syncShape(p.runtimeState.syncSprite, true, p)
+	physics.bodyCollider.syncShape(p.runtimeState.syncSprite, false, p)
 }
 
-func (cfg *colliderConfig) copyFrom(src *colliderConfig) {
-	*cfg = *src
-	cfg.Params = slices.Clone(src.Params)
+func (cfg colliderConfig) clone() colliderConfig {
+	cfg.Params = slices.Clone(cfg.Params)
+	return cfg
 }
 
-func (cfg *colliderConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+func (cfg *colliderConfig) initializeShape(proxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if cfg.Type == collision.ColliderAuto {
 		cfg.updateAutoBounds(sprite, isTrigger)
 	}
-	syncProxy.SetColliderEnabled(isTrigger, cfg.defaultEnabled(isTrigger, sprite))
-	cfg.applyShape(syncProxy, isTrigger, sprite)
+	proxy.SetColliderEnabled(isTrigger, cfg.defaultEnabled(isTrigger, sprite))
+	cfg.syncShape(proxy, isTrigger, sprite)
 }
 
-func (cfg *colliderConfig) refreshAutoShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+func (cfg *colliderConfig) refreshAutoShape(proxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if cfg.Type != collision.ColliderAuto || len(cfg.Params) < 2 {
 		return
 	}
 	cfg.updateAutoBounds(sprite, isTrigger)
-	cfg.applyShape(syncProxy, isTrigger, sprite)
+	cfg.syncShape(proxy, isTrigger, sprite)
 }
 
-func (cfg *colliderConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
+func (cfg *colliderConfig) syncShape(proxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	pivot := cfg.shapePivot(sprite)
 	scale := sprite.runtimeState.scale
 
 	switch cfg.Type {
 	case collision.ColliderNone:
-		syncProxy.ClearColliderShape(isTrigger)
+		proxy.ClearColliderShape(isTrigger)
 	case collision.ColliderCircle:
 		if len(cfg.Params) >= 1 {
-			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
+			proxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
 		}
 	case collision.ColliderRect, collision.ColliderAuto:
 		if len(cfg.Params) >= 2 {
-			syncProxy.SetColliderShapeRect(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale, cfg.Params[1]*scale))
+			proxy.SetColliderShapeRect(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale, cfg.Params[1]*scale))
 		}
 	case collision.ColliderCapsule:
 		if len(cfg.Params) >= 2 {
-			syncProxy.SetColliderShapeCapsule(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale*2, cfg.Params[1]*scale))
+			proxy.SetColliderShapeCapsule(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale*2, cfg.Params[1]*scale))
 		}
 	case collision.ColliderPolygon:
 		if len(cfg.Params) >= 6 && len(cfg.Params)%2 == 0 {
@@ -222,7 +222,7 @@ func (cfg *colliderConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, 
 			for i, coordinate := range cfg.Params {
 				points[i] = coordinate * scale
 			}
-			syncProxy.SetColliderShapePolygon(isTrigger, pivot, points)
+			proxy.SetColliderShapePolygon(isTrigger, pivot, points)
 		}
 	}
 }

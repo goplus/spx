@@ -18,6 +18,7 @@ package spx
 
 import (
 	"fmt"
+	"math/bits"
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
@@ -36,9 +37,12 @@ type raycastResult struct {
 }
 
 type touchFilter struct {
-	layerIndex int
-	Layer      int64
-	Mask       int64
+	Layer int64
+	Mask  int64
+}
+
+func (f *touchFilter) layerIndex() int {
+	return max(0, bits.Len64(uint64(f.Layer))-1)
 }
 
 type touchEntry struct {
@@ -170,7 +174,7 @@ func (p *Game) refreshTouchFilters() {
 	entries := p.touchEntries
 	var masksByLayer [touchLayerCount]int64
 
-	// Types sharing a layer must share its subscriptions.
+	// Reused layers need the union of their subscriptions.
 	for _, entry := range entries {
 		for target := range entry.sprite.physics().touchTargets {
 			filter, ok := p.touchFilters[target]
@@ -178,13 +182,13 @@ func (p *Game) refreshTouchFilters() {
 				engine.Panic("Unknown sprite " + target)
 				return
 			}
-			masksByLayer[entry.filter.layerIndex] |= filter.Layer
+			masksByLayer[entry.filter.layerIndex()] |= filter.Layer
 		}
 	}
 
-	// Commit only after validation, before any proxy writes.
+	// Commit all validated masks before proxy writes.
 	for _, entry := range entries {
-		entry.filter.Mask = masksByLayer[entry.filter.layerIndex]
+		entry.filter.Mask = masksByLayer[entry.filter.layerIndex()]
 		spxlog.Debug("Touch filter: name=%s, layer=%d, mask=%d", entry.sprite.name, entry.filter.Layer, entry.filter.Mask)
 	}
 
@@ -201,7 +205,7 @@ func (p *Game) buildTouchFilters() map[string]*touchFilter {
 	filters := make(map[string]*touchFilter, len(p.typs))
 	for name := range p.typs {
 		layerIndex := len(filters) % touchLayerCount
-		filters[name] = &touchFilter{layerIndex: layerIndex, Layer: 1 << layerIndex}
+		filters[name] = &touchFilter{Layer: 1 << layerIndex}
 	}
 	return filters
 }

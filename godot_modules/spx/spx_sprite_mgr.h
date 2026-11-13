@@ -90,7 +90,7 @@ private:
 
 	RBMap<GdObj, SpxSprite *> id_objects;
 
-	// Bridge enters already started, retained until exit processing.
+	// Directions whose enter callbacks have started.
 	PixelTouchPairs active_pixel_touches;
 	uint64_t pixel_touch_generation = 0;
 	bool updating_pixel_touches = false;

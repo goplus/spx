@@ -168,7 +168,7 @@ func TestLoadGameAppliesPhysicsBeforeLoadingSprites(t *testing.T) {
 				if physics {
 					wantCollider = collision.ColliderAuto
 				}
-				if got := sprite.physics().collisionInfo.Type; got != wantCollider {
+				if got := sprite.physics().bodyCollider.Type; got != wantCollider {
 					t.Fatalf("default collider = %d, want %d", got, wantCollider)
 				}
 			})
@@ -721,15 +721,15 @@ func TestTouchFilterFailurePreservesMasks(t *testing.T) {
 		t.Run(fmt.Sprintf("callback panics=%v", abort), func(t *testing.T) {
 			recorder := setupRuntimeFailureRecorder(t)
 			game := &Game{autoTouchLayers: true, touchFilters: map[string]*touchFilter{
-				"A": {layerIndex: 0, Layer: 1, Mask: 8},
-				"B": {layerIndex: 1, Layer: 2, Mask: 16},
-				"C": {layerIndex: 2, Layer: 4, Mask: 32},
+				"A": {Layer: 1, Mask: 8},
+				"B": {Layer: 2, Mask: 16},
+				"C": {Layer: 4, Mask: 32},
 			}}
 			a := newCollisionLayerOrderSprite(game, "A", nil)
 			b := newCollisionLayerOrderSprite(game, "B", nil)
 			c := newCollisionLayerOrderSprite(game, "C", nil)
 			previous := pkgengine.SpriteMgr
-			mgr := &polygonColliderSpriteMgr{}
+			mgr := &colliderSpy{}
 			pkgengine.SpriteMgr = mgr
 			t.Cleanup(func() { pkgengine.SpriteMgr = previous })
 			for i, sprite := range []*collisionLayerOrderSprite{a, b, c} {

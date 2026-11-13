@@ -89,7 +89,7 @@ func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
 	sprite.runtimeState.scale = 1.5
 	sprite.transform().direction = 90
 	sprite.transform().pivot = mathf.NewVec2(0.5, -0.25)
-	sprite.physics().triggerInfo.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
 
 	got := sprite.bounds()
 	want := mathf.Rect2{
@@ -361,7 +361,7 @@ func TestShapeTouchingRequiresTriggerGeometry(t *testing.T) {
 				}
 				if setup == "initial" {
 					sprite.physics().initTriggerConfig(&coreproject.SpriteConfig{TriggerShapeType: "none"})
-					sprite.physics().triggerInfo.syncShape(sprite.runtimeState.syncSprite, true, &sprite.SpriteImpl)
+					sprite.physics().triggerCollider.initializeShape(sprite.runtimeState.syncSprite, true, &sprite.SpriteImpl)
 				} else {
 					check(true)
 					if err := sprite.SetColliderShape(true, collision.ColliderNone, nil); err != nil {
@@ -389,8 +389,8 @@ func TestTouchingNameUsesVisualBoundsWithPhysics(t *testing.T) {
 	game.physicsEnabled = true
 	for _, sprite := range []*touchingQuerySprite{receiver, target} {
 		sprite.costumes = []*costume{{atlas: true, frame: costumeFrame{Width: 40, Height: 40, BitmapResolution: 1}}}
-		sprite.physics().triggerInfo = colliderConfig{Type: collision.ColliderRect, Params: []float64{1, 1}}
-		sprite.physics().collisionInfo.Type = collision.ColliderNone
+		sprite.physics().triggerCollider = colliderConfig{Type: collision.ColliderRect, Params: []float64{1, 1}}
+		sprite.physics().bodyCollider.Type = collision.ColliderNone
 	}
 	target.SetXpos(20)
 	mgr.collisionResult = func(_, _ pkgengine.Object) bool { return true }
@@ -798,10 +798,10 @@ func TestTouchingNameUsesRotatedCostume(t *testing.T) {
 
 func TestTouchingNameUsesTriggerShape(t *testing.T) {
 	_, mgr, receiver, target := newTouchingPair(t, true)
-	receiver.physics().triggerInfo = colliderConfig{Type: collision.ColliderRect, Params: []float64{1, 1}}
-	target.physics().triggerInfo = colliderConfig{Type: collision.ColliderRect, Params: []float64{2, 10}}
+	receiver.physics().triggerCollider = colliderConfig{Type: collision.ColliderRect, Params: []float64{1, 1}}
+	target.physics().triggerCollider = colliderConfig{Type: collision.ColliderRect, Params: []float64{2, 10}}
 	for _, sprite := range []*touchingQuerySprite{receiver, target} {
-		sprite.physics().collisionInfo = colliderConfig{Type: collision.ColliderRect, Params: []float64{1, 1}}
+		sprite.physics().bodyCollider = colliderConfig{Type: collision.ColliderRect, Params: []float64{1, 1}}
 	}
 	receiver.SetXYpos(4, 0)
 	target.transform().direction = 90
@@ -814,7 +814,7 @@ func TestTouchingNameUsesTriggerShape(t *testing.T) {
 	if !receiver.Touching__1("target") {
 		t.Fatal("rotated trigger overlap was culled")
 	}
-	target.physics().triggerInfo = colliderConfig{
+	target.physics().triggerCollider = colliderConfig{
 		Type:   collision.ColliderPolygon,
 		Params: []float64{-5, -1, 5, -1, 0, 1},
 	}
@@ -842,7 +842,7 @@ func TestTouchingNameIncludesAutoTriggerPadding(t *testing.T) {
 				sprite.runtimeState.scale = tc.scale
 				sprite.transform().direction = tc.heading
 				sprite.transform().rotationStyle = tc.style
-				sprite.physics().triggerInfo.Params = []float64{1 + TriggerExtraPixel, 1 + TriggerExtraPixel}
+				sprite.physics().triggerCollider.Params = []float64{1 + TriggerExtraPixel, 1 + TriggerExtraPixel}
 			}
 			bounds, ok := target.renderBounds()
 			if !ok {
@@ -869,8 +869,8 @@ func TestTouchingNameIncludesAutoTriggerPadding(t *testing.T) {
 func TestTouchingNameUsesCurrentAutoTriggerBounds(t *testing.T) {
 	t.Run("explicit shape and pivot", func(t *testing.T) {
 		_, mgr, receiver, target := newTouchingPair(t, true)
-		receiver.physics().triggerInfo.Params = []float64{3, 3}
-		target.physics().triggerInfo.Params = []float64{3, 3}
+		receiver.physics().triggerCollider.Params = []float64{3, 3}
+		target.physics().triggerCollider.Params = []float64{3, 3}
 		receiver.SetXYpos(100, 0)
 		target.transform().direction = 90
 		target.SetColliderPivot(true, 100, 0)
@@ -889,8 +889,8 @@ func TestTouchingNameUsesCurrentAutoTriggerBounds(t *testing.T) {
 	})
 	t.Run("pending costume refresh", func(t *testing.T) {
 		_, mgr, receiver, target := newTouchingPair(t, true)
-		receiver.physics().triggerInfo.Params = []float64{3, 3}
-		target.physics().triggerInfo.Params = []float64{3, 3}
+		receiver.physics().triggerCollider.Params = []float64{3, 3}
+		target.physics().triggerCollider.Params = []float64{3, 3}
 		target.costumes = []*costume{
 			{name: "small", atlas: true, frame: newSizedCostumeFrame(1, 1)},
 			{name: "wide", atlas: true, frame: newSizedCostumeFrame(40, 1)},
@@ -920,7 +920,7 @@ func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, mgr, receiver, target := newTouchingPair(t, true)
-			target.physics().triggerInfo = colliderConfig{Type: collision.ColliderRect, Params: []float64{2, 2}}
+			target.physics().triggerCollider = colliderConfig{Type: collision.ColliderRect, Params: []float64{2, 2}}
 			target.runtimeState.isCostumeDirty = false
 			tc.breakCostume(target)
 			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
@@ -937,7 +937,7 @@ func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
 func TestTriggerQueryBoundsRespectRotationStyle(t *testing.T) {
 	sp := newTouchingQuerySprite("target", 100, 50, 2)
 	sp.runtimeState.scale = 2
-	sp.physics().triggerInfo = colliderConfig{
+	sp.physics().triggerCollider = colliderConfig{
 		Type:   collision.ColliderRect,
 		Pivot:  mathf.NewVec2(10, 2),
 		Params: []float64{2, 4},
@@ -972,7 +972,7 @@ func TestTouchingNameUsesMinimumCircleRadius(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, mgr, receiver, target := newTouchingPair(t, true)
 			for _, sp := range []*touchingQuerySprite{receiver, target} {
-				sp.physics().triggerInfo = colliderConfig{Type: collision.ColliderCircle, Params: []float64{tc.radius}}
+				sp.physics().triggerCollider = colliderConfig{Type: collision.ColliderCircle, Params: []float64{tc.radius}}
 				sp.runtimeState.scale = tc.scale
 			}
 			target.SetXYpos(0.015, 0)
@@ -993,12 +993,12 @@ func TestTouchBoundsGeometryEdgeCases(t *testing.T) {
 		{Type: collision.ColliderPolygon, Params: []float64{0, 0, 1, 1}},
 		{Type: collision.ColliderPolygon, Params: []float64{0, 0, 1, 1, 2, 2, 3}},
 	} {
-		sprite.physics().triggerInfo = cfg
+		sprite.physics().triggerCollider = cfg
 		if _, bounded := sprite.touchBounds(false); bounded {
 			t.Errorf("invalid geometry %v produced usable bounds", cfg)
 		}
 	}
-	sprite.physics().triggerInfo = colliderConfig{Type: collision.ColliderCapsule, Params: []float64{3, 2}}
+	sprite.physics().triggerCollider = colliderConfig{Type: collision.ColliderCapsule, Params: []float64{3, 2}}
 	sprite.runtimeState.scale = 1
 	sprite.transform().direction = 90
 	box, bounded := sprite.touchBounds(false)

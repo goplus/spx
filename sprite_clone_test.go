@@ -843,8 +843,8 @@ func TestCloneTouchTargetsDoNotRefreshFilters(t *testing.T) {
 	game := &collisionLayerOrderGame{}
 	game.autoTouchLayers = true
 	game.touchFilters = map[string]*touchFilter{
-		"SpriteA": {layerIndex: 0, Layer: 1 << 0},
-		"SpriteB": {layerIndex: 1, Layer: 1 << 1},
+		"SpriteA": {Layer: 1 << 0},
+		"SpriteB": {Layer: 1 << 1},
 	}
 
 	spriteA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)
@@ -1188,8 +1188,8 @@ func TestSpriteLayoutKeepsInitFromAndReferenceSemantics(t *testing.T) {
 	source.g, source.name, source.sprite = game, "layout", source
 	source.scriptEventBindings.bind(&game.scriptEvents, &source.SpriteImpl)
 	source.components.initComponents(&source.SpriteImpl, &coreproject.SpriteConfig{})
-	source.physics().collisionInfo.Type = collision.ColliderNone
-	source.physics().triggerInfo.Type = collision.ColliderNone
+	source.physics().bodyCollider.Type = collision.ColliderNone
+	source.physics().triggerCollider.Type = collision.ColliderNone
 	game.shapeMgr.add(&source.SpriteImpl)
 	source.list.Init("source")
 	var clone layoutCloneSprite
@@ -1554,8 +1554,8 @@ func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sprite.sprite = sprite
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().collisionInfo.Type = collision.ColliderNone
-	sprite.physics().triggerInfo.Type = collision.ColliderNone
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
 	prepareAwakeCostumes(&sprite.SpriteImpl)
 	return sprite
 }
@@ -1571,8 +1571,8 @@ func newCloneStatePreservingSprite(g *Game, name string, recordValue *float64) *
 	sprite.sprite = sprite
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().collisionInfo.Type = collision.ColliderNone
-	sprite.physics().triggerInfo.Type = collision.ColliderNone
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
 	return sprite
 }
 
@@ -1587,8 +1587,8 @@ func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKi
 	sprite.sprite = sprite
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().collisionInfo.Type = collision.ColliderNone
-	sprite.physics().triggerInfo.Type = collision.ColliderNone
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
 	return sprite
 }
 
@@ -1611,8 +1611,8 @@ func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneP
 	sprite.sprite = sprite
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().collisionInfo.Type = collision.ColliderNone
-	sprite.physics().triggerInfo.Type = collision.ColliderNone
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
 	return sprite
 }
 
@@ -1659,8 +1659,8 @@ func newCloneLimitSprite(game *Game, name string) *cloneLimitSprite {
 	s.g, s.name, s.sprite = game, name, s
 	s.scriptEventBindings.bind(&game.scriptEvents, &s.SpriteImpl)
 	s.components.initComponents(&s.SpriteImpl, &coreproject.SpriteConfig{})
-	s.physics().collisionInfo.Type = collision.ColliderNone
-	s.physics().triggerInfo.Type = collision.ColliderNone
+	s.physics().bodyCollider.Type = collision.ColliderNone
+	s.physics().triggerCollider.Type = collision.ColliderNone
 	game.shapeMgr.add(&s.SpriteImpl)
 	return s
 }

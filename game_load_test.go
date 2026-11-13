@@ -231,8 +231,8 @@ func TestRefreshTouchFiltersUsesCurrentTargets(t *testing.T) {
 	game := &collisionLayerOrderGame{}
 	game.autoTouchLayers = true
 	game.touchFilters = map[string]*touchFilter{
-		"SpriteA": {layerIndex: 0, Layer: 1 << 0},
-		"SpriteB": {layerIndex: 1, Layer: 1 << 1},
+		"SpriteA": {Layer: 1 << 0},
+		"SpriteB": {Layer: 1 << 1},
 	}
 
 	var spriteA *collisionLayerOrderSprite
@@ -269,8 +269,8 @@ func TestBootstrapAppliesTouchTargetsFromMain(t *testing.T) {
 	game.initShapeMgr()
 	game.autoTouchLayers = true
 	game.touchFilters = map[string]*touchFilter{
-		"SpriteA": {layerIndex: 0, Layer: 1 << 0},
-		"SpriteB": {layerIndex: 1, Layer: 1 << 1},
+		"SpriteA": {Layer: 1 << 0},
+		"SpriteB": {Layer: 1 << 1},
 	}
 
 	var spriteA *collisionLayerOrderSprite
@@ -340,8 +340,8 @@ func TestLoadStageEntriesAssignsContiguousLayersToExpandedStageSprites(t *testin
 	game.Middle = newCollisionLayerOrderSprite(&game.Game, "Middle", nil)
 	groupProto := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
 	groupProto.baseObj.initWithSize(1, 1)
-	groupProto.physics().collisionInfo.Type = collision.ColliderNone
-	groupProto.physics().triggerInfo.Type = collision.ColliderNone
+	groupProto.physics().bodyCollider.Type = collision.ColliderNone
+	groupProto.physics().triggerCollider.Type = collision.ColliderNone
 	game.sprs = map[string]Sprite{
 		"Back":                      back,
 		"Front":                     front,

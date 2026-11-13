@@ -712,8 +712,8 @@ func TestStageUsesDirectFieldsAndPreservesSpriteOrder(t *testing.T) {
 	front := newCollisionLayerOrderSprite(&game.Game, "Front", nil)
 	prototype := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
 	prototype.baseObj.initWithSize(1, 1)
-	prototype.physics().collisionInfo.Type = collision.ColliderNone
-	prototype.physics().triggerInfo.Type = collision.ColliderNone
+	prototype.physics().bodyCollider.Type = collision.ColliderNone
+	prototype.physics().triggerCollider.Type = collision.ColliderNone
 	game.sprs = map[string]Sprite{"Back": back, "Front": front, "collisionLayerOrderSprite": prototype}
 	raw := []any{
 		"Back",
@@ -1316,7 +1316,7 @@ func TestGameDebugDrawLinesValidatesCompleteSegments(t *testing.T) {
 func TestManualModeClearsAutoTouchSetup(t *testing.T) {
 	g := Game{physicsEnabled: true}
 	g.touchFilters = map[string]*touchFilter{
-		"SpriteA": {layerIndex: 0, Layer: 1 << 0, Mask: 1 << 1},
+		"SpriteA": {Layer: 1 << 0, Mask: 1 << 1},
 	}
 	g.touchEntries = []touchEntry{{
 		filter: g.touchFilters["SpriteA"],
@@ -1525,7 +1525,7 @@ func TestTouchFiltersCommitBeforeProxyWrites(t *testing.T) {
 	setupRuntimeScheduler(t)
 	setupImmediateEngineCalls(t)
 	game := &Game{autoTouchLayers: true, touchFilters: map[string]*touchFilter{
-		"A": {layerIndex: 0, Layer: 1}, "B": {layerIndex: 1, Layer: 2},
+		"A": {Layer: 1}, "B": {Layer: 2},
 	}}
 	a := newCollisionLayerOrderSprite(game, "A", nil)
 	b := newCollisionLayerOrderSprite(game, "B", nil)
@@ -1545,7 +1545,7 @@ func TestTouchFiltersCommitBeforeProxyWrites(t *testing.T) {
 	gdx.SpriteMgr = manager
 	t.Cleanup(func() { gdx.SpriteMgr = previous })
 	for i, sprite := range []*collisionLayerOrderSprite{a, b} {
-		sprite.physics().triggerInfo.Type = collision.ColliderNone
+		sprite.physics().triggerCollider.Type = collision.ColliderNone
 		sprite.runtimeState.syncSprite = &engine.Sprite{Sprite: gdx.Sprite{Id: int64(i + 1)}}
 	}
 	game.setupTouchEntries([]Sprite{a, b})
