@@ -21,7 +21,6 @@ import (
 )
 
 type LinkerBridge interface {
-	IsWebIntepreterMode() bool
 	Link(coreCallbackInfo engine.CoreCallbackInfo)
 	Unlink()
 }
@@ -30,11 +29,6 @@ var linkerBridge LinkerBridge
 
 func SetLinkerBridge(bridge LinkerBridge) {
 	linkerBridge = bridge
-}
-
-// IsWebIntepreterMode is a compatibility shim around the runtime linker bridge.
-func IsWebIntepreterMode() bool {
-	return requireLinkerBridge().IsWebIntepreterMode()
 }
 
 // LinkEngine is a compatibility shim around the runtime linker bridge.
