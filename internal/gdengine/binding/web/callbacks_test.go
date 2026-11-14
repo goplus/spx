@@ -373,26 +373,23 @@ func TestDispatcherPreservesCallbackPayloads(t *testing.T) {
 
 func TestWebSessionStartupAndUnlink(t *testing.T) {
 	installLinkHost(t)
-	previousCallbacks, previousInitialized := callbacks, wasmInitialized
+	previousCallbacks, previousHandshake := callbacks, workerHandshakeComplete
 	previousSnapshot, previousGeneration := inputSnap, actionGeneration
 	previousBool, previousAxis, previousContact := actionBool, actionAxis, contactEventGeneration
 	previousKeys := keyDown
 	keyDown = map[int64]bool{}
 	actionBool, actionAxis = map[string]bool{}, map[string]float64{}
 	t.Cleanup(func() {
-		callbacks, wasmInitialized = previousCallbacks, previousInitialized
+		callbacks, workerHandshakeComplete = previousCallbacks, previousHandshake
 		inputSnap, actionGeneration = previousSnapshot, previousGeneration
 		actionBool, actionAxis, contactEventGeneration = previousBool, previousAxis, previousContact
 		keyDown = previousKeys
 	})
-	for _, interpreter := range []bool{false, true} {
+	for _, worker := range []bool{false, true} {
 		starts := 0
 		BindCallbacks(engine.CallbackInfo{CoreCallbackInfo: engine.CoreCallbackInfo{OnEngineStart: func() { starts++ }}})
-		wasmInitialized = !interpreter
-		session, gotInterpreter := Link()
-		if gotInterpreter != interpreter || session.interpreter != interpreter {
-			t.Fatalf("Link interpreter mode = %v/%v, want %v", gotInterpreter, session.interpreter, interpreter)
-		}
+		workerHandshakeComplete = worker
+		session := Link()
 		for _, name := range []string{"go_wasm_init", "gdspx_dispatch", "gdspx_on_contact_events"} {
 			if js.Global().Get(name).Type() != js.TypeFunction {
 				t.Fatalf("Link did not register %s", name)
@@ -421,11 +418,11 @@ func TestWebSessionStartupAndUnlink(t *testing.T) {
 			t.Fatal("session did not signal readiness")
 		}
 		want := 0
-		if interpreter {
+		if !worker {
 			want = 1
 		}
 		if starts != want {
-			t.Fatalf("interpreter=%v: start calls=%d, want %d", interpreter, starts, want)
+			t.Fatalf("worker=%v: start calls=%d, want %d", worker, starts, want)
 		}
 		select {
 		case <-done:
@@ -433,13 +430,13 @@ func TestWebSessionStartupAndUnlink(t *testing.T) {
 		default:
 		}
 		finish()
-		if wasmInitialized {
-			t.Fatal("unlink retained initialized engine state")
+		if workerHandshakeComplete {
+			t.Fatal("unlink retained worker handshake state")
 		}
 	}
 	goWasmInit(js.Undefined(), nil)
-	if !wasmInitialized {
-		t.Fatal("worker initialization did not set engine state")
+	if !workerHandshakeComplete {
+		t.Fatal("worker initialization did not record the handshake")
 	}
 }
 

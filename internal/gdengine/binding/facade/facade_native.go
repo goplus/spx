@@ -23,10 +23,10 @@ import (
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func LinkFFI() (*LinkSession, bool) {
+func LinkFFI() *LinkSession {
 	return newLinkSession(func(ready func()) {
 		ready()
-	}, nil), false
+	}, nil)
 }
 
 func BindCallbacks(callbacks engine.CallbackInfo) {

@@ -23,9 +23,9 @@ import (
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func LinkFFI() (*LinkSession, bool) {
-	link, interpreter := webffi.Link()
-	return newLinkSession(link.Run, link.Unlink), interpreter
+func LinkFFI() *LinkSession {
+	link := webffi.Link()
+	return newLinkSession(link.Run, link.Unlink)
 }
 
 func BindCallbacks(callbacks engine.CallbackInfo) {
