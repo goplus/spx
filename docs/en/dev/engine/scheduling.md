@@ -293,8 +293,8 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Control-flow integration | `internal/engine/coroutine.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
 | Engine-facing update callbacks and runtime timers/tweens | `internal/gdengine/callbacks.go`, `internal/engine/runtime_bridge.go` |
-| Physical position reads and final sprite submission | `runtime_sync.go`, `component_transform.go`, `shape_manager.go` |
-| Frame input sampling, unified input and timer dispatch | `runtime_input.go` |
+| Physical position reads and final sprite submission | `sprite_sync.go`, `sprite_transform_component.go`, `scene_objects.go` |
+| Frame input sampling, unified input and timer dispatch | `input.go` |
 | Shared script event registration and dispatch, condition sampling | `runtime_events.go` |
 | Game broadcasts, event binding and routing, click target selection | `game_events.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
@@ -316,7 +316,7 @@ frames, including through joined event handlers.
 
 ## Capture and input replay
 
-During an active game, `Snapshot` queues a request for dispatch after visual-state
+During an active game, the internal `capture` helper queues a request for dispatch after visual-state
 synchronization at the end of the frame. A configured `captureKey` requests
 screenshots from recorded or replayed key presses at the same input ticks.
 These requests do not fix how much script work occurs before capture.
@@ -397,10 +397,9 @@ go test ./...
 GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
-Core regression coverage is in `runtime_scheduler_test.go`,
-`runtime_events_test.go`,
-`runtime_engine_test.go`, `runtime_replay_test.go`,
-`runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/frame_test.go`,
+Core regression coverage is in `runtime_test.go`, `runtime_events_test.go`,
+`runtime_native_test.go`, `input_test.go`,
+`sprite_sync_test.go`, `internal/engine/frame_test.go`,
 `internal/engine/coroutine_native_test.go`,
 `sprite_clone_test.go`, `internal/engine/coroutine/loop_test.go`,
 `internal/engine/coroutine/order_test.go`, `internal/engine/coroutine/wait_order_test.go`, and

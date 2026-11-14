@@ -91,7 +91,7 @@ func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
 	sprite.transform().pivot = mathf.NewVec2(0.5, -0.25)
 	sprite.physics().triggerCollider.Type = collision.ColliderNone
 
-	got := sprite.bounds()
+	got := sprite.bubbleBounds()
 	want := mathf.Rect2{
 		Position: mathf.NewVec2(7.75, 16.8125),
 		Size:     mathf.NewVec2(7.875, 4.6875),
@@ -361,7 +361,7 @@ func TestShapeTouchingRequiresTriggerGeometry(t *testing.T) {
 				}
 				if setup == "initial" {
 					sprite.physics().initTriggerConfig(&coreproject.SpriteConfig{TriggerShapeType: "none"})
-					sprite.physics().triggerCollider.initializeShape(sprite.runtimeState.syncSprite, true, &sprite.SpriteImpl)
+					sprite.physics().triggerCollider.initializeShape(sprite.runtimeState.proxy, true, &sprite.SpriteImpl)
 				} else {
 					check(true)
 					if err := sprite.SetColliderShape(true, collision.ColliderNone, nil); err != nil {
@@ -445,13 +445,13 @@ func TestTouchingColorSyncsDirtySceneSpritesImmediately(t *testing.T) {
 	game := &Game{}
 	game.displayState.WorldWidth = 480
 	game.displayState.WorldHeight = 360
-	game.initShapeMgr()
+	game.scene.init()
 	receiver := newTouchingTestSprite("receiver", 0, 0, 1)
 	target := newTouchingTestSprite("target", 0, 0, 2)
 	receiver.g = game
 	target.g = game
-	game.shapeMgr.add(receiver)
-	game.shapeMgr.add(target)
+	game.scene.add(receiver)
+	game.scene.add(target)
 	mgr.positions[1] = mathf.NewVec2(0, 0)
 	mgr.positions[2] = mathf.NewVec2(0, 0)
 
@@ -489,7 +489,7 @@ func TestTouchingColorSyncsDirtyTransientOwnerImmediately(t *testing.T) {
 	game := &Game{}
 	game.displayState.WorldWidth = 480
 	game.displayState.WorldHeight = 360
-	game.initShapeMgr()
+	game.scene.init()
 	owner := newTouchingTestSprite("owner", 0, 0, 1)
 	owner.SetXpos(42)
 	owner.g = game
@@ -521,13 +521,13 @@ func TestHiddenColorQueriesSyncDeferredCostume(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sprite, _, mgr := setupPreparedResourceSync(t)
 			game := sprite.g
-			flush := func() { game.flushSpriteProxyChanges(game.shapeMgr.items) }
+			flush := func() { game.flushSpriteProxyChanges(game.scene.items) }
 			flush()
 			sprite.Hide()
 			flush()
 			sprite.SetCostume__0("costume1")
 			flush()
-			if !sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() || len(game.shapeMgr.dirtySprites) != 0 {
+			if !sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() || len(game.scene.dirtySprites) != 0 {
 				t.Fatal("hidden frame did not leave only the deferred costume pending")
 			}
 			mgr.expectedTexturePaths[1] = internalengine.ToAssetPath(sprite.costumes[1].path)
@@ -546,11 +546,11 @@ func TestHiddenColorQueriesSyncDeferredCostume(t *testing.T) {
 func TestColorQueryIncludesReentrantSceneChanges(t *testing.T) {
 	sprite, later, mgr := setupPreparedResourceSync(t)
 	game := sprite.g
-	game.flushSpriteProxyChanges(game.shapeMgr.items)
+	game.flushSpriteProxyChanges(game.scene.items)
 	sprite.SetXpos(42)
 	later.runtimeState.isCostumeDirty = true
 	later.markProxyDirty()
-	later.runtimeState.syncSprite.OnFramesSetChangedEvent.Subscribe(func() {
+	later.runtimeState.proxy.OnFramesSetChangedEvent.Subscribe(func() {
 		sprite.SetXpos(84)
 	})
 	var queriedPosition mathf.Vec2
@@ -563,7 +563,7 @@ func TestColorQueryIncludesReentrantSceneChanges(t *testing.T) {
 	if queriedPosition != (mathf.Vec2{X: 84, Y: 20}) {
 		t.Fatalf("color query saw reentrant position %v, want (84,20)", queriedPosition)
 	}
-	if len(game.shapeMgr.dirtySprites) != 0 || sprite.needsProxyUpdate() {
+	if len(game.scene.dirtySprites) != 0 || sprite.needsProxyUpdate() {
 		t.Fatal("color query left the reentrant scene change pending")
 	}
 }
@@ -590,7 +590,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 	for _, front := range []string{"Player", "Ground"} {
 		t.Run(front+"InFront", func(t *testing.T) {
 			currentScheduler, game := setupRuntimeEventGame(t)
-			game.initShapeMgr()
+			game.scene.init()
 			game.displayState.WorldWidth, game.displayState.WorldHeight = 480, 360
 			mgr := &cloneCollisionSpriteMgr{
 				spyCloneSpriteMgr: setupCloneSpriteMgr(t),
@@ -603,7 +603,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 			ground := newCloneLimitSprite(game, "Ground")
 			player := newCloneLimitSprite(game, "Player")
 			if front == "Ground" {
-				game.shapeMgr.items[0], game.shapeMgr.items[1] = game.shapeMgr.items[1], game.shapeMgr.items[0]
+				game.scene.items[0], game.scene.items[1] = game.scene.items[1], game.scene.items[0]
 			}
 			for _, sprite := range []*cloneLimitSprite{ground, player} {
 				sprite.runtimeState.scale = 1
@@ -641,7 +641,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 				})
 			})
 
-			game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
+			game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
 			const frames = 12
 			for range frames {
 				currentScheduler.Update()
@@ -670,7 +670,7 @@ func TestSpriteSensingWithoutProxyAndInvalidTargets(t *testing.T) {
 		t.Fatal("unbound receiver participated in collision query")
 	}
 	sprite := newTestTransformSprite(0, 0)
-	if sprite.bounds() != nil {
+	if sprite.bubbleBounds() != nil {
 		t.Fatal("sprite without costume has bounds")
 	}
 	if sprite.touchPoint(1, 2) || sprite.touchingColor(mathf.Color{}) || sprite.touchingColors(mathf.Color{}, mathf.Color{}) || sprite.touchingSprite(newTestTransformSprite(0, 0)) || sprite.checkTouchingScreen(int(Edge), edgeAreaStage) != 0 || sprite.checkNearestTouchedBoundary(edgeAreaStage) != 0 {
@@ -719,7 +719,7 @@ func TestPendingCloneSensingReportsCleanupFailureAndDoubleRelease(t *testing.T) 
 		t.Fatalf("cleanup failure=%v leases=%d", failure, sprite.proxyPublication.sensingVisibilityLeases.Load())
 	}
 	failure = capturePendingCloneSensingPanic(func() {
-		releasePendingCloneSensingVisibility(pendingCloneSensingVisibilityLease{sprite: &sprite.SpriteImpl, publication: sprite.proxyPublication, proxy: sprite.runtimeState.syncSprite})
+		releasePendingCloneSensingVisibility(pendingCloneSensingVisibilityLease{sprite: &sprite.SpriteImpl, publication: sprite.proxyPublication, proxy: sprite.runtimeState.proxy})
 	})
 	if failure != "spx: negative pending clone sensing visibility lease count" {
 		t.Fatalf("double release failure=%v", failure)
@@ -753,11 +753,11 @@ func TestTouchingNameReadsCurrentState(t *testing.T) {
 	if !receiver.Touching__1("target") {
 		t.Fatal("same-frame show was missed")
 	}
-	game.shapeMgr.removeShape(&target.SpriteImpl)
+	game.scene.removeShape(&target.SpriteImpl)
 	if receiver.Touching__1("target") {
 		t.Fatal("removed target touched receiver")
 	}
-	game.shapeMgr.add(&target.SpriteImpl)
+	game.scene.add(&target.SpriteImpl)
 	if !receiver.Touching__1("target") {
 		t.Fatal("re-added target was missed")
 	}
@@ -848,7 +848,7 @@ func TestTouchingNameIncludesAutoTriggerPadding(t *testing.T) {
 			if !ok {
 				t.Fatal("missing render bounds")
 			}
-			rotation, _, _ := getRenderRotationAndScale(&target.SpriteImpl)
+			rotation, _, _ := renderRotationAndFlip(&target.SpriteImpl)
 			sin, cos := math.Sincos(toRadian(rotation))
 			padding := TriggerExtraPixel * tc.scale * (math.Abs(sin) + math.Abs(cos))
 			// Rendered costumes are apart, but their inflated trigger boxes overlap.
@@ -1018,11 +1018,11 @@ func TestTouchingNameSeesCloneImmediately(t *testing.T) {
 	clone.g = game
 	clone.spriteState.cloned = true
 	mgr.positions[3] = mathf.NewVec2(0, 0)
-	game.shapeMgr.add(&clone.SpriteImpl)
+	game.scene.add(&clone.SpriteImpl)
 	if !receiver.Touching__1("target") {
 		t.Fatal("new clone was missed")
 	}
-	game.shapeMgr.removeShape(&clone.SpriteImpl)
+	game.scene.removeShape(&clone.SpriteImpl)
 	if receiver.Touching__1("target") {
 		t.Fatal("removed clone still touched receiver")
 	}
@@ -1041,22 +1041,22 @@ func TestTouchingNameFollowsShapeOrder(t *testing.T) {
 	clone := newTouchingQuerySprite("target", 0, 0, 3)
 	clone.g = game
 	clone.spriteState.cloned = true
-	game.shapeMgr.addClonedShape(&target.SpriteImpl, &clone.SpriteImpl)
+	game.scene.addClonedShape(&target.SpriteImpl, &clone.SpriteImpl)
 	first(&clone.SpriteImpl)
-	game.shapeMgr.activateShape(&clone.SpriteImpl)
+	game.scene.activateShape(&clone.SpriteImpl)
 	first(&target.SpriteImpl)
-	game.shapeMgr.goBackLayers(&target.SpriteImpl, -1)
+	game.scene.goBackLayers(&target.SpriteImpl, -1)
 	first(&clone.SpriteImpl)
-	game.shapeMgr.removeShape(&target.SpriteImpl)
+	game.scene.removeShape(&target.SpriteImpl)
 	first(&clone.SpriteImpl)
-	game.shapeMgr.init()
-	if game.shapeMgr.named != nil {
+	game.scene.init()
+	if game.scene.named != nil {
 		t.Fatal("scene reset retained the name index")
 	}
 	first(nil)
-	game.shapeMgr.spritesNamed("missing-a")
-	game.shapeMgr.spritesNamed("missing-b")
-	if game.shapeMgr.named != nil {
+	game.scene.spritesNamed("missing-a")
+	game.scene.spritesNamed("missing-b")
+	if game.scene.named != nil {
 		t.Fatal("empty scene allocated a name index")
 	}
 }
@@ -1078,10 +1078,10 @@ func BenchmarkTouchingName(b *testing.B) {
 			mgr := newTouchingSyncSpriteMgr()
 			installTouchingSyncSpriteMgr(b, mgr)
 			game := &Game{}
-			game.initShapeMgr()
+			game.scene.init()
 			receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
 			receiver.g = game
-			game.shapeMgr.add(&receiver.SpriteImpl)
+			game.scene.add(&receiver.SpriteImpl)
 			mgr.positions[1] = mathf.NewVec2(0, 0)
 			for i := range 300 {
 				name := "other"
@@ -1090,13 +1090,13 @@ func BenchmarkTouchingName(b *testing.B) {
 				}
 				target := newTouchingQuerySprite(name, float64(1000+i*10), 0, int64(i+2))
 				target.g = game
-				game.shapeMgr.add(&target.SpriteImpl)
+				game.scene.add(&target.SpriteImpl)
 			}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
 				if tc.rebuild {
-					clear(game.shapeMgr.named)
+					clear(game.scene.named)
 				}
 				if receiver.Touching__1("target") {
 					b.Fatal("unexpected collision")
@@ -1322,11 +1322,11 @@ func newTouchingTestSprite(name string, x, y float64, id pkgengine.Object) *Spri
 	sprite.name = name
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360
-	sprite.baseObj.initWithSize(1, 1)
+	sprite.visualObject.initWithSize(1, 1)
 	sprite.runtimeState.scale = 1
 	sprite.spriteState.isVisible = true
-	sprite.runtimeState.syncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.syncSprite.SetId(id)
+	sprite.runtimeState.proxy = &internalengine.Sprite{}
+	sprite.runtimeState.proxy.SetId(id)
 	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
 		mgr.visible[id] = true
 	}
@@ -1346,11 +1346,11 @@ func newTouchingQuerySprite(name string, x, y float64, id pkgengine.Object) *tou
 	})
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360
-	sprite.baseObj.initWithSize(1, 1)
+	sprite.visualObject.initWithSize(1, 1)
 	sprite.runtimeState.scale = 1
 	sprite.spriteState.isVisible = true
-	sprite.runtimeState.syncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.syncSprite.SetId(id)
+	sprite.runtimeState.proxy = &internalengine.Sprite{}
+	sprite.runtimeState.proxy.SetId(id)
 	sprite.sprite = sprite
 	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
 		mgr.visible[id] = true
@@ -1376,12 +1376,12 @@ func newTouchingPair(t *testing.T, byShape bool) (*Game, *touchingSyncSpriteMgr,
 	mgr := newTouchingSyncSpriteMgr()
 	installTouchingSyncSpriteMgr(t, mgr)
 	game := &Game{touchByShape: byShape}
-	game.initShapeMgr()
+	game.scene.init()
 	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
 	target := newTouchingQuerySprite("target", 0, 0, 2)
 	receiver.g, target.g = game, game
-	game.shapeMgr.add(&receiver.SpriteImpl)
-	game.shapeMgr.add(&target.SpriteImpl)
+	game.scene.add(&receiver.SpriteImpl)
+	game.scene.add(&target.SpriteImpl)
 	mgr.positions[1] = mathf.NewVec2(0, 0)
 	mgr.positions[2] = mathf.NewVec2(0, 0)
 	return game, mgr, receiver, target

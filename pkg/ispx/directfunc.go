@@ -51,8 +51,7 @@ func init() {
 func (c directResult[T]) call() T {
 	value := c.Call()
 	if value == nil {
-		// Abort can stop before return. Preserve zero results, and allow a
-		// Snapshot callback to return a nil error normally.
+		// Abort and nil-error callbacks both return the zero value.
 		var zero T
 		return zero
 	}

@@ -224,8 +224,8 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 控制流与调度器衔接 | `internal/engine/coroutine.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
 | 引擎层更新回调与 runtime 延时、tween | `internal/gdengine/callbacks.go`、`internal/engine/runtime_bridge.go` |
-| 物理位置回读与帧末精灵提交 | `runtime_sync.go`、`component_transform.go`、`shape_manager.go` |
-| 帧输入采样、统一输入与 Timer 派发 | `runtime_input.go` |
+| 物理位置回读与帧末精灵提交 | `sprite_sync.go`、`sprite_transform_component.go`、`scene_objects.go` |
+| 帧输入采样、统一输入与 Timer 派发 | `input.go` |
 | 公共脚本事件注册与派发、条件采样 | `runtime_events.go` |
 | Game 广播、事件绑定与路由、点击目标选择 | `game_events.go` |
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
@@ -243,7 +243,7 @@ runtime 用户回调由独立任务执行，可以直接等待未来帧，也可
 
 ## 截图与输入回放
 
-游戏运行期间，`Snapshot` 将截图请求入队，在帧末视觉状态同步后派发。
+游戏运行期间，内部函数 `capture` 将截图请求入队，在帧末视觉状态同步后派发。
 配置 `captureKey` 后，录制和回放中的按键 press 边沿会在相同 input tick 请求截图。
 这些请求不固定截图前完成的脚本工作量。
 host 接入方式见[《Web 端截图接入说明》](web_capture.md)。
@@ -300,9 +300,9 @@ go test ./...
 GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
-核心回归位于 `runtime_scheduler_test.go`、`runtime_events_test.go`、
-`runtime_engine_test.go`、`runtime_replay_test.go`、
-`runtime_sync_test.go`、`runtime_engine_native_test.go`、`internal/engine/frame_test.go`、
+核心回归位于 `runtime_test.go`、`runtime_events_test.go`、
+`runtime_native_test.go`、`input_test.go`、
+`sprite_sync_test.go`、`internal/engine/frame_test.go`、
 `internal/engine/coroutine_native_test.go`、
 `sprite_clone_test.go`、`internal/engine/coroutine/loop_test.go`、
 `internal/engine/coroutine/order_test.go`、`internal/engine/coroutine/wait_order_test.go` 和

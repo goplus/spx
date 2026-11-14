@@ -87,8 +87,8 @@ func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
 
 	dispatchedOnReturn := false
 	currentScheduler.Create(game, func(coroutine.Thread) {
-		game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-		dispatchedOnReturn = game.lifecycleState.StartDispatched.Load()
+		game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+		dispatchedOnReturn = game.lifecycle.startDispatched.Load()
 		order = append(order, "caller")
 	})
 	currentScheduler.Update()
@@ -112,7 +112,7 @@ func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
 
 func TestOnStartUsesTargetOrder(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
-	game.initShapeMgr()
+	game.scene.init()
 
 	newSprite := func(name string) *SpriteImpl {
 		sprite := &SpriteImpl{name: name, g: game}
@@ -123,9 +123,9 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 	laser := newSprite("Laser")
 	transition := newSprite("Transition")
 	levels := newSprite("Levels")
-	game.shapeMgr.add(laser)
-	game.shapeMgr.add(transition)
-	game.shapeMgr.add(levels)
+	game.scene.add(laser)
+	game.scene.add(transition)
+	game.scene.add(levels)
 	transition.spriteState.isVisible = true
 
 	level := 7.0
@@ -148,7 +148,7 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 		level = 1
 	})
 
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
 	currentScheduler.Update()
 
 	want := []string{"levels-init", "transition-hide", "laser-stop-check", "laser-hide"}
@@ -158,7 +158,7 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 	if level != 1 || transition.Visible() {
 		t.Fatalf("startup state = level %v, transition visible %v, want 1/false", level, transition.Visible())
 	}
-	if !game.lifecycleState.StartDispatched.Load() {
+	if !game.lifecycle.startDispatched.Load() {
 		t.Fatal("start event was not marked dispatched")
 	}
 }
@@ -293,15 +293,15 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		t.Fatalf("condition evaluated %d times during bootstrap, want 0", evaluations)
 	}
 
-	game.markGameStarted(game.bootstrapGeneration())
-	game.completeBootstrap(game.bootstrapGeneration())
+	game.lifecycle.markLoaded(game.lifecycle.generation())
+	game.lifecycle.completeBootstrap(game.lifecycle.generation())
 	pollRuntimeEventConditions(game)
 	if evaluations != 0 {
 		t.Fatalf("condition evaluated %d times before OnStart, want 0", evaluations)
 	}
 
 	game.dispatchStartEventIfNeeded()
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycleState.StartDispatched.Load)
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
 	if want := []string{"start"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order before condition polling = %v, want %v", order, want)
 	}
@@ -332,9 +332,9 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 	topLevelBlocked := make(chan struct{})
 	onStartBlocked := make(chan struct{})
 
-	generation := game.bootstrapGeneration()
-	game.markGameStarted(generation)
-	game.queueBootstrap(generation, func() {
+	generation := game.lifecycle.generation()
+	game.lifecycle.markLoaded(generation)
+	game.lifecycle.queue(generation, func() {
 		runMainUntilYield(game, func() {
 			order = append(order, "top-level")
 			game.OnCond(func() bool {
@@ -355,7 +355,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 		})
 	})
 
-	game.runBootstrapTasks(generation)
+	game.lifecycle.runTasks(generation)
 	if want := []string{"top-level"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order after top-level first yield = %v, want %v", order, want)
 	}
@@ -364,9 +364,9 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 		t.Fatalf("condition ran before OnStart: %v", order)
 	}
 
-	game.completeBootstrap(generation)
+	game.lifecycle.completeBootstrap(generation)
 	game.dispatchStartEventIfNeeded()
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycleState.StartDispatched.Load)
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
 	if want := []string{"top-level", "start"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order after OnStart = %v, want %v", order, want)
 	}
@@ -387,19 +387,19 @@ func TestOnStartIgnoresStaleBootstrapGeneration(t *testing.T) {
 
 	var game Game
 	game.bindScriptEvents()
-	stale := game.bootstrapGeneration()
-	game.resetBootstrap()
+	stale := game.lifecycle.generation()
+	game.lifecycle.reset()
 
 	calls := 0
 	game.OnStart(func() { calls++ })
 	game.handleEvent(&eventStart{generation: stale})
 	currentScheduler.Update()
-	if calls != 0 || game.lifecycleState.StartDispatched.Load() {
+	if calls != 0 || game.lifecycle.startDispatched.Load() {
 		t.Fatal("stale start event affected the current lifecycle")
 	}
 
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycleState.StartDispatched.Load)
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
 	if calls != 1 {
 		t.Fatalf("current start calls = %d, want 1", calls)
 	}
@@ -413,14 +413,14 @@ func TestOnStartWithoutSchedulerDoesNotCrossReset(t *testing.T) {
 	var calls []string
 	game.OnStart(func() {
 		calls = append(calls, "first")
-		game.resetBootstrap()
+		game.lifecycle.reset()
 	})
 	game.OnStart(func() { calls = append(calls, "stale") })
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
 	if want := []string{"first"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("start callbacks after reset = %v, want %v", calls, want)
 	}
-	if game.lifecycleState.StartDispatched.Load() {
+	if game.lifecycle.startDispatched.Load() {
 		t.Fatal("stale OnStart completion reopened the start gate")
 	}
 }
@@ -439,18 +439,18 @@ func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 	staleCalls := 0
 	game.OnStart(func() { staleCalls++ })
 
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
 	select {
 	case <-entered:
 	case <-time.After(time.Second):
 		t.Fatal("OnStart did not begin")
 	}
 
-	game.resetBootstrap()
+	game.lifecycle.reset()
 	game.scriptEvents.manager.Reset()
 	close(release)
 	currentScheduler.Update()
-	if game.lifecycleState.StartDispatched.Load() {
+	if game.lifecycle.startDispatched.Load() {
 		t.Fatal("stale OnStart completion reopened the start gate")
 	}
 	if staleCalls != 0 {
@@ -459,8 +459,8 @@ func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 
 	calls := 0
 	game.OnStart(func() { calls++ })
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycleState.StartDispatched.Load)
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
 	if calls != 1 {
 		t.Fatalf("new lifecycle start calls = %d, want 1", calls)
 	}
@@ -869,18 +869,18 @@ func TestRecursiveBroadcastAndWaitYieldsAtRoundBoundary(t *testing.T) {
 
 func TestGameRunBootstrapTasksExecutesQueuedHooksOnce(t *testing.T) {
 	var g Game
-	generation := g.bootstrapGeneration()
+	generation := g.lifecycle.generation()
 
 	var got []string
-	g.queueBootstrap(generation, func() {
+	g.lifecycle.queue(generation, func() {
 		got = append(got, "first")
 	})
-	g.queueBootstrap(generation, func() {
+	g.lifecycle.queue(generation, func() {
 		got = append(got, "second")
 	})
 
-	g.runBootstrapTasks(generation)
-	g.runBootstrapTasks(generation)
+	g.lifecycle.runTasks(generation)
+	g.lifecycle.runTasks(generation)
 
 	want := []string{"first", "second"}
 	if !reflect.DeepEqual(got, want) {
@@ -904,14 +904,14 @@ func TestFindClickTargetRespectsLayerOrderAndVisibility(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{1: true, 2: true})
 			var game Game
-			game.initShapeMgr()
+			game.scene.init()
 			bottom := newClickTestSprite(&game, "bottom", 1, true)
 			top := newClickTestSprite(&game, "top", 2, test.handler)
 			if test.ghost {
-				top.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
+				top.graphicEffects = map[EffectKind]float64{GhostEffect: 100}
 			}
-			game.shapeMgr.add(bottom)
-			game.shapeMgr.add(top)
+			game.scene.add(bottom)
+			game.scene.add(top)
 			if test.moveBack {
 				top.SetLayerTo(Back)
 			}
@@ -983,7 +983,7 @@ func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: tt.hit})
 			var game Game
-			game.initShapeMgr()
+			game.scene.init()
 			game.bindScriptEvents()
 			game.inputMgr.g = &game
 			now := time.Unix(100, 0)
@@ -1001,7 +1001,7 @@ func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
 				sprite.OnClick(func() { clicks = append(clicks, "target") })
 			}
 			sprite.OnSwipe__0(90, func() { swipes = append(swipes, "target") })
-			game.shapeMgr.add(sprite)
+			game.scene.add(sprite)
 			game.OnClick(func() { clicks = append(clicks, "stage") })
 			game.OnSwipe__0(90, func() { swipes = append(swipes, "stage") })
 			for _, id := range tt.blocked {
@@ -1053,7 +1053,7 @@ func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T)
 
 	for _, blocked := range []bool{false, true} {
 		var game Game
-		game.initShapeMgr()
+		game.scene.init()
 		game.bindScriptEvents()
 		game.inputMgr.init(&game)
 		game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
@@ -1064,7 +1064,7 @@ func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T)
 		}
 		target := &disappearingClickTarget{}
 		target.proxy.SetId(7)
-		game.shapeMgr.add(target)
+		game.scene.add(target)
 		stageClicks := 0
 		game.OnClick(func() { stageClicks++ })
 
@@ -1134,7 +1134,7 @@ func TestDebugEventBindingsAndBroadcastOverloads(t *testing.T) {
 	game.debugState.DebugInstr = true
 	sprite := &SpriteImpl{g: game, name: "actor"}
 	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
-	game.shapeMgr.add(sprite)
+	game.scene.add(sprite)
 	var got []string
 	game.OnTimer(0, func() { got = append(got, "timer") })
 	game.OnKey__0(KeyA, func() { got = append(got, "key") })
@@ -1176,7 +1176,7 @@ func TestPointHitsClickTargetRejectsInvalidTarget(t *testing.T) {
 			sprite := newClickTestSprite(game, state, 1, false)
 			switch state {
 			case "missing proxy":
-				sprite.runtimeState.syncSprite = nil
+				sprite.runtimeState.proxy = nil
 			case "hidden":
 				sprite.spriteState.isVisible = false
 			case "destroyed":
@@ -1326,11 +1326,11 @@ func TestStartBatchCleansPendingThreadCanceledBeforeRun(t *testing.T) {
 
 func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 	game := &Game{}
-	game.initShapeMgr()
+	game.scene.init()
 	back, front := &SpriteImpl{g: game}, &SpriteImpl{g: game}
 	removed := &SpriteImpl{g: game}
-	game.shapeMgr.add(back)
-	game.shapeMgr.add(front)
+	game.scene.add(back)
+	game.scene.add(front)
 	sinks := []eventSink{
 		{Owner: game, Handler: "stage-1"},
 		{Owner: back, Handler: "back-1"},
@@ -1360,7 +1360,7 @@ func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 		t.Fatal("ordered result aliases the shared event snapshot")
 	}
 	// A later broadcast must observe the new layer order, not a cached grouping.
-	game.shapeMgr.items[0], game.shapeMgr.items[1] = front, back
+	game.scene.items[0], game.scene.items[1] = front, back
 	if got := sinksInTargetOrder(game, sinks)[0].Handler; got != "back-1" {
 		t.Fatalf("first handler after layer change = %v", got)
 	}
@@ -1777,11 +1777,11 @@ func TestMatchingEventSinksNoMatchAllocations(t *testing.T) {
 // Stamp-driven games broadcast to many clones each frame.
 func BenchmarkTargetOrder(b *testing.B) {
 	game := &Game{}
-	game.initShapeMgr()
+	game.scene.init()
 	sinks := make([]eventSink, 0, 202)
 	for range 100 {
 		sprite := &SpriteImpl{g: game}
-		game.shapeMgr.add(sprite)
+		game.scene.add(sprite)
 		sinks = append(sinks, eventSink{Owner: sprite}, eventSink{Owner: sprite})
 	}
 	sinks = append(sinks, eventSink{Owner: game}, eventSink{Owner: "external"})
@@ -1857,10 +1857,10 @@ func BenchmarkBroadcastMatching(b *testing.B) {
 		b.Run(scenario.name, func(b *testing.B) {
 			game := new(Game)
 			game.bindScriptEvents()
-			game.initShapeMgr()
+			game.scene.init()
 			for i := range 16 {
 				sprite := newEventOrderSprite(game, "waypoint")
-				game.shapeMgr.add(sprite)
+				game.scene.add(sprite)
 				for j := range 4 {
 					message := "other"
 					if i*4+j < scenario.matches {
@@ -1956,8 +1956,8 @@ func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick
 	sprite.g = g
 	sprite.name = name
 	sprite.spriteState.isVisible = true
-	sprite.runtimeState.syncSprite = &engine.Sprite{}
-	sprite.runtimeState.syncSprite.SetId(id)
+	sprite.runtimeState.proxy = &engine.Sprite{}
+	sprite.runtimeState.proxy.SetId(id)
 	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
 	if registerClick {
 		sprite.OnClick(func() {})
@@ -1984,10 +1984,10 @@ func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
 			installRuntimeScheduler(b, currentScheduler, nil)
 			game := new(Game)
 			game.bindScriptEvents()
-			game.initShapeMgr()
+			game.scene.init()
 			for i := range 300 {
 				sprite := newEventOrderSprite(game, fmt.Sprintf("target-%d", i))
-				game.shapeMgr.add(sprite)
+				game.scene.add(sprite)
 				for range handlers {
 					sprite.OnMsg__1("fan-out", func() {})
 				}
@@ -2071,8 +2071,8 @@ func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 		log.add("message-after-yield")
 	})
 
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycleState.StartDispatched.Load)
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
 	waitForEventOrderEntries(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{
 		"front-before-yield",
@@ -2117,8 +2117,8 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	var log eventOrderLog
 
 	front := newEventOrderSprite(game, "front")
-	game.shapeMgr.add(front)
-	game.shapeMgr.updateRenderLayers()
+	game.scene.add(front)
+	game.scene.updateRenderLayers()
 
 	game.OnMsg__1("clone-order", func() { log.add("stage") })
 	back.OnMsg__1("clone-order", func() { log.add("back") })
@@ -2130,7 +2130,7 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	clone := newEventOrderSprite(game, "source-clone")
 	clone.spriteState.cloned = true
 	clone.OnMsg__1("clone-order", func() { log.add("clone") })
-	game.shapeMgr.addClonedShape(source, clone)
+	game.scene.addClonedShape(source, clone)
 
 	if got, want := game.getAllShapes(), []Shape{back, clone, source, front}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test clone layer order = %v, want %v", got, want)
@@ -2969,14 +2969,14 @@ func setupEventOrderGame(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl
 	t.Helper()
 
 	currentScheduler, game := setupRuntimeEventGame(t)
-	game.initShapeMgr()
+	game.scene.init()
 	setupCaptureTest(t)
 
 	back := newEventOrderSprite(game, "back")
 	front := newEventOrderSprite(game, "front")
-	game.shapeMgr.add(back)
-	game.shapeMgr.add(front)
-	game.shapeMgr.updateRenderLayers()
+	game.scene.add(back)
+	game.scene.add(front)
+	game.scene.updateRenderLayers()
 	return currentScheduler, game, back, front
 }
 

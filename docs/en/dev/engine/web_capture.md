@@ -6,9 +6,9 @@ Selecting the same frame or input tick does not guarantee identical script state
 
 ## 1. SPX capability
 
-Game scripts call `spx.Snapshot(name, fn)` at the step they want to capture. It runs `fn` if non-nil, then queues a screenshot if the body succeeds. A body that yields can finish in a later frame; the request records the frame and latest input tick when the body returns. Without an active game, the request is dispatched immediately.
+Recording and replay use a configured `captureKey` (the Web runner defaults to `P`). Its press edges are part of the recorded input, so replay requests screenshots at the same input ticks without script-side scheduling.
 
-Recording and replay can also use a configured `captureKey` (the Web runner defaults to `P`). Its press edges are part of the recorded input, so replay requests screenshots at the same input ticks without script-side scheduling. The internal engine frame counter is retained as screenshot metadata and includes loading and bootstrap updates.
+The internal [`capture`](../../../../runtime.go) helper queues requests for dispatch after visual-state synchronization at frame end. Requests carry the latest consumed input tick and the engine frame counter, which includes loading and bootstrap updates.
 
 ## 2. Web bridge
 

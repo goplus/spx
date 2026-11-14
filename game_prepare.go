@@ -38,7 +38,7 @@ type projectPlan struct {
 }
 
 type spritePlan struct {
-	*spriteLayout
+	*spriteTypeInfo
 	preparedSprite
 }
 
@@ -59,7 +59,7 @@ type stageEntry struct {
 type stageSprite struct {
 	field      int
 	typ        reflect.Type
-	properties []spriteProperties
+	properties []spriteOverrides
 }
 
 func (p *Game) prepareProject(fs spxfs.Dir, proj *coreproject.ProjectConfig, gamer reflect.Value) (projectPlan, error) {
@@ -101,7 +101,7 @@ func (p *Game) prepareSpritePrototype(fs spxfs.Dir, name string, typ reflect.Typ
 	var actual reflect.Type
 	if prepared, ok := plan.sprites[name]; ok {
 		actual = prepared.typ
-	} else if sprite, ok := p.sprs[name]; ok {
+	} else if sprite, ok := p.spritePrototypes[name]; ok {
 		if spriteOf(sprite) == nil {
 			return fmt.Errorf("sprite %q has no valid prototype", name)
 		}
@@ -131,17 +131,17 @@ func (g *Game) allocSpriteField(v reflect.Value, i int) (string, Sprite) {
 	value := field.Addr()
 	switch field.Kind() {
 	case reflect.Pointer:
-		if field.Type().Implements(tySprite) {
+		if field.Type().Implements(spriteInterfaceType) {
 			value = reflect.New(field.Type().Elem())
 			field.Set(value)
 		}
 	case reflect.Interface:
-		if typ, ok := g.typs[name]; ok {
+		if typ, ok := g.spriteTypes[name]; ok {
 			value = reflect.New(typ)
 			field.Set(value)
 		}
 	}
-	if g.typs[name] == nil {
+	if g.spriteTypes[name] == nil {
 		return name, nil
 	}
 	sprite, _ := reflect.TypeAssert[Sprite](value)
@@ -166,7 +166,7 @@ func (p *Game) prepareStageEntry(fs spxfs.Dir, gamer reflect.Value, raw any, pla
 	var entry stageEntry
 	if name, ok := raw.(string); ok {
 		entry.kind, entry.prototype = "prototype", name
-		return entry, p.prepareSpritePrototype(fs, name, p.typs[name], gamer, plan)
+		return entry, p.prepareSpritePrototype(fs, name, p.spriteTypes[name], gamer, plan)
 	}
 	shape, ok := raw.(coreproject.StageShape)
 	if !ok {
@@ -187,7 +187,7 @@ func (p *Game) prepareStageEntry(fs spxfs.Dir, gamer reflect.Value, raw any, pla
 		if err = p.prepareSpritePrototype(fs, entry.prototype, entry.sprite.typ, gamer, plan); err != nil {
 			return entry, err
 		}
-		_, err = inspectCloneLayout(entry.sprite.typ)
+		_, err = inspectCloneType(entry.sprite.typ)
 	case "stageMonitor", "monitor":
 		entry.monitor, err = prepareMonitor(shape)
 	case "measure":
@@ -207,7 +207,7 @@ func prepareSprite(fs spxfs.Dir, name string, typ reflect.Type, gamer reflect.Va
 	if err != nil {
 		return spritePlan{}, fmt.Errorf("sprite config %q: %w", name, err)
 	}
-	layout, err := inspectSpriteLayout(typ)
+	layout, err := inspectSpriteType(typ)
 	if err != nil {
 		return spritePlan{}, err
 	}
@@ -217,7 +217,7 @@ func prepareSprite(fs spxfs.Dir, name string, typ reflect.Type, gamer reflect.Va
 	if !gamer.CanAddr() {
 		return spritePlan{}, fmt.Errorf("sprite %s owner game is not addressable", typ)
 	}
-	return spritePlan{spriteLayout: layout, preparedSprite: prepared}, nil
+	return spritePlan{spriteTypeInfo: layout, preparedSprite: prepared}, nil
 }
 
 func prepareSpriteConfig(config *coreproject.SpriteConfig) (preparedSprite, error) {
@@ -319,11 +319,11 @@ func prepareStageSprite(gamer reflect.Value, shape coreproject.StageShape, multi
 		if !ok {
 			return entry, fmt.Errorf("stage sprite target %q is not a sprite field", target)
 		}
-		properties, err := parseSpriteProperties(shape)
+		properties, err := parseSpriteOverrides(shape)
 		if err == nil && spriteOf(sprite) == nil {
 			err = fmt.Errorf("stage sprite target %q has no sprite value", target)
 		}
-		entry.properties = []spriteProperties{properties}
+		entry.properties = []spriteOverrides{properties}
 		return entry, err
 	}
 	if field.Kind() != reflect.Slice {
@@ -333,17 +333,17 @@ func prepareStageSprite(gamer reflect.Value, shape coreproject.StageShape, multi
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
-	if typ.Kind() != reflect.Struct || !reflect.PointerTo(typ).Implements(tySprite) {
+	if typ.Kind() != reflect.Struct || !reflect.PointerTo(typ).Implements(spriteInterfaceType) {
 		return entry, fmt.Errorf("stage sprites target %q has invalid item type %s", target, field.Type().Elem())
 	}
 	entry.typ = typ
-	entry.properties = make([]spriteProperties, len(items))
+	entry.properties = make([]spriteOverrides, len(items))
 	for i, item := range items {
 		shape, ok := item.(coreproject.StageShape)
 		if !ok {
 			return entry, fmt.Errorf("stage sprites target %q item[%d] has invalid type %T", target, i, item)
 		}
-		properties, err := parseSpriteProperties(shape)
+		properties, err := parseSpriteOverrides(shape)
 		if err != nil {
 			return entry, fmt.Errorf("stage sprites target %q item[%d]: %w", target, i, err)
 		}

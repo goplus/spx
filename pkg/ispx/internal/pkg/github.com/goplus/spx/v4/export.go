@@ -189,7 +189,6 @@ func init() {
 			"SetDebug":                   reflect.ValueOf(q.SetDebug),
 			"SetRandomSeed":              reflect.ValueOf(q.SetRandomSeed),
 			"SetRunWithoutScreenRefresh": reflect.ValueOf(q.SetRunWithoutScreenRefresh),
-			"Snapshot":                   reflect.ValueOf(q.Snapshot),
 			"TimeSinceLevelLoad":         reflect.ValueOf(q.TimeSinceLevelLoad),
 			"WaitUntil":                  reflect.ValueOf(q.WaitUntil),
 			"Warp":                       reflect.ValueOf(q.Warp),
@@ -622,7 +621,6 @@ func init() {
 		"SchedNow":                     func_SchedNow,
 		"SetRandomSeed":                func_SetRandomSeed,
 		"SetRunWithoutScreenRefresh":   func_SetRunWithoutScreenRefresh,
-		"Snapshot":                     func_Snapshot,
 		"TimeSinceLevelLoad":           func_TimeSinceLevelLoad,
 		"WaitUntil":                    func_WaitUntil,
 		"Warp":                         func_Warp,
@@ -784,10 +782,6 @@ func func_SetRandomSeed(ctx ixgo.DirectCallContext) {
 
 func func_SetRunWithoutScreenRefresh(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.SetRunWithoutScreenRefresh(ixgo.DirectCallArg[bool](ctx, 0)))
-}
-
-func func_Snapshot(ctx ixgo.DirectCallContext) {
-	q.Snapshot(ixgo.DirectCallArg[string](ctx, 0), ixgo.DirectCallArg[func() error](ctx, 1))
 }
 
 func method_ptr_SpriteImpl_ChangeHeading(ctx ixgo.DirectCallContext) {
