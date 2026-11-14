@@ -159,7 +159,7 @@ func TestScriptOrderAcrossRoundsWithAddedAndCanceledPeers(t *testing.T) {
 		scheduler.JoinAll(peers)
 		scheduler.Join(added)
 	})
-	waitForThreadSignal(t, caller.done, "script rounds did not complete without Update")
+	waitForThreadSignal(t, caller.finished.done, "script rounds did not complete without Update")
 	if want := []string{"a0", "b0", "c0", "d0", "a1", "c1", "d1", "a2", "c2", "d2"}; !slices.Equal(order, want) {
 		t.Fatalf("script order = %v, want %v", order, want)
 	}
@@ -225,9 +225,9 @@ func TestPendingRestartsKeepPositionWhileRetiredInvocationsCleanUp(t *testing.T)
 				releaseSibling.Open()
 				scheduler.JoinAll(replacements)
 			})
-			waitForThreadSignal(t, caller.done, "replacement batch did not finish")
-			waitForThreadSignal(t, original.done, "original invocation did not clean up")
-			waitForThreadSignal(t, sibling.done, "sibling did not resume")
+			waitForThreadSignal(t, caller.finished.done, "replacement batch did not finish")
+			waitForThreadSignal(t, original.finished.done, "original invocation did not clean up")
+			waitForThreadSignal(t, sibling.finished.done, "sibling did not resume")
 			if want := []string{"original", "latest", "sibling"}; !slices.Equal(order, want) {
 				t.Fatalf("restart order = %v, want %v", order, want)
 			}

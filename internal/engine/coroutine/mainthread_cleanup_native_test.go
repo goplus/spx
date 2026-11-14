@@ -18,7 +18,7 @@ func TestCleanupMainThreadQueuedAllowsNestedEngineCallsAfterCancellation(t *test
 	// The cleanup was queued from a worker; nested wrappers run directly on the engine.
 	setMainThreadForTest(t, true)
 	scheduler.Update()
-	waitForThreadSignal(t, thread.done, "queued engine cleanup did not finish")
+	waitForThreadSignal(t, thread.finished.done, "queued engine cleanup did not finish")
 	scheduler.RunAfterStop(nil)
 	if !cleaned {
 		t.Fatal("cancellation skipped the nested engine cleanup")

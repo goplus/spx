@@ -20,7 +20,7 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 			worker := scheduler.Create("panic-worker", func(Thread) {
 				panicWithValue(value)
 			})
-			waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
+			waitForThreadSignal(t, worker.finished.done, "panicking coroutine did not finish")
 			scheduler.RunAfterStop(nil)
 			select {
 			case report := <-reports:
@@ -49,7 +49,7 @@ func TestPanicReportPreservesRuntimePanicAndFaultStack(t *testing.T) {
 	worker := scheduler.Create("runtime-panic-worker", func(Thread) {
 		panicWithNilDereference(nil)
 	})
-	waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
+	waitForThreadSignal(t, worker.finished.done, "panicking coroutine did not finish")
 	scheduler.RunAfterStop(nil)
 	select {
 	case report := <-reports:
@@ -73,7 +73,7 @@ func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 				panic(value)
 			}
 		})
-		waitForThreadSignal(t, worker.done, "coroutine did not finish")
+		waitForThreadSignal(t, worker.finished.done, "coroutine did not finish")
 		scheduler.RunAfterStop(nil)
 		select {
 		case report := <-reports:

@@ -22,7 +22,7 @@ func (p *Scheduler) RunSync(owner any, call func(Thread)) {
 			return
 		}
 		dispatcher := p.Create(owner, call)
-		p.waitForSignal(dispatcher.done)
+		p.waitForSignal(dispatcher.finished.done)
 	}) {
 		return
 	}
