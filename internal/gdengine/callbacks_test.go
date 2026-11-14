@@ -101,7 +101,7 @@ func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 
 func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	previousCallbacks, previousSprites := coreCallbacks, spriteSnapshot
-	previousLink, previousInterpreter := activeLink, isWebInterpreterMode
+	previousLink := activeLink
 	previousAudio, previousCamera, previousDebug := engine.AudioMgr, engine.CameraMgr, engine.DebugMgr
 	previousExt, previousInput, previousNavigation := engine.ExtMgr, engine.InputMgr, engine.NavigationMgr
 	previousPen, previousPhysics, previousPlatform := engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr
@@ -110,7 +110,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	previousDelta, _ := clock.FixedDeltaTime()
 	t.Cleanup(func() {
 		coreCallbacks, spriteSnapshot = previousCallbacks, previousSprites
-		activeLink, isWebInterpreterMode = previousLink, previousInterpreter
+		activeLink = previousLink
 		engine.AudioMgr, engine.CameraMgr, engine.DebugMgr = previousAudio, previousCamera, previousDebug
 		engine.ExtMgr, engine.InputMgr, engine.NavigationMgr = previousExt, previousInput, previousNavigation
 		engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr = previousPen, previousPhysics, previousPlatform
@@ -172,7 +172,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 					session := PrepareLink(standaloneCallbacks(core))
 					t.Cleanup(func() {
 						session.Unlink()
-						if activeLink != nil || isWebInterpreterMode || !reflect.ValueOf(coreCallbacks).IsZero() {
+						if activeLink != nil || !reflect.ValueOf(coreCallbacks).IsZero() {
 							t.Error("Unlink retained the active session or callbacks")
 						}
 						for i, manager := range []any{
@@ -191,7 +191,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 					readyCalls := 0
 					session.Run(func() { readyCalls++ })
 					session.Run(func() { readyCalls++ })
-					if readyCalls != 2 || IsWebIntepreterMode() != (linkerBridge{}).IsWebIntepreterMode() {
+					if readyCalls != 2 {
 						t.Fatal("link startup did not signal readiness consistently")
 					}
 					func() {
@@ -246,7 +246,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 		}
 		bridge.Unlink()
 		bridge.Unlink()
-		if activeLink != nil || IsWebIntepreterMode() {
+		if activeLink != nil {
 			t.Fatal("public unlink retained session state")
 		}
 	}

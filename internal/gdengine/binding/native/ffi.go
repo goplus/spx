@@ -48,17 +48,15 @@ func main()
 //export gdspx_init
 func gdspx_init(resolver uintptr, _ unsafe.Pointer, configuration unsafe.Pointer) uint8 {
 	resolveCFunc = func(name string) unsafe.Pointer {
-		return getProcAddress(resolver, name)
+		fn := getProcAddress(resolver, name)
+		if fn == nil {
+			panic("gdengine: " + name + " is unavailable; update the SPX runtime")
+		}
+		return fn
 	}
 
 	builtinAPI.resolveAPIFunctions()
 	api.resolveAPIFunctions()
-	if api.SpxPlatformIsMainThread == nil {
-		panic("gdengine: spx_platform_is_main_thread is unavailable")
-	}
-	if api.SpxSpriteClearColliderShape == nil {
-		panic("gdengine: spx_sprite_clear_collider_shape is unavailable; update the SPX runtime")
-	}
 	init := (*initialization)(configuration)
 	*init = initialization{minimum_initialization_level: initializationLevelScene}
 	setupInitialization(init)

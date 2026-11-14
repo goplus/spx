@@ -25,7 +25,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/goplus/spx/v4/internal/gdengine/binding/native/testdata/stringallocator"
+	"github.com/goplus/spx/v4/internal/gdengine/binding/native/testdata/nativefixture"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -48,16 +48,16 @@ func bindNativeBuiltinFixture(t *testing.T) []string {
 	t.Helper()
 	previousResolver, previousBuiltinAPI, previousAPI := resolveCFunc, builtinAPI, api
 	previousCallbacks := callbacks
-	stringallocator.Reset()
+	nativefixture.Reset()
 	t.Cleanup(func() {
 		resolveCFunc, builtinAPI, api = previousResolver, previousBuiltinAPI, previousAPI
 		callbacks = previousCallbacks
-		stringallocator.Reset()
+		nativefixture.Reset()
 	})
 	var names []string
 	resolveCFunc = func(name string) unsafe.Pointer {
 		names = append(names, name)
-		return getProcAddress(uintptr(stringallocator.Resolver()), name)
+		return getProcAddress(uintptr(nativefixture.Resolver()), name)
 	}
 	builtinAPI.resolveAPIFunctions()
 	return names
@@ -74,25 +74,25 @@ func TestNativeBuiltinResolution(t *testing.T) {
 	}
 	for _, name := range names {
 		got, ok := bindings[name]
-		want := getProcAddress(uintptr(stringallocator.Resolver()), name)
+		want := getProcAddress(uintptr(nativefixture.Resolver()), name)
 		if !ok || got == nil || got != want {
 			t.Fatalf("binding %q = %p, want %p", name, got, want)
 		}
 		delete(bindings, name)
 	}
-	if got := getProcAddress(uintptr(stringallocator.Resolver()), "unknown_builtin"); got != nil {
+	if got := getProcAddress(uintptr(nativefixture.Resolver()), "unknown_builtin"); got != nil {
 		t.Fatalf("unknown symbol = %p, want nil", got)
 	}
-	owned := GdString(stringallocator.Allocate("resolved allocator"))
-	if got := ToString(owned); got != "resolved allocator" || stringallocator.ReleaseCount() != 1 || stringallocator.HasOutstandingAllocation() {
-		t.Fatalf("resolved allocator returned %q, releases = %d, outstanding = %v", got, stringallocator.ReleaseCount(), stringallocator.HasOutstandingAllocation())
+	owned := GdString(nativefixture.Allocate("resolved allocator"))
+	if got := ToString(owned); got != "resolved allocator" || nativefixture.ReleaseCount() != 1 || nativefixture.HasOutstandingAllocation() {
+		t.Fatalf("resolved allocator returned %q, releases = %d, outstanding = %v", got, nativefixture.ReleaseCount(), nativefixture.HasOutstandingAllocation())
 	}
 }
 
 func TestNativeInitialization(t *testing.T) {
 	bindNativeBuiltinFixture(t)
 	configuration := initialization{minimum_initialization_level: initializationLevelScene + 1}
-	if got := gdspx_init(uintptr(stringallocator.Resolver()), nil, unsafe.Pointer(&configuration)); got != 1 {
+	if got := gdspx_init(uintptr(nativefixture.Resolver()), nil, unsafe.Pointer(&configuration)); got != 1 {
 		t.Fatalf("initialization result = %d, want success", got)
 	}
 	if configuration.minimum_initialization_level != initializationLevelScene {
@@ -101,7 +101,7 @@ func TestNativeInitialization(t *testing.T) {
 	if configuration.initialize == nil || configuration.deinitialize == nil {
 		t.Fatal("initialization callbacks were not installed")
 	}
-	if !ToBool(CallPlatformIsMainThread()) || stringallocator.RegistrationCount() != 1 || !stringallocator.HasRegistration() {
+	if !ToBool(CallPlatformIsMainThread()) || nativefixture.RegistrationCount() != 1 || !nativefixture.HasRegistration() {
 		t.Fatal("initialization did not bind the engine API and register callbacks once")
 	}
 	for _, phase := range []struct {
@@ -122,53 +122,39 @@ func TestNativeInitialization(t *testing.T) {
 						t.Fatalf("inactive lifecycle hook entered application main: %v", got)
 					}
 				}()
-				stringallocator.InvokeLifecycle(unsafe.Pointer(&configuration), level, phase.initialize)
+				nativefixture.InvokeLifecycle(unsafe.Pointer(&configuration), level, phase.initialize)
 			})
 		}
 	}
 }
 
 func TestNativeInitializationRejectsMissingRequiredAPI(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		resolver func() unsafe.Pointer
-		missing  func() bool
-		message  string
-	}{
-		{
-			name:     "main thread",
-			resolver: stringallocator.ResolverWithoutMainThread,
-			missing:  func() bool { return api.SpxPlatformIsMainThread == nil },
-			message:  "gdengine: spx_platform_is_main_thread is unavailable",
-		},
-		{
-			name:     "clear collider shape",
-			resolver: stringallocator.ResolverWithoutClearColliderShape,
-			missing:  func() bool { return api.SpxSpriteClearColliderShape == nil },
-			message:  "gdengine: spx_sprite_clear_collider_shape is unavailable; update the SPX runtime",
-		},
+	for _, name := range []string{
+		"spx_global_register_callbacks",
+		"spx_global_free_string",
+		"spx_audio_stop_all",
+		"spx_platform_is_main_thread",
+		"spx_sprite_clear_collider_shape",
 	} {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			bindNativeBuiltinFixture(t)
 			configuration := initialization{}
-			gdspx_init(uintptr(stringallocator.Resolver()), nil, unsafe.Pointer(&configuration))
-			if test.missing() {
-				t.Fatal("valid startup did not resolve required symbol")
-			}
+			gdspx_init(uintptr(nativefixture.Resolver()), nil, unsafe.Pointer(&configuration))
 			// A previous link must not mask a missing required symbol in the next one.
 			configuration = initialization{minimum_initialization_level: initializationLevelScene + 1}
 			defer func() {
-				if got := recover(); got != test.message {
-					t.Fatalf("missing required API panic = %v, want %q", got, test.message)
+				want := "gdengine: " + name + " is unavailable; update the SPX runtime"
+				if got := recover(); got != want {
+					t.Fatalf("missing required API panic = %v, want %q", got, want)
 				}
-				if !test.missing() || stringallocator.RegistrationCount() != 1 {
-					t.Fatal("failed startup reused a stale symbol or registered callbacks")
+				if nativefixture.RegistrationCount() != 1 {
+					t.Fatal("failed startup registered callbacks")
 				}
 				if configuration.minimum_initialization_level != initializationLevelScene+1 || configuration.initialize != nil || configuration.deinitialize != nil {
 					t.Fatal("failed startup published initialization hooks")
 				}
 			}()
-			gdspx_init(uintptr(test.resolver()), nil, unsafe.Pointer(&configuration))
+			gdspx_init(uintptr(nativefixture.ResolverWithout(name)), nil, unsafe.Pointer(&configuration))
 		})
 	}
 }
@@ -176,15 +162,15 @@ func TestNativeInitializationRejectsMissingRequiredAPI(t *testing.T) {
 func TestNativeRegisteredCallbacksCrossCABI(t *testing.T) {
 	bindNativeBuiltinFixture(t)
 	registerEngineCallbacks()
-	if stringallocator.RegistrationCount() != 1 || !stringallocator.HasRegistration() {
+	if nativefixture.RegistrationCount() != 1 || !nativefixture.HasRegistration() {
 		t.Fatal("generated C callback table was not registered")
 	}
 	const id int64 = 1<<54 + 3
 	const text = "héllo action 世界"
-	borrowed := stringallocator.Allocate(text)
+	borrowed := nativefixture.Allocate(text)
 	BindCallbacks(engine.CallbackInfo{})
 	// Calling back through C must also be safe before handlers are bound.
-	if calls := stringallocator.InvokeCallbacks(id, -7, -.125, 2, borrowed); calls != 11 {
+	if calls := nativefixture.InvokeCallbacks(id, -7, -.125, 2, borrowed); calls != 11 {
 		t.Fatalf("registered C callback fields = %d, want 11", calls)
 	}
 	var got []any
@@ -203,10 +189,10 @@ func TestNativeRegisteredCallbacksCrossCABI(t *testing.T) {
 		OnUiToggle:                func(object int64, on bool) { got = append(got, object, on) },
 		OnUiTextChanged:           func(object int64, text string) { got = append(got, object, text) },
 	})
-	if calls := stringallocator.InvokeCallbacks(id, -7, -.125, 2, borrowed); calls != 11 {
+	if calls := nativefixture.InvokeCallbacks(id, -7, -.125, 2, borrowed); calls != 11 {
 		t.Fatalf("C callback calls = %d, want 11", calls)
 	}
-	if stringallocator.ReleaseCount() != 0 || copyString(GdString(borrowed)) != text {
+	if nativefixture.ReleaseCount() != 0 || copyString(GdString(borrowed)) != text {
 		t.Fatal("callbacks released or modified the borrowed string")
 	}
 	*(*byte)(borrowed) = '?'

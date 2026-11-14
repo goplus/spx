@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-// Package stringallocator supplies bounded C fixtures for native ABI tests.
+// Package nativefixture supplies C fixtures for native ABI tests.
 // Go does not support importing C directly from a _test.go file.
-package stringallocator
+package nativefixture
 
 /*
 #include "../../gdextension_spx_interface.h"
@@ -66,6 +66,7 @@ static void reset_allocator(void) {
 static SpxCallbackInfo registered_callbacks;
 static int registration_count;
 static int registration_nonnull;
+static char *missing_symbol;
 
 static void register_callbacks(GDExtensionSpxCallbackInfoPtr callbacks) {
 	registration_count++;
@@ -76,6 +77,8 @@ static void register_callbacks(GDExtensionSpxCallbackInfoPtr callbacks) {
 }
 
 static void reset_callbacks(void) {
+	free(missing_symbol);
+	missing_symbol = NULL;
 	memset(&registered_callbacks, 0, sizeof(registered_callbacks));
 	registration_count = 0;
 	registration_nonnull = 0;
@@ -105,33 +108,28 @@ static int invoke_callbacks(GdObj object, GdInt other, GdFloat delta, GdBool fla
 	return calls;
 }
 
-// Startup succeeds with only SPX ABI entries; legacy String/Variant symbols
-// deliberately remain unresolved.
+// Unused SPX APIs are resolved but must never be called by this fixture.
+static void unused_spx_api(void) { abort(); }
+
 static GDExtensionInterfaceFunctionPtr resolve_builtin(const char *name) {
+	if (missing_symbol != NULL && strcmp(name, missing_symbol) == 0) return NULL;
 #define RESOLVE(symbol, fn) if (strcmp(name, symbol) == 0) return (GDExtensionInterfaceFunctionPtr)fn
 	RESOLVE("spx_global_register_callbacks", register_callbacks);
 	RESOLVE("spx_global_free_string", release_string);
 	RESOLVE("spx_platform_is_main_thread", is_main_thread);
 	RESOLVE("spx_sprite_clear_collider_shape", clear_collider_shape);
 #undef RESOLVE
+	if (strncmp(name, "spx_", 4) == 0) return unused_spx_api;
 	return NULL;
 }
 
 static GDExtensionInterfaceGetProcAddress builtin_resolver(void) { return resolve_builtin; }
 
-static GDExtensionInterfaceFunctionPtr resolve_without_main_thread(const char *name) {
-	if (strcmp(name, "spx_platform_is_main_thread") == 0) return NULL;
-	return resolve_builtin(name);
+static GDExtensionInterfaceGetProcAddress resolver_without(char *name) {
+	free(missing_symbol);
+	missing_symbol = name;
+	return resolve_builtin;
 }
-
-static GDExtensionInterfaceGetProcAddress resolver_without_main_thread(void) { return resolve_without_main_thread; }
-
-static GDExtensionInterfaceFunctionPtr resolve_without_clear_collider_shape(const char *name) {
-	if (strcmp(name, "spx_sprite_clear_collider_shape") == 0) return NULL;
-	return resolve_builtin(name);
-}
-
-static GDExtensionInterfaceGetProcAddress resolver_without_clear_collider_shape(void) { return resolve_without_clear_collider_shape; }
 
 static void invoke_lifecycle(GDExtensionInitialization *config, int level, int initializing) {
 	if (initializing) config->initialize(config->userdata, (GDExtensionInitializationLevel)level);
@@ -167,12 +165,8 @@ func Resolver() unsafe.Pointer {
 	return unsafe.Pointer(C.builtin_resolver())
 }
 
-func ResolverWithoutMainThread() unsafe.Pointer {
-	return unsafe.Pointer(C.resolver_without_main_thread())
-}
-
-func ResolverWithoutClearColliderShape() unsafe.Pointer {
-	return unsafe.Pointer(C.resolver_without_clear_collider_shape())
+func ResolverWithout(name string) unsafe.Pointer {
+	return unsafe.Pointer(C.resolver_without(C.CString(name)))
 }
 
 func InvokeLifecycle(config unsafe.Pointer, level int, initializing bool) {

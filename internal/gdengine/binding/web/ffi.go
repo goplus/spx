@@ -26,28 +26,27 @@ import (
 )
 
 type LinkSession struct {
-	exit        chan struct{}
-	interpreter bool
+	exit chan struct{}
 }
 
 var (
 	callbacks engine.CallbackInfo
 
-	// wasmInitialized records the worker initialization handshake.
-	wasmInitialized          bool
+	// Set by the worker's go_wasm_init handshake.
+	workerHandshakeComplete  bool
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
 )
 
-func Link() (*LinkSession, bool) {
+func Link() *LinkSession {
 	registerWebGlobals()
 	API.resolveAPIFunctions()
-	interpreter := !wasmInitialized
-	return &LinkSession{exit: make(chan struct{}), interpreter: interpreter}, interpreter
+	return &LinkSession{exit: make(chan struct{})}
 }
 
 func (s *LinkSession) Run(ready func()) {
-	if s.interpreter { // adapt for ixgo
+	if !workerHandshakeComplete {
+		// Non-worker startup needs an explicit start event.
 		gdspxDispatch(js.Value{}, []js.Value{jsEventOnEngineStart})
 	}
 	ready()
@@ -56,7 +55,7 @@ func (s *LinkSession) Run(ready func()) {
 
 func (s *LinkSession) Unlink() {
 	close(s.exit)
-	wasmInitialized = false
+	workerHandshakeComplete = false
 }
 
 func BindCallbacks(info engine.CallbackInfo) {
@@ -91,6 +90,6 @@ func registerCallbackDispatcher() {
 // goWasmInit is only called in worker mode.
 func goWasmInit(this js.Value, args []js.Value) any {
 	spxlog.Info("WASM initialized")
-	wasmInitialized = true
+	workerHandshakeComplete = true
 	return js.ValueOf(nil)
 }

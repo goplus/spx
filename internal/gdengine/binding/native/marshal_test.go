@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/gdengine/binding/native/testdata/stringallocator"
+	"github.com/goplus/spx/v4/internal/gdengine/binding/native/testdata/nativefixture"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -57,7 +57,7 @@ func TestNativeScalarConversions(t *testing.T) {
 
 func TestReturnedStringsUseRuntimeAllocator(t *testing.T) {
 	previous := builtinAPI.SpxGlobalFreeString
-	builtinAPI.SpxGlobalFreeString = GDExtensionSpxGlobalFreeString(stringallocator.FreeCallback())
+	builtinAPI.SpxGlobalFreeString = GDExtensionSpxGlobalFreeString(nativefixture.FreeCallback())
 	t.Cleanup(func() { builtinAPI.SpxGlobalFreeString = previous })
 	for _, tt := range []struct{ name, value string }{
 		{"empty", ""},
@@ -65,25 +65,25 @@ func TestReturnedStringsUseRuntimeAllocator(t *testing.T) {
 		{"newlines", "line one\nline two"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			stringallocator.Reset()
-			t.Cleanup(stringallocator.Reset)
-			owned := GdString(stringallocator.Allocate(tt.value))
+			nativefixture.Reset()
+			t.Cleanup(nativefixture.Reset)
+			owned := GdString(nativefixture.Allocate(tt.value))
 			if owned == nil {
 				t.Fatal("fixture failed to allocate a native string")
 			}
 			borrowed := copyString(owned)
-			if borrowed != tt.value || stringallocator.ReleaseCount() != 0 {
-				t.Fatalf("borrowed string = %q, release count = %d", borrowed, stringallocator.ReleaseCount())
+			if borrowed != tt.value || nativefixture.ReleaseCount() != 0 {
+				t.Fatalf("borrowed string = %q, release count = %d", borrowed, nativefixture.ReleaseCount())
 			}
 			got := ToString(owned)
 			if got != tt.value || borrowed != tt.value {
 				t.Fatalf("string copies after native release = %q, %q; want %q", got, borrowed, tt.value)
 			}
-			if stringallocator.ReleaseCount() != 1 || stringallocator.HasOutstandingAllocation() {
-				t.Fatalf("runtime allocator release count = %d, outstanding allocation = %v", stringallocator.ReleaseCount(), stringallocator.HasOutstandingAllocation())
+			if nativefixture.ReleaseCount() != 1 || nativefixture.HasOutstandingAllocation() {
+				t.Fatalf("runtime allocator release count = %d, outstanding allocation = %v", nativefixture.ReleaseCount(), nativefixture.HasOutstandingAllocation())
 			}
-			if got := ToString(nil); got != "" || stringallocator.ReleaseCount() != 1 {
-				t.Fatalf("nil return = %q, release count = %d", got, stringallocator.ReleaseCount())
+			if got := ToString(nil); got != "" || nativefixture.ReleaseCount() != 1 {
+				t.Fatalf("nil return = %q, release count = %d", got, nativefixture.ReleaseCount())
 			}
 		})
 	}
