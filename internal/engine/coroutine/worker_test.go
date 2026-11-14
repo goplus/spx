@@ -34,7 +34,7 @@ func TestWaitToDoGoexitStopsCaller(t *testing.T) {
 		scheduler.WaitToDo(runtime.Goexit)
 		continued.Store(true)
 	})
-	waitForThreadSignal(t, thread.done, "worker Goexit left its caller suspended")
+	waitForThreadSignal(t, thread.finished.done, "worker Goexit left its caller suspended")
 	waitForThreadSignal(t, cleaned, "caller cleanup did not run")
 	if !thread.Stopped() || continued.Load() {
 		t.Fatal("caller continued after its worker exited without a result")
@@ -55,7 +55,7 @@ func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
 			scheduler.RunAfterStop(nil)
 		})
 	})
-	waitForThreadSignal(t, thread.done, "caller did not finish")
+	waitForThreadSignal(t, thread.finished.done, "caller did not finish")
 	if recovered := <-guarded; recovered != ErrReentrantWait {
 		t.Fatalf("synchronous drain panic = %v", recovered)
 	}
@@ -94,7 +94,7 @@ func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 	})
 
 	select {
-	case <-thread.done:
+	case <-thread.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("nil worker panic did not complete the waiting coroutine")
 	}
@@ -125,7 +125,7 @@ func TestRunAfterStopWaitsForWaitToDoWorker(t *testing.T) {
 		scheduler.RunAfterStop(func() { close(callback) })
 		close(drained)
 	}()
-	waitForThreadSignal(t, caller.done, "shutdown did not stop the worker's caller")
+	waitForThreadSignal(t, caller.finished.done, "shutdown did not stop the worker's caller")
 	assertShutdownRejectsCreation(t, scheduler)
 	select {
 	case <-callback:
@@ -138,7 +138,7 @@ func TestRunAfterStopWaitsForWaitToDoWorker(t *testing.T) {
 	waitForThreadSignal(t, drained, "shutdown did not finish after the worker exited")
 	waitForThreadSignal(t, callback, "shutdown did not run its callback")
 	fresh := scheduler.Create("after-drain", func(Thread) {})
-	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
+	waitForThreadSignal(t, fresh.finished.done, "fresh script did not finish")
 	if fresh.Stopped() || scheduler.admissionClosed() {
 		t.Fatal("shutdown did not reopen admission after the worker exited")
 	}
@@ -188,7 +188,7 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 				scheduler.Stop(caller)
 			}
 			for _, caller := range callers {
-				waitForThreadSignal(t, caller.done, "canceled caller did not finish")
+				waitForThreadSignal(t, caller.finished.done, "canceled caller did not finish")
 			}
 
 			reset := make(chan struct{})
@@ -229,7 +229,7 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 	thread := scheduler.Create("receiver", func(Thread) {
 		value = WaitForChan(scheduler, input)
 	})
-	waitForThreadSignal(t, thread.firstSliceDone, "receiver did not wait")
+	waitForThreadSignal(t, thread.firstSlice.done, "receiver did not wait")
 
 	// Another script slice owns execution while the receive completes.
 	scheduler.runMu.Lock()
@@ -259,7 +259,7 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 		}
 		scheduler.Stop(thread)
 	}()
-	waitForThreadSignal(t, thread.done, "canceled receiver did not finish")
+	waitForThreadSignal(t, thread.finished.done, "canceled receiver did not finish")
 	if value != 0 {
 		t.Fatalf("canceled receive committed its result: %d", value)
 	}

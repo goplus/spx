@@ -188,7 +188,7 @@ func TestCancelStopsSuspendedThread(t *testing.T) {
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	scheduler.JoinFirstSlice(thread)
 	thread.Cancel()
-	waitForThreadSignal(t, thread.done, "Cancel did not wake the suspended script")
+	waitForThreadSignal(t, thread.finished.done, "Cancel did not wake the suspended script")
 	if !thread.Stopped() || thread.Context().Err() == nil {
 		t.Fatal("Cancel did not publish a stop request")
 	}

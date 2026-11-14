@@ -44,7 +44,7 @@ func TestWaitMainThreadDirectPreservesFaultStack(t *testing.T) {
 						}
 						call(func() { panicWithValue(value) })
 					})
-					waitForThreadSignal(t, worker.done, "panicking callback did not finish")
+					waitForThreadSignal(t, worker.finished.done, "panicking callback did not finish")
 					scheduler.RunAfterStop(nil)
 					select {
 					case report := <-reports:
@@ -100,7 +100,7 @@ func TestWaitMainThreadDirectPreservesCanceledAbnormalExit(t *testing.T) {
 				})
 				t.Error("canceled abnormal callback returned normally")
 			})
-			waitForThreadSignal(t, worker.done, "canceled callback did not finish")
+			waitForThreadSignal(t, worker.finished.done, "canceled callback did not finish")
 			scheduler.RunAfterStop(nil)
 			if !checked {
 				t.Fatal("canceled callback never reached its caller's defer")
@@ -129,7 +129,7 @@ func TestWaitMainThreadDirectCancellation(t *testing.T) {
 				})
 				continued.Store(true)
 			})
-			waitForThreadSignal(t, thread.done, "canceled caller did not finish")
+			waitForThreadSignal(t, thread.finished.done, "canceled caller did not finish")
 			scheduler.RunAfterStop(nil)
 			if called.Load() != (when != "before") || continued.Load() || !cleaned.Load() || reported.Load() {
 				t.Fatalf("called=%v continued=%v cleaned=%v reported=%v", called.Load(), continued.Load(), cleaned.Load(), reported.Load())
@@ -238,7 +238,7 @@ func TestManagedMainThreadCallbackRejectsYieldBeforeSideEffects(t *testing.T) {
 								t.Errorf("yield panic = %v, want %v", got, ErrReentrantWait)
 							}
 							select {
-							case <-me.firstSliceDone:
+							case <-me.firstSlice.done:
 								t.Error("rejected operation released the first script slice")
 							default:
 							}
@@ -248,9 +248,9 @@ func TestManagedMainThreadCallbackRejectsYieldBeforeSideEffects(t *testing.T) {
 						})
 					})
 					// A regression that yields must still be able to unwind without a frame.
-					waitForThreadSignal(t, thread.firstSliceDone, "caller neither rejected the wait nor yielded")
+					waitForThreadSignal(t, thread.firstSlice.done, "caller neither rejected the wait nor yielded")
 					scheduler.Stop(thread)
-					waitForThreadSignal(t, thread.done, "caller did not finish")
+					waitForThreadSignal(t, thread.finished.done, "caller did not finish")
 					scheduler.RunAfterStop(nil)
 					if workRan.Load() {
 						t.Error("rejected wait launched its worker or batch")
@@ -280,7 +280,7 @@ func TestCleanupMainThreadDirectAllowsNestedEngineCallsAfterCancellation(t *test
 			t.Errorf("ordinary call after cleanup panic = %v, want %v", got, ErrAbortThread)
 		}
 	})
-	waitForThreadSignal(t, thread.done, "nested engine cleanup did not finish")
+	waitForThreadSignal(t, thread.finished.done, "nested engine cleanup did not finish")
 	scheduler.RunAfterStop(nil)
 	if cleaned != 2 {
 		t.Fatalf("nested engine cleanup calls = %d, want 2", cleaned)
@@ -347,6 +347,6 @@ func TestManagedMainThreadCallbackAllowsCompletedWaits(t *testing.T) {
 			})
 		}
 	})
-	waitForThreadSignal(t, thread.done, "completed waits blocked the callback")
+	waitForThreadSignal(t, thread.finished.done, "completed waits blocked the callback")
 	scheduler.RunAfterStop(nil)
 }
