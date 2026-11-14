@@ -403,54 +403,29 @@ func TestDispatchFrameEventsServicesClickQueriesOnEngineThread(t *testing.T) {
 	}
 }
 
-func TestCaptureReportsBodyAndCaptureFailures(t *testing.T) {
-	for _, tt := range []struct {
-		name       string
-		activeGame bool
-		bodyError  bool
-	}{
-		{name: "body without game", bodyError: true},
-		{name: "body with game", activeGame: true, bodyError: true},
-		{name: "capture backend"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			setupCaptureInputSessionTest(t)
-			setupImmediateEngineCalls(t)
-			original := pkgengine.ExtMgr
-			recorder := &inputFrameFailureExtMgr{}
-			pkgengine.ExtMgr = recorder
-			t.Cleanup(func() { pkgengine.ExtMgr = original })
-			setupRuntimeScheduler(t)
-			if tt.activeGame {
-				engine.SetGame(struct{}{})
-			}
-			failure := errors.New("capture " + tt.name + " failed")
-			bodyCalls, captures := 0, 0
-			engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
-				captures++
-				if req.Name != "failed.png" {
-					t.Errorf("capture name = %q, want failed.png", req.Name)
-				}
-				return failure
-			})
-			capture("failed.png", func() error {
-				bodyCalls++
-				if tt.bodyError {
-					return failure
-				}
-				return nil
-			})
-			if !slices.Equal(recorder.messages, []string{failure.Error()}) || !slices.Equal(recorder.exits, []int64{1}) {
-				t.Fatalf("runtime errors = %v, exits = %v; want %q and exit 1", recorder.messages, recorder.exits, failure)
-			}
-			wantCaptures := 1
-			if tt.bodyError {
-				wantCaptures = 0
-			}
-			if bodyCalls != 1 || captures != wantCaptures || engine.HasPendingCaptures() {
-				t.Fatalf("body calls = %d, captures = %d, pending = %v; want 1, %d, false", bodyCalls, captures, engine.HasPendingCaptures(), wantCaptures)
-			}
-		})
+func TestCaptureReportsBackendFailure(t *testing.T) {
+	setupCaptureInputSessionTest(t)
+	setupImmediateEngineCalls(t)
+	original := pkgengine.ExtMgr
+	recorder := &inputFrameFailureExtMgr{}
+	pkgengine.ExtMgr = recorder
+	t.Cleanup(func() { pkgengine.ExtMgr = original })
+	setupRuntimeScheduler(t)
+	failure := errors.New("capture backend failed")
+	captures := 0
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		captures++
+		if req.Name != "failed.png" {
+			t.Errorf("capture name = %q, want failed.png", req.Name)
+		}
+		return failure
+	})
+	capture("failed.png")
+	if !slices.Equal(recorder.messages, []string{failure.Error()}) || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("runtime errors = %v, exits = %v; want %q and exit 1", recorder.messages, recorder.exits, failure)
+	}
+	if captures != 1 || engine.HasPendingCaptures() {
+		t.Fatalf("captures = %d, pending = %v; want 1, false", captures, engine.HasPendingCaptures())
 	}
 }
 

@@ -79,16 +79,8 @@ func init() {
 	engine.SetScheduler(scheduler)
 }
 
-// capture runs fn, if present, and queues a screenshot on success.
-// Frame and input tick are captured after fn returns.
-func capture(name string, fn func() error) {
-	if fn != nil {
-		if err := fn(); err != nil {
-			engine.Panic(err)
-			return
-		}
-	}
-
+// capture queues a screenshot with the current input tick.
+func capture(name string) {
 	if err := engine.EnqueueCapture(name, captureInputTick()); err != nil {
 		engine.Panic(err)
 	}

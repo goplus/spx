@@ -210,7 +210,7 @@ func (p *Game) dispatchFrameEvents() {
 	p.inputMgr.swipe.Expire()
 	// Capture requests must observe the advanced frame clock.
 	for range frame.captures {
-		capture("", nil)
+		capture("")
 	}
 	withEventRegistrationBarrier(frameEventDispatcher{}, func() {
 		// Freeze due timers before dispatch: handlers may register or reset timers.

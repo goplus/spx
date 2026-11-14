@@ -505,7 +505,6 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	defer engine.SetGame(nil)
 	setupCaptureTest(t)
 	engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
-	defer engine.SetCaptureHandler(nil)
 
 	game.OnEngineRender(0)
 	if shape.updates != 0 {
@@ -1089,32 +1088,6 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 	requirePosition(t, sprite, 50, 60)
 }
 
-func TestCaptureUsesConfiguredHandlerAfterBody(t *testing.T) {
-	var got []string
-	engine.SetGame(nil)
-	setupCaptureTest(t)
-	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
-		got = append(got, "capture:"+req.Name)
-		return nil
-	})
-	defer engine.SetCaptureHandler(nil)
-
-	capture("step_001.png", func() error {
-		got = append(got, "body")
-		return nil
-	})
-
-	want := []string{"body", "capture:step_001.png"}
-	if len(got) != len(want) {
-		t.Fatalf("capture order = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("capture order = %v, want %v", got, want)
-		}
-	}
-}
-
 func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 	var got []string
 	engine.SetGame(struct{}{})
@@ -1124,9 +1097,8 @@ func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 		got = append(got, req.Name)
 		return nil
 	})
-	defer engine.SetCaptureHandler(nil)
 
-	capture("step_001.png", nil)
+	capture("step_001.png")
 	if len(got) != 0 {
 		t.Fatalf("capture ran immediately: %v", got)
 	}
@@ -1136,68 +1108,6 @@ func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "step_001.png" {
 		t.Fatalf("FlushCaptures = %v, want [step_001.png]", got)
-	}
-}
-
-func TestCaptureBodyMayWaitForNextFrame(t *testing.T) {
-	for _, stopOwner := range []bool{false, true} {
-		name := "resume"
-		if stopOwner {
-			name = "stop owner"
-		}
-		t.Run(name, func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			setupCaptureTest(t)
-			base := clock.Frame()
-
-			bodyStarted, bodyCompleted := false, false
-			var captured []engine.CaptureRequest
-			engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
-				captured = append(captured, req)
-				return nil
-			})
-			t.Cleanup(func() { engine.SetCaptureHandler(nil) })
-
-			thread := currentScheduler.Create(game, func(coroutine.Thread) {
-				capture("yielded.png", func() error {
-					bodyStarted = true
-					engine.WaitNextFrame()
-					bodyCompleted = true
-					return nil
-				})
-			})
-			currentScheduler.JoinFirstSlice(thread)
-			if !bodyStarted || bodyCompleted {
-				t.Fatal("capture body did not suspend at its next-frame wait")
-			}
-			if engine.HasPendingCaptures() {
-				t.Fatal("capture was queued before its body completed")
-			}
-
-			if stopOwner {
-				game.Stop(OtherScriptsInGame)
-			}
-			clock.Update(0, 0)
-			currentScheduler.Update()
-			currentScheduler.Join(thread)
-			if stopOwner {
-				if !thread.Stopped() || bodyCompleted || engine.HasPendingCaptures() {
-					t.Fatal("stopped owner's capture body resumed or queued a screenshot")
-				}
-			} else if !bodyCompleted || !engine.HasPendingCaptures() {
-				t.Fatal("capture was not queued after its body completed")
-			}
-			if err := engine.FlushCaptures(); err != nil {
-				t.Fatal(err)
-			}
-			if stopOwner {
-				if len(captured) != 0 {
-					t.Fatalf("stopped owner's captured requests = %+v, want none", captured)
-				}
-			} else if len(captured) != 1 || captured[0].Name != "yielded.png" || captured[0].Frame != base+1 {
-				t.Fatalf("captured requests = %+v, want yielded.png at frame %d", captured, base+1)
-			}
-		})
 	}
 }
 
@@ -1324,7 +1234,6 @@ func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 	pkgengine.ExtMgr = extMgr
 	t.Cleanup(func() {
 		pkgengine.InputMgr, pkgengine.ExtMgr = originalInputMgr, originalExtMgr
-		engine.SetCaptureHandler(nil)
 	})
 	replay := validRuntimeReplay(
 		InputReplayFrame{Frame: 0, Time: 0},
