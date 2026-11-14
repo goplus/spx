@@ -82,7 +82,7 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	p.applyPreparedStage(gamer, proj, generation, &plan)
 	opened.FS = nil // The game now owns the directory.
 
-	p.initLogicLoop()
+	scheduler.Create("logicLoop", p.logicLoop)
 	engine.Managers().PlatformMgr.SetWindowTitle(title)
 	return nil
 }

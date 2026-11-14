@@ -17,7 +17,12 @@
 package spx
 
 import (
+	"runtime/debug"
+	"time"
+
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
@@ -43,6 +48,42 @@ func Procedure(call func()) {
 	engine.RunStopThisScript(call)
 }
 
+// Scheduling.
+func SchedNow() int {
+	if thread := scheduler.Caller(); thread != nil && !handleMainExecutionTimeout(thread) {
+		scheduler.Sched(thread)
+	}
+	return 0
+}
+
+func Sched() int {
+	thread := scheduler.Caller()
+	if thread == nil || handleMainExecutionTimeout(thread) || !thread.IsSchedTimeout(schedTimeoutMs) {
+		return 0
+	}
+	spxlog.Warn("%s\n%s", coreruntime.LoopExecutionTimedOutMsg, debug.Stack())
+	engine.WaitNextFrame()
+	engine.Panic(coreruntime.LoopExecutionTimedOutMsg)
+	return 0
+}
+
+func Forever(call func()) {
+	coreruntime.Forever(call, engine.NewControlFlowWaiter())
+}
+
+func Repeat(times int, call func()) {
+	coreruntime.Repeat(times, call, engine.NewControlFlowWaiter())
+}
+
+// The __xgo_autoclosure_ prefix preserves XGo's command-style condition syntax.
+func RepeatUntil(__xgo_autoclosure_condition func() bool, call func()) {
+	coreruntime.RepeatUntil(__xgo_autoclosure_condition, call, engine.NewControlFlowWaiter())
+}
+
+func WaitUntil(__xgo_autoclosure_condition func() bool) {
+	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
+}
+
 // Stop stops scripts selected by kind.
 // Explicit receivers support interpreted direct calls.
 func (p *Game) Stop(kind StopKind) {
@@ -52,11 +93,11 @@ func (p *Game) Stop(kind StopKind) {
 // stopAllResources removes clones and resets effects and audio.
 // The caller must remain alive for engine calls during cleanup.
 func (p *Game) stopAllResources() {
-	p.baseObj.clearGraphicEffects()
+	p.visualObject.clearGraphicEffects()
 	p.soundMgr.StopAll()
 	p.clearSoundEffects(p.audioState.SoundObj)
 	// Destroying clones removes shapes from the live list.
-	for _, shape := range p.shapeMgr.getTempShapes() {
+	for _, shape := range p.scene.getTempShapes() {
 		sprite, ok := shape.(*SpriteImpl)
 		if !ok {
 			continue
@@ -83,12 +124,7 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 		scheduler.StopThisScript()
 		return
 	}
-	filter, stopCaller := coreevent.ResolveStop(
-		kind,
-		owner,
-		func(obj any) bool { return isSprite(obj) },
-		func(obj any) bool { return isGame(obj) },
-	)
+	filter, stopCaller := coreevent.ResolveStop(kind, owner, isSprite, isGame)
 	if filter == nil {
 		return
 	}
@@ -113,6 +149,42 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	if stopCaller {
 		scheduler.StopCurrent()
 	}
+}
+
+// runBetweenScripts excludes script slices during frame snapshots and commits.
+func runBetweenScripts(call func()) {
+	if scheduler == nil {
+		call()
+		return
+	}
+	scheduler.RunBetweenScripts(call)
+}
+
+func runMainUntilYield(owner any, mainFn func()) {
+	thread := scheduler.Create(owner, func(coroutine.Thread) {
+		runMain(mainFn)
+	})
+	scheduler.JoinFirstSlice(thread)
+}
+
+// runMain calls Main synchronously while tracking its execution timeout.
+func runMain(call func()) {
+	if thread := scheduler.Caller(); thread != nil {
+		end := thread.BeginMain(time.Now())
+		defer end()
+	}
+	call()
+}
+
+func handleMainExecutionTimeout(thread coroutine.Thread) bool {
+	if !coreruntime.MainExecutionTimedOut(thread.MainStartedAt(), time.Now(), mainExecTimeoutSec*time.Second) {
+		return false
+	}
+	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.Stack())
+	// Warn once, then schedule Main as a regular coroutine.
+	thread.DisableMainTimeout()
+	scheduler.Sched(thread)
+	return true
 }
 
 func isGame(obj any) bool {

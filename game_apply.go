@@ -43,11 +43,11 @@ func (p *Game) applyPreparedStage(g reflect.Value, proj *coreproject.ProjectConf
 	p.setupPlatformAndCamera(proj)
 	p.setupAudioAndTilemap(proj)
 	sprites := p.applyStageEntries(g, plan)
-	p.prepareStageBootstrap(sprites, proj, g, generation)
+	p.setupStageBootstrap(sprites, proj, g, generation)
 }
 
 func (p *Game) applySpritePrototype(name string, gamer reflect.Value, plan *projectPlan) Sprite {
-	if sprite := p.sprs[name]; sprite != nil {
+	if sprite := p.spritePrototypes[name]; sprite != nil {
 		return sprite
 	}
 	prepared := plan.sprites[name]
@@ -75,12 +75,10 @@ func (p *Game) loadPreparedSprite(sprite Sprite, name string, gamer reflect.Valu
 
 	base.components.initComponents(base, config)
 	base.initRuntimeProxy()
-	p.sprs[name] = sprite
+	p.spritePrototypes[name] = sprite
 }
 
-// -----------------------------------------------------------------------------
-// Display Setup
-// -----------------------------------------------------------------------------
+// Display Setup.
 func (p *Game) setupDisplayConfig(proj *coreproject.ProjectConfig) {
 	display := coreproject.ResolveDisplaySettings(proj)
 	p.displayState.WindowScale = display.WindowScale
@@ -92,33 +90,6 @@ func (p *Game) setupDisplayConfig(proj *coreproject.ProjectConfig) {
 		spxlog.SetLevel(spxlog.LevelInfo)
 	}
 	engine.SetDebugMode(p.debugState.Debug)
-}
-
-func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
-	hasTilemap := p.tilemapMgr.hasData()
-	proj.Map = coreproject.ResolveMapConfig(proj.Map, hasTilemap, baseScreenWidth, baseScreenHeight)
-
-	p.displayState.WorldWidth = proj.Map.Width
-	p.displayState.WorldHeight = proj.Map.Height
-
-	if backdrops := proj.GetBackdrops(); !hasTilemap && len(backdrops) > 0 {
-		p.baseObj.initBackdrops(backdrops, proj.GetBackdropIndex())
-		p.doWorldSize()
-	} else {
-		p.baseObj.initWithSize(p.displayState.WorldWidth, p.displayState.WorldHeight)
-	}
-	spxlog.Debug("SetWorldSize: %d, %d", p.displayState.WorldWidth, p.displayState.WorldHeight)
-
-	p.doWindowSize()
-	metrics := coreproject.ResolveWorldWindowMetrics(
-		p.displayState.WorldWidth,
-		p.displayState.WorldHeight,
-		p.displayState.WindowWidth,
-		p.displayState.WindowHeight,
-		coreproject.ToMapMode(proj.Map.Mode),
-	)
-	p.applyWorldWindowMetrics(metrics)
-	spxlog.Debug("SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
 }
 
 func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
@@ -155,23 +126,11 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	ui.SetBaseScreenSize(baseScreenWidth, baseScreenHeight)
 	ui.ClampUIPositionInScreen(isWindowMapSizeEqual)
 
-	p.runtimeState.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
-	p.setupBackdrop()
+	p.runtimeState.proxy = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
+	p.applyBackdropLayout()
 }
 
-func (p *Game) applyWorldWindowMetrics(metrics coreproject.WorldWindowMetrics) {
-	p.displayState.WorldWidth = metrics.WorldWidth
-	p.displayState.WorldHeight = metrics.WorldHeight
-	p.displayState.MinWorldX = metrics.MinWorldX
-	p.displayState.MinWorldY = metrics.MinWorldY
-	p.displayState.MapMode = metrics.MapMode
-	p.displayState.WindowWidth = metrics.WindowWidth
-	p.displayState.WindowHeight = metrics.WindowHeight
-}
-
-// -----------------------------------------------------------------------------
-// Stage Items
-// -----------------------------------------------------------------------------
+// Stage Items.
 func (p *Game) setupAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	p.applyTilemap()
 	p.ensureSoundObject(&p.audioState.SoundObj)
@@ -181,7 +140,7 @@ func (p *Game) setupAudioAndTilemap(proj *coreproject.ProjectConfig) {
 }
 
 func (p *Game) applyTilemap() {
-	p.tilemapMgr.parseTilemap()
+	p.tilemapMgr.applyMapContents()
 	if p.camera != nil {
 		p.camera.setLimits()
 	}
@@ -196,23 +155,21 @@ func (p *Game) syncPenCanvasToWorld() {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// Bootstrap
-// -----------------------------------------------------------------------------
-func (p *Game) prepareStageBootstrap(sprites []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
+// Bootstrap.
+func (p *Game) setupStageBootstrap(sprites []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
 	// Bootstrap hooks may override the initial camera target.
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.Follow__1(proj.Camera.On)
 	}
-	p.queueBootstrap(generation, func() {
+	p.lifecycle.queue(generation, func() {
 		p.setupTouchEntries(sprites)
 	})
 	for _, sprite := range sprites {
 		if spr := spriteOf(sprite); spr != nil {
-			p.queueBootstrap(generation, spr.awake)
+			p.lifecycle.queue(generation, spr.awake)
 		}
 	}
-	p.queueBootstrap(generation, func() {
+	p.lifecycle.queue(generation, func() {
 		// Start each Main in stage order.
 		for _, sprite := range sprites {
 			if spr := spriteOf(sprite); spr != nil {
@@ -221,7 +178,7 @@ func (p *Game) prepareStageBootstrap(sprites []Sprite, proj *coreproject.Project
 		}
 	})
 	if loader, ok := reflect.TypeAssert[interface{ OnLoaded() }](g.Addr()); ok {
-		p.queueBootstrap(generation, loader.OnLoaded)
+		p.lifecycle.queue(generation, loader.OnLoaded)
 	}
 }
 
@@ -233,14 +190,14 @@ func (p *Game) applyStageEntries(gamer reflect.Value, plan *projectPlan) []Sprit
 			prototype := p.applySpritePrototype(entry.prototype, gamer, plan)
 			spr := spriteOf(prototype)
 			spr.setLayer(layer + firstSpriteLayer)
-			p.shapeMgr.add(spr)
+			p.scene.add(spr)
 			sprites = append(sprites, prototype)
 		case "sprite":
 			field := coreproject.WritableField(gamer.Field(entry.sprite.field))
 			sp := stageSpriteValue(field).(Sprite)
 			dest := spriteOf(sp)
-			applySpriteProperties(dest, entry.sprite.properties[0])
-			p.shapeMgr.add(dest)
+			applySpriteOverrides(dest, entry.sprite.properties[0])
+			p.scene.add(dest)
 			sprites = append(sprites, sp)
 		case "sprites":
 			field := coreproject.WritableField(gamer.Field(entry.sprite.field))
@@ -256,7 +213,7 @@ func (p *Game) applyStageEntries(gamer reflect.Value, plan *projectPlan) []Sprit
 					item = item.Elem()
 				}
 				dest, sp := instantiateStageSprite(item, prototype, properties)
-				p.shapeMgr.add(dest)
+				p.scene.add(dest)
 				sprites = append(sprites, sp)
 			}
 			field.Set(items)
@@ -266,12 +223,12 @@ func (p *Game) applyStageEntries(gamer reflect.Value, plan *projectPlan) []Sprit
 				spxlog.Error("Skip monitor %q: %v", entry.monitor.config.Name, err)
 				continue
 			}
-			p.shapeMgr.add(monitor)
+			p.scene.add(monitor)
 		case "measure":
-			p.shapeMgr.add(ui.NewMeasureShape(entry.measure))
+			p.scene.add(ui.NewMeasureShape(entry.measure))
 		}
 	}
 	// Expanded groups keep contiguous layers above the pen canvas.
-	p.shapeMgr.updateRenderLayers()
+	p.scene.updateRenderLayers()
 	return sprites
 }

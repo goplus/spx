@@ -28,11 +28,28 @@ var costumeSizeCache sync.Map
 
 // costumeSetImage represents metadata for a costume set image.
 type costumeSetImage struct {
-	path   string
-	rc     coreproject.CostumeSetRect
-	width  float64
-	height float64
-	nx     int // number of frames in the image
+	path       string
+	rect       coreproject.CostumeSetRect
+	width      float64
+	height     float64
+	frameCount int
+}
+
+const (
+	defaultBitmapResolution = 1
+	fullUVRange             = 1.0
+)
+
+// costumeFrame stores precomputed size and atlas metadata for a costume frame.
+type costumeFrame struct {
+	Width            int
+	Height           int
+	BitmapResolution int
+	ImageSize        mathf.Vec2 // standalone logical dimensions or full atlas image pixel dimensions
+	Center           mathf.Vec2
+	PosX             int
+	PosY             int
+	AtlasUVRect      mathf.Vec4
 }
 
 // costume represents a single costume (image frame) for a sprite or backdrop.
@@ -95,8 +112,8 @@ func newCostumeWithSize(width, height int) *costume {
 	return &costume{frame: newSizedCostumeFrame(width, height)}
 }
 
-// newCostumeWith creates a costume from a costume set image.
-func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameIndex, bitmapResolution int) *costume {
+// newCostumeFromSet creates a costume from a costume set image.
+func newCostumeFromSet(name string, img *costumeSetImage, faceRight float64, frameIndex, bitmapResolution int) *costume {
 	frame := newAtlasCostumeFrame(img, frameIndex, bitmapResolution, costumePixelSize)
 	return &costume{name: name, path: img.path, atlas: frameIndex >= 0, faceRight: faceRight, frame: frame}
 }
@@ -152,4 +169,87 @@ func cachedCostumeSize(imagePath string, logical bool) mathf.Vec2 {
 	}
 	costumeSizeCache.Store(key, size)
 	return size
+}
+
+// normalizeBitmapResolution returns a valid bitmap resolution value.
+func normalizeBitmapResolution(v int) int {
+	if v == 0 {
+		return defaultBitmapResolution
+	}
+	return v
+}
+
+// defaultAtlasUV returns the full-range UV rect for non-atlas textures.
+func defaultAtlasUV() mathf.Vec4 {
+	return mathf.NewVec4(0, 0, fullUVRange, fullUVRange)
+}
+
+// calculateAtlasUV computes UV coordinates for an atlas region.
+func calculateAtlasUV(posX, posY, width, height int, imageSize mathf.Vec2) mathf.Vec4 {
+	uStart := float64(posX) / imageSize.X
+	vStart := float64(posY) / imageSize.Y
+	uSize := float64(width) / imageSize.X
+	vSize := float64(height) / imageSize.Y
+	return mathf.NewVec4(uStart, vStart, uSize, vSize)
+}
+
+// resolveCostumeImageSize returns the image size from configuration or loads it from fallback.
+func resolveCostumeImageSize(cfgWidth, cfgHeight float64, imagePath string, fallback func(string) mathf.Vec2) mathf.Vec2 {
+	if cfgWidth > 0 && cfgHeight > 0 {
+		return mathf.Vec2{X: cfgWidth, Y: cfgHeight}
+	}
+	return fallback(imagePath)
+}
+
+// newSizedCostumeFrame creates a descriptor for an in-memory sized frame.
+func newSizedCostumeFrame(width, height int) costumeFrame {
+	return costumeFrame{
+		Width:            width,
+		Height:           height,
+		BitmapResolution: defaultBitmapResolution,
+		ImageSize:        mathf.NewVec2(float64(width), float64(height)),
+		Center:           mathf.NewVec2(float64(width)/2, float64(height)/2),
+		AtlasUVRect:      defaultAtlasUV(),
+	}
+}
+
+// newAtlasCostumeFrame creates a descriptor for one frame inside an atlas/costume set.
+func newAtlasCostumeFrame(img *costumeSetImage, frameIndex, bitmapResolution int, fallback func(string) mathf.Vec2) costumeFrame {
+	frameCount := max(img.frameCount, 1)
+	imageSize := resolveCostumeImageSize(img.width, img.height, img.path, fallback)
+	width := int(imageSize.X) / frameCount
+	height := int(imageSize.Y)
+	posX := frameIndex * width
+	posY := 0
+
+	if img.rect.H != 0 {
+		width = int(img.rect.W) / frameCount
+		height = int(img.rect.H)
+		posX = int(img.rect.X) + frameIndex*width
+		posY = int(img.rect.Y)
+	}
+
+	return costumeFrame{
+		Width:            width,
+		Height:           height,
+		BitmapResolution: bitmapResolution,
+		ImageSize:        imageSize,
+		Center:           mathf.NewVec2(float64(width)/2, float64(height)/2),
+		PosX:             posX,
+		PosY:             posY,
+		AtlasUVRect:      calculateAtlasUV(posX, posY, width, height, imageSize),
+	}
+}
+
+// newStandaloneCostumeFrame creates a descriptor for a single non-atlas texture.
+func newStandaloneCostumeFrame(config *coreproject.CostumeConfig, fallback func(string) mathf.Vec2) costumeFrame {
+	imageSize := resolveCostumeImageSize(config.ImageWidth, config.ImageHeight, config.Path, fallback)
+	return costumeFrame{
+		Width:            int(imageSize.X),
+		Height:           int(imageSize.Y),
+		BitmapResolution: normalizeBitmapResolution(config.BitmapResolution),
+		ImageSize:        imageSize,
+		Center:           imageSize.Mulf(0.5),
+		AtlasUVRect:      defaultAtlasUV(),
+	}
 }

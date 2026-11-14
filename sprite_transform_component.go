@@ -1,0 +1,562 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package spx
+
+import (
+	"math"
+
+	"github.com/goplus/spbase/mathf"
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
+)
+
+const (
+	// minSpeed is the minimum allowed speed value to prevent division by zero.
+	minSpeed = 0.001
+
+	// missingTargetDistance is Scratch's sentinel for an unresolved target.
+	missingTargetDistance = 10_000
+
+	// minBounceComponent prevents sprites from getting stuck at boundaries.
+	minBounceComponent = 0.2
+
+	fullCircleDegrees = 360.0
+	halfCircleDegrees = 180.0
+
+	// fenceWidth matches Scratch's keepInFence margin.
+	fenceWidth = 15.0
+
+	// minVisibleSize matches Scratch's minimum rendered sprite size in pixels.
+	minVisibleSize = 5.0
+
+	// maxStageScale matches Scratch's 150% stage-coverage cap.
+	maxStageScale = 1.5
+)
+
+type transformComponent struct {
+	sprite *SpriteImpl
+
+	// Position coordinates in world space.
+	x, y float64
+	// Axis write versions; zero means no pending write.
+	pendingPosition positionVersions
+
+	direction     float64
+	rotationStyle RotationStyle
+
+	pivot mathf.Vec2
+}
+
+type positionVersions struct {
+	x, y uint64
+}
+
+func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
+	t.sprite = sprite
+
+	t.x = spriteCfg.X
+	t.y = spriteCfg.Y
+	t.direction = spriteCfg.Heading
+	t.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
+	t.pivot = spriteCfg.Pivot
+}
+
+func (t *transformComponent) cloneFor(newSprite *SpriteImpl) *transformComponent {
+	cloned := *t
+	cloned.sprite = newSprite
+	// New proxies start at the copied position with fresh versions.
+	cloned.pendingPosition = positionVersions{}
+	return &cloned
+}
+
+func (t *transformComponent) moveForward(step float64) {
+	sin, cos := math.Sincos(toRadian(t.direction))
+	t.moveTo(t.x+step*sin, t.y+step*cos)
+}
+
+func (t *transformComponent) glide(x, y float64, secs float64) {
+	// Scratch casts NaN to zero and completes non-positive glides immediately.
+	if secs <= 0 || math.IsNaN(secs) {
+		t.setPosition(x, y)
+		return
+	}
+
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", t.sprite.name, x, y, secs)
+	}
+
+	animName := t.sprite.animation().getStateAnimName(StateGlide)
+	t.sprite.animation().doTween(animName, nil, tweenParams{
+		aniType:  coreproject.AniTypeGlide,
+		duration: secs,
+		moveFrom: mathf.NewVec2(t.x, t.y),
+		moveTo:   mathf.NewVec2(x, y),
+	})
+}
+
+func (t *transformComponent) glideToTarget(target Target, secs float64) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Glide: target=%v, secs=%v", target, secs)
+	}
+	x, y, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return
+	}
+	t.glide(x, y, secs)
+}
+
+func (t *transformComponent) step(step, speed float64, animation SpriteAnimationName) {
+	dirSin, dirCos := math.Sincos(toRadian(t.direction))
+	diff := mathf.NewVec2(step*dirSin, step*dirCos)
+	to := mathf.NewVec2(t.x, t.y).Add(diff)
+	t.stepToPos(to.X, to.Y, speed, animation)
+}
+
+func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnimationName) {
+	if animation == "" {
+		animation = t.sprite.animation().getStateAnimName(StateStep)
+	}
+
+	ani, ok := t.sprite.animation().getAnimation(animation)
+	if !ok {
+		t.setPosition(x, y)
+		return
+	}
+
+	from := mathf.NewVec2(t.x, t.y)
+	to := mathf.NewVec2(x, y)
+	speed = math.Max(speed, minSpeed)
+	duration := from.DistanceTo(to) * ani.StepDuration / speed
+	t.sprite.animation().doTween(animation, ani, tweenParams{
+		aniType:  coreproject.AniTypeMove,
+		duration: duration,
+		speed:    speed,
+		moveFrom: from,
+		moveTo:   to,
+	})
+}
+
+func (t *transformComponent) stepToTarget(target Target, speed float64, animation SpriteAnimationName) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Goto: sprite=%s, target=%v", t.sprite.name, target)
+	}
+	x, y, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return
+	}
+	t.stepToPos(x, y, speed, animation)
+}
+
+func (t *transformComponent) setSize(size float64) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("SetSize: sprite=%s, size=%v", t.sprite.name, size)
+	}
+	if size < 0 {
+		spxlog.Warn("SetSize: sprite=%s, size=%v is negative, clamping to 0", t.sprite.name, size)
+		size = 0
+	}
+	size = t.clampSpriteScale(size)
+
+	t.sprite.runtimeState.scale = size
+	t.sprite.runtimeState.isCostumeDirty = true
+	t.sprite.markProxyDirty()
+	t.sprite.updatePhysicsShapesScale()
+}
+
+func (t *transformComponent) changeSize(delta float64) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", t.sprite.name, delta)
+	}
+	t.setSize(t.sprite.runtimeState.scale + delta)
+}
+
+func (t *transformComponent) getXY() (x, y float64) {
+	return t.x, t.y
+}
+
+func (t *transformComponent) setPosition(x, y float64) {
+	t.moveTo(normalizeMotionValue(x), normalizeMotionValue(y))
+}
+
+func (t *transformComponent) setX(x float64) {
+	t.moveAxes(normalizeMotionValue(x), t.y, engine.PositionX)
+}
+
+func (t *transformComponent) setY(y float64) {
+	t.moveAxes(t.x, normalizeMotionValue(y), engine.PositionY)
+}
+
+func (t *transformComponent) changePosition(dx, dy float64) {
+	t.moveTo(t.x+normalizeMotionValue(dx), t.y+normalizeMotionValue(dy))
+}
+
+func (t *transformComponent) changeX(dx float64) {
+	t.moveAxes(t.x+normalizeMotionValue(dx), t.y, engine.PositionX)
+}
+
+func (t *transformComponent) changeY(dy float64) {
+	t.moveAxes(t.x, t.y+normalizeMotionValue(dy), engine.PositionY)
+}
+
+func (t *transformComponent) distanceToTarget(target Target) float64 {
+	x, y := t.x, t.y
+	x2, y2, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return missingTargetDistance
+	}
+	dx := x - x2
+	dy := y - y2
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+// clampSpriteScale follows Scratch's sprite size limits.
+func (t *transformComponent) clampSpriteScale(size float64) float64 {
+	if len(t.sprite.costumes) == 0 || t.sprite.costumeIndex < 0 || t.sprite.costumeIndex >= len(t.sprite.costumes) {
+		return size
+	}
+
+	costumeWidth, costumeHeight := t.sprite.currentCostume().sizeInSPX()
+	if costumeWidth <= 0 || costumeHeight <= 0 {
+		return size
+	}
+
+	worldWidth, worldHeight := t.sprite.g.displayState.WorldWidth, t.sprite.g.displayState.WorldHeight
+	if worldWidth <= 0 || worldHeight <= 0 {
+		worldWidth, worldHeight = baseScreenWidth, baseScreenHeight
+	}
+
+	minScale := math.Min(
+		1.0,
+		math.Max(
+			minVisibleSize/costumeWidth,
+			minVisibleSize/costumeHeight,
+		),
+	)
+	maxScale := math.Min(
+		(maxStageScale*float64(worldWidth))/costumeWidth,
+		(maxStageScale*float64(worldHeight))/costumeHeight,
+	)
+	if maxScale < minScale {
+		maxScale = minScale
+	}
+
+	return mathf.Clamp(size, minScale, maxScale)
+}
+
+// setPositionRaw updates position without movement side effects and reports whether it changed.
+func (t *transformComponent) setPositionRaw(x, y float64) bool {
+	if t.x == x && t.y == y {
+		return false
+	}
+	t.x, t.y = x, y
+	return true
+}
+
+func (t *transformComponent) moveTo(x, y float64) {
+	t.moveAxes(x, y, engine.PositionXY)
+}
+
+func (t *transformComponent) moveAxes(x, y float64, axes engine.PositionAxes) {
+	if t.sprite.isDragging() {
+		return
+	}
+	x, y = t.fixWorldRange(x, y)
+	t.sprite.movePen(x, y)
+	t.writePosition(x, y, axes)
+}
+
+func (t *transformComponent) writePosition(x, y float64, axes engine.PositionAxes) {
+	// Fencing can move the other axis too.
+	if x != t.x {
+		axes |= engine.PositionX
+	}
+	if y != t.y {
+		axes |= engine.PositionY
+	}
+	t.x, t.y = x, y
+	// Same-value setters also own a new write version.
+	t.sprite.markProxyDirty()
+	if axes&engine.PositionX != 0 {
+		t.pendingPosition.x = t.sprite.spriteState.dirtyVersion
+	}
+	if axes&engine.PositionY != 0 {
+		t.pendingPosition.y = t.sprite.spriteState.dirtyVersion
+	}
+}
+
+// fixWorldRange mirrors Scratch's keepInFence behavior: a sprite may extend
+// beyond the stage as long as at least a small fenced slice remains visible.
+func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
+	rect := t.sprite.fenceBounds()
+	if rect == nil {
+		return x, y
+	}
+	if t.sprite.g.displayState.WorldWidth <= 0 || t.sprite.g.displayState.WorldHeight <= 0 {
+		return x, y
+	}
+
+	worldLeft, worldTop, worldRight, worldBottom := t.sprite.g.worldBounds()
+	dx := x - t.x
+	dy := y - t.y
+	left := rect.Position.X
+	right := rect.Position.X + rect.Size.X
+	bottom := rect.Position.Y
+	top := rect.Position.Y + rect.Size.Y
+
+	fenceInset := math.Min(fenceWidth, math.Floor(math.Min(rect.Size.X, rect.Size.Y)/2))
+
+	minX := float64(worldLeft) + fenceInset
+	maxX := float64(worldRight) - fenceInset
+	if right+dx < minX {
+		// Scratch snaps a fenced coordinate inward to an integer.
+		x = math.Ceil(t.x + (minX - right))
+	} else if left+dx > maxX {
+		x = math.Floor(t.x + (maxX - left))
+	}
+
+	minY := float64(worldBottom) + fenceInset
+	maxY := float64(worldTop) - fenceInset
+	if top+dy < minY {
+		y = math.Ceil(t.y + (minY - top))
+	} else if bottom+dy > maxY {
+		y = math.Floor(t.y + (maxY - bottom))
+	}
+
+	return x, y
+}
+
+// setHeading ignores non-finite input and reports whether the normalized direction changed.
+func (t *transformComponent) setHeading(dir Direction) bool {
+	if math.IsNaN(dir) || math.IsInf(dir, 0) {
+		return false
+	}
+	dir = normalizeDirection(dir)
+	if t.direction == dir {
+		return false
+	}
+
+	t.direction = dir
+	t.sprite.markProxyDirty()
+	return true
+}
+
+func (t *transformComponent) changeHeading(delta Direction) bool {
+	return t.setHeading(t.direction + delta)
+}
+
+func (t *transformComponent) setRotationStyle(style RotationStyle) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", t.sprite.name, style)
+	}
+	t.rotationStyle = style
+	t.sprite.markProxyDirty()
+}
+
+func (t *transformComponent) turn(delta Direction, speed float64, animation SpriteAnimationName) {
+	from := t.direction
+	to := t.direction + delta
+	t.doTurnAnimation(from, to, speed, animation, func() {
+		if t.changeHeading(delta) && isDebugInstrEnabled() {
+			spxlog.Debug("Turn: sprite=%s, delta=%v", t.sprite.name, delta)
+		}
+	})
+}
+
+func (t *transformComponent) turnTo(target any, speed float64, animation SpriteAnimationName) {
+	targetDirection, ok := t.resolveTargetDirection(target)
+	if !ok {
+		return
+	}
+	fromAngle, toAngle := normalizeAngleRange(t.direction, targetDirection)
+
+	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
+		if t.setHeading(targetDirection) && isDebugInstrEnabled() {
+			spxlog.Debug("TurnTo: sprite=%s, target=%v", t.sprite.name, target)
+		}
+	})
+}
+
+func (t *transformComponent) turnToPos(x, y, speed float64, animation SpriteAnimationName) {
+	targetAngle := t.headingToPosition(x, y)
+	fromAngle, toAngle := normalizeAngleRange(t.direction, targetAngle)
+
+	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
+		if t.setHeading(targetAngle) && isDebugInstrEnabled() {
+			spxlog.Debug("TurnToPos: sprite=%s, x=%v, y=%v", t.sprite.name, x, y)
+		}
+	})
+}
+
+func (t *transformComponent) bounceOffEdge(area string) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("BounceOffEdge: %s", t.sprite.name)
+	}
+
+	nearestEdge := t.sprite.checkNearestTouchedBoundary(area)
+	if nearestEdge == 0 {
+		return
+	}
+
+	radians := toRadian(90 - t.direction)
+	dx := math.Cos(radians)
+	dy := -math.Sin(radians)
+
+	dx, dy = calculateBounceDirection(nearestEdge, dx, dy)
+
+	newDirection := pkgengine.RadToDeg(math.Atan2(dy, dx)) + 90
+	t.direction = normalizeDirection(newDirection)
+
+	t.moveTo(t.x, t.y)
+}
+
+func (t *transformComponent) directionToTarget(target Target) Direction {
+	direction, ok := t.resolveTargetDirection(target)
+	if !ok {
+		return t.direction
+	}
+	return normalizeDirection(direction)
+}
+
+func (t *transformComponent) directionToPos(x, y float64) Direction {
+	return normalizeDirection(t.headingToPosition(x, y))
+}
+
+func (t *transformComponent) resolveTargetDirection(target any) (Direction, bool) {
+	if direction, ok := target.(Direction); ok {
+		return direction, true
+	}
+	x, y, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return 0, false
+	}
+	return t.headingToPosition(x, y), true
+}
+
+func (t *transformComponent) headingToPosition(x, y float64) float64 {
+	if t.x == x && t.y == y {
+		return t.direction
+	}
+	return pkgengine.HeadingToPoint(mathf.NewVec2(t.x, t.y), mathf.NewVec2(x, y))
+}
+
+func (t *transformComponent) doTurnAnimation(
+	from, to float64,
+	speed float64,
+	animation SpriteAnimationName,
+	fallback func(),
+) {
+	absDelta := math.Abs(from - to)
+	if math.IsNaN(absDelta) || math.IsInf(absDelta, 0) {
+		return
+	}
+	if animation == "" {
+		animation = t.sprite.animation().getStateAnimName(StateTurn)
+	}
+
+	ani, ok := t.sprite.animation().getAnimation(animation)
+	if !ok {
+		fallback()
+		return
+	}
+
+	speed = math.Max(speed, minSpeed)
+	duration := ani.TurnToDuration / fullCircleDegrees * absDelta / speed
+	t.sprite.animation().doTween(animation, ani, tweenParams{
+		aniType:  coreproject.AniTypeTurn,
+		duration: duration,
+		speed:    speed,
+		turnFrom: from,
+		turnTo:   to,
+	})
+}
+
+func calculateBounceDirection(edge int, dx, dy float64) (float64, float64) {
+	switch edge {
+	case touchingScreenLeft:
+		dx = math.Max(minBounceComponent, math.Abs(dx))
+	case touchingScreenTop:
+		dy = math.Max(minBounceComponent, math.Abs(dy))
+	case touchingScreenRight:
+		dx = -math.Max(minBounceComponent, math.Abs(dx))
+	case touchingScreenBottom:
+		dy = -math.Max(minBounceComponent, math.Abs(dy))
+	}
+	return dx, dy
+}
+
+func toRotationStyle(style string) RotationStyle {
+	switch style {
+	case "left-right", "leftRight":
+		return LeftRight
+	case "none":
+		return None
+	case "normal":
+		return Normal
+	default:
+		spxlog.Warn("Unrecognized rotationStyle value '%s', using default 'Normal'.", style)
+		return Normal
+	}
+}
+
+func toRadian(dir float64) float64 {
+	return math.Pi * dir / 180
+}
+
+// Treat an invalid numeric motion input as zero displacement. Expressions can
+// produce NaN directly (for example, 0 / abs(0)), which must not corrupt the
+// sprite transform.
+func normalizeMotionValue(value float64) float64 {
+	if math.IsNaN(value) {
+		return 0
+	}
+	return value
+}
+
+// normalizeDirection wraps finite angles to (-180, 180], preserving non-finite inputs.
+func normalizeDirection(dir float64) float64 {
+	if math.IsInf(dir, 0) {
+		return dir
+	}
+	dir = math.Remainder(dir, fullCircleDegrees)
+	if dir == -halfCircleDegrees {
+		return halfCircleDegrees
+	}
+	return dir
+}
+
+// normalizeAngleRange chooses equivalent angles with the shortest rotation path.
+func normalizeAngleRange(from, to float64) (float64, float64) {
+	// Keep [0, 360) endpoints to preserve the direction of exact half turns.
+	from = math.Mod(from, fullCircleDegrees)
+	to = math.Mod(to, fullCircleDegrees)
+	if from < 0 {
+		from += fullCircleDegrees
+	}
+	if to < 0 {
+		to += fullCircleDegrees
+	}
+
+	if to-from > halfCircleDegrees {
+		from += fullCircleDegrees
+	} else if from-to > halfCircleDegrees {
+		to += fullCircleDegrees
+	}
+
+	return from, to
+}

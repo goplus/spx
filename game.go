@@ -18,18 +18,17 @@ package spx
 
 import (
 	"reflect"
-	"sync"
 	"sync/atomic"
+	"time"
 
 	spxfs "github.com/goplus/spx/v4/fs"
 	_ "github.com/goplus/spx/v4/fs/asset"
 	_ "github.com/goplus/spx/v4/fs/zip"
-
 	"github.com/goplus/spx/v4/internal/core/clock"
-	inputstate "github.com/goplus/spx/v4/internal/core/input"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 	"github.com/goplus/spx/v4/internal/engine/ui"
+	spxapi "github.com/goplus/spx/v4/pkg/spx"
 )
 
 const (
@@ -41,8 +40,8 @@ const (
 )
 
 var (
-	scheduler *coroutine.Scheduler
-	tySprite  = reflect.TypeFor[Sprite]()
+	scheduler           *coroutine.Scheduler
+	spriteInterfaceType = reflect.TypeFor[Sprite]()
 )
 
 var defaultDebugFlags atomic.Uint32
@@ -58,12 +57,6 @@ const (
 )
 
 const (
-	MOUSE_BUTTON_LEFT   int64 = inputstate.MouseButtonLeft
-	MOUSE_BUTTON_RIGHT  int64 = inputstate.MouseButtonRight
-	MOUSE_BUTTON_MIDDLE int64 = inputstate.MouseButtonMiddle
-)
-
-const (
 	schedTimeoutMs              = 3000
 	mainExecTimeoutSec          = 3
 	initialSpriteSyncBufferSize = 100
@@ -74,12 +67,11 @@ const (
 
 // Game represents the main game instance with all core systems.
 type Game struct {
-	baseObj
+	visualObject
 	scriptEventBindings
-	gameBootstrapState
 	fs spxfs.Dir
 
-	lifecycleState   gameLifecycleState
+	lifecycle        gameLifecycle
 	displayState     gameDisplayState
 	dialogState      gameDialogState
 	debugState       gameDebugState
@@ -91,9 +83,9 @@ type Game struct {
 	Camera Camera
 	camera *cameraImpl
 
-	typs   map[string]reflect.Type
-	sprs   map[string]Sprite
-	sounds map[string]sound
+	spriteTypes      map[string]reflect.Type
+	spritePrototypes map[string]Sprite
+	sounds           map[string]sound
 
 	scriptEvents    scriptEventRegistry
 	gamer           Gamer
@@ -101,27 +93,16 @@ type Game struct {
 	touchEntries    []touchEntry
 	autoTouchLayers bool
 
-	inputMgr       inputManager
-	inputSessionMu sync.RWMutex
-	inputSession   *inputSession
-	inputTerminal  InputSessionStatus
-	inputClaimed   bool
-	soundMgr       soundManager
-	shapeMgr       shapeManager
-	tilemapMgr     gameTilemapMgr
+	inputMgr   inputManager
+	inputSlot  inputSessionSlot
+	soundMgr   soundManager
+	scene      sceneObjects
+	tilemapMgr tilemapManager
 
 	syncBuffer    *engine.SpriteSyncBuffer
 	physicsPull   physicsPullBuffer
 	penSyncBuffer *engine.PenSyncBuffer
 	triggerEvents []engine.TriggerEvent
-}
-
-type gameLifecycleState struct {
-	RunOnce         sync.Once
-	OncePathFinder  sync.Once
-	BootstrapDone   atomic.Bool
-	StartDispatched atomic.Bool
-	IsRunned        atomic.Bool
 }
 
 type gameDisplayState struct {
@@ -148,25 +129,63 @@ type gameDebugState struct {
 	DebugEvent bool
 }
 
-type gamePathfindingState struct {
-	PathCellSizeX int
-	PathCellSizeY int
+func (p *Game) Username() string {
+	return spxapi.Username()
 }
 
-type gameAudioState struct {
-	AudioAttenuation float64
-	AudioMaxDistance float64
-	SoundObj         engine.Object
+func (p *Game) WaitNextFrame() Seconds {
+	return engine.WaitNextFrame()
 }
 
-// gameBootstrapState owns generation-scoped admission and task execution.
-// Game coordinates lifecycle gates under the same mutex; callbacks run unlocked.
-type gameBootstrapState struct {
-	bootstrapMu      sync.Mutex
-	bootstrapGen     uint64
-	bootstrapStarted bool
-	startScheduled   bool
-	pendingBootstrap []func()
+func (p *Game) Wait(seconds Seconds) {
+	engine.Wait(seconds)
+}
+
+func (p *Game) Timer() Seconds {
+	return clock.Timer()
+}
+
+func (p *Game) ResetTimer() {
+	clock.ResetTimer()
+}
+
+func (p *Game) Now() time.Time {
+	return time.Now()
+}
+
+func (p *Game) Dayssince2000() float64 {
+	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	return time.Since(base).Hours() / 24
+}
+
+// Dialog.
+func (p *Game) Ask(question any) {
+	msgStr := dialogText(question)
+	p.ask(true, msgStr, func(answer string) {})
+}
+
+func (p *Game) Answer() string {
+	return p.dialogState.AnswerVal
+}
+
+func (p *Game) initGame(sprites []Sprite) *Game {
+	costumeSizeCache.Clear()
+	if err := p.attachPreparedInputSession(); err != nil {
+		engine.Panic(err)
+	}
+	p.scene.init()
+	p.setDebugFlags(dbgFlags(defaultDebugFlags.Load()))
+	p.bindScriptEvents()
+	p.spritePrototypes = make(map[string]Sprite)
+	p.sounds = make(map[string]sound)
+	p.spriteTypes = make(map[string]reflect.Type)
+	p.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
+	p.penSyncBuffer = engine.NewPenSyncBuffer(initialPenSyncBufferSize)
+	for _, spr := range sprites {
+		tySpr := reflect.TypeOf(spr).Elem()
+		p.spriteTypes[tySpr.Name()] = tySpr
+	}
+	return p
 }
 
 func (p *Game) setDebugFlags(flags dbgFlags) {
@@ -175,130 +194,26 @@ func (p *Game) setDebugFlags(flags dbgFlags) {
 	scheduler.SetPerfDebug(flags&DbgFlagPerf != 0)
 }
 
-func (p *Game) reset() {
-	p.resetBootstrap()
-
-	p.releaseGameAudio()
-	p.EraseAll()
-
-	p.scriptEvents.manager.Reset()
-	p.shapeMgr.reset()
-
-	p.debugState.DebugPanel = nil
-	p.dialogState.AskPanel = nil
-
-	p.Stop(AllOtherScripts)
-
-	p.lifecycleState.RunOnce = sync.Once{}
-	p.lifecycleState.OncePathFinder = sync.Once{}
-	p.sprs = make(map[string]Sprite)
-
-	p.abortInputSession("game reset")
-	p.touchFilters = nil
-	p.touchEntries = nil
-	costumeSizeCache.Clear()
-	p.inputMgr.init(p)
-
-	clock.ClearTimers()
-}
-
-func (p *Game) initGame(sprites []Sprite) *Game {
-	costumeSizeCache.Clear()
-	if err := p.attachPreparedInputSession(); err != nil {
-		engine.Panic(err)
-	}
-	p.initShapeMgr()
-	p.setDebugFlags(dbgFlags(defaultDebugFlags.Load()))
-	p.bindScriptEvents()
-	p.sprs = make(map[string]Sprite)
-	p.sounds = make(map[string]sound)
-	p.typs = make(map[string]reflect.Type)
-	p.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
-	p.penSyncBuffer = engine.NewPenSyncBuffer(initialPenSyncBufferSize)
-	for _, spr := range sprites {
-		tySpr := reflect.TypeOf(spr).Elem()
-		p.typs[tySpr.Name()] = tySpr
-	}
-	return p
-}
-
 func (p *Game) baseGame() *Game {
 	return p
 }
 
-func (p *Game) initShapeMgr() {
-	p.shapeMgr.init()
-}
-
-func (p *gameBootstrapState) queueBootstrap(generation uint64, call func()) bool {
-	if call == nil {
-		return false
+// showQuestionInPanel controls whether the question appears in the bottom Ask panel.
+func (p *Game) ask(showQuestionInPanel bool, question string, callback func(string)) {
+	if p.dialogState.AskPanel == nil {
+		p.dialogState.AskPanel = ui.NewUiAsk()
+		p.scene.add(p.dialogState.AskPanel)
 	}
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return false
+	hasAnswer := false
+	p.dialogState.AskPanel.Show(showQuestionInPanel, question, func(msg string) {
+		p.dialogState.AnswerVal = msg
+		callback(msg)
+		hasAnswer = true
+	})
+	for !hasAnswer {
+		p.dialogState.AskPanel.Update()
+		engine.WaitNextFrame()
 	}
-	p.pendingBootstrap = append(p.pendingBootstrap, call)
-	return true
-}
-
-func (p *gameBootstrapState) bootstrapGeneration() uint64 {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	return p.bootstrapGen
-}
-
-// Validate and publish under the reset lock so stale work cannot reopen a gate.
-func (p *gameBootstrapState) markBootstrapFlag(generation uint64, flag *atomic.Bool) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return false
-	}
-	flag.Store(true)
-	return true
-}
-
-func (p *gameBootstrapState) takeBootstrapTasks(generation uint64) []func() {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return nil
-	}
-	tasks := p.pendingBootstrap
-	p.pendingBootstrap = nil
-	return tasks
-}
-
-func (p *gameBootstrapState) runBootstrapTasks(generation uint64) {
-	for {
-		tasks := p.takeBootstrapTasks(generation)
-		if len(tasks) == 0 {
-			return
-		}
-		// Also drain tasks queued by earlier tasks.
-		for _, task := range tasks {
-			if !p.isCurrentBootstrap(generation) {
-				return
-			}
-			task()
-		}
-	}
-}
-
-func (p *gameBootstrapState) isCurrentBootstrap(generation uint64) bool {
-	return generation == p.bootstrapGeneration()
-}
-
-func (p *gameBootstrapState) claimBootstrap(generation uint64) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen || p.bootstrapStarted {
-		return false
-	}
-	p.bootstrapStarted = true
-	return true
 }
 
 func currentGame() *Game {
