@@ -227,6 +227,7 @@ type listMonitorSprite struct {
 // TestMain supplies the raw manager normally installed by gdengine.Link.
 func TestMain(m *testing.M) {
 	pkgengine.PlatformMgr = mainThreadTestPlatform{}
+	setupTestAssetPaths()
 	os.Exit(m.Run())
 }
 

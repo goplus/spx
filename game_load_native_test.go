@@ -75,7 +75,7 @@ type runtimePanicRecorder struct {
 
 type loadGameAssetResMgr struct {
 	loadGameResMgr
-	filesystemMode bool
+	loadModes []bool
 }
 
 type preflightLoadGame struct {
@@ -458,8 +458,8 @@ func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {
 	if err := game.loadGame(dir, 0); err == nil || !strings.Contains(err.Error(), "font rejected") {
 		t.Fatalf("asset directory load=%v", err)
 	}
-	if !resources.filesystemMode {
-		t.Fatal("asset directory did not select filesystem loading")
+	if !slices.Equal(resources.loadModes, []bool{testFilesystemMode}) {
+		t.Fatalf("resource load modes = %v, want [%v]", resources.loadModes, testFilesystemMode)
 	}
 }
 
@@ -669,7 +669,9 @@ func (m *runtimePanicRecorder) RequestExit(code int64) {
 	m.exits = append(m.exits, code)
 }
 
-func (m *loadGameAssetResMgr) SetLoadMode(filesystem bool) { m.filesystemMode = filesystem }
+func (m *loadGameAssetResMgr) SetLoadMode(filesystem bool) {
+	m.loadModes = append(m.loadModes, filesystem)
+}
 
 func (*loadGameAssetResMgr) HasFile(string) bool { return false }
 

@@ -187,7 +187,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         "native": {
             "coverage.out": ["github.com/goplus/spx/v4"],
             "cmd/ispx/coverage.out": ["github.com/goplus/spx/v4/cmd/ispx"],
-            "coverage-engine-packmode.out": ["./internal/engine"],
+            "coverage-packmode.out": [".", "./internal/engine"],
         },
     }
 
@@ -229,7 +229,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                         options.append('-exec="/mock/go root/lib/wasm/go_js_wasm_exec"')
                     if suite == "web" and profile == "coverage-web.out":
                         options.append("-timeout=1m")
-                    if profile == "coverage-engine-packmode.out":
+                    if profile == "coverage-packmode.out":
                         options.extend(["-tags", "packmode"])
                     elif suite in ("native", "codegen"):
                         options.append("-coverpkg=" + ",".join(packages))
