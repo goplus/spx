@@ -227,7 +227,13 @@ type listMonitorSprite struct {
 // TestMain supplies the raw manager normally installed by gdengine.Link.
 func TestMain(m *testing.M) {
 	pkgengine.PlatformMgr = mainThreadTestPlatform{}
-	setupTestAssetPaths()
+	// Direct runtime tests need archive roots; filesystem tests keep synthetic paths.
+	if !testFilesystemMode {
+		previous := pkgengine.ResMgr
+		pkgengine.ResMgr = &gameTestResMgr{}
+		engine.SetAssetDir("assets")
+		pkgengine.ResMgr = previous
+	}
 	os.Exit(m.Run())
 }
 

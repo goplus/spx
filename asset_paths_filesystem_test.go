@@ -19,6 +19,3 @@
 package spx
 
 const testFilesystemMode = true
-
-// Keep synthetic filesystem paths usable without requiring real asset files.
-func setupTestAssetPaths() {}

@@ -18,22 +18,4 @@
 
 package spx
 
-import (
-	"github.com/goplus/spx/v4/internal/engine"
-	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
-)
-
 const testFilesystemMode = false
-
-// Direct runtime tests bypass loadGame, which normally installs archive roots.
-func setupTestAssetPaths() {
-	previous := pkgengine.ResMgr
-	pkgengine.ResMgr = testAssetResMgr{}
-	engine.SetAssetDir("assets")
-	pkgengine.ResMgr = previous
-}
-
-type testAssetResMgr struct{ pkgengine.IResMgr }
-
-func (testAssetResMgr) SetLoadMode(bool)    {}
-func (testAssetResMgr) HasFile(string) bool { return false }

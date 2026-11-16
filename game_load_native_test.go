@@ -73,11 +73,6 @@ type runtimePanicRecorder struct {
 	exits    []int64
 }
 
-type loadGameAssetResMgr struct {
-	loadGameResMgr
-	loadModes []bool
-}
-
 type preflightLoadGame struct {
 	Game
 	First, Second *preflightLoadSprite
@@ -453,7 +448,7 @@ func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	resources := &loadGameAssetResMgr{loadGameResMgr: loadGameResMgr{fontError: "font rejected"}}
+	resources := &loadGameResMgr{fontError: "font rejected"}
 	pkgengine.ResMgr = resources
 	if err := game.loadGame(dir, 0); err == nil || !strings.Contains(err.Error(), "font rejected") {
 		t.Fatalf("asset directory load=%v", err)
@@ -668,12 +663,6 @@ func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
 func (m *runtimePanicRecorder) RequestExit(code int64) {
 	m.exits = append(m.exits, code)
 }
-
-func (m *loadGameAssetResMgr) SetLoadMode(filesystem bool) {
-	m.loadModes = append(m.loadModes, filesystem)
-}
-
-func (*loadGameAssetResMgr) HasFile(string) bool { return false }
 
 func (*preflightLoadSprite) Main() {}
 

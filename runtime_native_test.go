@@ -539,7 +539,7 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 	generation := game.lifecycle.generation()
 	platform := &resetDuringStartupPlatform{onTitle: game.lifecycle.reset}
 	pkgengine.PlatformMgr = platform
-	pkgengine.ResMgr = &loadGameAssetResMgr{}
+	pkgengine.ResMgr = &loadGameResMgr{}
 	previousAudio := pkgengine.AudioMgr
 	pkgengine.AudioMgr = &loadGameAudioMgr{}
 	t.Cleanup(func() { pkgengine.AudioMgr = previousAudio })
