@@ -34,17 +34,32 @@ var osStderr = os.Stderr
 var errUsage = shared.ErrUsage
 
 type BuildConfig struct {
-	Target string
-	Mode   string
+	Target          string
+	Mode            string
+	WebLinkOptimize *bool // nil inherits the SPX module profile.
 }
 
-type workflowBuildWebConfig struct {
-	mode            string
-	skipToolInstall bool
-}
-
-type workflowBuildDevConfig struct {
-	webMode string
+// NormalizeBuildConfig validates build options and supplies the default Web mode.
+func NormalizeBuildConfig(cfg BuildConfig) (BuildConfig, error) {
+	switch cfg.Target {
+	case "dev", "web":
+		if cfg.Mode == "" {
+			cfg.Mode = "normal"
+		}
+		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
+			return BuildConfig{}, err
+		}
+	case "editor", "desktop", "android", "ios":
+		if cfg.WebLinkOptimize != nil {
+			return BuildConfig{}, errors.New("--web-link-optimize is only supported by build dev and build web")
+		}
+		if cfg.Mode != "" {
+			return BuildConfig{}, errors.New("--mode is only supported by build dev and build web")
+		}
+	default:
+		return BuildConfig{}, fmt.Errorf("unsupported build target: %s", cfg.Target)
+	}
+	return cfg, nil
 }
 
 type workflowRunDemoConfig struct {
@@ -87,28 +102,24 @@ func Run(args []string) error {
 }
 
 func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
+	cfg, err := NormalizeBuildConfig(cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.Target == "dev" {
+		return buildDevWorkflow(cfg, runner)
+	}
+	if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+		return err
+	}
 	switch cfg.Target {
-	case "dev":
-		return buildDevWorkflow(workflowBuildDevConfig{webMode: cfg.Mode}, runner)
 	case "editor":
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
 		return engine.BuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
 	case "desktop":
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
-		if err := engine.BuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
-			return err
-		}
-		return runtimecmd.ExportPackRuntime(runner)
+		return buildHostRuntimeWorkflow(runner)
 	case "web":
-		return buildWebWorkflow(workflowBuildWebConfig{mode: cfg.Mode}, runner)
+		return buildWebWorkflow(cfg, runner)
 	case "android", "ios":
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
 		return engine.BuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
 	default:
 		return fmt.Errorf("unsupported build target: %s", cfg.Target)
@@ -300,20 +311,16 @@ func runWorkflowStopWeb(args []string) error {
 	return stopWebWorkflow(runner)
 }
 
-func buildWebWorkflow(cfg workflowBuildWebConfig, runner shared.ScriptRunner) error {
-	if !cfg.skipToolInstall {
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
-	}
+func buildWebWorkflow(cfg BuildConfig, runner shared.ScriptRunner) error {
 	if err := engine.BuildEngine(engine.BuildConfig{
-		Target:   "template",
-		Platform: "web",
-		Mode:     cfg.mode,
+		Target:          "template",
+		Platform:        "web",
+		Mode:            cfg.Mode,
+		WebLinkOptimize: cfg.WebLinkOptimize,
 	}, runner.RepoRootDir()); err != nil {
 		return err
 	}
-	return runtimecmd.ExportWebTemplateRuntime(cfg.mode, runner)
+	return runtimecmd.ExportWebTemplateRuntime(cfg.Mode, runner)
 }
 
 func buildHostRuntimeWorkflow(runner shared.ScriptRunner) error {
@@ -323,7 +330,7 @@ func buildHostRuntimeWorkflow(runner shared.ScriptRunner) error {
 	return runtimecmd.ExportPackRuntime(runner)
 }
 
-func buildDevWorkflow(cfg workflowBuildDevConfig, runner shared.ScriptRunner) error {
+func buildDevWorkflow(cfg BuildConfig, runner shared.ScriptRunner) error {
 	printWorkflowStep(1, 4, "Build host editor and test SPX module")
 	if err := engine.BuildEngine(engine.BuildConfig{Target: "editor", TestModule: true}, runner.RepoRootDir()); err != nil {
 		return err
@@ -335,7 +342,7 @@ func buildDevWorkflow(cfg workflowBuildDevConfig, runner shared.ScriptRunner) er
 	}
 
 	printWorkflowStep(3, 4, "Build web template and export assets")
-	if err := buildWebWorkflow(workflowBuildWebConfig{mode: cfg.webMode, skipToolInstall: true}, runner); err != nil {
+	if err := buildWebWorkflow(cfg, runner); err != nil {
 		return err
 	}
 

@@ -156,6 +156,7 @@ func TestParseSetupCommandArgs(t *testing.T) {
 }
 
 func TestParseBuildCommandArgs(t *testing.T) {
+	webLinkOptimize, unoptimizedLink := true, false
 	tests := []struct {
 		args []string
 		want workflow.BuildConfig
@@ -164,6 +165,10 @@ func TestParseBuildCommandArgs(t *testing.T) {
 		{args: []string{"dev", "--mode", "miniprogram"}, want: workflow.BuildConfig{Target: "dev", Mode: "miniprogram"}},
 		{args: []string{"web"}, want: workflow.BuildConfig{Target: "web", Mode: "normal"}},
 		{args: []string{"web", "--mode", "worker"}, want: workflow.BuildConfig{Target: "web", Mode: "worker"}},
+		{args: []string{"web", "--web-link-optimize"}, want: workflow.BuildConfig{Target: "web", Mode: "normal", WebLinkOptimize: &webLinkOptimize}},
+		{args: []string{"dev", "--mode", "worker", "--web-link-optimize=1"}, want: workflow.BuildConfig{Target: "dev", Mode: "worker", WebLinkOptimize: &webLinkOptimize}},
+		{args: []string{"web", "--web-link-optimize=false"}, want: workflow.BuildConfig{Target: "web", Mode: "normal", WebLinkOptimize: &unoptimizedLink}},
+		{args: []string{"dev", "--web-link-optimize=0"}, want: workflow.BuildConfig{Target: "dev", Mode: "normal", WebLinkOptimize: &unoptimizedLink}},
 		{args: []string{"editor"}, want: workflow.BuildConfig{Target: "editor"}},
 		{args: []string{"desktop"}, want: workflow.BuildConfig{Target: "desktop"}},
 		{args: []string{"android"}, want: workflow.BuildConfig{Target: "android"}},
@@ -187,6 +192,11 @@ func TestParseBuildCommandArgs(t *testing.T) {
 		{"android", "--mode", "normal"},
 		{"ios", "--mode", "normal"},
 		{"web", "--mode", "unknown"},
+		{"editor", "--web-link-optimize"},
+		{"desktop", "--web-link-optimize"},
+		{"android", "--web-link-optimize"},
+		{"ios", "--web-link-optimize"},
+		{"web", "--web-link-optimize=invalid"},
 		{"web", "extra"},
 	}
 	for _, args := range invalid {

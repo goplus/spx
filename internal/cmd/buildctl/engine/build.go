@@ -196,6 +196,9 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		if plan.WebProxyToPThread {
 			webArgs = append(webArgs, "proxy_to_pthread=true")
 		}
+		if plan.WebLinkOptimize != nil {
+			webArgs = append(webArgs, fmt.Sprintf("web_link_optimize=%t", *plan.WebLinkOptimize))
+		}
 		webArgs = module.TemplateBuildArgs(webArgs...)
 		fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(webArgs))
 		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, webArgs...); err != nil {

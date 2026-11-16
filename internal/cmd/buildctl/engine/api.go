@@ -26,10 +26,11 @@ type DownloadConfig struct {
 }
 
 type BuildConfig struct {
-	Target     string
-	Platform   string
-	Mode       string
-	TestModule bool
+	Target          string
+	Platform        string
+	Mode            string
+	TestModule      bool
+	WebLinkOptimize *bool // nil inherits the SPX module profile.
 }
 
 func ShouldRefreshPreparedAssets() bool {

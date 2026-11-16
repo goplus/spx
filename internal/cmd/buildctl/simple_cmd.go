@@ -137,6 +137,7 @@ func parseBuildCommandArgs(args []string) (workflow.BuildConfig, error) {
 	fs := flag.NewFlagSet("build "+cfg.Target, flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&cfg.Mode, "mode", "", "Web mode: normal, worker, minigame, or miniprogram")
+	webLinkOptimize := fs.Bool("web-link-optimize", true, "override the module profile's Web link optimization (true for release optimization)")
 	fs.Usage = printBuildCommandUsage
 	if err := fs.Parse(args[1:]); err != nil {
 		return workflow.BuildConfig{}, err
@@ -146,27 +147,16 @@ func parseBuildCommandArgs(args []string) (workflow.BuildConfig, error) {
 		return workflow.BuildConfig{}, shared.ErrUsage
 	}
 
-	switch cfg.Target {
-	case "dev", "web":
-		if cfg.Mode == "" {
-			cfg.Mode = "normal"
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "web-link-optimize" {
+			cfg.WebLinkOptimize = webLinkOptimize
 		}
-		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
-			return workflow.BuildConfig{}, err
-		}
-	case "editor", "desktop", "android", "ios":
-		if cfg.Mode != "" {
-			return workflow.BuildConfig{}, errors.New("--mode is only supported by build dev and build web")
-		}
-	default:
-		fs.Usage()
-		return workflow.BuildConfig{}, fmt.Errorf("unsupported build target: %s", cfg.Target)
-	}
-	return cfg, nil
+	})
+	return workflow.NormalizeBuildConfig(cfg)
 }
 
 func printBuildCommandUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: buildctl build <dev|editor|desktop|web|android|ios> [--mode normal|worker|minigame|miniprogram]")
+	fmt.Fprintln(os.Stderr, "Usage: buildctl build <dev|editor|desktop|web|android|ios> [--mode normal|worker|minigame|miniprogram] [--web-link-optimize]")
 }
 
 func runDoctor(args []string) error {
