@@ -100,10 +100,13 @@ Web 后台等待让出 Go goroutine；同步 JS 回调若依赖后续事件，�
   和下一轮队列；队列不再单独加锁。
 - 准入读锁允许并行登记，原子计数 `pendingSetups` 将重新开放准入推迟到所有登记回调结束。
   登记回调在锁外执行；原子 epoch 使准入重新开放后仍能拒绝停止前的过期请求。
-- 等待登记与 blocked 状态一起发布，锁序为 `schedulerMu` → `waiterSet.mu`。
-  关闭等待集合时移交等待者，解锁后再唤醒，避免与登记形成锁序环。
-- 任务结束时先把 Join 等待者标为 runnable，再取消 context、关闭完成通知并移除
-  调度状态，避免 Update 在两者之间误判没有可运行脚本。
+- 等待登记与 blocked 状态一起发布，锁序为 `schedulerMu` → `completion.mu`。
+  `completion.complete()` 只关闭一次通知并移交等待者；释放 `completion.mu` 后
+  再把等待者标为 pending，避免与登记形成锁序环。
+- `finishThread` 持有 `schedulerMu`，先完成首个执行片段的通知并将其等待者标为
+  pending，再取消 context，随后完成线程结束通知并将 Join 等待者标为 pending。
+  移除目标线程的调度状态后，才选择下一脚本；两组等待者参与同一次选择，Update
+  不会在目标与等待者之间误判没有可运行脚本。观察到线程完成，也就保证 context 已取消。
 - 外部工作启动前登记，worker 退出时统一注销。取消调用脚本不能提前减少
   外部工作计数；重置必须等实际工作结束。
 - 清理等待在生命周期登记锁下同时检查条件并订阅完成通知，避免遗漏唤醒。
@@ -219,7 +222,7 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 回调重入限制、主线程调用、帧边界回调 | `internal/engine/coroutine/callback.go`、`mainthread.go` |
 | 定时与通道等待、worker 生命周期 | `internal/engine/coroutine/wait.go` |
 | 帧等待、循环轮次、重绘预算 | `internal/engine/coroutine/frame.go` |
-| 同步脚本入口、Join / Latch 的共享等待协议 | `internal/engine/coroutine/execute.go`、`waiters.go` |
+| 同步脚本入口、共享完成通知与 Join / Latch 等待 | `internal/engine/coroutine/execute.go`、`completion.go`、`join.go`、`latch.go` |
 | 等待任务处理与调度统计 | `internal/engine/coroutine/update.go`、`stats.go` |
 | 控制流与调度器衔接 | `internal/engine/coroutine.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
