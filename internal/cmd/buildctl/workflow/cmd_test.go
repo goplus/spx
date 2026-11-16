@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -152,10 +153,29 @@ func TestWorkflowLifecycleAndRunnerErrors(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsUnknownTarget(t *testing.T) {
-	runner := &recordingRunner{repoRoot: t.TempDir()}
-	if err := Build(BuildConfig{Target: "unknown"}, runner); err == nil {
-		t.Fatal("Build accepted an unknown target")
+func TestBuildRejectsInvalidConfigurationBeforeWork(t *testing.T) {
+	optimized, unoptimized := true, false
+	for _, tt := range []struct {
+		cfg     BuildConfig
+		message string
+	}{
+		{BuildConfig{Target: "unknown"}, "unsupported build target: unknown"},
+		{BuildConfig{Target: "dev", Mode: "unknown"}, "unsupported web-mode: unknown"},
+		{BuildConfig{Target: "web", Mode: "unknown"}, "unsupported web-mode: unknown"},
+		{BuildConfig{Target: "editor", Mode: "worker"}, "--mode is only supported by build dev and build web"},
+		{BuildConfig{Target: "desktop", Mode: "normal"}, "--mode is only supported by build dev and build web"},
+		{BuildConfig{Target: "android", WebLinkOptimize: &unoptimized}, "--web-link-optimize is only supported by build dev and build web"},
+		{BuildConfig{Target: "ios", WebLinkOptimize: &optimized}, "--web-link-optimize is only supported by build dev and build web"},
+	} {
+		t.Run(tt.cfg.Target, func(t *testing.T) {
+			runner := &recordingRunner{repoRoot: t.TempDir()}
+			if err := Build(tt.cfg, runner); err == nil || err.Error() != tt.message {
+				t.Fatalf("Build(%+v) error = %v, want %q", tt.cfg, err, tt.message)
+			}
+			if len(runner.calls) != 0 || len(runner.commands) != 0 {
+				t.Fatalf("invalid configuration started work: scripts=%v, commands=%v", runner.calls, runner.commands)
+			}
+		})
 	}
 }
 
@@ -407,14 +427,47 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("fixture executables require Linux or macOS")
 	}
-	for _, target := range []string{"dev", "editor", "desktop", "web", "android", "ios"} {
-		t.Run(target, func(t *testing.T) {
+	optimized, unoptimized := true, false
+	for _, tt := range []struct {
+		name, target string
+		optimize     *bool
+	}{
+		{"dev", "dev", nil},
+		{"editor", "editor", nil},
+		{"desktop", "desktop", nil},
+		{"web", "web", nil},
+		{"android", "android", nil},
+		{"ios", "ios", nil},
+		{"fast web", "web", &unoptimized},
+		{"optimized dev", "dev", &optimized},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			target, webLinkOptimize := tt.target, tt.optimize
 			runner := newWorkflowBuildFixture(t)
 			database := filepath.Join(os.Getenv("GODOT_SRC"), "compile_commands.json")
 			previousDatabase := []byte("[{\"command\":\"previous editor\"}]\n")
 			mustWriteFile(t, database, previousDatabase)
-			if err := Build(BuildConfig{Target: target, Mode: "normal"}, runner); err != nil {
+			if err := Build(BuildConfig{Target: target, WebLinkOptimize: webLinkOptimize}, runner); err != nil {
 				t.Fatal(err)
+			}
+			commands, err := os.ReadFile(filepath.Join(runner.repoRoot, "scons-commands"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			overrideCommands := 0
+			for _, command := range strings.Split(string(commands), "\n") {
+				if strings.Contains(command, "web_link_optimize=") {
+					overrideCommands++
+					if !strings.Contains(command, "platform=web") {
+						t.Fatalf("Web link optimization override reached a non-Web build: %s", command)
+					}
+					if webLinkOptimize == nil || !strings.Contains(command, fmt.Sprintf("web_link_optimize=%t", *webLinkOptimize)) {
+						t.Fatalf("incorrect Web link optimization override: %s", command)
+					}
+				}
+			}
+			if (webLinkOptimize != nil && overrideCommands != 1) || (webLinkOptimize == nil && overrideCommands != 0) {
+				t.Fatalf("Web link optimization override = %v, got %d override commands", webLinkOptimize, overrideCommands)
 			}
 			wantDatabase := previousDatabase
 			if target == "dev" || target == "editor" {
@@ -500,7 +553,7 @@ func TestBuildWorkflowFailureStopsSubsequentSteps(t *testing.T) {
 		t.Run(target+"/engine failure", func(t *testing.T) {
 			runner := newWorkflowBuildFixture(t)
 			t.Setenv("SPX_MODULE_SRC", filepath.Join(runner.repoRoot, "missing-module"))
-			if err := Build(BuildConfig{Target: target, Mode: "normal"}, runner); err == nil || len(runner.commands) != 0 {
+			if err := Build(BuildConfig{Target: target}, runner); err == nil || len(runner.commands) != 0 {
 				t.Fatalf("engine failure=%v,commands=%v", err, runner.commands)
 			}
 		})
@@ -643,7 +696,8 @@ func newWorkflowBuildFixture(t *testing.T) *recordingRunner {
 	writeWorkflowTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+lock.Godot.Commit+"'\n")
 	venv := filepath.Join(root, ".bin", "scons-"+lock.Toolchain.SCons, "bin")
 	writeWorkflowTool(t, filepath.Join(venv, "python"), "printf '%s\\n' '"+lock.Toolchain.SCons+"'\n")
-	writeWorkflowTool(t, filepath.Join(venv, "scons"), `case "$*" in
+	writeWorkflowTool(t, filepath.Join(venv, "scons"), `printf '%s\n' "$*" >> "$WORKFLOW_ROOT/scons-commands"
+case "$*" in
   *tests=yes*) printf enabled > "$WORKFLOW_ROOT/module-tests-enabled" ;;
 esac
 case "$*" in

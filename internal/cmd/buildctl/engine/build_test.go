@@ -18,6 +18,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -594,9 +595,22 @@ func TestBuildEngineWebTemplate(t *testing.T) {
 		}
 		commands[name] = path
 	}
-	module, moduleSource := loadEngineTestSPXModule(t, `{"schema":1,"common":[],"editor_release":[],"template_release":["optimize=size"]}`)
-	for _, scenario := range []string{"normal", "worker", "sdk failure", "build failure", "cache failure"} {
-		t.Run(scenario, func(t *testing.T) {
+	optimized, unoptimized := true, false
+	for _, tt := range []struct {
+		name, mode, profile string
+		optimize            *bool
+	}{
+		{"normal", "normal", "no", nil},
+		{"worker", "worker", "no", nil},
+		{"optimized profile", "normal", "yes", nil},
+		{"optimized override", "normal", "no", &optimized},
+		{"fast override", "worker", "yes", &unoptimized},
+		{"sdk failure", "normal", "no", nil},
+		{"build failure", "normal", "no", nil},
+		{"cache failure", "normal", "no", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			module, moduleSource := loadEngineTestSPXModule(t, `{"schema":1,"common":["web_link_optimize=`+tt.profile+`"],"editor_release":[],"template_release":["optimize=size"]}`)
 			root := isolateEngineEnvironment(t)
 			sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
 			if runtime.GOOS == "darwin" {
@@ -618,13 +632,9 @@ func TestBuildEngineWebTemplate(t *testing.T) {
 			}
 			mustWriteFile(t, filepath.Join(sdk, "emsdk_env.sh"), []byte("export EMSDK="+shared.ShellQuote(sdk)+"\nexport PATH="+shared.ShellQuote(compilerBin)+":\"$PATH\"\n"))
 			writeEngineTestTool(t, filepath.Join(sdk, "emsdk"), "[ \"$1\" = activate ] || exit 90\n[ \"$SPX_WEB_CASE\" != 'sdk failure' ] || exit 23\n")
-			t.Setenv("SPX_WEB_CASE", scenario)
+			t.Setenv("SPX_WEB_CASE", tt.name)
 			env := buildEnvironment{EngineDir: filepath.Join(root, "godot"), TemplateDir: filepath.Join(root, "templates"), GoPath: filepath.Join(root, "go"), Version: "test"}
-			mode := "normal"
-			if scenario == "worker" {
-				mode = "worker"
-			}
-			plan, err := resolveEngineBuildShellPlan(env, BuildConfig{Target: "template", Platform: "web", Mode: mode})
+			plan, err := resolveEngineBuildShellPlan(env, BuildConfig{Target: "template", Platform: "web", Mode: tt.mode, WebLinkOptimize: tt.optimize})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -636,15 +646,15 @@ func TestBuildEngineWebTemplate(t *testing.T) {
 			commandEnv["SPX_BUILD_RECORD"] = filepath.Join(root, "build-record")
 			scons := filepath.Join(root, "scons")
 			writeEngineTestTool(t, scons, "[ \"$SPX_WEB_CASE\" != 'build failure' ] || exit 23\nprintf '%s\\n' \"$EMSDK\" \"$@\" > \"$SPX_BUILD_RECORD\"\n")
-			if scenario == "cache failure" {
+			if tt.name == "cache failure" {
 				mustWriteFile(t, filepath.Dir(plan.WebCachedTemplateZip), []byte("blocked"))
 			}
 			err = buildEngineTemplate(env, commandEnv, scons, module, plan)
 			if commandEnv["EMSDK"] != "old SDK" {
 				t.Fatal("SDK exports mutated the caller environment")
 			}
-			if strings.HasSuffix(scenario, "failure") {
-				if scenario == "cache failure" {
+			if strings.HasSuffix(tt.name, "failure") {
+				if tt.name == "cache failure" {
 					if err == nil || !strings.Contains(err.Error(), "not a directory") {
 						t.Fatalf("cache error = %v, want blocked destination", err)
 					}
@@ -662,9 +672,12 @@ func TestBuildEngineWebTemplate(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantArgs := []string{sdk, "optimize=size", "platform=web", "target=template_release", "threads=" + plan.WebThreads}
-			if mode == "worker" {
+			wantArgs := []string{sdk, "web_link_optimize=" + tt.profile, "optimize=size", "platform=web", "target=template_release", "threads=" + plan.WebThreads}
+			if tt.mode == "worker" {
 				wantArgs = append(wantArgs, "proxy_to_pthread=true")
+			}
+			if tt.optimize != nil {
+				wantArgs = append(wantArgs, fmt.Sprintf("web_link_optimize=%t", *tt.optimize))
 			}
 			wantArgs = append(wantArgs, "custom_modules="+moduleSource)
 			assertEngineTestCommandRecord(t, commandEnv["SPX_BUILD_RECORD"], wantArgs)

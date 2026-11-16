@@ -52,6 +52,7 @@ GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
 | `GODOT_SRC` | `./godot` | `dev` 和引擎 `build-*` 目标使用的 Godot 源码 checkout。 |
 | `SPX_MODULE_SRC` | `./godot_modules/spx` | 引擎构建和 `make generate` 使用的外置 SPX Godot 模块。 |
 | `MODE` | `normal` | Web 环境准备、构建、导出，以及 `dev` 中的 Web 构建。 |
+| `WEB_LINK_OPTIMIZE` | 未设置，继承 module profile | `build-web` 和 `dev` 的 Web 链接覆盖项；设为 `1` 开启完整链接优化，设为 `0` 使用快速链接。 |
 | `DEMO_INDEX` | `3` | demo 命令选择的 tutorial 索引。 |
 | `PORT` | `8106` | Web demo 命令使用的端口。 |
 
@@ -92,6 +93,22 @@ spx run --path tutorial/00-Hello
 make setup-web MODE=worker
 make runwebworker DEMO_INDEX=2
 ```
+
+本地和普通 CI 继承 `godot_modules/spx/spx_scons_profile.json` 中的 `web_link_optimize=no`，默认快速链接。测量包体积、加载速度或运行性能时，开启完整优化：
+
+```sh
+make build-web MODE=normal
+make build-web MODE=normal WEB_LINK_OPTIMIZE=1
+# 完整本地开发栈也支持：make dev MODE=normal WEB_LINK_OPTIMIZE=1
+```
+
+快速链接保留 C/C++ 编译优化，最终链接使用 `-O1` 跳过 Binaryen 优化和 JS/Wasm 压缩，产物可能更大、运行更慢。切换优化设置只需重新链接，可复用对象文件；输出位置相同。
+
+直接使用 `buildctl build web` 或 `buildctl build dev` 时，可用 `--web-link-optimize` 开启、`--web-link-optimize=false` 关闭；未设置则继承 profile，显式设置优先。
+
+发布及 dry-run 工作流在 profile 之后覆盖 `web_link_optimize=yes`，保留完整优化。
+
+`symbol_lists/...` 日志后的 `- ok` 表示符号缓存已生成，之后的停顿通常发生在链接或 WASM 优化阶段。运行 `EMPROFILE=2 make build-web WEB_LINK_OPTIMIZE=1` 可查看 `link`、`wasm_opt` 等阶段耗时。
 
 ### 引擎和模块开发
 

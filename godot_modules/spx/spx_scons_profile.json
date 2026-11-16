@@ -2,6 +2,7 @@
   "schema": 1,
   "common": [
     "optimize=size",
+    "web_link_optimize=no",
     "use_volk=no",
     "deprecated=no",
     "minizip=yes",

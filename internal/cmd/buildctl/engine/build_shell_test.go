@@ -384,6 +384,26 @@ func TestWebBuildModeDefaultsAndThreading(t *testing.T) {
 	}
 }
 
+func TestBuildShellPlanRejectsNonWebLinkOptimization(t *testing.T) {
+	for _, tt := range []struct {
+		name, host, platform string
+		optimize             bool
+	}{
+		{"enabled on explicit non-Web platform", "web", "linux", true},
+		{"disabled on explicit non-Web platform", "web", "linux", false},
+		{"inherited non-Web platform", "macos", "", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := resolveEngineBuildShellPlan(buildEnvironment{Platform: tt.host}, BuildConfig{
+				Target: "template", Platform: tt.platform, WebLinkOptimize: &tt.optimize,
+			})
+			if err == nil || err.Error() != "--web-link-optimize requires the web platform" {
+				t.Fatalf("error = %v, want Web-only option rejection", err)
+			}
+		})
+	}
+}
+
 func TestBuildShellPlanRejectsInvalidConfiguration(t *testing.T) {
 	for _, args := range [][]string{{"--target", "unknown"}, {"--target", "template", "extra"}, {"--target", "template", "--platform", "unknown"}, {"--target", "template", "--mode", "normal"}, {"--target", "template", "--platform", "web", "--mode", "unknown"}, {"--invalid"}} {
 		if _, err := ParseEnvExportEngineBuildShellArgs(args); err == nil {

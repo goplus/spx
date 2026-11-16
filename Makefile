@@ -37,6 +37,8 @@ SPX_VERSION ?=
 RUNTIME_VERSION ?=
 RUNTIME_ABI ?=
 WEB_MODE = $(or $(strip $(MODE)),normal)
+# Empty inherits the module's SCons profile; set 0 or 1 to override it.
+WEB_LINK_OPTIMIZE ?=
 VALID_INSTALL_WEB_TRUE_VALUES := 1 true TRUE yes YES on ON
 VALID_INSTALL_WEB_FALSE_VALUES := 0 false FALSE no NO off OFF
 VALID_INSTALL_WEB_VALUES := $(VALID_INSTALL_WEB_TRUE_VALUES) $(VALID_INSTALL_WEB_FALSE_VALUES)
@@ -44,6 +46,7 @@ VALID_INSTALL_WEB_VALUES := $(VALID_INSTALL_WEB_TRUE_VALUES) $(VALID_INSTALL_WEB
 validate-platform-required = $(if $(strip $(PLATFORM)),,$(error PLATFORM is required. Usage: make download-engine PLATFORM=android|ios|web [MODE=normal|worker|minigame|miniprogram]))
 validate-install-web = $(if $(filter $(strip $(WEB)),$(VALID_INSTALL_WEB_VALUES)),,$(error invalid WEB "$(WEB)". Expected one of: $(VALID_INSTALL_WEB_TRUE_VALUES) $(VALID_INSTALL_WEB_FALSE_VALUES)))
 install-web-flag = $(if $(filter $(strip $(WEB)),$(VALID_INSTALL_WEB_TRUE_VALUES)),--web)
+web-build-flags = --mode "$(WEB_MODE)"$(if $(strip $(WEB_LINK_OPTIMIZE)), --web-link-optimize="$(strip $(WEB_LINK_OPTIMIZE))")
 
 validate-download-engine:
 	$(call validate-platform-required)
@@ -99,6 +102,7 @@ help: ## Show common commands
 	@echo ""
 	@echo "Variable notes:"
 	@echo "  MODE defaults to normal for Web-related targets."
+	@echo "  Web linking defaults to the module profile; use WEB_LINK_OPTIMIZE=1 for release optimization."
 	@echo "  GODOT_SRC defaults to ./godot and is used by:"
 	@echo "    dev build-editor build-desktop build-web build-android build-ios"
 	@echo "  SPX_MODULE_SRC defaults to ./godot_modules/spx and is used by:"
@@ -149,7 +153,7 @@ setup-web: ## Set up Web assets. Usage: make setup-web [MODE=normal|worker|minig
 	$(BUILDCTL_CMD) setup web --mode "$(WEB_MODE)"
 
 dev: ## Build and test the host SPX module, then build the complete local stack. Usage: make dev [MODE=normal|worker|minigame|miniprogram]
-	$(BUILDCTL_CMD) build dev --mode "$(WEB_MODE)"
+	$(BUILDCTL_CMD) build dev $(web-build-flags)
 
 doctor: ## Validate and print the resolved build configuration
 	$(BUILDCTL_CMD) doctor
@@ -187,8 +191,8 @@ build-editor: ## Build editor mode engine
 build-desktop: ## Build desktop engine
 	$(BUILDCTL_CMD) build desktop
 
-build-web: ## Build web engine template. Usage: make build-web [MODE=normal|worker|minigame|miniprogram]
-	$(BUILDCTL_CMD) build web --mode "$(WEB_MODE)"
+build-web: ## Build web engine template. Usage: make build-web [MODE=normal|worker|minigame|miniprogram] [WEB_LINK_OPTIMIZE=1]
+	$(BUILDCTL_CMD) build web $(web-build-flags)
 
 build-wasm: ## Build wasm
 	$(BUILDCTL_CMD) runtime build-wasm

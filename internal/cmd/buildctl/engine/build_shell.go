@@ -40,6 +40,7 @@ type BuildShellPlan struct {
 	TemplatePostCommands  []string
 	WebThreads            string
 	WebProxyToPThread     bool
+	WebLinkOptimize       *bool
 	WebThreadSuffix       string
 	WebCachedTemplateZip  string
 }
@@ -124,6 +125,9 @@ func resolveEngineBuildShellPlan(env buildEnvironment, cfg BuildConfig) (BuildSh
 	if effectivePlatform == "" {
 		effectivePlatform = env.Platform
 	}
+	if cfg.WebLinkOptimize != nil && effectivePlatform != "web" {
+		return BuildShellPlan{}, fmt.Errorf("--web-link-optimize requires the web platform")
+	}
 	effectiveTarget := cfg.Target
 	if effectiveTarget == "editor" && effectivePlatform == "web" {
 		effectiveTarget = "template"
@@ -154,6 +158,7 @@ func resolveEngineBuildShellPlan(env buildEnvironment, cfg BuildConfig) (BuildSh
 			plan.TemplateDestination = templateDestination
 		}
 		if effectivePlatform == "web" {
+			plan.WebLinkOptimize = cfg.WebLinkOptimize
 			mode := cfg.Mode
 			if mode == "" {
 				mode = "normal"

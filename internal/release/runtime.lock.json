@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "runtime_version": "4.0.1",
+  "runtime_version": "4.0.2",
   "runtime_abi": 4,
   "release_repository": "goplus/spx",
   "manifest": "runtime-manifest.json",
@@ -27,7 +27,7 @@
   "godot": {
     "repository": "https://github.com/goplus/godot.git",
     "ref": "spx4.4.1",
-    "commit": "4706c8e85a10313fb6e1bf98fe81358b25ff96c2",
+    "commit": "5b62c786ccbe4c85f0e11ac93d6802a299e35092",
     "version": "4.4.1.stable"
   },
   "module": {
