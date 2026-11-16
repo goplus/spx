@@ -136,18 +136,6 @@ func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
 }
 
 // Internals.
-func (p *SpriteImpl) queueAnimationLoopAudio(state *animationPlayback) {
-	if state == nil {
-		return
-	}
-	if state.onStartSound != "" {
-		p.animation().addPendingAudio(state.onStartSound)
-	}
-	if state.onPlaySound != "" {
-		state.OnPlayAudioRestartPending = true
-	}
-}
-
 func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 	engine.Lock()
 	buffer = p.animation().takePendingAudios(buffer)
@@ -607,8 +595,16 @@ func (a *animationComponent) takePendingOnPlayAudioStates() (states [2]*animatio
 	return
 }
 
-func (s *animationComponent) addPendingAudio(audioName string) {
-	s.pendingAudios = append(s.pendingAudios, audioName)
+func (a *animationComponent) queueLoopAudio(state *animationPlayback) {
+	if state == nil {
+		return
+	}
+	if state.onStartSound != "" {
+		a.pendingAudios = append(a.pendingAudios, state.onStartSound)
+	}
+	if state.onPlaySound != "" {
+		state.OnPlayAudioRestartPending = true
+	}
 }
 
 func (s *animationComponent) takePendingAudios(buffer []string) []string {

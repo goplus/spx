@@ -211,8 +211,9 @@ func (p *SpriteImpl) handleAnimationLooped() {
 	if p.isDestroyed() || p.runtimeState.proxy == nil {
 		return
 	}
-	p.queueAnimationLoopAudio(p.animation().curAnimState)
-	p.queueAnimationLoopAudio(p.animation().getCurTweenState())
+	animation := p.animation()
+	animation.queueLoopAudio(animation.curAnimState)
+	animation.queueLoopAudio(animation.getCurTweenState())
 }
 
 // Sprite Sync.
