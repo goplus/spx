@@ -207,7 +207,7 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 			th.cancelFunc = func() {
 				once.Do(func() {
 					select {
-					case <-th.firstSliceDone:
+					case <-th.firstSlice.done:
 						publishedBeforeCancellation.Store(true)
 					default:
 					}
@@ -228,7 +228,7 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 		t.Fatal("yield boundary was published before the coroutine was stopped")
 	}
 	select {
-	case <-thread.done:
+	case <-thread.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("coroutine did not stop at its next yield")
 	}
@@ -298,7 +298,7 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 		}, BatchAsync)
 		scheduler.JoinAll(peers)
 	})
-	waitForThreadSignal(t, caller.done, "mutual first-slice waiters deadlocked")
+	waitForThreadSignal(t, caller.finished.done, "mutual first-slice waiters deadlocked")
 }
 
 func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
@@ -472,7 +472,7 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 		t.Fatal("startup completed before its worker finished")
 	}
 	close(resume)
-	waitForThreadSignal(t, thread.done, "startup did not finish after its worker returned")
+	waitForThreadSignal(t, thread.finished.done, "startup did not finish after its worker returned")
 	if !completed.Load() {
 		t.Fatal("startup did not complete after its worker finished")
 	}
@@ -525,7 +525,7 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 		scheduler.WaitYield(me)
 		close(resumed)
 	})
-	waitForThreadSignal(t, thread.firstSliceDone, "script did not reach its yield")
+	waitForThreadSignal(t, thread.firstSlice.done, "script did not reach its yield")
 
 	queuedRan := false
 	scheduler.queueMainThreadCallForTest(nil, func() { queuedRan = true })

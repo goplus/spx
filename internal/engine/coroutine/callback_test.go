@@ -42,11 +42,11 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 				var parent Thread
 				if managed {
 					parent = scheduler.Create("parent", func(Thread) { start() })
-					<-parent.done
+					<-parent.finished.done
 				} else {
 					start()
 				}
-				<-threads[0].done
+				<-threads[0].finished.done
 				if recovered != ErrReentrantWait {
 					t.Errorf("setup drain panic = %v, want %v", recovered, ErrReentrantWait)
 				}
@@ -73,7 +73,7 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 			},
 			Run: func(Thread) {},
 		}}, BatchAsync)
-		<-threads[0].done
+		<-threads[0].finished.done
 		if recovered != ErrReentrantWait {
 			t.Errorf("cleanup drain panic = %v, want %v", recovered, ErrReentrantWait)
 		}
@@ -104,7 +104,7 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 			}}, BatchAsync)...)
 		})
 		for _, thread := range threads {
-			<-thread.done
+			<-thread.finished.done
 			if !thread.Stopped() {
 				t.Error("shutdown callback admitted a thread")
 			}
@@ -176,7 +176,7 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 					}
 					scheduler.RunAfterStop(nil)
 					thread := scheduler.Create("after-unwind", func(Thread) {})
-					<-thread.done
+					<-thread.finished.done
 					if thread.Stopped() {
 						t.Error("unwinding shutdown rejected a fresh thread")
 					}
@@ -240,7 +240,7 @@ func TestRunBetweenScriptsRejectsReentry(t *testing.T) {
 		}
 		if managed {
 			caller := scheduler.Create("caller", func(Thread) { attempt() })
-			waitForThreadSignal(t, caller.done, "rejected engine entry blocked its caller")
+			waitForThreadSignal(t, caller.finished.done, "rejected engine entry blocked its caller")
 		} else {
 			scheduler.RunBetweenScripts(attempt)
 		}

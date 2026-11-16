@@ -65,8 +65,8 @@ func (p *Scheduler) registerTask(admission threadAdmission, task Task) Thread {
 		p.admissionMu.RUnlock()
 		// The rejected thread has not been published, so it has no waiters to wake.
 		th.Cancel()
-		th.firstSliceWaiters.close(th.firstSliceDone)
-		th.joinWaiters.close(th.done)
+		th.firstSlice.complete()
+		th.finished.complete()
 		return th
 	}
 	p.registerThread(th)
@@ -85,19 +85,25 @@ func (p *Scheduler) registerTask(admission threadAdmission, task Task) Thread {
 		go p.runThread(th, task.Run, cleanup)
 	}()
 	if task.RegisterInvocation != nil {
-		id, previous := p.enterCallback(callbackNoDrain)
-		defer p.leaveCallback(id, previous)
-		setupReturned := false
-		defer func() {
-			if !setupReturned {
-				th.Cancel()
-			}
-			p.finishSetup()
-		}()
-		cleanup = task.RegisterInvocation(th)
-		setupReturned = true
+		cleanup = p.runRegistration(th, task.RegisterInvocation)
 	}
 	return th
+}
+
+// runRegistration finishes an admitted setup even if it panics or calls Goexit.
+func (p *Scheduler) runRegistration(th Thread, register func(Thread) func()) func() {
+	id, previous := p.enterCallback(callbackNoDrain)
+	defer p.leaveCallback(id, previous)
+	setupReturned := false
+	defer func() {
+		if !setupReturned {
+			th.Cancel()
+		}
+		p.finishSetup()
+	}()
+	cleanup := register(th)
+	setupReturned = true
+	return cleanup
 }
 
 // publishThreads publishes each newly registered thread once, as a batch.
@@ -135,14 +141,10 @@ func (p *Scheduler) runThread(th Thread, fn func(Thread), cleanup func()) {
 func (p *Scheduler) finishThread(th Thread, gid uint64, recovered any) {
 	p.schedulerMu.Lock()
 	// Both waiter groups participate in the same scheduler selection.
-	for waiter := range th.firstSliceWaiters.close(th.firstSliceDone) {
-		p.markPendingLocked(waiter)
-	}
-	for waiter := range th.joinWaiters.close(nil) {
-		p.markPendingLocked(waiter)
-	}
+	p.markWaitersPendingLocked(th.firstSlice.complete())
+	// Publish context cancellation before any caller observes thread completion.
 	th.cancelFunc()
-	close(th.done)
+	p.markWaitersPendingLocked(th.finished.complete())
 	th.removeReadyLocked()
 	delete(p.pendingExecution, th)
 	delete(p.waitBatch.runnable.pendingExecution, th)

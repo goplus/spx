@@ -88,7 +88,7 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 	for range callers {
 		waitForThreadSignal(t, finished, "Open did not return")
 	}
-	waitForThreadSignal(t, waiter.done, "waiter did not resume")
+	waitForThreadSignal(t, waiter.finished.done, "waiter did not resume")
 	if resumed != 1 {
 		t.Fatalf("waiter resumed %d times, want 1", resumed)
 	}
@@ -105,10 +105,10 @@ func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 	scheduler.StopIf(func(thread Thread) bool { return thread == waiter })
 	scheduler.Join(waiter)
 
-	latch.waiters.mu.Lock()
-	defer latch.waiters.mu.Unlock()
-	if len(latch.waiters.threads) != 0 {
-		t.Fatalf("canceled latch waiters = %d, want 0", len(latch.waiters.threads))
+	latch.opened.mu.Lock()
+	defer latch.opened.mu.Unlock()
+	if len(latch.opened.threads) != 0 {
+		t.Fatalf("canceled latch waiters = %d, want 0", len(latch.opened.threads))
 	}
 }
 

@@ -36,7 +36,7 @@ func TestDrainWakesMultipleWaiters(t *testing.T) {
 	waitForThreadSignal(t, workerStarted, "native worker did not start")
 	latch := scheduler.NewLatch()
 	peer := scheduler.Create("peer", func(Thread) { latch.Wait() })
-	waitForThreadSignal(t, peer.firstSliceDone, "peer did not suspend")
+	waitForThreadSignal(t, peer.firstSlice.done, "peer did not suspend")
 
 	const count = 6
 	started, completed := make(chan struct{}, count), make(chan struct{}, count)
@@ -52,7 +52,7 @@ func TestDrainWakesMultipleWaiters(t *testing.T) {
 	}
 
 	scheduler.Stop(workerOwner)
-	waitForThreadSignal(t, workerOwner.done, "native worker's caller did not stop")
+	waitForThreadSignal(t, workerOwner.finished.done, "native worker's caller did not stop")
 	releaseWorker()
 	select {
 	case <-completed:
@@ -74,7 +74,7 @@ func TestShutdownRejectsManagedCallerWithoutSideEffects(t *testing.T) {
 	t.Cleanup(func() { scheduler.RunAfterStop(nil) })
 	latch := scheduler.NewLatch()
 	peer := scheduler.Create("peer", func(Thread) { latch.Wait() })
-	waitForThreadSignal(t, peer.firstSliceDone, "peer did not suspend")
+	waitForThreadSignal(t, peer.firstSlice.done, "peer did not suspend")
 	epoch := scheduler.admissionEpoch.Load()
 	var recovered any
 	caller := scheduler.Create("caller", func(me Thread) {
@@ -85,7 +85,7 @@ func TestShutdownRejectsManagedCallerWithoutSideEffects(t *testing.T) {
 			t.Error("rejected shutdown changed the managed caller")
 		}
 	})
-	waitForThreadSignal(t, caller.done, "managed shutdown caller did not finish")
+	waitForThreadSignal(t, caller.finished.done, "managed shutdown caller did not finish")
 	if recovered != ErrReentrantWait {
 		t.Fatalf("managed shutdown panic = %v, want %v", recovered, ErrReentrantWait)
 	}
@@ -148,12 +148,12 @@ func TestStopIsIdempotentForSuspendedThread(t *testing.T) {
 	thread := scheduler.Create("worker", func(Thread) {
 		blocked.Wait()
 	})
-	waitForThreadSignal(t, thread.firstSliceDone, "coroutine did not suspend")
+	waitForThreadSignal(t, thread.firstSlice.done, "coroutine did not suspend")
 
 	scheduler.Stop(thread)
 	scheduler.Stop(thread)
 	scheduler.Stop(nil)
-	waitForThreadSignal(t, thread.done, "suspended coroutine did not stop")
+	waitForThreadSignal(t, thread.finished.done, "suspended coroutine did not stop")
 	scheduler.Stop(thread)
 }
 
@@ -260,7 +260,7 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 		// This script still owns runMu: rejected work must finish without
 		// running another coroutine or disturbing the current execution owner.
 		for name, done := range map[string]<-chan struct{}{
-			"context": thread.Context().Done(), "first slice": thread.firstSliceDone, "done": thread.done,
+			"context": thread.Context().Done(), "first slice": thread.firstSlice.done, "done": thread.finished.done,
 		} {
 			select {
 			case <-done:
@@ -280,7 +280,7 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 		close(joined)
 	})
 	waitForThreadSignal(t, joined, "managed joins blocked on a rejected thread")
-	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
+	waitForThreadSignal(t, fresh.finished.done, "fresh script did not finish")
 	if fresh.Stopped() {
 		t.Fatal("StopAll did not reopen admission for new requests")
 	}
@@ -327,7 +327,7 @@ func TestRunAfterStopOrdersInFlightRegistration(t *testing.T) {
 		t.Fatal("in-flight registration did not return")
 	}
 	select {
-	case <-thread.done:
+	case <-thread.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("in-flight thread remained after the shutdown barrier")
 	}
@@ -369,7 +369,7 @@ func TestRunAfterStopRejectsCreationDuringBarrier(t *testing.T) {
 		t.Fatal("shutdown barrier did not finish after the blocker was removed")
 	}
 	select {
-	case <-child.done:
+	case <-child.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("rejected thread did not finish")
 	}
@@ -391,7 +391,7 @@ func TestRunAfterStopRejectsSynchronousPanicHandlerReentry(t *testing.T) {
 	worker := scheduler.Create("panicking-worker", func(Thread) {
 		panic("worker failure")
 	})
-	waitForThreadSignal(t, worker.done, "panicking worker did not finish")
+	waitForThreadSignal(t, worker.finished.done, "panicking worker did not finish")
 	select {
 	case recovered := <-guarded:
 		want := ErrReentrantWait
@@ -429,7 +429,7 @@ func TestRunAfterStopWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.T) 
 	}()
 	waitForThreadSignal(t, handlerStarted, "shutdown did not reach the panic handler")
 	// Script completion alone is insufficient: its panic handler still owns work.
-	waitForThreadSignal(t, worker.done, "panicking script did not finish")
+	waitForThreadSignal(t, worker.finished.done, "panicking script did not finish")
 	assertShutdownRejectsCreation(t, scheduler)
 	select {
 	case <-callback:
@@ -442,7 +442,7 @@ func TestRunAfterStopWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.T) 
 	waitForThreadSignal(t, drained, "shutdown did not finish after the panic handler")
 	waitForThreadSignal(t, callback, "shutdown did not run its callback")
 	fresh := scheduler.Create("after-panic-handler", func(Thread) {})
-	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
+	waitForThreadSignal(t, fresh.finished.done, "fresh script did not finish")
 	if fresh.Stopped() || scheduler.admissionClosed() {
 		t.Fatal("shutdown did not reopen admission after the panic handler")
 	}
@@ -458,7 +458,7 @@ func assertShutdownRejectsCreation(t *testing.T, scheduler *Scheduler) {
 	t.Helper()
 	ran := false
 	thread := scheduler.Create("during-shutdown", func(Thread) { ran = true })
-	waitForThreadSignal(t, thread.done, "rejected coroutine did not finish")
+	waitForThreadSignal(t, thread.finished.done, "rejected coroutine did not finish")
 	if !scheduler.admissionClosed() || !thread.Stopped() || ran {
 		t.Fatal("shutdown admitted new work before drain completed")
 	}

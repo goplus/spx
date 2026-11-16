@@ -78,7 +78,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 				// The engine synchronously runs dispatchers before its next Update.
 				// A suspended wait batch must allow these scripts to finish.
 				dispatcher := scheduler.Create(nil, func(Thread) { record("dispatcher") })
-				waitForThreadSignal(t, dispatcher.done, "incomplete wait batch blocked the engine dispatcher")
+				waitForThreadSignal(t, dispatcher.finished.done, "incomplete wait batch blocked the engine dispatcher")
 				want := []string{"dispatcher"}
 				// A priority engine call arriving during the pause must neither
 				// publish the partial batch nor consume its remaining wait count.
@@ -177,8 +177,8 @@ func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 	// whose wait job has not yet been scanned, without another Update.
 	scheduler.Stop(threads[0])
 	scheduler.Stop(threads[len(threads)-1])
-	waitForThreadSignal(t, threads[0].done, "staged script did not finish cancellation")
-	waitForThreadSignal(t, threads[len(threads)-1].done, "unscanned script did not finish cancellation")
+	waitForThreadSignal(t, threads[0].finished.done, "staged script did not finish cancellation")
+	waitForThreadSignal(t, threads[len(threads)-1].finished.done, "unscanned script did not finish cancellation")
 	scheduler.schedulerMu.Lock()
 	for _, thread := range []Thread{threads[0], threads[len(threads)-1]} {
 		_, published := scheduler.pendingExecution[thread]
@@ -210,10 +210,10 @@ func TestInterruptedWaitBatchAllowsCancelAndRestart(t *testing.T) {
 	waitForThreadSignal(t, updated, "canceled wait batch left permanently pending execution")
 
 	restarted := scheduler.Create(nil, func(Thread) { scheduler.WaitNextFrame() })
-	waitForThreadSignal(t, restarted.firstSliceDone, "scheduler did not accept new work after shutdown")
+	waitForThreadSignal(t, restarted.firstSlice.done, "scheduler did not accept new work after shutdown")
 	clock.Update(1.0/30, 30)
 	scheduler.Update()
-	waitForThreadSignal(t, restarted.done, "new script did not resume after shutdown")
+	waitForThreadSignal(t, restarted.finished.done, "new script did not resume after shutdown")
 }
 
 func expireUpdateAtFirstCheckpoint(scheduler *Scheduler) {

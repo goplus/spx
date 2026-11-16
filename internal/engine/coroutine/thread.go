@@ -56,7 +56,6 @@ type threadImpl struct {
 
 	ctx        context.Context
 	cancelFunc context.CancelFunc
-	done       chan struct{}
 
 	schedFrame     int64
 	schedTimestamp time.Time
@@ -66,9 +65,8 @@ type threadImpl struct {
 	warpStart       atomic.Int64
 	stopAtNextYield atomic.Bool
 
-	joinWaiters       waiterSet
-	firstSliceWaiters waiterSet
-	firstSliceDone    chan struct{}
+	finished   completion
+	firstSlice completion
 }
 
 // Thread represents a coroutine.
@@ -76,13 +74,13 @@ type Thread = *threadImpl
 
 func (p *Scheduler) newThread(owner any) Thread {
 	th := &threadImpl{
-		Owner:          owner,
-		manager:        p,
-		id:             p.nextThreadID.Add(1),
-		schedFrame:     -1,
-		name:           threadName(owner),
-		done:           make(chan struct{}),
-		firstSliceDone: make(chan struct{}),
+		Owner:      owner,
+		manager:    p,
+		id:         p.nextThreadID.Add(1),
+		schedFrame: -1,
+		name:       threadName(owner),
+		finished:   newCompletion(),
+		firstSlice: newCompletion(),
 	}
 	th.resumeOrder = th.id
 	th.ctx, th.cancelFunc = context.WithCancel(context.Background())

@@ -138,11 +138,15 @@ code and circular dependencies can still prevent cleanup.
   the admission lock. The atomic epoch rejects requests from before a stop,
   even after admission reopens.
 - Waiter registration and the blocked state are published together, with lock
-  order `schedulerMu` → `waiterSet.mu`. Closing a set transfers its waiters;
-  waking them after unlocking avoids reversing this order.
-- Thread completion makes Join waiters runnable before canceling the context,
-  closing the completion channel, and removing scheduler state. Update must not
-  observe an empty runnable set between the target and its waiters.
+  order `schedulerMu` → `completion.mu`. `completion.complete()` closes its
+  signal once and transfers its waiters. Waiters are marked pending only after
+  releasing `completion.mu`, avoiding the reverse lock order.
+- `finishThread` holds `schedulerMu` while completing the first-slice signal and
+  marking its waiters pending, canceling the context, then completing the thread's
+  finished signal and marking Join waiters pending. It removes the target's
+  scheduler state before selecting the next script. Both waiter groups participate
+  in that selection; Update cannot observe a gap between the target and its waiters.
+  Observing thread completion therefore also guarantees context cancellation.
 - External work registers before starting and unregisters when the worker exits.
   Canceling its script cannot decrement the work count early;
   reset must wait for the work itself to finish.
@@ -288,7 +292,7 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Callback reentry guards, engine-thread calls, frame-boundary callbacks | `internal/engine/coroutine/callback.go`, `mainthread.go` |
 | Timed and channel waits, worker lifecycle | `internal/engine/coroutine/wait.go` |
 | Frame waits, loop rounds, redraw budget | `internal/engine/coroutine/frame.go` |
-| Synchronous script entry and shared Join / Latch waits | `internal/engine/coroutine/execute.go`, `waiters.go` |
+| Synchronous script entry and shared completion / Join / Latch waits | `internal/engine/coroutine/execute.go`, `completion.go`, `join.go`, `latch.go` |
 | Wait-job processing and scheduler statistics | `internal/engine/coroutine/update.go`, `stats.go` |
 | Control-flow integration | `internal/engine/coroutine.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |

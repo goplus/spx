@@ -112,10 +112,10 @@ func TestJoinAllValidatesBeforeWaiting(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("JoinAll waited for an earlier target before validating the batch")
 	}
-	waitForThreadSignal(t, caller.done, "rejected caller did not finish")
-	local.joinWaiters.mu.Lock()
-	waiters := len(local.joinWaiters.threads)
-	local.joinWaiters.mu.Unlock()
+	waitForThreadSignal(t, caller.finished.done, "rejected caller did not finish")
+	local.finished.mu.Lock()
+	waiters := len(local.finished.threads)
+	local.finished.mu.Unlock()
 	if waiters != 0 {
 		t.Fatal("JoinAll registered a waiter before validating all targets")
 	}
@@ -125,17 +125,17 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		join    func(*Scheduler, Thread)
-		waiters func(Thread) *waiterSet
+		waiters func(Thread) *completion
 	}{
 		{
 			name:    "done",
 			join:    (*Scheduler).Join,
-			waiters: func(th Thread) *waiterSet { return &th.joinWaiters },
+			waiters: func(th Thread) *completion { return &th.finished },
 		},
 		{
 			name:    "first-yield-or-done",
 			join:    (*Scheduler).JoinFirstSlice,
-			waiters: func(th Thread) *waiterSet { return &th.firstSliceWaiters },
+			waiters: func(th Thread) *completion { return &th.firstSlice },
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -177,15 +177,15 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 				test.join(scheduler, target)
 				close(survivorReturned)
 			})
-			waitForThreadSignal(t, survivor.firstSliceDone, "survivor did not wait")
+			waitForThreadSignal(t, survivor.firstSlice.done, "survivor did not wait")
 
 			for range 16 {
 				waiter := scheduler.Create("canceled-waiter", func(Thread) {
 					test.join(scheduler, target)
 				})
-				waitForThreadSignal(t, waiter.firstSliceDone, "waiter did not wait")
+				waitForThreadSignal(t, waiter.firstSlice.done, "waiter did not wait")
 				scheduler.Stop(waiter)
-				waitForThreadSignal(t, waiter.done, "canceled waiter did not finish")
+				waitForThreadSignal(t, waiter.finished.done, "canceled waiter did not finish")
 
 				waiters := test.waiters(target)
 				waiters.mu.Lock()
@@ -203,9 +203,9 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 			default:
 			}
 			releaseTarget()
-			waitForThreadSignal(t, survivor.done, "survivor did not resume after target ran")
+			waitForThreadSignal(t, survivor.finished.done, "survivor did not resume after target ran")
 			waitForThreadSignal(t, survivorReturned, "survivor did not return from join")
-			waitForThreadSignal(t, target.done, "target did not finish")
+			waitForThreadSignal(t, target.finished.done, "target did not finish")
 		})
 	}
 }
@@ -231,23 +231,54 @@ func TestCompletionResumesWaitersInScriptOrder(t *testing.T) {
 				test.earlier(scheduler, target)
 				order <- "earlier"
 			})
-			waitForThreadSignal(t, earlier.firstSliceDone, "earlier waiter did not block")
+			waitForThreadSignal(t, earlier.firstSlice.done, "earlier waiter did not block")
 			later := scheduler.Create("later", func(Thread) {
 				test.later(scheduler, target)
 				order <- "later"
 			})
-			waitForThreadSignal(t, later.firstSliceDone, "later waiter did not block")
+			waitForThreadSignal(t, later.firstSlice.done, "later waiter did not block")
 			// Wait for the last yield to release its scheduler permit.
 			scheduler.runMu.Lock()
 			//lint:ignore SA2001 This lock/unlock is a barrier, not a protected operation.
 			scheduler.runMu.Unlock()
 			target.Cancel()
-			waitForThreadSignal(t, earlier.done, "earlier waiter did not finish")
-			waitForThreadSignal(t, later.done, "later waiter did not finish")
+			waitForThreadSignal(t, earlier.finished.done, "earlier waiter did not finish")
+			waitForThreadSignal(t, later.finished.done, "later waiter did not finish")
 			if first, second := <-order, <-order; first != "earlier" || second != "later" {
 				t.Fatalf("resumption order = %s, %s; want earlier, later", first, second)
 			}
 		})
+	}
+}
+
+func TestThreadCompletionWaitsForContextCancellation(t *testing.T) {
+	scheduler := New(nil)
+	canceling, release := make(chan struct{}), make(chan struct{})
+	releaseCancellation := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(func() {
+		releaseCancellation()
+		scheduler.RunAfterStop(nil)
+	})
+	thread := scheduler.registerTask(scheduler.captureAdmission(), Task{Run: func(Thread) {}})
+	cancel := thread.cancelFunc
+	// Hold normal completion at cancellation so an early done publication
+	// cannot be hidden by the finishing goroutine running ahead of the test.
+	thread.cancelFunc = sync.OnceFunc(func() {
+		close(canceling)
+		<-release
+		cancel()
+	})
+	scheduler.publishThreads([]Thread{thread})
+	waitForThreadSignal(t, canceling, "thread did not begin context cancellation")
+	select {
+	case <-thread.finished.done:
+		t.Fatal("thread completed before its context was canceled")
+	default:
+	}
+	releaseCancellation()
+	scheduler.Join(thread)
+	if thread.Context().Err() == nil || thread.Stopped() {
+		t.Fatal("normal completion must cancel the context without requesting a stop")
 	}
 }
 

@@ -24,7 +24,7 @@ func (p *Scheduler) Join(target Thread) {
 		return
 	}
 
-	p.join(target, target.done, &target.joinWaiters)
+	p.join(target, &target.finished)
 }
 
 // JoinAll validates all targets before waiting for each to finish.
@@ -43,16 +43,16 @@ func (p *Scheduler) JoinFirstSlice(target Thread) {
 		return
 	}
 
-	p.join(target, target.firstSliceDone, &target.firstSliceWaiters)
+	p.join(target, &target.firstSlice)
 }
 
-func (p *Scheduler) join(target Thread, done <-chan struct{}, waiters *waiterSet) {
+func (p *Scheduler) join(target Thread, signal *completion) {
 	p.requireOwnThread(target)
 	me := p.Caller()
 	if me == target {
 		return
 	}
-	p.waitOn(me, done, waiters)
+	p.waitOn(me, signal)
 }
 
 func (p *Scheduler) requireOwnThread(target Thread) {

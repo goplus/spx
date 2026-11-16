@@ -20,30 +20,28 @@ package coroutine
 // Wait atomically publishes blocking and waiter registration.
 type Latch struct {
 	manager *Scheduler
-
-	done    chan struct{}
-	waiters waiterSet
+	opened  completion
 }
 
 // NewLatch creates a closed latch associated with this coroutine scheduler.
 func (p *Scheduler) NewLatch() *Latch {
 	return &Latch{
 		manager: p,
-		done:    make(chan struct{}),
+		opened:  newCompletion(),
 	}
 }
 
 // Done is closed when the latch opens.
 func (p *Latch) Done() <-chan struct{} {
-	return p.done
+	return p.opened.done
 }
 
 // Open opens the latch once and resumes all waiters.
 func (p *Latch) Open() {
-	p.manager.wakeWaiters(p.waiters.close(p.done))
+	p.manager.wakeWaiters(p.opened.complete())
 }
 
 // Wait yields inside this scheduler and blocks other callers until the latch opens.
 func (p *Latch) Wait() {
-	p.manager.waitOn(p.manager.Caller(), p.done, &p.waiters)
+	p.manager.waitOn(p.manager.Caller(), &p.opened)
 }

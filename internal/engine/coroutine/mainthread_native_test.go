@@ -125,7 +125,7 @@ func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 		t.Fatal("managed dispatcher callback ran after shutdown admission closed")
 	}
 	select {
-	case <-blocker.done:
+	case <-blocker.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("blocking coroutine did not finish")
 	}
@@ -467,7 +467,7 @@ func TestCleanupMainThreadRunsAfterQueuedCallCancellation(t *testing.T) {
 	deadline := time.Now().Add(time.Second)
 	for {
 		select {
-		case <-thread.done:
+		case <-thread.finished.done:
 			if called.Load() || continued.Load() || !cleaned.Load() {
 				t.Fatalf("called=%v continued=%v cleaned=%v", called.Load(), continued.Load(), cleaned.Load())
 			}
@@ -606,7 +606,7 @@ func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
 		t.Error("canceled caller continued")
 	})
 	scheduler.Update()
-	waitForThreadSignal(t, thread.done, "canceled caller did not finish")
+	waitForThreadSignal(t, thread.finished.done, "canceled caller did not finish")
 	scheduler.RunAfterStop(nil)
 	if reported.Load() {
 		t.Fatal("canceled call published its panic result")
@@ -624,7 +624,7 @@ func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
 		})
 	})
 	scheduler.Update()
-	waitForThreadSignal(t, thread.done, "caller did not finish")
+	waitForThreadSignal(t, thread.finished.done, "caller did not finish")
 	if recovered := <-guarded; recovered != ErrReentrantWait {
 		t.Fatalf("synchronous drain panic = %v", recovered)
 	}
@@ -748,7 +748,7 @@ func TestShutdownPumpsCleanupWithoutAdvancingFrames(t *testing.T) {
 					defer scheduler.CleanupMainThread(cleanup)
 					latch.Wait()
 				})
-				waitForThreadSignal(t, thread.firstSliceDone, "cleanup owner did not suspend")
+				waitForThreadSignal(t, thread.firstSlice.done, "cleanup owner did not suspend")
 				scheduler.Stop(thread)
 			} else {
 				result := make(chan struct{})
@@ -819,8 +819,8 @@ func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("shutdown did not pump the Goexit cleanup")
 	}
-	waitForThreadSignal(t, cleanupOwner.done, "cleanup owner did not finish")
-	waitForThreadSignal(t, worker.done, "shutdown did not stop the worker's caller")
+	waitForThreadSignal(t, cleanupOwner.finished.done, "cleanup owner did not finish")
+	waitForThreadSignal(t, worker.finished.done, "shutdown did not stop the worker's caller")
 	if len(scheduler.shutdownGate) != 1 {
 		t.Fatal("interrupted shutdown did not release its gate")
 	}
@@ -848,7 +848,7 @@ func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 		t.Fatal("successful recovery did not reopen admission and empty the registry")
 	}
 	fresh := scheduler.Create("after-recovery", func(Thread) {})
-	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
+	waitForThreadSignal(t, fresh.finished.done, "fresh script did not finish")
 	if fresh.Stopped() {
 		t.Fatal("successful recovery rejected a fresh script")
 	}

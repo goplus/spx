@@ -265,7 +265,8 @@ func (p *Scheduler) blockThreadLocked(th Thread) {
 	if !th.canceled() {
 		delete(p.pendingExecution, th)
 	}
-	p.wakeWaitersLocked(th.firstSliceWaiters.close(th.firstSliceDone))
+	p.markWaitersPendingLocked(th.firstSlice.complete())
+	p.scheduleLocked()
 }
 
 // Canceled threads can unwind under runMu without owning a scheduler permit.
@@ -288,11 +289,11 @@ func (p *Scheduler) scheduleLocked() {
 	}
 }
 
-func (p *Scheduler) wakeWaitersLocked(waiters map[Thread]struct{}) {
+// Register the whole group before the caller selects the next script.
+func (p *Scheduler) markWaitersPendingLocked(waiters map[Thread]struct{}) {
 	for waiter := range waiters {
 		p.markPendingLocked(waiter)
 	}
-	p.scheduleLocked()
 }
 
 // Caller must hold schedulerMu.
@@ -311,7 +312,7 @@ func (p *runnableState) markPendingLocked(th Thread) {
 		return
 	}
 	select {
-	case <-th.done:
+	case <-th.finished.done:
 		return
 	default:
 	}

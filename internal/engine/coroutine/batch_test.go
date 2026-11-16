@@ -76,7 +76,7 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 						if !thread.Stopped() || thread.Context().Err() == nil {
 							t.Error("rejected batch returned an uncanceled thread")
 						}
-						for _, done := range []<-chan struct{}{thread.firstSliceDone, thread.done} {
+						for _, done := range []<-chan struct{}{thread.firstSlice.done, thread.finished.done} {
 							select {
 							case <-done:
 							default:
@@ -565,14 +565,14 @@ func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
 							t.Fatalf("registration panic = %v, want registration failure", panicValue)
 						}
 						for _, thread := range registered {
-							waitForThreadSignal(t, thread.done, "registration failure left a task running")
-							waitForThreadSignal(t, thread.firstSliceDone, "registration failure left a first slice open")
+							waitForThreadSignal(t, thread.finished.done, "registration failure left a task running")
+							waitForThreadSignal(t, thread.firstSlice.done, "registration failure left a first slice open")
 							if !thread.Stopped() {
 								t.Fatal("registration failure did not cancel a task")
 							}
 						}
 						if caller != nil {
-							waitForThreadSignal(t, caller.done, "registration failure left the caller running")
+							waitForThreadSignal(t, caller.finished.done, "registration failure left the caller running")
 						}
 						scheduler.drain()
 						if got := cleaned.Load(); got != int32(failAt) {
@@ -653,7 +653,7 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	}}, BatchAsync)[0]
 
 	select {
-	case <-thread.done:
+	case <-thread.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("cleanup panic left the task running")
 	}
@@ -671,7 +671,7 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 		ran.Store(true)
 	})
 	select {
-	case <-next.done:
+	case <-next.finished.done:
 	case <-time.After(time.Second):
 		t.Fatal("runMu remained locked after cleanup panic")
 	}
@@ -703,7 +703,7 @@ func TestBatchWaitDoneDrainsNestedAsyncSlicesWithoutUpdate(t *testing.T) {
 	})
 
 	// These tasks need no engine update or clock advancement to finish.
-	waitForThreadSignal(t, caller.done, "batch caller did not resume without Update")
+	waitForThreadSignal(t, caller.finished.done, "batch caller did not resume without Update")
 	waitForThreadSignal(t, leafRan, "nested async leaf did not run without Update")
 	var got []string
 	for len(entries) != 0 {
@@ -735,7 +735,7 @@ func TestBatchWaitDoneReturnsAfterAsyncChildYields(t *testing.T) {
 		observed <- [2]bool{childStarted.Load(), childFinished.Load()}
 	})
 
-	waitForThreadSignal(t, caller.done, "batch waited for an async child's completion")
+	waitForThreadSignal(t, caller.finished.done, "batch waited for an async child's completion")
 	if got := <-observed; got != [2]bool{true, false} {
 		t.Fatalf("child started/finished when caller returned = %v, want [true false]", got)
 	}
@@ -795,7 +795,7 @@ func TestBatchWaitDoneInsideRegistrationWithoutUpdate(t *testing.T) {
 					run()
 				}()
 			} else {
-				callerDone = scheduler.Create("caller", func(Thread) { run() }).done
+				callerDone = scheduler.Create("caller", func(Thread) { run() }).finished.done
 			}
 
 			waitForThreadSignal(t, callerDone, "registering caller did not finish")
@@ -870,7 +870,7 @@ func TestRegistrationCanJoinIndependentYield(t *testing.T) {
 				waitForThreadSignal(t, registrationDone, "registration did not finish after cancellation")
 				scheduler.RunAfterStop(nil)
 			})
-			waitForThreadSignal(t, independent.firstSliceDone, "independent task did not yield")
+			waitForThreadSignal(t, independent.firstSlice.done, "independent task did not yield")
 			if siblingRan.Load() {
 				t.Fatal("unpublished sibling ran before registration completed")
 			}
@@ -882,7 +882,7 @@ func TestRegistrationCanJoinIndependentYield(t *testing.T) {
 			waitForThreadSignal(t, updated, "Update blocked on registration waiting for an independent yield")
 			waitForThreadSignal(t, registrationDone, "registration did not finish after the independent task")
 			for _, thread := range threads {
-				waitForThreadSignal(t, thread.done, "registered task did not finish")
+				waitForThreadSignal(t, thread.finished.done, "registered task did not finish")
 			}
 			if !independentRan.Load() || taskRan.Load() == test.cancel || siblingRan.Load() != test.sibling {
 				t.Fatalf("completed scripts: independent=%v task=%v sibling=%v", independentRan.Load(), taskRan.Load(), siblingRan.Load())
@@ -968,7 +968,7 @@ func TestUnpublishedCancellationTracksCleanup(t *testing.T) {
 				close(updated)
 			}()
 			waitForThreadSignal(t, updated, "Update did not finish after cancellation cleanup")
-			waitForThreadSignal(t, thread.done, "canceled unpublished task did not finish")
+			waitForThreadSignal(t, thread.finished.done, "canceled unpublished task did not finish")
 
 			// A batch may publish after a canceled member has already exited.
 			scheduler.publishThreads([]Thread{thread})
@@ -1006,11 +1006,11 @@ func TestBatchCompletionBoundaryCanceledCaller(t *testing.T) {
 		}}}, BatchWaitDone)
 		continued.Store(true)
 	})
-	waitForThreadSignal(t, caller.firstSliceDone, "caller did not wait at the completion boundary")
+	waitForThreadSignal(t, caller.firstSlice.done, "caller did not wait at the completion boundary")
 	waitForThreadSignal(t, blockerStarted, "pending runnable task did not start")
 	scheduler.Stop(caller)
 	release()
-	waitForThreadSignal(t, caller.done, "canceled boundary caller did not finish")
+	waitForThreadSignal(t, caller.finished.done, "canceled boundary caller did not finish")
 	if continued.Load() {
 		t.Fatal("canceled caller ran its continuation")
 	}
@@ -1019,7 +1019,7 @@ func TestBatchCompletionBoundaryCanceledCaller(t *testing.T) {
 	next := scheduler.Create("next", func(Thread) {
 		scheduler.StartBatch([]Task{{Run: func(Thread) {}}}, BatchWaitDone)
 	})
-	waitForThreadSignal(t, next.done, "later batch did not complete after caller cancellation")
+	waitForThreadSignal(t, next.finished.done, "later batch did not complete after caller cancellation")
 }
 
 func TestBatchWaitDoneWaitsForCleanup(t *testing.T) {
@@ -1073,7 +1073,7 @@ func TestBatchWaitDoneWaitsForCleanup(t *testing.T) {
 				t.Fatal("batch caller continued before receiver cleanup finished")
 			}
 			release()
-			waitForThreadSignal(t, caller.done, "batch caller did not resume after cleanup")
+			waitForThreadSignal(t, caller.finished.done, "batch caller did not resume after cleanup")
 			if !continued.Load() {
 				t.Fatal("batch caller lost its continuation")
 			}
