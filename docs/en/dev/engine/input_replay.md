@@ -93,7 +93,7 @@ The Go runtime owns replay state and tick consumption. The Web host bridge start
 
 ## Capture integration
 
-Configure `captureKey` to request screenshots on recorded key presses, or call `spx.Snapshot` from game scripts. Requests carry the latest consumed input tick and are dispatched after visual-state synchronization. The Web bridge waits for rendering before reading pixels. See [Web capture](web_capture.md).
+Configure `captureKey` to request screenshots on recorded key presses. Requests carry the latest consumed input tick and are dispatched after visual-state synchronization. The Web bridge waits for rendering before reading pixels. See [Web capture](web_capture.md).
 
 ## Not supported in v1
 

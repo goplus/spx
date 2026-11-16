@@ -23,19 +23,115 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-// -----------------------------------------------------------------------------
-// Backdrop
-// -----------------------------------------------------------------------------
-func (p *Game) setBackdrop(backdrop any, wait bool) {
-	if p.goSetBackdrop(backdrop) {
-		engine.RequestRedraw()
-		p.setupBackdrop()
-		p.doWindowSize()
-		p.doWhenBackdropChanged(p.getCostumeName(), wait)
-	}
+// Stage Display.
+func (p *Game) BackdropName() string {
+	return p.getCostumeName()
 }
 
-func (p *Game) goSetBackdrop(val any) bool {
+func (p *Game) BackdropIndex() int {
+	return p.getCostumeIndex()
+}
+
+func (p *Game) SetBackdrop__0(name BackdropName) {
+	p.setBackdrop(name, false)
+}
+
+func (p *Game) SetBackdrop__1(index float64) {
+	p.setBackdrop(index, false)
+}
+
+func (p *Game) SetBackdrop__2(index int) {
+	p.setBackdrop(index, false)
+}
+
+func (p *Game) SetBackdrop__3(action switchAction) {
+	p.setBackdrop(action, false)
+}
+
+func (p *Game) SetBackdropAndWait__0(name BackdropName) {
+	p.setBackdrop(name, true)
+}
+
+func (p *Game) SetBackdropAndWait__1(index float64) {
+	p.setBackdrop(index, true)
+}
+
+func (p *Game) SetBackdropAndWait__2(index int) {
+	p.setBackdrop(index, true)
+}
+
+func (p *Game) SetBackdropAndWait__3(action switchAction) {
+	p.setBackdrop(action, true)
+}
+
+func (p *Game) SetWindowSize(width int64, height int64) {
+	engine.Managers().PlatformMgr.SetWindowSize(width, height, false)
+}
+
+func (p *Game) SetGraphicEffect(kind EffectKind, value float64) {
+	engine.RequestRedraw()
+	p.visualObject.setGraphicEffect(kind, value)
+}
+
+func (p *Game) ChangeGraphicEffect(kind EffectKind, value float64) {
+	engine.RequestRedraw()
+	p.visualObject.changeGraphicEffect(kind, value)
+}
+
+func (p *Game) ClearGraphicEffects() {
+	engine.RequestRedraw()
+	p.visualObject.clearGraphicEffects()
+}
+
+func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
+	hasTilemap := p.tilemapMgr.hasData()
+	proj.Map = coreproject.ResolveMapConfig(proj.Map, hasTilemap, baseScreenWidth, baseScreenHeight)
+
+	p.displayState.WorldWidth = proj.Map.Width
+	p.displayState.WorldHeight = proj.Map.Height
+
+	if backdrops := proj.GetBackdrops(); !hasTilemap && len(backdrops) > 0 {
+		p.visualObject.initBackdrops(backdrops, proj.GetBackdropIndex())
+		p.ensureWorldSize()
+	} else {
+		p.visualObject.initWithSize(p.displayState.WorldWidth, p.displayState.WorldHeight)
+	}
+	spxlog.Debug("SetWorldSize: %d, %d", p.displayState.WorldWidth, p.displayState.WorldHeight)
+
+	p.ensureWindowSize()
+	metrics := coreproject.ResolveWorldWindowMetrics(
+		p.displayState.WorldWidth,
+		p.displayState.WorldHeight,
+		p.displayState.WindowWidth,
+		p.displayState.WindowHeight,
+		coreproject.ToMapMode(proj.Map.Mode),
+	)
+	p.applyWorldWindowMetrics(metrics)
+	spxlog.Debug("SetWindowSize: %d, %d", p.displayState.WindowWidth, p.displayState.WindowHeight)
+}
+
+func (p *Game) applyWorldWindowMetrics(metrics coreproject.WorldWindowMetrics) {
+	p.displayState.WorldWidth = metrics.WorldWidth
+	p.displayState.WorldHeight = metrics.WorldHeight
+	p.displayState.MinWorldX = metrics.MinWorldX
+	p.displayState.MinWorldY = metrics.MinWorldY
+	p.displayState.MapMode = metrics.MapMode
+	p.displayState.WindowWidth = metrics.WindowWidth
+	p.displayState.WindowHeight = metrics.WindowHeight
+}
+
+// Backdrop.
+func (p *Game) setBackdrop(backdrop any, wait bool) {
+	if !p.selectBackdrop(backdrop) {
+		return
+	}
+	engine.RequestRedraw()
+	p.applyBackdropLayout()
+	p.ensureWindowSize()
+	p.doWhenBackdropChanged(p.getCostumeName(), wait)
+}
+
+func (p *Game) selectBackdrop(val any) bool {
 	switch v := val.(type) {
 	case int:
 		if Pos(v) == Random {
@@ -66,7 +162,7 @@ func (p *Game) setRandomBackdrop() bool {
 	return true
 }
 
-func (p *Game) setupBackdrop() {
+func (p *Game) applyBackdropLayout() {
 	imgW, imgH := p.getCostumeSize()
 	spriteMgr := engine.Managers().SpriteMgr
 	layout := coreproject.ResolveBackdropLayout(
@@ -86,37 +182,29 @@ func (p *Game) setupBackdrop() {
 	})
 
 	if p.displayState.MapMode == coreproject.MapModeActualSize {
-		x, y := getCostumeRenderOffset(p.currentCostume(), p.currentCostume().pivot, layout.ScaleX, layout.ScaleY)
+		costume := p.currentCostume()
+		x, y := getCostumeRenderOffset(costume, costume.pivot, layout.ScaleX, layout.ScaleY)
 		spriteMgr.SetPosition(
-			p.runtimeState.syncSprite.GetId(),
+			p.runtimeState.proxy.GetId(),
 			mathf.NewVec2(x, y),
 		)
 	}
-	spriteMgr.SetScale(p.runtimeState.syncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
-}
-
-// -----------------------------------------------------------------------------
-// Display Size
-// -----------------------------------------------------------------------------
-func (p *Game) getWindowSize() mathf.Vec2 {
-	x, y := p.windowSize()
-	return mathf.NewVec2(float64(x), float64(y))
+	spriteMgr.SetScale(p.runtimeState.proxy.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
 }
 
 func (p *Game) windowSize() (int, int) {
-	p.doWindowSize()
+	p.ensureWindowSize()
 	return p.displayState.WindowWidth, p.displayState.WindowHeight
 }
 
-func (p *Game) doWindowSize() {
+func (p *Game) ensureWindowSize() {
 	if p.displayState.WindowWidth == 0 {
-		c := p.costumes[p.costumeIndex]
-		p.displayState.WindowWidth, p.displayState.WindowHeight = c.displaySize()
+		p.displayState.WindowWidth, p.displayState.WindowHeight = p.currentCostume().displaySize()
 	}
 }
 
 func (p *Game) worldSize() (int, int) {
-	p.doWorldSize()
+	p.ensureWorldSize()
 	return p.displayState.WorldWidth, p.displayState.WorldHeight
 }
 
@@ -129,9 +217,8 @@ func (p *Game) worldBounds() (left, top, right, bottom int) {
 	return
 }
 
-func (p *Game) doWorldSize() {
+func (p *Game) ensureWorldSize() {
 	if p.displayState.WorldWidth == 0 {
-		c := p.costumes[p.costumeIndex]
-		p.displayState.WorldWidth, p.displayState.WorldHeight = c.displaySize()
+		p.displayState.WorldWidth, p.displayState.WorldHeight = p.currentCostume().displaySize()
 	}
 }

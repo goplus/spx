@@ -29,9 +29,7 @@ var (
 	cachedBounds map[string]mathf.Rect2
 )
 
-// -----------------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------------
+// Public API.
 func (p *SpriteImpl) Hide() {
 	if bubble := p.components.bubble; bubble != nil {
 		bubble.stopAll()
@@ -113,24 +111,22 @@ func (p *SpriteImpl) SetLayer__1(direction dirAction, layers int) {
 		} else {
 			layers = -layers
 		}
-		p.g.shapeMgr.goBackLayers(p, layers)
+		p.g.scene.goBackLayers(p, layers)
 	case Backward:
-		p.g.shapeMgr.goBackLayers(p, layers)
+		p.g.scene.goBackLayers(p, layers)
 	}
 }
 
 func (p *SpriteImpl) SetLayerTo(layer layerAction) {
 	switch layer {
 	case Front:
-		p.g.shapeMgr.goBackLayers(p, math.MinInt32)
+		p.g.scene.goBackLayers(p, math.MinInt32)
 	case Back:
-		p.g.shapeMgr.goBackLayers(p, math.MaxInt32)
+		p.g.scene.goBackLayers(p, math.MaxInt32)
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Internal Rendering
-// -----------------------------------------------------------------------------
+// Internal Rendering.
 func (p *SpriteImpl) requestRedrawIfVisible() {
 	if p.Visible() {
 		engine.RequestRedraw()
@@ -167,10 +163,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 }
 
 func (p *SpriteImpl) isFullyGhosted() bool {
-	if p.greffUniforms == nil {
-		return false
-	}
-	val, ok := p.greffUniforms[GhostEffect]
+	val, ok := p.graphicEffects[GhostEffect]
 	return ok && normalizeEffectValue(GhostEffect, val) >= 1
 }
 
@@ -193,15 +186,15 @@ func applyRenderOffset(p *SpriteImpl, cx, cy *float64) {
 // local render offset. Godot performs the same transform through RenderRoot.
 func getWorldRenderOffset(p *SpriteImpl) (float64, float64) {
 	x, y := getRenderOffset(p)
-	rotation, scaleX, scaleY := getRenderRotationAndScale(p)
-	x *= scaleX
-	y *= scaleY
+	rotation, flipX, flipY := renderRotationAndFlip(p)
+	x *= flipX
+	y *= flipY
 
 	sin, cos := math.Sincos(-engine.DegToRad(rotation))
 	return x*cos - y*sin, x*sin + y*cos
 }
 
-func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64) {
+func renderRotationAndFlip(p *SpriteImpl) (rotation, flipX, flipY float64) {
 	transform := p.transform()
 	if transform.rotationStyle == None {
 		return 0, 1.0, 1.0
@@ -209,15 +202,15 @@ func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64)
 	cs := p.costumes[p.costumeIndex]
 	rotation = p.Heading() + cs.faceRight
 	rotation -= 90
-	scaleX = 1.0
-	scaleY = 1.0
+	flipX = 1.0
+	flipY = 1.0
 	if transform.rotationStyle == LeftRight {
 		rotation = 0
 		if transform.direction < 0 {
-			scaleX = -1.0
+			flipX = -1.0
 		}
 	}
-	return rotation, scaleX, scaleY
+	return rotation, flipX, flipY
 }
 
 func getCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {

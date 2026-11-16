@@ -28,24 +28,20 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-// -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
+// Types.
 type DecoratorJSON = tm.DecoratorJSON
 
-type gameTilemapMgr struct {
-	g              *Game
-	fs             spxfs.Dir       // filesystem for loading tilemap files
-	datas          *tm.TscnMapData // old format data
-	decoratorDatas *DecoratorJSON  // new format decorator data
-	useNewLoader   bool            // true if using C++ TileMapParser (new format)
-	tilemapDir     string          // current tilemap directory (e.g., "tilemaps/map1")
-	currentMap     string          // current loaded map name (e.g., "map1")
+type tilemapManager struct {
+	g                *Game
+	fs               spxfs.Dir       // filesystem for loading tilemap files
+	mapData          *tm.TscnMapData // Legacy map data.
+	decoratorData    *DecoratorJSON  // Native map decorators.
+	usesNativeParser bool
+	tilemapDir       string // current tilemap directory (e.g., "tilemaps/map1")
+	currentMap       string // current loaded map name (e.g., "map1")
 }
 
-// -----------------------------------------------------------------------------
-// Dynamic Loading
-// -----------------------------------------------------------------------------
+// Dynamic Loading.
 // LoadTilemap dynamically loads a tilemap from the specified path.
 // mapDir can be either:
 //   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
@@ -63,9 +59,7 @@ func (p *Game) UnloadTilemap() {
 	p.tilemapMgr.unloadMap()
 }
 
-// -----------------------------------------------------------------------------
-// Tile Placement
-// -----------------------------------------------------------------------------
+// Tile Placement.
 func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
 	engine.Managers().TilemapMgr.PlaceTiles(numeric.ConvertFloatSlice[float32](positions), path)
@@ -81,9 +75,7 @@ func (p *Game) PlaceTile(x, y float64, texturePath string) {
 	engine.Managers().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
 }
 
-// -----------------------------------------------------------------------------
-// Tile Removal
-// -----------------------------------------------------------------------------
+// Tile Removal.
 func (p *Game) EraseTile__0(x, y float64) {
 	engine.Managers().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
 }
@@ -92,9 +84,7 @@ func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
 	engine.Managers().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
 }
 
-// -----------------------------------------------------------------------------
-// Tile Query
-// -----------------------------------------------------------------------------
+// Tile Query.
 func (p *Game) GetTile__0(x, y float64) string {
 	return engine.Managers().TilemapMgr.GetTile(mathf.NewVec2(x, y))
 }
@@ -108,9 +98,7 @@ func (p *Game) TilemapName() string {
 	return p.tilemapMgr.currentMap
 }
 
-// -----------------------------------------------------------------------------
-// Engine Bridge
-// -----------------------------------------------------------------------------
+// Engine Bridge.
 func (p *Game) setTileMapLayerIndex(index int64) {
 	engine.Managers().TilemapMgr.SetLayerIndex(index)
 }
@@ -125,14 +113,12 @@ func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float6
 	engine.Managers().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }
 
-// -----------------------------------------------------------------------------
-// Loading
-// -----------------------------------------------------------------------------
+// Loading.
 // loadMap loads a tilemap from the specified path.
 // mapDir can be either:
 //   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
 //   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
-func (p *gameTilemapMgr) loadMap(mapDir string) {
+func (p *tilemapManager) loadMap(mapDir string) {
 	if mapDir == "" {
 		return
 	}
@@ -143,14 +129,14 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 	p.applyLoadedMap(loaded)
 }
 
-func (p *gameTilemapMgr) applyLoadedMap(loaded tm.LoadResult) {
-	p.datas = loaded.Data
-	p.decoratorDatas = loaded.DecoratorData
-	p.useNewLoader = loaded.UseNewLoader
+func (p *tilemapManager) applyLoadedMap(loaded tm.LoadResult) {
+	p.mapData = loaded.Data
+	p.decoratorData = loaded.DecoratorData
+	p.usesNativeParser = loaded.UseNewLoader
 	p.tilemapDir = loaded.TilemapDir
 	p.currentMap = loaded.CurrentMap
 
-	if p.useNewLoader {
+	if p.usesNativeParser {
 		engine.Managers().TilemapparserMgr.LoadTilemap(engine.ToAssetPath(loaded.TilemapPath))
 		if loaded.DecoratorErr != nil {
 			spxlog.Info("Tilemap: no decorator.json found at %s (this is OK if no decorators)", loaded.DecoratorPath)
@@ -159,37 +145,37 @@ func (p *gameTilemapMgr) applyLoadedMap(loaded tm.LoadResult) {
 }
 
 // unloadMap unloads the current tilemap and cleans up resources.
-func (p *gameTilemapMgr) unloadMap() {
+func (p *tilemapManager) unloadMap() {
 	if p.currentMap == "" {
 		return
 	}
-	if p.useNewLoader {
+	if p.usesNativeParser {
 		engine.Managers().TilemapparserMgr.DestroyAllTilemaps()
 	}
 	engine.Managers().SceneMgr.ClearPureSprites()
-	p.datas = nil
-	p.decoratorDatas = nil
+	p.mapData = nil
+	p.decoratorData = nil
 	p.currentMap = ""
 	p.tilemapDir = ""
-	p.useNewLoader = false
+	p.usesNativeParser = false
 }
 
-func (p *gameTilemapMgr) parseTilemap() {
-	if p.useNewLoader {
-		if p.decoratorDatas != nil {
-			p.loadDecoratorNodes(p.decoratorDatas.Decorators, p.tilemapDir)
+func (p *tilemapManager) applyMapContents() {
+	if p.usesNativeParser {
+		if p.decoratorData != nil {
+			p.loadDecoratorNodes(p.decoratorData.Decorators, p.tilemapDir)
 		}
 		return
 	}
-	if p.datas == nil {
+	if p.mapData == nil {
 		return
 	}
-	tm.LoadTilemaps(p.datas, p.g.setTileInfo, p.g.setTileMapLayerIndex, p.g.PlaceTiles__1)
-	p.loadDecoratorNodes(p.datas.Decorators, "tilemaps")
+	tm.LoadTilemaps(p.mapData, p.g.setTileInfo, p.g.setTileMapLayerIndex, p.g.PlaceTiles__1)
+	p.loadDecoratorNodes(p.mapData.Decorators, "tilemaps")
 	p.calcWorldSize()
 }
 
-func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilemapDir string) {
+func (p *tilemapManager) loadDecoratorNodes(decorators []tm.DecoratorNode, tilemapDir string) {
 	const headingOffset = -90.0
 	for _, item := range decorators {
 		position := item.Position.ToVec2()
@@ -205,12 +191,12 @@ func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilem
 }
 
 // calcWorldSize calculates and updates world size based on actual tile distribution in tilemap.
-func (p *gameTilemapMgr) calcWorldSize() {
-	if p.datas == nil || len(p.datas.TileMap.Layers) == 0 {
+func (p *tilemapManager) calcWorldSize() {
+	if p.mapData == nil || len(p.mapData.TileMap.Layers) == 0 {
 		spxlog.Debug("Tilemap: no tilemap data or layers, skipping world size update")
 		return
 	}
-	bounds, ok := tm.CalcWorldBounds(p.datas)
+	bounds, ok := tm.CalcWorldBounds(p.mapData)
 	if !ok {
 		spxlog.Debug("Tilemap: no representable tile bounds")
 		return
@@ -221,6 +207,6 @@ func (p *gameTilemapMgr) calcWorldSize() {
 	p.g.displayState.WorldHeight = bounds.WorldHeight
 }
 
-func (p *gameTilemapMgr) hasData() bool {
-	return p.datas != nil || p.useNewLoader
+func (p *tilemapManager) hasData() bool {
+	return p.mapData != nil || p.usesNativeParser
 }

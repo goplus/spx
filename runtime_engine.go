@@ -19,7 +19,6 @@ package spx
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/core/clock"
@@ -29,29 +28,27 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/ui"
 )
 
-// -----------------------------------------------------------------------------
-// Engine Callbacks
-// -----------------------------------------------------------------------------
+// Engine Callbacks.
 func (p *Game) OnEngineStart() {
-	p.lifecycleState.RunOnce.Do(func() {
+	p.lifecycle.startOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
-		generation := p.bootstrapGeneration()
+		generation := p.lifecycle.generation()
 		engine.Go(p, func(context.Context, any) {
-			if !p.isCurrentBootstrap(generation) {
+			if !p.lifecycle.isCurrent(generation) {
 				return
 			}
 			if me, ok := p.gamer.(interface{ MainEntry() }); ok {
-				p.queueBootstrap(generation, func() {
+				p.lifecycle.queue(generation, func() {
 					runMainUntilYield(p, me.MainEntry)
 				})
 			}
-			if !p.lifecycleState.IsRunned.Load() {
+			if !p.lifecycle.loaded.Load() {
 				if err := p.loadGame("assets", generation); err != nil {
 					engine.Panic(err)
 					return
 				}
 			}
-			if !p.markGameStarted(generation) {
+			if !p.lifecycle.markLoaded(generation) {
 				return
 			}
 			p.startBootstrap(generation)
@@ -60,7 +57,7 @@ func (p *Game) OnEngineStart() {
 }
 
 func (p *Game) OnEngineDestroy() {
-	p.resetBootstrap()
+	p.lifecycle.reset()
 	p.discardPenCommands()
 	p.abortInputSession("game destroyed")
 }
@@ -72,7 +69,7 @@ func (p *Game) OnEngineReset() {
 // OnEngineBeforeUpdate snapshots physics, input, and conditions before the clock advances.
 func (p *Game) OnEngineBeforeUpdate(delta float64) {
 	p.scriptEvents.pendingConditions = nil
-	if !p.lifecycleState.IsRunned.Load() {
+	if !p.lifecycle.loaded.Load() {
 		return
 	}
 	runBetweenScripts(func() {
@@ -80,14 +77,14 @@ func (p *Game) OnEngineBeforeUpdate(delta float64) {
 		if !p.inputMgr.prepareInputFrame(delta) {
 			return
 		}
-		if p.lifecycleState.StartDispatched.Load() {
+		if p.lifecycle.startDispatched.Load() {
 			p.scriptEvents.sampleConditions()
 		}
 	})
 }
 
 func (p *Game) OnEngineUpdate(float64) {
-	if !p.lifecycleState.IsRunned.Load() || p.inputMgr.frame.pending == nil {
+	if !p.lifecycle.loaded.Load() || p.inputMgr.frame.pending == nil {
 		return
 	}
 	// Use a managed dispatcher because update callbacks may run user code.
@@ -104,13 +101,13 @@ func (p *Game) OnEngineUpdate(float64) {
 func (p *Game) OnEngineRender(float64) {
 	runBetweenScripts(func() {
 		defer p.flushPenCommands()
-		if !p.lifecycleState.IsRunned.Load() {
+		if !p.lifecycle.loaded.Load() {
 			return
 		}
 		p.camera.onUpdate()
-		activeShapes := p.shapeMgr.getTempShapes()
+		activeShapes := p.scene.getTempShapes()
 		p.flushSpriteProxyChanges(activeShapes)
-		p.shapeMgr.flushBubbleVisuals(activeShapes)
+		p.scene.flushBubbleVisuals(activeShapes)
 	})
 }
 
@@ -127,10 +124,10 @@ func (p *Game) OnEnginePause(bool) {
 // first slice precedes event registration; future-frame waits stay independent.
 func (p *Game) dispatchShapeUpdates() {
 	delta := clock.DeltaTime()
-	generation := p.bootstrapGeneration()
+	generation := p.lifecycle.generation()
 	var tasks []coroutine.Task
 	// Task collection cannot run user code, so the live list is stable here.
-	for _, shape := range p.shapeMgr.all() {
+	for _, shape := range p.scene.all() {
 		switch updater := shape.(type) {
 		case bubbleShape:
 			// Bubble visuals are committed at frame end.
@@ -138,7 +135,7 @@ func (p *Game) dispatchShapeUpdates() {
 			tasks = append(tasks, coroutine.Task{
 				Owner: p,
 				Run: func(coroutine.Thread) {
-					if currentGame() == p && p.isCurrentBootstrap(generation) {
+					if currentGame() == p && p.lifecycle.isCurrent(generation) {
 						updater.onUpdate(delta)
 					}
 				},
@@ -148,77 +145,8 @@ func (p *Game) dispatchShapeUpdates() {
 	scheduler.StartBatch(tasks, coroutine.BatchWaitFirstSlice)
 }
 
-// -----------------------------------------------------------------------------
-// Bootstrap
-// -----------------------------------------------------------------------------
-func (p *Game) startBootstrap(generation uint64) {
-	engine.Go(p, func(context.Context, any) {
-		if currentGame() != p || !p.claimBootstrap(generation) {
-			return
-		}
-		p.runBootstrapTasks(generation)
-		p.completeBootstrap(generation)
-	})
-}
-
-func (p *Game) resetBootstrap() {
-	p.bootstrapMu.Lock()
-	p.bootstrapGen++
-	p.bootstrapStarted = false
-	p.startScheduled = false
-	p.pendingBootstrap = nil
-	p.lifecycleState.IsRunned.Store(false)
-	p.lifecycleState.BootstrapDone.Store(false)
-	p.lifecycleState.StartDispatched.Store(false)
-	p.bootstrapMu.Unlock()
-}
-
-func (p *Game) completeBootstrap(generation uint64) bool {
-	return p.markBootstrapFlag(generation, &p.lifecycleState.BootstrapDone)
-}
-
-func (p *Game) markGameStarted(generation uint64) bool {
-	return p.markBootstrapFlag(generation, &p.lifecycleState.IsRunned)
-}
-
-// -----------------------------------------------------------------------------
-// Start Events
-// -----------------------------------------------------------------------------
-func (p *Game) dispatchStartEventIfNeeded() {
-	if ev := p.scheduleStartEvent(); ev != nil {
-		p.handleEvent(ev)
-	}
-}
-
-func (p *Game) scheduleStartEvent() *eventStart {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if !p.lifecycleState.BootstrapDone.Load() || p.lifecycleState.StartDispatched.Load() || p.startScheduled {
-		return nil
-	}
-	p.startScheduled = true
-	return &eventStart{generation: p.bootstrapGen}
-}
-
-func (p *Game) takeStartSinks(generation uint64) ([]eventSink, bool) {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return nil, false
-	}
-	return p.scriptEvents.manager.SnapshotStartOnce(), true
-}
-
-func (p *Game) markStartDispatched(generation uint64) bool {
-	return p.markBootstrapFlag(generation, &p.lifecycleState.StartDispatched)
-}
-
-func (p *Game) initLogicLoop() {
-	scheduler.Create("logicLoop", p.logicLoop)
-}
-
 func (p *Game) logicLoop(coroutine.Thread) {
-	tempAudios, tempAnimations := []string{}, []*animState{}
+	tempAudios, tempAnimations := []string{}, []*animationPlayback{}
 	for {
 		tempAudios, tempAnimations = p.processLogicFrame(tempAudios, tempAnimations)
 		engine.WaitNextFrame()
@@ -226,8 +154,8 @@ func (p *Game) logicLoop(coroutine.Thread) {
 	}
 }
 
-func (p *Game) processLogicFrame(tempAudios []string, tempAnimations []*animState) ([]string, []*animState) {
-	items := p.shapeMgr.getTempShapes()
+func (p *Game) processLogicFrame(tempAudios []string, tempAnimations []*animationPlayback) ([]string, []*animationPlayback) {
+	items := p.scene.getTempShapes()
 	// Flush all pending audio before completing any animations.
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
@@ -261,7 +189,7 @@ func (p *Game) showDebugPanel() {
 	lastInfo := scheduler.UpdateStats()
 
 	msg := fmt.Sprintf("FPS: %.f\n", clock.FPS())
-	msg += fmt.Sprintf("Shape: %v\n", p.shapeMgr.count())
+	msg += fmt.Sprintf("Shape: %v\n", p.scene.count())
 	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
 	msg += fmt.Sprintf("GameRender: %v\n", renderInfo.ActualCall)
 	msg += fmt.Sprintf("CoroUpdateJobs: %v\n", coroInfo.ActualCall)
@@ -275,33 +203,4 @@ func (p *Game) showDebugPanel() {
 	msg += fmt.Sprintf("coro: GCCount: %v\n", lastInfo.GCCount)
 	msg += fmt.Sprintf("coro: LoopIterations: %v\n", lastInfo.LoopIterations)
 	p.debugState.DebugPanel.Show(msg)
-}
-
-// -----------------------------------------------------------------------------
-// Execution Helpers
-// -----------------------------------------------------------------------------
-
-// runBetweenScripts excludes script slices during frame snapshots and commits.
-func runBetweenScripts(call func()) {
-	if scheduler == nil {
-		call()
-		return
-	}
-	scheduler.RunBetweenScripts(call)
-}
-
-func runMainUntilYield(owner any, mainFn func()) {
-	thread := scheduler.Create(owner, func(coroutine.Thread) {
-		runMain(mainFn)
-	})
-	scheduler.JoinFirstSlice(thread)
-}
-
-// runMain calls Main synchronously while tracking its execution timeout.
-func runMain(call func()) {
-	if thread := scheduler.Caller(); thread != nil {
-		end := thread.BeginMain(time.Now())
-		defer end()
-	}
-	call()
 }

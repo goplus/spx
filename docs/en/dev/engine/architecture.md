@@ -41,7 +41,7 @@ flowchart TD
     CLI[CLI packaging] --> Core
 ```
 
-Configuration parsing receives a resource directory once. The root package's `game_resources.go` places engine lookup **below** the packed configuration overlay, so later sprite, sound and tilemap reads use the same directory and precedence rules. Preparation resolves assets from that directory without consulting the previous game's global asset root. Font discovery and binary availability are optional directory capabilities: a Web interpreter can verify a font mounted in Godot without reading its binary through the interpreter filesystem. Neither core parsing nor offline packaging should need a running engine or a global backend registration hook.
+Configuration parsing receives a resource directory once. The root package's `resources.go` places engine lookup **below** the packed configuration overlay, so later sprite, sound and tilemap reads use the same directory and precedence rules. Preparation resolves assets from that directory without consulting the previous game's global asset root. Font discovery and binary availability are optional directory capabilities: a Web interpreter can verify a font mounted in Godot without reading its binary through the interpreter filesystem. Neither core parsing nor offline packaging should need a running engine or a global backend registration hook.
 
 Input events belong to `internal/core/input`; `internal/engine` keeps aliases for its callers. This avoids conversion copies and lets input policy tests run without engine initialization. The public named key-code API remains compatible.
 

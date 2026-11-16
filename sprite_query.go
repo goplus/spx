@@ -39,9 +39,7 @@ const (
 	edgeAreaViewport = "viewport"
 )
 
-// -----------------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------------
+// Public API.
 func (p *SpriteImpl) TouchingColor__0(color Color) bool {
 	return p.touchingColor(toMathfColor(color))
 }
@@ -78,25 +76,9 @@ func (p *SpriteImpl) ShowVar(name PropertyName) {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Internal Queries
-// -----------------------------------------------------------------------------
+// Internal Queries.
 func (p *SpriteImpl) hasCostume() bool {
 	return p.costumeIndex >= 0 && p.costumeIndex < len(p.costumes) && p.costumes[p.costumeIndex] != nil
-}
-
-func (p *SpriteImpl) bounds() *mathf.Rect2 {
-	if !p.hasCostume() {
-		return nil
-	}
-
-	x, y := p.getXY()
-	w, h := p.adjustPositionAndGetDimensions(&x, &y)
-
-	return &mathf.Rect2{
-		Position: mathf.Vec2{X: x - w*0.5, Y: y - h*0.5},
-		Size:     mathf.Vec2{X: w, Y: h},
-	}
 }
 
 // fenceBounds returns the axis-aligned bounds of the rendered costume. Scratch
@@ -124,7 +106,7 @@ func (p *SpriteImpl) renderBounds() (mathf.Rect2, bool) {
 	centerX += offsetX
 	centerY += offsetY
 
-	rotation, _, _ := getRenderRotationAndScale(p)
+	rotation, _, _ := renderRotationAndFlip(p)
 	sin, cos := math.Sincos(toRadian(rotation))
 	aabbWidth := math.Abs(cos)*width + math.Abs(sin)*height
 	aabbHeight := math.Abs(sin)*width + math.Abs(cos)*height
@@ -144,7 +126,7 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 		return width * p.runtimeState.scale, height * p.runtimeState.scale
 	}
 
-	if triggerCollider.Type == collision.ColliderAuto && p.runtimeState.syncSprite == nil {
+	if triggerCollider.Type == collision.ColliderAuto && p.runtimeState.proxy == nil {
 		center, size := getCostumeBoundByAlpha(p)
 		triggerCollider.Pivot = center
 		triggerCollider.Params = []float64{size.X, size.Y}
@@ -173,7 +155,7 @@ func (p *SpriteImpl) touching(obj Target) bool {
 		}
 		if v == Mouse {
 			x, y := p.g.getMousePos()
-			return p.g.touchingPoint(p, x, y)
+			return p.touchPoint(x, y)
 		}
 	case Sprite:
 		src := spriteOf(v)
@@ -186,7 +168,7 @@ func (p *SpriteImpl) touching(obj Target) bool {
 }
 
 func (p *SpriteImpl) prepareSelfCollisionQuery() bool {
-	if p.runtimeState.syncSprite == nil {
+	if p.runtimeState.proxy == nil {
 		return false
 	}
 	p.syncProxyForQuery()
@@ -199,14 +181,14 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	}
 	// Scratch's sensing path ignores visible/ghost when checking whether a sprite
 	// is touching the mouse, so use the sensing branch in the engine query.
-	return engine.Managers().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.syncSprite.GetId(), mathf.NewVec2(x, y), false)
+	return engine.Managers().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.proxy.GetId(), mathf.NewVec2(x, y), false)
 }
 
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if !p.prepareSceneColorQuery() {
 		return false
 	}
-	return engine.Managers().SpriteMgr.CheckCollisionByColor(p.runtimeState.syncSprite.GetId(), color, colorThreshold, alphaThreshold)
+	return engine.Managers().SpriteMgr.CheckCollisionByColor(p.runtimeState.proxy.GetId(), color, colorThreshold, alphaThreshold)
 }
 
 func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
@@ -214,7 +196,7 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 		return false
 	}
 	return engine.Managers().SpriteMgr.CheckCollisionByColors(
-		p.runtimeState.syncSprite.GetId(),
+		p.runtimeState.proxy.GetId(),
 		spriteColor,
 		targetColor,
 		colorThreshold,
@@ -223,7 +205,7 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 }
 
 func (p *SpriteImpl) prepareSceneColorQuery() bool {
-	if p.g == nil || p.runtimeState.syncSprite == nil {
+	if p.g == nil || p.runtimeState.proxy == nil {
 		return false
 	}
 	p.g.syncSpriteProxiesForQuery(p)
@@ -250,8 +232,8 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	}
 	if !p.isCloneProxyPublicationBlocked() && !dst.isCloneProxyPublicationBlocked() {
 		return engine.Managers().SpriteMgr.CheckCollisionWithSprite(
-			p.runtimeState.syncSprite.GetId(),
-			dst.runtimeState.syncSprite.GetId(),
+			p.runtimeState.proxy.GetId(),
+			dst.runtimeState.proxy.GetId(),
 			alphaThreshold,
 			usePixels,
 		)
@@ -265,8 +247,8 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	var touching bool
 	engine.WaitMainThread(func() {
 		withPendingCloneSensingVisibility([]*SpriteImpl{p, dst}, func() {
-			touching = p.runtimeState.syncSprite.CheckCollisionWithSprite(
-				dst.runtimeState.syncSprite.GetId(),
+			touching = p.runtimeState.proxy.CheckCollisionWithSprite(
+				dst.runtimeState.proxy.GetId(),
 				alphaThreshold,
 				usePixels,
 			)
@@ -304,7 +286,7 @@ func (p *SpriteImpl) costumeTouchBounds(withTriggerPadding bool) (collision.AABB
 	padding := 0.0
 	if withTriggerPadding {
 		// Auto triggers extend beyond the costume, including after rotation.
-		rotation, _, _ := getRenderRotationAndScale(p)
+		rotation, _, _ := renderRotationAndFlip(p)
 		sin, cos := math.Sincos(toRadian(rotation))
 		padding = TriggerExtraPixel * math.Abs(p.runtimeState.scale) * (math.Abs(sin) + math.Abs(cos)) / 2
 	}
@@ -322,9 +304,9 @@ func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) 
 	}
 	switch normalizeEdgeArea(area) {
 	case edgeAreaCamera:
-		touching = int(engine.Managers().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.syncSprite.GetId()))
+		touching = int(engine.Managers().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.proxy.GetId()))
 	default:
-		touching = int(engine.Managers().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.syncSprite.GetId()))
+		touching = int(engine.Managers().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.proxy.GetId()))
 	}
 	return touching & where
 }
@@ -335,23 +317,21 @@ func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
 	}
 	switch normalizeEdgeArea(area) {
 	case edgeAreaCamera:
-		return int(engine.Managers().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.syncSprite.GetId()))
+		return int(engine.Managers().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.proxy.GetId()))
 	default:
-		return int(engine.Managers().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.syncSprite.GetId()))
+		return int(engine.Managers().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.proxy.GetId()))
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Game Queries
-// -----------------------------------------------------------------------------
+// Game Queries.
 func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
-	if dst == nil || dst.runtimeState.syncSprite == nil {
+	if dst == nil || dst.runtimeState.proxy == nil {
 		return nil
 	}
 	usePixels := !p.touchByShape
 	dstBox, dstBounded := dst.touchBounds(usePixels)
-	for _, sp := range p.shapeMgr.spritesNamed(name) {
-		if sp == dst || !sp.isTouchable() || sp.isDragging() || sp.runtimeState.syncSprite == nil {
+	for _, sp := range p.scene.spritesNamed(name) {
+		if sp == dst || !sp.isTouchable() || sp.isDragging() || sp.runtimeState.proxy == nil {
 			continue
 		}
 		if box, bounded := sp.touchBounds(usePixels); dstBounded && bounded && !dstBox.Intersects(box) {
@@ -364,9 +344,35 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	return nil
 }
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
+// Position.
+// resolveTargetPosition distinguishes a missing target from one at the origin.
+func (p *Game) resolveTargetPosition(target Target) (float64, float64, bool) {
+	var targetSprite *SpriteImpl
+	switch target := target.(type) {
+	case SpriteName:
+		targetSprite = p.scene.findSprite(target)
+	case Sprite:
+		targetSprite = spriteOf(target)
+	case specialObj:
+		if target == Mouse {
+			x, y := p.getMousePos()
+			return x, y, true
+		}
+	case Pos:
+		if target == Random {
+			worldW, worldH := p.worldSize()
+			randomX, randomY := randomIntn(worldW), randomIntn(worldH)
+			return float64(randomX - (worldW >> 1)), float64((worldH >> 1) - randomY), true
+		}
+	}
+	if targetSprite == nil {
+		return 0, 0, false
+	}
+	x, y := targetSprite.getXY()
+	return x, y, true
+}
+
+// Helpers.
 // withPendingCloneSensingVisibility makes logical visibility queryable without
 // making a pending clone renderable. The native visibility bit is leased only
 // inside one main-thread callback, so rendering and physics cannot interleave
@@ -393,7 +399,7 @@ func withPendingCloneSensingVisibility(sprites []*SpriteImpl, call func()) {
 
 	for _, sprite := range sprites {
 		publication := sprite.proxyPublication
-		proxy := sprite.runtimeState.syncSprite
+		proxy := sprite.runtimeState.proxy
 		if publication == nil || proxy == nil ||
 			publication.state.Load() == cloneProxyPublished {
 			continue

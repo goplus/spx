@@ -17,11 +17,7 @@
 package spx
 
 import (
-	"slices"
-
-	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
-	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func (p *Game) Broadcast__0(msg MsgName) {
@@ -66,50 +62,4 @@ func (p *Game) handleEvent(ev event) {
 	case *eventTimer:
 		p.doWhenTimer(e.Timestamp)
 	}
-}
-
-// Click Dispatch
-type clicker interface {
-	doWhenClick()
-	getProxy() *engine.Sprite
-	Visible() bool
-}
-
-func (p *Game) findClickTarget(point mathf.Vec2) clicker {
-	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
-		if target, ok := item.(clicker); ok && p.pointHitsClickTarget(target, point) {
-			return target
-		}
-	}
-	return nil
-}
-
-// Drag picking ignores non-draggable foreground sprites.
-func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
-	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
-			return sprite
-		}
-	}
-	return nil
-}
-
-func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
-	syncSprite := target.getProxy()
-	if syncSprite == nil || !target.Visible() {
-		return false
-	}
-
-	sprite, ok := target.(*SpriteImpl)
-	if ok {
-		if sprite.isDestroyed() {
-			return false
-		}
-		sprite.syncProxyForQuery()
-		if sprite.isFullyGhosted() {
-			return false
-		}
-	}
-
-	return engine.Managers().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 }

@@ -30,9 +30,7 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/ui"
 )
 
-// -----------------------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------------------
+// Constants.
 const (
 	// Style selects the appearance of default and large monitors.
 	// Slider and list monitors always use the Scratch appearance.
@@ -42,9 +40,10 @@ const (
 	monitorUpdateIntervalS = 0.2
 )
 
-// -----------------------------------------------------------------------------
-// Monitor
-// -----------------------------------------------------------------------------
+// Property.
+type PropertyName = string
+
+// Monitor.
 type Monitor struct {
 	name        WidgetName
 	size        float64
@@ -80,9 +79,50 @@ type monitorBinding struct {
 	write func(float64) bool
 }
 
-// -----------------------------------------------------------------------------
-// Widget Methods
-// -----------------------------------------------------------------------------
+func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
+	if name == "" {
+		return Value{}
+	}
+
+	resolvedTarget, from := resolvePropertyTarget(p.propertyRootValue(), target)
+	if from < 0 {
+		return Value{}
+	}
+
+	eval := coreproject.ResolveMemberValueEval(resolvedTarget, name, from)
+	if eval == nil {
+		return Value{}
+	}
+	return scratch.WrapValue(eval())
+}
+
+func (p *Game) HideVar(name PropertyName) {
+	p.setStageMonitor("", name, false)
+}
+
+func (p *Game) ShowVar(name PropertyName) {
+	p.setStageMonitor("", name, true)
+}
+
+func (p *Game) propertyRootValue() reflect.Value {
+	if p.gamer != nil {
+		return reflect.ValueOf(p.gamer).Elem()
+	}
+	return reflect.ValueOf(p).Elem()
+}
+
+func (p *Game) setStageMonitor(target string, val PropertyName, visible bool) bool {
+	val = strings.TrimPrefix(val, getVarPrefix)
+	for _, item := range p.scene.items {
+		if sp, ok := item.(*Monitor); ok && sp.target == target && strings.TrimPrefix(sp.val, getVarPrefix) == val {
+			sp.setVisible(visible)
+			return true
+		}
+	}
+	return false
+}
+
+// Widget Methods.
 func (p *Monitor) GetName() WidgetName {
 	return p.name
 }
@@ -202,9 +242,7 @@ func (p *Monitor) evaluate() ui.MonitorValue {
 	return value
 }
 
-// -----------------------------------------------------------------------------
-// Visibility Control
-// -----------------------------------------------------------------------------
+// Visibility Control.
 func (p *Monitor) setVisible(visible bool) {
 	if visible == p.visible {
 		return
@@ -219,9 +257,7 @@ func (p *Monitor) setXYpos(x float64, y float64) {
 	p.isDirty = true
 }
 
-// -----------------------------------------------------------------------------
-// Construction
-// -----------------------------------------------------------------------------
+// Construction.
 func newMonitor(g reflect.Value, prepared preparedMonitor) (*Monitor, error) {
 	v := prepared.config
 	appearance := prepared.style.Appearance
@@ -313,24 +349,16 @@ func parseMonitorSlider(v coreproject.StageShape) ui.MonitorSlider {
 	return ui.NewMonitorSlider(min, max, !ok || discrete)
 }
 
-// -----------------------------------------------------------------------------
-// Evaluation
-// -----------------------------------------------------------------------------
-func getTarget(g reflect.Value, target string) (reflect.Value, int) {
-	if target == "" {
-		return g, 1 // spx.Game
-	}
-	if val := coreproject.FindFieldPtr(g, target, 0); val != nil {
-		return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
-	}
-	return reflect.Value{}, -1
-}
-
 func bindMonitor(g reflect.Value, targetName, val string, appearance ui.MonitorAppearance) (monitorBinding, error) {
-	target, from := getTarget(g, targetName)
+	target, from := resolvePropertyTarget(g, targetName)
 	if from < 0 {
 		return monitorBinding{}, syscall.ENOENT
 	}
+	if targetName != "" {
+		// Monitor bindings retain the generated sprite field scope for all targets.
+		from = spritePropertyFieldsStart
+	}
+
 	binding := monitorBinding{read: buildMonitorEval(target, from, val, appearance)}
 	if binding.read == nil {
 		return monitorBinding{}, syscall.ENOENT
@@ -390,4 +418,21 @@ func listMonitorItems(value any) []string {
 		items[i] = scratch.ToString(list.Index(i).Interface())
 	}
 	return items
+}
+
+func resolvePropertyTarget(root reflect.Value, target string) (reflect.Value, int) {
+	if target == "" {
+		return root, 1 // spx.Game
+	}
+
+	val := coreproject.FindFieldPtr(root, target, 0)
+	if val == nil {
+		return reflect.Value{}, -1
+	}
+
+	v := reflect.ValueOf(val).Elem()
+	if _, ok := val.(Sprite); ok {
+		return v, spritePropertyFieldsStart
+	}
+	return v, 0 // normal target field
 }

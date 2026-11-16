@@ -10,28 +10,19 @@
 
 - 在 Web 端做固定输入回归截图
 - 在自定义 `index.html` 中接管截图保存、对比、上报
-- 在脚本执行到指定步骤时请求截图
+- 通过录制的截图按键固定截图点位
 
 ## 1. SPX 侧能力
 
-SPX 通过 [`spx.Snapshot(name, fn)`](../../../../runtime_snapshot.go) 请求截图。它先执行 `fn`，成功后将请求入队，并在当前 engine frame 的视觉状态同步后派发；没有活跃 Game 时立即派发请求。
-
-一个最小例子：
-
-```go
-// 在游戏脚本到达待验证的步骤时调用。
-spx.Snapshot("title", nil)
-```
-
-`Snapshot` 的 `fn` 会先执行，成功后才排入截图请求；如果 `fn` 返回错误，运行时会报告错误且不会截图。传入 `nil` 可以不执行 body，直接排入请求。这样可以把“操作”和“截图”写在同一个步骤里。如果当前 Game 有活跃的 Input Session，请求还会携带最近消费的 input tick。
-
 录制与回放可通过 host 配置的 `captureKey` 触发截图。按键的 press 边沿随输入流一起记录，回放时会在相同 input tick 再次请求截图；Web runner 默认使用 `P`。游戏脚本无需额外注册定时回调。
+
+运行时通过内部函数 [`capture`](../../../../runtime.go) 将请求入队，在当前 engine frame 的视觉状态同步后派发。如果当前 Game 有活跃的 Input Session，请求还会携带最近消费的 input tick。
 
 截图时序如下：
 
 - 请求中的 `frame` 来自内部 engine-session 帧计数，从 engine `onStart` 开始，包含资源加载和 bootstrap 期间的 update。
-- `Snapshot` 在 body 成功返回后读取 `frame` 和最近消费的 `inputTick`；body 若在协程中 yield，截图点也会随 body 的完成时间后移。
-- 从普通事件协程调用 `Snapshot` 时，运行时会在派发截图前再次同步本帧的视觉状态。
+- 截图快捷键在本帧时钟推进后生成请求，记录 `frame` 和最近消费的 `inputTick`。
+- 运行时在派发截图前同步本帧的视觉状态。
 - reset 会清除尚未派发的截图请求；engine-session 帧计数只在新的引擎时间会话开始时归零。
 - `frame` 用于同帧截图合并和诊断；录制与回放的图片以 `inputTick` 配对，不依赖加载阶段消耗的帧数。
 
@@ -56,7 +47,7 @@ Web 运行时由 [`capture.js`](../../../../cmd/ispx/web/capture.js) 排队和�
 
 ## 3. Web host 截图请求格式
 
-传给 host 的 `request` 是 Web 平台桥接对象，不是 SPX 脚本的公开类型。当前 `Snapshot` 产生的结构如下：
+传给 host 的 `request` 是 Web 平台桥接对象，不是 SPX 脚本的公开类型。请求结构如下：
 
 ```js
 {
@@ -70,13 +61,13 @@ Web 运行时由 [`capture.js`](../../../../cmd/ispx/web/capture.js) 排队和�
 
 字段含义：
 
-- `name`：SPX 脚本传入的名字
+- `name`：可选的截图名称；截图快捷键请求为空
 - `filename`：runner 生成的稳定文件名，保证是 `.png`
 - `inputTick`：截图请求发出时最近消费的 input tick；没有活跃 input tick 时为 `null`
 - `frame`：截图请求对应的 engine-session 帧号，作为采图协调与诊断元数据保留
 - `sequence`：当前运行期内的截图序号
 
-脚本只声明 `Snapshot` 点位。当前图片是 baseline、run，还是需要立即对比，由 `Record` / `Replay` 运行模式和外部 host 决定。
+当前图片是 baseline、run，还是需要立即对比，由 `Record` / `Replay` 运行模式和外部 host 决定。
 
 runner 的命名规则是：
 
@@ -182,7 +173,7 @@ baseline 采用两阶段提交：采图期间只写 PNG；`Record` 模式调用 
 4. 在 Game 停止时选择 `Normal`、`Record` 或 `Replay`，把相应 `input` 配置传给统一的 `startGame`；不要在同一局中切换模式
 5. 在 host 里直接使用 `request.filename`；自定义命名时优先使用 `request.inputTick`，把 `request.frame` 留作诊断
 6. `Record` 写 baseline；`Replay` 读取 replay JSON 并写 runs；`Normal` 直接写 runs
-7. 所有预期 `Snapshot` 都触发后，在停止、切换项目或替换 host 前等待 `spxFlushCaptureQueue()`；官方 runner 的 `stopGame` 已包含这一步，自定义停止流程需要显式处理
+7. 所有预期截图都触发后，在停止、切换项目或替换 host 前等待 `spxFlushCaptureQueue()`；官方 runner 的 `stopGame` 已包含这一步，自定义停止流程需要显式处理
 8. 调用统一的 `stopGame`；`Record` 只有此时才返回可保存的 replay Blob，`Replay` 输入耗尽后也不会自动调用它
 9. 如果要做回归测试，再把已提交的 baseline 与当前 run 做对比
 
@@ -206,7 +197,7 @@ runner 默认生成的文件名：
 
 如果你只是要“接入能力”，这些都不是必须的；真正必须的只有：
 
-- 在 SPX 里调用 `Snapshot`，或在录制与回放中配置 `captureKey`
+- 在录制与回放中配置 `captureKey`
 - 在外部页面安装 `spxSetCaptureHost`
 - 在停止、切换 session 或替换 host 前等待 `spxFlushCaptureQueue()`
 
@@ -234,7 +225,7 @@ window.addEventListener('spxCaptureScreenshot', (event) => {
 ## 9. 注意事项
 
 - `Record` / `Replay` 依赖浏览器文件系统目录选择能力，用于持久化或读取 `baseline/input-replay.json`；`Normal` 截图在没有 host 时仍可退回浏览器下载
-- `Snapshot` 只声明截图点位；Record 写 baseline，Replay 写 run，真正何时以及如何对比由外部 host 决定
+- Record 写 baseline，Replay 写 run，真正何时以及如何对比由外部 host 决定
 - Web 测试页在 `Record` / `Replay` 中默认使用 `P` 作为确定性截图键；可通过 `captureKey` 配置更换或关闭，普通项目不会被 core 隐式占用该键
 - 输入录制/回放 session 统一 SPX logical update delta 和脚本随机源；它不会把全部 coroutine 强制成全局 FIFO，也不包含 Godot fixed physics delta
 - `Replay` 只重放输入，不接管 Game 生命周期；输入耗尽不会自动停止 Game，host 必须根据自己的生命周期调用 `stopGame`
@@ -245,9 +236,9 @@ window.addEventListener('spxCaptureScreenshot', (event) => {
 
 ## 10. 参考文件
 
-- [`runtime_snapshot.go`](../../../../runtime_snapshot.go)
-- [`runtime_input.go`](../../../../runtime_input.go)
-- [`runtime_capture_js.go`](../../../../runtime_capture_js.go)
+- [`runtime.go`](../../../../runtime.go)
+- [`input.go`](../../../../input.go)
+- [`capture_js.go`](../../../../capture_js.go)
 - [`internal/core/clock/clock.go`](../../../../internal/core/clock/clock.go)
 - [`cmd/ispx/web/runner.html`](../../../../cmd/ispx/web/runner.html)
 - [`cmd/ispx/web/input-session.js`](../../../../cmd/ispx/web/input-session.js)

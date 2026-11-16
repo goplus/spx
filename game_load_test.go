@@ -200,23 +200,23 @@ type recordingProjectFontBridge struct {
 
 func TestPrepareStageBootstrapKeepsManualCameraFollowLast(t *testing.T) {
 	game := &cameraFollowOverrideGame{}
-	game.initShapeMgr()
+	game.scene.init()
 	game.camera = &cameraImpl{g: &game.Game}
 	game.Camera = game.camera
 
 	spriteA := newCameraFollowOverrideSprite(&game.Game, "SpriteA", "")
 	spriteB := newCameraFollowOverrideSprite(&game.Game, "SpriteB", "SpriteB")
-	game.shapeMgr.add(spriteOf(spriteA))
-	game.shapeMgr.add(spriteOf(spriteB))
+	game.scene.add(spriteOf(spriteA))
+	game.scene.add(spriteOf(spriteB))
 
-	generation := game.bootstrapGeneration()
-	game.prepareStageBootstrap(
+	generation := game.lifecycle.generation()
+	game.setupStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{Camera: &coreproject.CameraConfig{On: "SpriteA"}},
 		reflect.ValueOf(game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasks(generation)
+	game.lifecycle.runTasks(generation)
 
 	followTarget, ok := game.camera.followTarget.(*SpriteImpl)
 	if !ok {
@@ -244,14 +244,14 @@ func TestRefreshTouchFiltersUsesCurrentTargets(t *testing.T) {
 	spriteA.physics().addTouchTargets("SpriteB")
 	spriteB.physics().addTouchTargets("SpriteA")
 
-	generation := game.bootstrapGeneration()
-	game.prepareStageBootstrap(
+	generation := game.lifecycle.generation()
+	game.setupStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasks(generation)
+	game.lifecycle.runTasks(generation)
 	game.refreshTouchFilters()
 
 	if got := game.touchFilters["SpriteA"].Mask; got != 0 {
@@ -266,7 +266,7 @@ func TestBootstrapAppliesTouchTargetsFromMain(t *testing.T) {
 	setupRuntimeScheduler(t)
 
 	game := &collisionLayerOrderGame{}
-	game.initShapeMgr()
+	game.scene.init()
 	game.autoTouchLayers = true
 	game.touchFilters = map[string]*touchFilter{
 		"SpriteA": {Layer: 1 << 0},
@@ -278,11 +278,11 @@ func TestBootstrapAppliesTouchTargetsFromMain(t *testing.T) {
 		spriteA.OnTouchStart__0("SpriteB", func() {})
 	})
 	spriteB := newCollisionLayerOrderSprite(&game.Game, "SpriteB", nil)
-	game.shapeMgr.add(spriteOf(spriteA))
-	game.shapeMgr.add(spriteOf(spriteB))
+	game.scene.add(spriteOf(spriteA))
+	game.scene.add(spriteOf(spriteB))
 
-	generation := game.bootstrapGeneration()
-	game.prepareStageBootstrap(
+	generation := game.lifecycle.generation()
+	game.setupStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(game).Elem(),
@@ -302,11 +302,11 @@ func TestLoadStageEntriesReservesLayerZeroForPen(t *testing.T) {
 	const penCanvasLayer = 0
 
 	var game Game
-	game.initShapeMgr()
+	game.scene.init()
 
 	back := newCollisionLayerOrderSprite(&game, "Back", nil)
 	front := newCollisionLayerOrderSprite(&game, "Front", nil)
-	game.sprs = map[string]Sprite{
+	game.spritePrototypes = map[string]Sprite{
 		"Back":  back,
 		"Front": front,
 	}
@@ -333,16 +333,16 @@ func TestLoadStageEntriesAssignsContiguousLayersToExpandedStageSprites(t *testin
 	setupCloneSpriteMgr(t)
 
 	var game stageLayerOrderGame
-	game.initShapeMgr()
+	game.scene.init()
 
 	back := newCollisionLayerOrderSprite(&game.Game, "Back", nil)
 	front := newCollisionLayerOrderSprite(&game.Game, "Front", nil)
 	game.Middle = newCollisionLayerOrderSprite(&game.Game, "Middle", nil)
 	groupProto := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
-	groupProto.baseObj.initWithSize(1, 1)
+	groupProto.visualObject.initWithSize(1, 1)
 	groupProto.physics().bodyCollider.Type = collision.ColliderNone
 	groupProto.physics().triggerCollider.Type = collision.ColliderNone
-	game.sprs = map[string]Sprite{
+	game.spritePrototypes = map[string]Sprite{
 		"Back":                      back,
 		"Front":                     front,
 		"collisionLayerOrderSprite": groupProto,
@@ -401,7 +401,7 @@ func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
 
 	sprite.initRuntimeProxy()
 
-	if sprite.runtimeState.syncSprite == nil {
+	if sprite.runtimeState.proxy == nil {
 		t.Fatal("SyncSprite = nil, want initialized proxy")
 	}
 	if sprite.runtimeState.isCostumeDirty {
@@ -422,7 +422,7 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 		"size":         2.0,
 		"costumeIndex": 1.0,
 	}
-	properties, err := parseSpriteProperties(shape)
+	properties, err := parseSpriteOverrides(shape)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	if dest == nil {
 		t.Fatal("instantiateStageSprite returned nil sprite")
 	}
-	if dest.runtimeState.syncSprite == nil {
+	if dest.runtimeState.proxy == nil {
 		t.Fatal("SyncSprite = nil, want initialized proxy")
 	}
 	if dest.runtimeState.isCostumeDirty {
@@ -456,7 +456,7 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	setupCloneSpriteMgr(t)
 	source := newCloneAwakeOrderSprite(&game, "SpriteA")
 	out := reflect.New(reflect.TypeOf(source).Elem()).Elem()
-	properties, err := parseSpriteProperties(coreproject.StageShape{"visible": true})
+	properties, err := parseSpriteOverrides(coreproject.StageShape{"visible": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	if dest.spriteState.hasOnCloned || *source.sawAwakeInMain {
 		t.Fatal("stage instantiation ran sprite Main")
 	}
-	if dest.runtimeState.syncSprite == nil {
+	if dest.runtimeState.proxy == nil {
 		t.Fatal("stage instance proxy was not initialized")
 	}
 }
@@ -606,11 +606,11 @@ func TestPrepareSpriteConfigBuildsStableAnimationDefinitions(t *testing.T) {
 	}
 }
 
-func TestSpriteLayoutRejectsNonStructTypes(t *testing.T) {
+func TestSpriteTypeRejectsNonStructTypes(t *testing.T) {
 	for _, typ := range []reflect.Type{nil, reflect.TypeFor[int](), reflect.TypeFor[*SpriteImpl]()} {
-		layout, err := inspectSpriteLayout(typ)
+		layout, err := inspectSpriteType(typ)
 		if layout != nil || err == nil || !strings.Contains(err.Error(), "must be a struct") {
-			t.Fatalf("inspectSpriteLayout(%v) = %v, %v; want no layout and a struct type error", typ, layout, err)
+			t.Fatalf("inspectSpriteType(%v) = %v, %v; want no layout and a struct type error", typ, layout, err)
 		}
 	}
 }
@@ -782,7 +782,7 @@ func TestAllocSpriteFieldsUsesGeneratedStorage(t *testing.T) {
 		iface   Sprite
 		value   projectTestSprite
 	}{pointer: original, iface: original, value: projectTestSprite{marker: "value"}}
-	game := Game{typs: map[string]reflect.Type{
+	game := Game{spriteTypes: map[string]reflect.Type{
 		"pointer": reflect.TypeFor[projectTestSprite](),
 		"iface":   reflect.TypeFor[projectTestSprite](),
 		"value":   reflect.TypeFor[projectTestSprite](),
@@ -811,7 +811,7 @@ func TestPrepareSpriteFieldsReturnsFirstError(t *testing.T) {
 		First   *spriteLoadTestSprite
 		Later   *spriteLoadTestSprite
 	}{}
-	game.typs = map[string]reflect.Type{
+	game.spriteTypes = map[string]reflect.Type{
 		"Data":  reflect.TypeFor[int](),
 		"First": reflect.TypeFor[spriteLoadTestSprite](),
 		"Later": reflect.TypeFor[spriteLoadTestSprite](),
@@ -866,12 +866,12 @@ func TestPrepareProjectFailurePreservesLiveGame(t *testing.T) {
 				Last:              last,
 				Items:             []*projectTestSprite{original},
 			}
-			game.typs = make(map[string]reflect.Type)
+			game.spriteTypes = make(map[string]reflect.Type)
 			for _, name := range []string{"projectTestSprite", "Dynamic", "Value", "Last", "Missing"} {
-				game.typs[name] = reflect.TypeFor[projectTestSprite]()
+				game.spriteTypes[name] = reflect.TypeFor[projectTestSprite]()
 			}
-			game.sprs = map[string]Sprite{"Existing": original}
-			game.shapeMgr.items = []Shape{&original.SpriteImpl}
+			game.spritePrototypes = map[string]Sprite{"Existing": original}
+			game.scene.items = []Shape{&original.SpriteImpl}
 			beforeValue := &projectTestSprite{marker: "value"}
 			fs := &recordingProjectFS{files: map[string]string{
 				"sprites/projectTestSprite/index.json": testSpriteConfig,
@@ -891,7 +891,7 @@ func TestPrepareProjectFailurePreservesLiveGame(t *testing.T) {
 			if original.marker != "pointer" || dynamic.marker != "interface" || last.marker != "last" || len(game.Items) != 1 || game.Items[0] != original {
 				t.Fatal("preparation changed existing sprites or a stage group")
 			}
-			if len(game.sprs) != 1 || game.sprs["Existing"] != original || len(game.shapeMgr.items) != 1 || game.shapeMgr.items[0] != &original.SpriteImpl {
+			if len(game.spritePrototypes) != 1 || game.spritePrototypes["Existing"] != original || len(game.scene.items) != 1 || game.scene.items[0] != &original.SpriteImpl {
 				t.Fatal("preparation published sprite prototypes or stage shapes")
 			}
 			wantReads := []string{
@@ -910,7 +910,7 @@ func TestPrepareProjectFailurePreservesLiveGame(t *testing.T) {
 
 func TestPrepareProjectReusesSpriteConfigurationAcrossStageEntries(t *testing.T) {
 	game := &projectTestGame{}
-	game.typs = map[string]reflect.Type{"projectTestSprite": reflect.TypeFor[projectTestSprite]()}
+	game.spriteTypes = map[string]reflect.Type{"projectTestSprite": reflect.TypeFor[projectTestSprite]()}
 	fs := &recordingProjectFS{files: map[string]string{
 		"sprites/projectTestSprite/index.json": testSpriteConfig,
 	}}
@@ -927,7 +927,7 @@ func TestPrepareProjectReusesSpriteConfigurationAcrossStageEntries(t *testing.T)
 	if want := []string{"sprites/projectTestSprite/index.json"}; !reflect.DeepEqual(fs.reads, want) {
 		t.Fatalf("resource reads = %v, want %v", fs.reads, want)
 	}
-	if game.projectTestSprite != nil || game.Items != nil || len(game.sprs) != 0 || len(game.shapeMgr.items) != 0 {
+	if game.projectTestSprite != nil || game.Items != nil || len(game.spritePrototypes) != 0 || len(game.scene.items) != 0 {
 		t.Fatal("successful preparation published fields or stage state")
 	}
 }
@@ -948,7 +948,7 @@ func TestPrepareProjectReadsTilemapOnceAndKeepsDecoratorOptional(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			game := &projectTestGame{}
-			game.sprs = map[string]Sprite{"Existing": &projectTestSprite{}}
+			game.spritePrototypes = map[string]Sprite{"Existing": &projectTestSprite{}}
 			fs := &recordingProjectFS{files: test.files}
 			project := &coreproject.ProjectConfig{TilemapPath: test.path, Zorder: []any{"Existing"}}
 			plan, err := game.prepareProject(fs, project, reflect.ValueOf(game).Elem())
@@ -988,7 +988,7 @@ func TestPrepareProjectPreservesStageFailureOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			game := &projectTestGame{}
-			game.typs = map[string]reflect.Type{"Missing": reflect.TypeFor[projectTestSprite]()}
+			game.spriteTypes = map[string]reflect.Type{"Missing": reflect.TypeFor[projectTestSprite]()}
 			fs := &recordingProjectFS{}
 			_, err := game.prepareProject(fs, &coreproject.ProjectConfig{Zorder: test.entries}, reflect.ValueOf(game).Elem())
 			if err == nil || !strings.Contains(err.Error(), test.want) {
@@ -1034,7 +1034,7 @@ func TestPrepareProjectRejectsNilCachedPrototype(t *testing.T) {
 		coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{coreproject.StageShape{}}},
 	} {
 		game := &projectTestGame{}
-		game.sprs = map[string]Sprite{"projectTestSprite": (*projectTestSprite)(nil)}
+		game.spritePrototypes = map[string]Sprite{"projectTestSprite": (*projectTestSprite)(nil)}
 		_, err := game.prepareProject(&recordingProjectFS{}, &coreproject.ProjectConfig{Zorder: []any{entry}}, reflect.ValueOf(game).Elem())
 		if err == nil || !strings.Contains(err.Error(), "projectTestSprite") {
 			t.Errorf("typed-nil prototype with entry %v: error = %v, want preflight rejection", entry, err)
@@ -1047,9 +1047,9 @@ func TestPrepareProjectRejectsPrototypeTypeCollision(t *testing.T) {
 		t.Run(map[bool]string{false: "prepared field", true: "cached prototype"}[cached], func(t *testing.T) {
 			game := &prototypeConflictGame{}
 			if cached {
-				game.sprs = map[string]Sprite{"projectTestSprite": &conflictingSprite{}}
+				game.spritePrototypes = map[string]Sprite{"projectTestSprite": &conflictingSprite{}}
 			} else {
-				game.typs = map[string]reflect.Type{"projectTestSprite": reflect.TypeFor[conflictingSprite]()}
+				game.spriteTypes = map[string]reflect.Type{"projectTestSprite": reflect.TypeFor[conflictingSprite]()}
 			}
 			fs := &recordingProjectFS{files: map[string]string{
 				"sprites/projectTestSprite/index.json": testSpriteConfig,
@@ -1336,7 +1336,7 @@ func setupGameTestRuntime(t *testing.T, files gameTestFS, game Gamer, sprites []
 	base.soundMgr.Init(&fakeAudioBackend{})
 	base.tilemapMgr.g, base.tilemapMgr.fs = base, files
 	base.physicsEnabled = physics
-	base.lifecycleState.IsRunned.Store(true)
+	base.lifecycle.loaded.Store(true)
 
 	return base
 }
@@ -1478,16 +1478,16 @@ func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
 			pkgengine.PlatformMgr = nil
 			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
-			generation := game.bootstrapGeneration()
+			generation := game.lifecycle.generation()
 			var calls atomic.Int32
 			if name != "empty" {
-				game.queueBootstrap(generation, func() {
+				game.lifecycle.queue(generation, func() {
 					calls.Add(1)
-					game.queueBootstrap(generation, func() { calls.Add(1) })
+					game.lifecycle.queue(generation, func() { calls.Add(1) })
 				})
 			}
 			if name == "stale" {
-				game.resetBootstrap()
+				game.lifecycle.reset()
 			}
 
 			queued := make(chan struct{})
@@ -1502,7 +1502,7 @@ func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
 				t.Fatal("bootstrap scheduling waited for an engine-thread call")
 			}
 			currentScheduler.Update()
-			if got, want := game.lifecycleState.BootstrapDone.Load(), name != "stale"; got != want {
+			if got, want := game.lifecycle.bootstrapDone.Load(), name != "stale"; got != want {
 				t.Fatalf("bootstrap done = %v, want %v", got, want)
 			}
 			var wantCalls int32
@@ -1518,20 +1518,20 @@ func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
 
 func TestGameRunBootstrapTasksDrainsNestedCallbacks(t *testing.T) {
 	var g Game
-	generation := g.bootstrapGeneration()
+	generation := g.lifecycle.generation()
 	var got []string
 
-	g.queueBootstrap(generation, func() {
+	g.lifecycle.queue(generation, func() {
 		got = append(got, "first")
-		g.queueBootstrap(generation, func() {
+		g.lifecycle.queue(generation, func() {
 			got = append(got, "nested")
 		})
 	})
-	g.queueBootstrap(generation, func() {
+	g.lifecycle.queue(generation, func() {
 		got = append(got, "second")
 	})
 
-	g.runBootstrapTasks(generation)
+	g.lifecycle.runTasks(generation)
 
 	want := []string{"first", "second", "nested"}
 	if !slices.Equal(got, want) {
@@ -1541,20 +1541,20 @@ func TestGameRunBootstrapTasksDrainsNestedCallbacks(t *testing.T) {
 
 func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 	var g Game
-	generation := g.bootstrapGeneration()
+	generation := g.lifecycle.generation()
 	g.bindScriptEvents()
 
 	var sprite SpriteImpl
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite)
 
-	g.queueBootstrap(generation, func() {
+	g.lifecycle.queue(generation, func() {
 		g.OnStart(func() {})
 	})
-	g.queueBootstrap(generation, func() {
+	g.lifecycle.queue(generation, func() {
 		sprite.OnStart(func() {})
 	})
 
-	g.runBootstrapTasks(generation)
+	g.lifecycle.runTasks(generation)
 
 	got := g.scriptEvents.manager.Snapshot(coreevent.BucketStart)
 	if len(got) != 2 {
@@ -1570,30 +1570,30 @@ func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 
 func TestGameRunBootstrapTasksStopsDrainingAfterReset(t *testing.T) {
 	var g Game
-	generation := g.bootstrapGeneration()
+	generation := g.lifecycle.generation()
 	var got []string
 
-	if !g.queueBootstrap(generation, func() {
+	if !g.lifecycle.queue(generation, func() {
 		got = append(got, "first")
-		g.resetBootstrap()
-		g.queueBootstrap(g.bootstrapGeneration(), func() {
+		g.lifecycle.reset()
+		g.lifecycle.queue(g.lifecycle.generation(), func() {
 			got = append(got, "new")
 		})
 	}) {
 		t.Fatal("queueBootstrap rejected current generation")
 	}
-	if !g.queueBootstrap(generation, func() {
+	if !g.lifecycle.queue(generation, func() {
 		got = append(got, "stale")
 	}) {
 		t.Fatal("queueBootstrap rejected current generation")
 	}
 
-	g.runBootstrapTasks(generation)
+	g.lifecycle.runTasks(generation)
 	if len(got) != 1 || got[0] != "first" {
 		t.Fatalf("old generation drained stale tasks: got %v, want [first]", got)
 	}
 
-	g.runBootstrapTasks(g.bootstrapGeneration())
+	g.lifecycle.runTasks(g.lifecycle.generation())
 	want := []string{"first", "new"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("current generation tasks got %v, want %v", got, want)
@@ -1602,23 +1602,23 @@ func TestGameRunBootstrapTasksStopsDrainingAfterReset(t *testing.T) {
 
 func TestGameBootstrapCompletionIgnoresStaleGeneration(t *testing.T) {
 	var game Game
-	stale := game.bootstrapGeneration()
+	stale := game.lifecycle.generation()
 
-	game.lifecycleState.IsRunned.Store(true)
-	game.lifecycleState.BootstrapDone.Store(true)
-	game.lifecycleState.StartDispatched.Store(true)
-	game.resetBootstrap()
+	game.lifecycle.loaded.Store(true)
+	game.lifecycle.bootstrapDone.Store(true)
+	game.lifecycle.startDispatched.Store(true)
+	game.lifecycle.reset()
 
-	if game.markGameStarted(stale) {
+	if game.lifecycle.markLoaded(stale) {
 		t.Fatal("stale bootstrap generation was marked running")
 	}
-	if game.completeBootstrap(stale) {
+	if game.lifecycle.completeBootstrap(stale) {
 		t.Fatal("stale bootstrap generation was marked done")
 	}
-	if game.markStartDispatched(stale) {
+	if game.lifecycle.markStartDispatched(stale) {
 		t.Fatal("stale bootstrap generation was marked started")
 	}
-	if game.lifecycleState.IsRunned.Load() || game.lifecycleState.BootstrapDone.Load() || game.lifecycleState.StartDispatched.Load() {
+	if game.lifecycle.loaded.Load() || game.lifecycle.bootstrapDone.Load() || game.lifecycle.startDispatched.Load() {
 		t.Fatal("stale generation reopened lifecycle gates")
 	}
 }
@@ -1629,14 +1629,14 @@ func TestPrepareStageBootstrapAwakesAllSpritesBeforeMain(t *testing.T) {
 	spriteB := newBootstrapAwakeOrderSprite(&game, "SpriteB")
 	spriteA.peer = spriteB
 	spriteB.peer = spriteA
-	generation := game.bootstrapGeneration()
-	game.prepareStageBootstrap(
+	generation := game.lifecycle.generation()
+	game.setupStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasks(generation)
+	game.lifecycle.runTasks(generation)
 	if !spriteA.sawSelfAwake || !spriteA.sawPeerAwake {
 		t.Fatalf("SpriteA main saw awake state self=%v peer=%v, want both true", spriteA.sawSelfAwake, spriteA.sawPeerAwake)
 	}
@@ -1659,8 +1659,8 @@ func TestPrepareStageBootstrapRunsSpriteMainsInZOrderUntilFirstYield(t *testing.
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", func() {
 		spriteBSeenThreadCount = scheduler.LastThreadID()
 	})
-	generation := game.bootstrapGeneration()
-	game.prepareStageBootstrap(
+	generation := game.lifecycle.generation()
+	game.setupStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
@@ -1702,12 +1702,12 @@ func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 				resumed++
 			})
 			prepareAwakeCostumes(&sprite.SpriteImpl)
-			sprite.runtimeState.syncSprite = &engine.Sprite{}
+			sprite.runtimeState.proxy = &engine.Sprite{}
 			sprites = append(sprites, sprite)
 		}
 
-		generation := game.bootstrapGeneration()
-		game.prepareStageBootstrap(sprites, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem(), generation)
+		generation := game.lifecycle.generation()
+		game.setupStageBootstrap(sprites, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem(), generation)
 		if len(calls) != 0 || currentScheduler.LastThreadID() != 0 {
 			t.Fatal("queuing bootstrap callbacks started user code")
 		}
@@ -1717,8 +1717,8 @@ func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 			}
 		}
 
-		game.runBootstrapTasks(generation)
-		game.runBootstrapTasks(generation)
+		game.lifecycle.runTasks(generation)
+		game.lifecycle.runTasks(generation)
 		if want := []string{"SpriteA", "SpriteB", "OnLoaded"}; !slices.Equal(calls, want) {
 			t.Fatalf("bootstrap callbacks = %v, want %v", calls, want)
 		}
@@ -1744,15 +1744,15 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 	stageStarted := make(chan struct{})
 	stageResumed := make(chan struct{})
 	followingTaskRan := make(chan struct{})
-	generation := game.bootstrapGeneration()
-	game.queueBootstrap(generation, func() {
+	generation := game.lifecycle.generation()
+	game.lifecycle.queue(generation, func() {
 		runMainUntilYield(&game, func() {
 			close(stageStarted)
 			engine.WaitForChan(blocked)
 			close(stageResumed)
 		})
 	})
-	game.queueBootstrap(generation, func() {
+	game.lifecycle.queue(generation, func() {
 		close(followingTaskRan)
 	})
 	runBootstrapTasksWithScheduler(t, &game, generation)
@@ -1788,15 +1788,15 @@ func TestPrepareStageBootstrapAllowsOnStartAfterMainFirstYield(t *testing.T) {
 		engine.WaitForChan(blocked)
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
-	generation := game.bootstrapGeneration()
-	game.prepareStageBootstrap(
+	generation := game.lifecycle.generation()
+	game.setupStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
 		generation,
 	)
 	runBootstrapTasksWithScheduler(t, &game, generation)
-	game.completeBootstrap(generation)
+	game.lifecycle.completeBootstrap(generation)
 	game.dispatchStartEventIfNeeded()
 	scheduler.Update()
 	select {
@@ -1807,45 +1807,45 @@ func TestPrepareStageBootstrapAllowsOnStartAfterMainFirstYield(t *testing.T) {
 }
 
 func TestBootstrapStateTaskSnapshots(t *testing.T) {
-	var state gameBootstrapState
-	generation := state.bootstrapGeneration()
+	var state gameLifecycle
+	generation := state.generation()
 	var got []string
-	if state.queueBootstrap(generation, nil) {
+	if state.queue(generation, nil) {
 		t.Error("accepted a nil bootstrap task")
 	}
-	if state.queueBootstrap(generation+1, func() {}) {
+	if state.queue(generation+1, func() {}) {
 		t.Error("accepted a bootstrap task for a different generation")
 	}
 	if t.Failed() {
 		return
 	}
-	state.queueBootstrap(generation, func() { got = append(got, "first") })
-	if tasks := state.takeBootstrapTasks(generation + 1); len(tasks) != 0 {
+	state.queue(generation, func() { got = append(got, "first") })
+	if tasks := state.takeTasks(generation + 1); len(tasks) != 0 {
 		t.Fatal("a different generation consumed current tasks")
 	}
-	first := state.takeBootstrapTasks(generation)
-	state.queueBootstrap(generation, func() { got = append(got, "second") })
+	first := state.takeTasks(generation)
+	state.queue(generation, func() { got = append(got, "second") })
 	for _, task := range first {
 		task()
 	}
 	if !slices.Equal(got, []string{"first"}) {
 		t.Fatalf("snapshot = %v, want [first]", got)
 	}
-	for _, task := range state.takeBootstrapTasks(generation) {
+	for _, task := range state.takeTasks(generation) {
 		task()
 	}
 	if !slices.Equal(got, []string{"first", "second"}) {
 		t.Fatalf("task order = %v, want [first second]", got)
 	}
-	if len(state.takeBootstrapTasks(generation)) != 0 {
+	if len(state.takeTasks(generation)) != 0 {
 		t.Fatal("consumed tasks were returned again")
 	}
 }
 
 func TestBootstrapStateConcurrentClaim(t *testing.T) {
-	var state gameBootstrapState
-	generation := state.bootstrapGeneration()
-	if state.claimBootstrap(generation + 1) {
+	var state gameLifecycle
+	generation := state.generation()
+	if state.claim(generation + 1) {
 		t.Fatal("claimed a different generation")
 	}
 	var claims atomic.Int32
@@ -1854,7 +1854,7 @@ func TestBootstrapStateConcurrentClaim(t *testing.T) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			if state.claimBootstrap(generation) {
+			if state.claim(generation) {
 				claims.Add(1)
 			}
 		}()
@@ -1863,7 +1863,7 @@ func TestBootstrapStateConcurrentClaim(t *testing.T) {
 	if got := claims.Load(); got != 1 {
 		t.Fatalf("successful claims = %d, want 1", got)
 	}
-	if !state.isCurrentBootstrap(generation) || state.isCurrentBootstrap(generation+1) {
+	if !state.isCurrent(generation) || state.isCurrent(generation+1) {
 		t.Fatal("claiming bootstrap changed the generation")
 	}
 }
@@ -1885,7 +1885,7 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	prepareAwakeCostumes(&sprite.SpriteImpl)
-	sprite.runtimeState.syncSprite = &engine.Sprite{}
+	sprite.runtimeState.proxy = &engine.Sprite{}
 	return sprite
 }
 
@@ -1902,7 +1902,7 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 
 	done := make(chan struct{})
 	go func() {
-		game.runBootstrapTasks(generation)
+		game.lifecycle.runTasks(generation)
 		close(done)
 	}()
 	deadline := time.Now().Add(time.Second)

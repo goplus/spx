@@ -722,9 +722,9 @@ func TestMatchesRuntimePackTarget(t *testing.T) {
 		want    bool
 	}{
 		{"game.go", "package spx\n", true},
-		{"runtime_capture_js.go", "package spx\n", false},
-		{"runtime_capture_windows.go", "package spx\n", false},
-		{"runtime_capture_linux.go", "package spx\n", true},
+		{"capture_js.go", "package spx\n", false},
+		{"capture_windows.go", "package spx\n", false},
+		{"capture_linux.go", "package spx\n", true},
 		{"open_mobile.go", "//go:build android || ios\n\npackage asset\n", false},
 		{"path_packmode.go", "//go:build packmode\n\npackage engine\n", false},
 		{"facade_web.go", "//go:build js\n\npackage facade\n", false},
@@ -775,7 +775,7 @@ func TestRuntimePackSourceSHA256HonorsBuildConstraints(t *testing.T) {
 
 	runGit("init", "-q")
 	write("game.go", "package spx\n")
-	write("runtime_capture_js.go", "package spx\n")
+	write("capture_js.go", "package spx\n")
 	write(runtimePackExportPresets, `[preset.0]
 name="Android"
 [preset.0.options]
@@ -791,7 +791,7 @@ binary_format/architecture="x86_64"
 		t.Fatal(err)
 	}
 
-	write("runtime_capture_js.go", "package spx\n\nconst changed = true\n")
+	write("capture_js.go", "package spx\n\nconst changed = true\n")
 	commit("change inactive source")
 	inactive, err := RuntimePackSourceSHA256(repo, "HEAD")
 	if err != nil {

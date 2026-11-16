@@ -58,7 +58,7 @@ func doClone(sprite Sprite, data any, onCloned func(sprite *SpriteImpl)) {
 }
 
 func createRuntimeClone(src *SpriteImpl) *SpriteImpl {
-	shapes := &src.g.shapeMgr
+	shapes := &src.g.scene
 	if !shapes.reserveClone() {
 		return nil
 	}
@@ -69,7 +69,7 @@ func createRuntimeClone(src *SpriteImpl) *SpriteImpl {
 	}
 	out := reflect.New(reflect.TypeOf(src.sprite).Elem()).Elem()
 	dest := instantiateRuntimeClone(out, src.sprite)
-	src.g.shapeMgr.addClonedShape(src, dest)
+	src.g.scene.addClonedShape(src, dest)
 	return dest
 }
 
@@ -90,9 +90,9 @@ func instantiateRuntimeClone(out reflect.Value, source Sprite) *SpriteImpl {
 	return dest
 }
 
-func instantiateStageSprite(out reflect.Value, source Sprite, properties spriteProperties) (*SpriteImpl, Sprite) {
+func instantiateStageSprite(out reflect.Value, source Sprite, properties spriteOverrides) (*SpriteImpl, Sprite) {
 	dest, outPtr := copySprite(out, source)
-	applySpriteProperties(dest, properties)
+	applySpriteOverrides(dest, properties)
 	dest.initRuntimeProxy()
 	return dest, outPtr
 }
@@ -106,7 +106,7 @@ func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
 
 func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 	in := reflect.ValueOf(source).Elem()
-	layout, err := inspectCloneLayout(in.Type())
+	layout, err := inspectCloneType(in.Type())
 	if err != nil {
 		panic(err)
 	}
@@ -133,7 +133,7 @@ func snapshotSpriteUserFields(v reflect.Value) []spriteUserFieldSnapshot {
 	if !v.CanAddr() {
 		return nil
 	}
-	layout, err := inspectSpriteLayout(v.Type())
+	layout, err := inspectSpriteType(v.Type())
 	if err != nil {
 		panic(err)
 	}

@@ -281,7 +281,7 @@ func (p *scriptEventBindings) doWhenStart(generation uint64) {
 		registry.dispatchStartEventBatch(sinksInTargetOrder(registry.game, sinks), scriptEventDispatch{
 			mode: coroutine.BatchWaitFirstSlice,
 			run: func(_ coroutine.Thread, ev *eventSink) {
-				if !registry.game.isCurrentBootstrap(generation) {
+				if !registry.game.lifecycle.isCurrent(generation) {
 					return
 				}
 				if isDebugEventEnabled() {
@@ -290,7 +290,7 @@ func (p *scriptEventBindings) doWhenStart(generation uint64) {
 				ev.Handler.(func())()
 			},
 		})
-		registry.game.markStartDispatched(generation)
+		registry.game.lifecycle.markStartDispatched(generation)
 	}
 	if scheduler == nil {
 		runStartPhase(nil)

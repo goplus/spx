@@ -17,14 +17,11 @@
 package spx
 
 import (
-	"github.com/goplus/spx/v4/internal/engine/ui"
-
+	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
+	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/ui"
 )
-
-// ============================================================================
-// Communication Methods (Say, Think, Ask, Quote)
-// ============================================================================
 
 func (p *SpriteImpl) Ask(question any) {
 	if isDebugInstrEnabled() {
@@ -38,7 +35,7 @@ func (p *SpriteImpl) Ask(question any) {
 	}
 	showQuestionInPanel := !isVisible
 	p.g.ask(showQuestionInPanel, msgStr, func(answer string) {
-		p.doStopText()
+		p.stopTextBubble()
 	})
 }
 
@@ -96,7 +93,7 @@ func (p *SpriteImpl) Quote__3(message, description string, secs Seconds) {
 
 func (p *SpriteImpl) QuoteMsg(message string, __xgo_optional_secs Seconds) {
 	if message == "" {
-		p.doStopQuote()
+		p.stopQuoteBubble()
 		return
 	}
 	p.QuoteMsgEx(message, "", __xgo_optional_secs)
@@ -106,8 +103,68 @@ func (p *SpriteImpl) QuoteMsgEx(message, description string, __xgo_optional_secs
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, __xgo_optional_secs)
 	}
-	token := p.quote(message, description)
+	token := p.bubble().upsertQuote(message, description)
 	if __xgo_optional_secs > 0 {
 		p.waitAndExpireQuote(__xgo_optional_secs, token)
+	}
+}
+
+func (p *SpriteImpl) sayOrThink(msg any, style int) bubbleToken {
+	msgStr := dialogText(msg)
+	if msgStr == "" {
+		p.stopTextBubble()
+		return bubbleToken{}
+	}
+
+	bubble := p.bubble()
+	return bubble.upsertText(msgStr, style)
+}
+
+func (p *SpriteImpl) waitAndExpireText(secs float64, token bubbleToken) {
+	engine.Wait(secs)
+	bubble := p.components.bubble
+	if bubble != nil {
+		// Expire only the generation displayed by this call.
+		bubble.expireText(token)
+	}
+}
+
+func (p *SpriteImpl) stopTextBubble() {
+	bubble := p.components.bubble
+	if bubble != nil {
+		bubble.stopText()
+	}
+}
+
+func (p *SpriteImpl) waitAndExpireQuote(secs float64, token bubbleToken) {
+	engine.Wait(secs)
+	bubble := p.components.bubble
+	if bubble != nil {
+		bubble.expireQuote(token)
+	}
+}
+
+func (p *SpriteImpl) stopQuoteBubble() {
+	bubble := p.components.bubble
+	if bubble != nil {
+		bubble.stopQuote()
+	}
+}
+
+func (p *SpriteImpl) newBubbleBase() bubbleBase {
+	return bubbleBase{sprite: p, camera: p.g.camera, isDirty: true}
+}
+
+func (p *SpriteImpl) bubbleBounds() *mathf.Rect2 {
+	if !p.hasCostume() {
+		return nil
+	}
+
+	x, y := p.getXY()
+	w, h := p.adjustPositionAndGetDimensions(&x, &y)
+
+	return &mathf.Rect2{
+		Position: mathf.Vec2{X: x - w*0.5, Y: y - h*0.5},
+		Size:     mathf.Vec2{X: w, Y: h},
 	}
 }

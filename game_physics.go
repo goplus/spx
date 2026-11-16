@@ -27,7 +27,7 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-const touchLayerCount = 32 // Godot trigger layer bit count.
+const touchLayerCount = 32
 
 type raycastResult struct {
 	Hit      bool
@@ -39,10 +39,6 @@ type raycastResult struct {
 type touchFilter struct {
 	Layer int64
 	Mask  int64
-}
-
-func (f *touchFilter) layerIndex() int {
-	return max(0, bits.Len64(uint64(f.Layer))-1)
 }
 
 type touchEntry struct {
@@ -80,7 +76,7 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 			}
 			impl := spriteOf(item)
 			if impl != nil {
-				ignoreSpritesIds = append(ignoreSpritesIds, impl.getSpriteId())
+				ignoreSpritesIds = append(ignoreSpritesIds, impl.proxyID())
 			}
 		}
 	}
@@ -194,7 +190,7 @@ func (p *Game) refreshTouchFilters() {
 
 	engine.WaitMainThread(func() {
 		for _, entry := range entries {
-			if proxy := entry.sprite.runtimeState.syncSprite; proxy != nil {
+			if proxy := entry.sprite.runtimeState.proxy; proxy != nil {
 				entry.sprite.physics().syncTriggerFilters(proxy)
 			}
 		}
@@ -202,8 +198,8 @@ func (p *Game) refreshTouchFilters() {
 }
 
 func (p *Game) buildTouchFilters() map[string]*touchFilter {
-	filters := make(map[string]*touchFilter, len(p.typs))
-	for name := range p.typs {
+	filters := make(map[string]*touchFilter, len(p.spriteTypes))
+	for name := range p.spriteTypes {
 		layerIndex := len(filters) % touchLayerCount
 		filters[name] = &touchFilter{Layer: 1 << layerIndex}
 	}
@@ -243,6 +239,10 @@ func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *
 		spxlog.Warn("Raycast warn: %v", err)
 	}
 	return result
+}
+
+func (f *touchFilter) layerIndex() int {
+	return max(0, bits.Len64(uint64(f.Layer))-1)
 }
 
 func tryRaycastResult(ary engine.Array) (*raycastResult, error) {

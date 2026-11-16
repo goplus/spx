@@ -297,7 +297,7 @@ defer preparation.Cancel()
 
 ## 截图配合
 
-`spx.Snapshot` 会在 decorator body 成功后排入帧末截图请求，请求始终带有 engine `frame`。当前 Game Session 已经消费输入时，还会带有最近的 `inputTick`。
+截图快捷键通过内部函数 `capture` 排入帧末截图请求，请求始终带有 engine `frame`。当前 Game Session 已经消费输入时，还会带有最近的 `inputTick`。
 
 ```text
 <timeline>_<sequence>[_<name>].png
@@ -305,7 +305,7 @@ defer preparation.Cancel()
 
 消费首个 input tick 后，`timeline` 是补齐四位的 `inputTick`；此前回退为 `frame_<frame>`。`name` 为空时文件名直接结束在 sequence，例如 `0833_0004.png`。新的 Game 不会继承上一局的 input tick。Session 启动后、tick `0` 之前发出的截图没有 `inputTick`。
 
-脚本只声明 `Snapshot` 点位；图片是 baseline 还是 run，以及是否对比，由 `Record` / `Replay` 模式和外部 host 决定。
+图片是 baseline 还是 run，以及是否对比，由 `Record` / `Replay` 模式和外部 host 决定。
 
 core 默认不注册截图快捷键。host 可以通过 `InputSessionOptions.CaptureKey` 显式启用；Web 测试页默认使用 `P`，可通过 `?captureKey=PrintScreen` 修改，或使用 `?captureKey=off` 关闭。快捷键、capture marker 和测试 UI 仍由上层决定，普通项目不会被隐式占用按键。
 

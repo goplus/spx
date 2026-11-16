@@ -109,10 +109,10 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 		pkgengine.AudioMgr = previousAudio
 	})
 	setupLoadGameFlags(t)
-	base.lifecycleState.IsRunned.Store(false)
+	base.lifecycle.loaded.Store(false)
 	resource := &loadGameFS{gameTestFS: files}
 
-	if err := base.loadGame(resource, base.bootstrapGeneration()); err != nil {
+	if err := base.loadGame(resource, base.lifecycle.generation()); err != nil {
 		t.Fatal(err)
 	}
 	if resource.closeCalls != 0 || base.fs != resource {
@@ -124,7 +124,7 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	if platform.title != "loaded game" {
 		t.Fatalf("window title = %q", platform.title)
 	}
-	if len(base.pendingBootstrap) == 0 || base.lifecycleState.BootstrapDone.Load() {
+	if len(base.lifecycle.tasks) == 0 || base.lifecycle.bootstrapDone.Load() {
 		t.Fatal("load must queue bootstrap hooks without running them")
 	}
 	if got := scheduler.LastThreadID(); got != 1 {
@@ -157,10 +157,10 @@ func TestLoadGameAppliesPhysicsBeforeLoadingSprites(t *testing.T) {
 				t.Cleanup(func() { pkgengine.AudioMgr = previousAudio })
 				setupLoadGameFlags(t)
 
-				if err := base.loadGame(&loadGameFS{gameTestFS: files}, base.bootstrapGeneration()); err != nil {
+				if err := base.loadGame(&loadGameFS{gameTestFS: files}, base.lifecycle.generation()); err != nil {
 					t.Fatal(err)
 				}
-				sprite := spriteOf(base.sprs[test.spriteName])
+				sprite := spriteOf(base.spritePrototypes[test.spriteName])
 				if sprite == nil || sprite.g != base {
 					t.Fatal("loaded sprite is not bound to its game")
 				}
@@ -184,7 +184,7 @@ func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
 	resource := &loadGameFS{gameTestFS: files}
 	pending := &inputFrame{events: []event{&eventKeyDown{Key: KeySpace}}}
 	game.inputMgr.frame.pending = pending
-	if err := game.loadGame(resource, game.bootstrapGeneration()); err == nil || !strings.Contains(err.Error(), "font unavailable") {
+	if err := game.loadGame(resource, game.lifecycle.generation()); err == nil || !strings.Contains(err.Error(), "font unavailable") {
 		t.Fatalf("loadGame error = %v", err)
 	}
 	if resource.closeCalls != 1 {
@@ -246,7 +246,7 @@ func TestLoadGameSpriteLoadPanicClosesResources(t *testing.T) {
 	files := gameTestFS{"index.json": `{}`}
 	game := &stagePlanGame{}
 	base := setupGameTestRuntime(t, files, game, nil, false)
-	base.typs["Dynamic"] = reflect.TypeFor[int]()
+	base.spriteTypes["Dynamic"] = reflect.TypeFor[int]()
 	setupLoadGameFlags(t)
 	resource := &loadGameFS{gameTestFS: files}
 
@@ -258,7 +258,7 @@ func TestLoadGameSpriteLoadPanicClosesResources(t *testing.T) {
 			t.Fatalf("resource close calls = %d, want 1", resource.closeCalls)
 		}
 	}()
-	_ = base.loadGame(resource, base.bootstrapGeneration())
+	_ = base.loadGame(resource, base.lifecycle.generation())
 }
 
 func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
@@ -277,8 +277,8 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 			platform := &loadGamePlatformMgr{title: "unchanged"}
 			pkgengine.PlatformMgr = platform
 			setupLoadGameFlags(t)
-			base.lifecycleState.IsRunned.Store(false)
-			base.tilemapMgr = gameTilemapMgr{}
+			base.lifecycle.loaded.Store(false)
+			base.tilemapMgr = tilemapManager{}
 			previousFS := &loadGameFS{}
 			base.fs = previousFS
 			resource := &loadGameFS{
@@ -286,7 +286,7 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 				closeErr:   tt.closeErr,
 			}
 
-			err := base.loadGame(resource, base.bootstrapGeneration())
+			err := base.loadGame(resource, base.lifecycle.generation())
 			if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "DirectLoadSprite") {
 				t.Fatalf("loadGame error = %v, want original sprite load error", err)
 			}
@@ -299,7 +299,7 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 			if base.fs != previousFS || previousFS.closeCalls != 0 {
 				t.Fatal("failed load did not preserve the previous resource directory")
 			}
-			if base.tilemapMgr.g != nil || len(base.pendingBootstrap) != 0 || scheduler.LastThreadID() != 0 {
+			if base.tilemapMgr.g != nil || len(base.lifecycle.tasks) != 0 || scheduler.LastThreadID() != 0 {
 				t.Fatal("sprite load failure continued into tilemap, bootstrap, or script initialization")
 			}
 			if platform.title != "unchanged" {
@@ -329,7 +329,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 			panicMgr := &runtimePanicRecorder{IExtMgr: pkgengine.ExtMgr}
 			pkgengine.ExtMgr = panicMgr
 			setupLoadGameFlags(t)
-			game.lifecycleState.IsRunned.Store(false)
+			game.lifecycle.loaded.Store(false)
 			previousFS := &loadGameFS{}
 			game.fs = previousFS
 			game.tilemapMgr.fs = previousFS
@@ -338,7 +338,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 			closeErr := errors.New("close failed")
 			resource := &loadGameFS{gameTestFS: files, closeErr: closeErr}
 
-			err := game.loadGame(resource, game.bootstrapGeneration())
+			err := game.loadGame(resource, game.lifecycle.generation())
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("loadGame error = %v, want %q", err, tt.want)
 			}
@@ -351,7 +351,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 			if game.fs != previousFS || previousFS.closeCalls != 0 || game.tilemapMgr != previousTilemap {
 				t.Fatal("failed stage load did not restore resource ownership")
 			}
-			if len(game.pendingBootstrap) != 0 || scheduler.LastThreadID() != 0 || platform.title != "unchanged" {
+			if len(game.lifecycle.tasks) != 0 || scheduler.LastThreadID() != 0 || platform.title != "unchanged" {
 				t.Fatal("stage failure continued into bootstrap, scripts, or window title update")
 			}
 			if len(panicMgr.messages) != 0 || len(panicMgr.exits) != 0 {
@@ -428,7 +428,7 @@ func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
 	setupRuntimeScheduler(t)
 	game := &stageLoadTestGame{}
 	XGot_Game_Main(game, &stageLoadTestSprite{})
-	if engine.GetGame() != &game.Game || game.gamer != game || game.typs["stageLoadTestSprite"] != reflect.TypeFor[stageLoadTestSprite]() {
+	if engine.GetGame() != &game.Game || game.gamer != game || game.spriteTypes["stageLoadTestSprite"] != reflect.TypeFor[stageLoadTestSprite]() {
 		t.Fatal("main did not bind and initialize the game")
 	}
 	defer func() {
@@ -499,7 +499,7 @@ func TestGameInitializationReportsClaimedInput(t *testing.T) {
 	currentScheduler := scheduler
 	engine.SetScheduler(nil)
 	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
-	game := &Game{inputClaimed: true}
+	game := &Game{inputSlot: inputSessionSlot{claimed: true}}
 	game.initGame(nil)
 	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], ErrInputSessionActive.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
 		t.Fatalf("claimed input panic=%v, exits=%v", recorder.messages, recorder.exits)
@@ -534,7 +534,7 @@ func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
 			}
 			game := &preflightLoadGame{}
 			base := setupGameTestRuntime(t, files, game, nil, false)
-			base.typs = map[string]reflect.Type{"First": reflect.TypeFor[preflightLoadSprite](), "Second": reflect.TypeFor[preflightLoadSprite]()}
+			base.spriteTypes = map[string]reflect.Type{"First": reflect.TypeFor[preflightLoadSprite](), "Second": reflect.TypeFor[preflightLoadSprite]()}
 			first, second := &preflightLoadSprite{}, &preflightLoadSprite{}
 			game.First, game.Second = first, second
 			fonts := &loadGameResMgr{}
@@ -546,20 +546,20 @@ func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
 			setupLoadGameFlags(t)
 			resource := &loadGameFS{gameTestFS: files}
 
-			err := base.loadGame(resource, base.bootstrapGeneration())
+			err := base.loadGame(resource, base.lifecycle.generation())
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("loadGame error = %v, want %q", err, test.want)
 			}
 			if fonts.applyCalls != 0 || mgr.nextID != beforeID {
 				t.Fatalf("preparation changed engine: fonts=%d sprite IDs=%d -> %d", fonts.applyCalls, beforeID, mgr.nextID)
 			}
-			if game.First != first || game.Second != second || len(base.sprs) != 0 || len(base.getAllShapes()) != 0 {
+			if game.First != first || game.Second != second || len(base.spritePrototypes) != 0 || len(base.getAllShapes()) != 0 {
 				t.Fatal("preparation published sprite fields, prototypes, or shapes")
 			}
 			if base.fs != beforeFS || base.tilemapMgr != beforeTilemap || resource.closeCalls != 1 {
 				t.Fatal("preparation changed resource ownership")
 			}
-			if len(base.pendingBootstrap) != 0 || scheduler.LastThreadID() != 0 {
+			if len(base.lifecycle.tasks) != 0 || scheduler.LastThreadID() != 0 {
 				t.Fatal("preparation started scripts")
 			}
 		})
@@ -589,7 +589,7 @@ func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
 	game := &projectTestGame{}
 	base := setupGameTestRuntime(t, files, game, nil, false)
 	for _, name := range []string{"projectTestSprite", "Dynamic", "Value", "Lazy"} {
-		base.typs[name] = reflect.TypeFor[projectTestSprite]()
+		base.spriteTypes[name] = reflect.TypeFor[projectTestSprite]()
 	}
 	pkgengine.PlatformMgr = &loadGamePlatformMgr{}
 	pkgengine.ResMgr = &loadGameResMgr{}
@@ -606,7 +606,7 @@ func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
 		reads:      make(map[string]int),
 	}
 
-	if err := base.loadGame(resource, base.bootstrapGeneration()); err != nil {
+	if err := base.loadGame(resource, base.lifecycle.generation()); err != nil {
 		t.Fatal(err)
 	}
 	for name := range files {
@@ -614,10 +614,10 @@ func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
 			t.Errorf("metadata %q read %d times, want once", name, resource.reads[name])
 		}
 	}
-	if game.projectTestSprite == nil || game.Dynamic == nil || len(game.Items) != 2 || base.sprs["Lazy"] == nil {
+	if game.projectTestSprite == nil || game.Dynamic == nil || len(game.Items) != 2 || base.spritePrototypes["Lazy"] == nil {
 		t.Fatal("project did not publish its pointer, interface, group, or lazy sprite")
 	}
-	want := []Sprite{game.projectTestSprite, game.Dynamic, &game.Value, game.Items[0], game.Items[1], base.sprs["Lazy"]}
+	want := []Sprite{game.projectTestSprite, game.Dynamic, &game.Value, game.Items[0], game.Items[1], base.spritePrototypes["Lazy"]}
 	positions := []float64{11, 22, 33, 44, 55, 0}
 	shapes := base.getAllShapes()
 	if len(shapes) != len(want) {
@@ -733,7 +733,7 @@ func TestTouchFilterFailurePreservesMasks(t *testing.T) {
 			pkgengine.SpriteMgr = mgr
 			t.Cleanup(func() { pkgengine.SpriteMgr = previous })
 			for i, sprite := range []*collisionLayerOrderSprite{a, b, c} {
-				sprite.runtimeState.syncSprite = &engine.Sprite{Sprite: pkgengine.Sprite{Id: int64(i + 1)}}
+				sprite.runtimeState.proxy = &engine.Sprite{Sprite: pkgengine.Sprite{Id: int64(i + 1)}}
 			}
 			a.physics().touchTargets["C"] = true
 			b.physics().touchTargets["missing"] = true
