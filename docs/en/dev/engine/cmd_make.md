@@ -52,6 +52,7 @@ Use `setup` and `setup-web` when prebuilt locked assets are sufficient. Use `dev
 | `GODOT_SRC` | `./godot` | Godot source checkout used by `dev` and the engine `build-*` targets. |
 | `SPX_MODULE_SRC` | `./godot_modules/spx` | External SPX Godot module used by engine builds and `make generate`. |
 | `MODE` | `normal` | Web setup, build, export, and the Web portion of `dev`. |
+| `WEB_LINK_OPTIMIZE` | Unset; inherit the module profile | Web link override for `build-web` and `dev`; `1` enables full link optimization and `0` uses fast linking. |
 | `DEMO_INDEX` | `3` | Tutorial selected by demo commands. |
 | `PORT` | `8106` | Port used by Web demo commands. |
 
@@ -92,6 +93,22 @@ spx run --path tutorial/00-Hello
 make setup-web MODE=worker
 make runwebworker DEMO_INDEX=2
 ```
+
+Local builds and ordinary CI inherit `web_link_optimize=no` from `godot_modules/spx/spx_scons_profile.json`, using fast linking by default. Enable full optimization when measuring artifact size, loading speed, or runtime performance:
+
+```sh
+make build-web MODE=normal
+make build-web MODE=normal WEB_LINK_OPTIMIZE=1
+# The full local stack also supports: make dev MODE=normal WEB_LINK_OPTIMIZE=1
+```
+
+Fast linking retains C/C++ compilation optimization but uses `-O1` for the final link to skip Binaryen optimization and JS/Wasm minification. Artifacts may be larger and run slower. Switching the setting reuses object files and only requires relinking; both settings use the same output paths.
+
+For direct `buildctl build web` or `buildctl build dev` commands, use `--web-link-optimize` to enable full optimization or `--web-link-optimize=false` to disable it. An omitted flag inherits the profile; an explicit flag takes precedence.
+
+Release and dry-run workflows override the profile with `web_link_optimize=yes` to retain full optimization.
+
+The `- ok` after a `symbol_lists/...` log means the symbol cache was generated. A subsequent pause usually occurs during linking or WASM optimization. Run `EMPROFILE=2 make build-web WEB_LINK_OPTIMIZE=1` to inspect timings for stages such as `link` and `wasm_opt`.
 
 ### Engine and module development
 

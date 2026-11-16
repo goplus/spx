@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import io
 import json
+import runpy
 import shutil
 import subprocess
 import sys
@@ -179,6 +180,25 @@ class RuntimeBuildContractTest(unittest.TestCase):
             outputs["template-release-flags"],
             "builtin_brotli=no deprecated=no optimize=size",
         )
+
+    def test_web_link_optimization_only_changes_web_link_flags(self):
+        class Environment(dict):
+            def Append(self, **values):
+                for key, value in values.items():
+                    self[key].extend(value)
+
+        configure = runpy.run_path(str(REPO_ROOT / "godot_modules/spx/config.py"))["configure"]
+        for platform in ("web", "linuxbsd", "android", "ios"):
+            for optimize in (False, True):
+                with self.subTest(platform=platform, optimize=optimize):
+                    env = Environment(platform=platform, web_link_optimize=optimize,
+                                      LINKFLAGS=["-Os"], CCFLAGS=["-Os"], CPPFLAGS=["-DSPX"])
+                    expected = copy.deepcopy(env)
+                    if platform == "web" and not optimize:
+                        expected["LINKFLAGS"].append("-O1")
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        configure(env)
+                    self.assertEqual(env, expected)
 
     def test_profile_rejects_orchestration_flags(self):
         profile = {
