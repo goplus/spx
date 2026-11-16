@@ -142,6 +142,7 @@ type gameTestPhysicsMgr struct {
 
 type gameTestResMgr struct {
 	pkgengine.IResMgr
+	loadModes []bool
 }
 
 type gameTestTilemapparserMgr struct {
@@ -1234,6 +1235,12 @@ func (*gameTestPhysicsMgr) SetGlobalGravity(float64) {}
 func (*gameTestPhysicsMgr) SetGlobalFriction(float64) {}
 
 func (*gameTestPhysicsMgr) SetGlobalAirDrag(float64) {}
+
+func (m *gameTestResMgr) SetLoadMode(filesystem bool) {
+	m.loadModes = append(m.loadModes, filesystem)
+}
+
+func (*gameTestResMgr) HasFile(string) bool { return false }
 
 func (*gameTestResMgr) GetBoundFromAlpha(string) mathf.Rect2 {
 	return mathf.Rect2{Size: mathf.NewVec2(10, 10)}
