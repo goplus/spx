@@ -29,53 +29,7 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type touchingSyncSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	positions               map[pkgengine.Object]mathf.Vec2
-	visible                 map[pkgengine.Object]bool
-	texturePaths            map[pkgengine.Object]string
-	expectedTexturePaths    map[pkgengine.Object]string
-	checkedTexturePaths     map[pkgengine.Object]string
-	setTransformCalls       map[pkgengine.Object]int
-	setPositionCalls        map[pkgengine.Object]int
-	setRotationCalls        map[pkgengine.Object]int
-	setScaleCalls           map[pkgengine.Object]int
-	setPivotCalls           map[pkgengine.Object]int
-	setVisibleCalls         map[pkgengine.Object]int
-	setTextureCalls         map[pkgengine.Object]int
-	setTextureAtlasCalls    map[pkgengine.Object]int
-	setRenderScaleCalls     map[pkgengine.Object]int
-	setTextureDirectCalls   map[pkgengine.Object]int
-	setTextureAtlasPathByID map[pkgengine.Object]string
-	collisionChecks         int
-	lastUsePixels           bool
-	onCollision             func()
-	collisionResult         func(pkgengine.Object, pkgengine.Object) bool
-	onColorCollision        func()
-	lastColorThreshold      float64
-	lastAlphaThreshold      float64
-	colorQueryResult        *bool
-	panicVisibleTrue        any
-	panicVisibleFalse       any
-	panicCollision          any
-}
-
-type touchingQuerySprite struct {
-	SpriteImpl
-}
-
-type cloneCollisionSpriteMgr struct {
-	*spyCloneSpriteMgr
-	visible     map[pkgengine.Object]bool
-	ghost       map[pkgengine.Object]float64
-	sensedGhost bool
-}
-
-type mouseSensingSpriteMgr struct {
-	*touchingSyncSpriteMgr
-	point       mathf.Vec2
-	visibleOnly bool
-}
+// Touch geometry, targets, and scene ordering.
 
 func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
 	sprite := newTestTransformSprite(10, 20)
@@ -98,164 +52,6 @@ func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
 	}
 	if got == nil || *got != want {
 		t.Fatalf("bounds() = %v, want %v", got, want)
-	}
-}
-
-func TestPendingCloneSensingIsIndependentFromRenderPublication(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
-	target := newTouchingQuerySprite("target", 0, 0, 2)
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-	mgr.positions[2] = mathf.NewVec2(0, 0)
-
-	target.beginCloneProxyPublication()
-	mgr.visible[2] = false
-	if !receiver.Touching__0(target) {
-		t.Fatal("published sprite could not sense a logically visible pending clone")
-	}
-	if mgr.visible[2] {
-		t.Fatal("pending target remained render-visible after sensing")
-	}
-	if mgr.collisionChecks != 1 {
-		t.Fatalf("pending target collision checks = %d, want 1", mgr.collisionChecks)
-	}
-
-	target.proxyPublication = nil
-	mgr.visible[2] = true
-	receiver.beginCloneProxyPublication()
-	mgr.visible[1] = false
-	visibilityCalls := mgr.setVisibleCalls[1]
-	if !receiver.Touching__0(target) {
-		t.Fatal("pending clone could not sense a published sprite")
-	}
-	if mgr.visible[1] {
-		t.Fatal("pending clone remained natively visible after sensing")
-	}
-	if got := mgr.setVisibleCalls[1] - visibilityCalls; got != 2 {
-		t.Fatalf("pending sensing visibility calls = %d, want one show and one restore", got)
-	}
-	if !receiver.isCloneProxyPublicationBlocked() {
-		t.Fatal("sensing published the pending clone")
-	}
-}
-
-func TestPendingCloneSensingByNameIsIndependentFromRenderPublication(t *testing.T) {
-	_, mgr, receiver, target := newTouchingPair(t, false)
-
-	target.beginCloneProxyPublication()
-	mgr.visible[2] = false
-	if !receiver.Touching__1("target") {
-		t.Fatal("named sensing could not observe a logically visible pending clone")
-	}
-	if mgr.visible[2] {
-		t.Fatal("pending named target remained render-visible after sensing")
-	}
-	if mgr.collisionChecks != 1 {
-		t.Fatalf("pending named target collision checks = %d, want 1", mgr.collisionChecks)
-	}
-
-	target.proxyPublication = nil
-	mgr.visible[2] = true
-	receiver.beginCloneProxyPublication()
-	mgr.visible[1] = false
-	if !receiver.Touching__1("target") {
-		t.Fatal("pending clone could not sense a published named target")
-	}
-}
-
-func TestLogicallyHiddenPendingCloneDoesNotAcquireSensingVisibility(t *testing.T) {
-	mgr, receiver, target := newPendingCloneSensingPair(t)
-	receiver.spriteState.isVisible = false
-
-	if receiver.Touching__0(target) {
-		t.Fatal("logically hidden pending clone participated in sensing")
-	}
-	if got := mgr.setVisibleCalls[1]; got != 0 {
-		t.Fatalf("hidden pending clone visibility calls = %d, want 0", got)
-	}
-	if mgr.collisionChecks != 0 {
-		t.Fatalf("hidden pending clone collision checks = %d, want 0", mgr.collisionChecks)
-	}
-}
-
-func TestPendingCloneSensingVisibilityLeaseIsReentrant(t *testing.T) {
-	mgr, receiver, target := newPendingCloneSensingPair(t)
-
-	var nestedTouching bool
-	var hiddenBeforeOuterQueryReturned bool
-	mgr.onCollision = func() {
-		// Exercise the nested query-sync path: SetTransform must retain the
-		// visibility owned by the outer lease.
-		receiver.markProxyDirty()
-		nestedTouching = receiver.Touching__0(target)
-		hiddenBeforeOuterQueryReturned = !mgr.visible[1]
-	}
-	if !receiver.Touching__0(target) {
-		t.Fatal("outer pending-clone sensing query returned false")
-	}
-	if !nestedTouching {
-		t.Fatal("nested pending-clone sensing query returned false")
-	}
-	if hiddenBeforeOuterQueryReturned {
-		t.Fatal("nested query released the outer visibility lease")
-	}
-	if mgr.visible[1] {
-		t.Fatal("outer query did not restore pending clone visibility")
-	}
-	if got := mgr.setVisibleCalls[1]; got != 2 {
-		t.Fatalf("nested sensing visibility calls = %d, want one show and one restore", got)
-	}
-	if mgr.collisionChecks != 2 {
-		t.Fatalf("nested collision checks = %d, want 2", mgr.collisionChecks)
-	}
-}
-
-func TestPendingCloneSensingShowPanicRestoresLease(t *testing.T) {
-	mgr, receiver, target := newPendingCloneSensingPair(t)
-	mgr.panicVisibleTrue = "temporary sensing show failed"
-
-	var recovered any
-	func() {
-		defer func() { recovered = recover() }()
-		receiver.Touching__0(target)
-	}()
-	if recovered != "temporary sensing show failed" {
-		t.Fatalf("sensing panic = %v, want original show failure", recovered)
-	}
-	if mgr.visible[1] {
-		t.Fatal("pending clone remained visible after partial show failure")
-	}
-	if got := receiver.proxyPublication.sensingVisibilityLeases.Load(); got != 0 {
-		t.Fatalf("visibility leases after show failure = %d, want 0", got)
-	}
-	if !receiver.Touching__0(target) {
-		t.Fatal("sensing lease did not recover after show failure")
-	}
-}
-
-func TestPendingCloneSensingQueryPanicPreservesFailureAndRestoresVisibility(t *testing.T) {
-	mgr, receiver, target := newPendingCloneSensingPair(t)
-	mgr.panicCollision = "sensing query failed"
-	mgr.panicVisibleFalse = "sensing visibility restore failed"
-
-	var recovered any
-	func() {
-		defer func() { recovered = recover() }()
-		receiver.Touching__0(target)
-	}()
-	if recovered != "sensing query failed" {
-		t.Fatalf("sensing panic = %v, want query failure", recovered)
-	}
-	if mgr.visible[1] {
-		t.Fatal("pending clone remained visible after query failure")
-	}
-	if mgr.panicVisibleFalse != nil {
-		t.Fatal("query failure skipped visibility restoration")
-	}
-	if got := receiver.proxyPublication.sensingVisibilityLeases.Load(); got != 0 {
-		t.Fatalf("visibility leases after query failure = %d, want 0", got)
 	}
 }
 
@@ -399,271 +195,6 @@ func TestTouchingNameUsesVisualBoundsWithPhysics(t *testing.T) {
 	}
 }
 
-func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	sprite := newTouchingTestSprite("mover", 0, 0, 1)
-	sprite.costumes = []*costume{
-		{name: "idle", path: "idle.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
-		{name: "hit", path: "hit.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
-	}
-	sprite.costumeIndex = 0
-	sprite.runtimeState.isCostumeDirty = false
-	sprite.runtimeState.isAnimating = false
-
-	mgr.texturePaths[1] = internalengine.ToAssetPath("idle.png")
-	mgr.expectedTexturePaths[1] = internalengine.ToAssetPath("hit.png")
-
-	sprite.SetCostume__0("hit")
-
-	if !sprite.touchingColor(mathf.Color{}) {
-		t.Fatal("touchingColor() = false, want true after immediate costume sync")
-	}
-	if got := mgr.setTextureCalls[1]; got != 1 {
-		t.Fatalf("SetTexture calls after first touchingColor = %d, want 1", got)
-	}
-	if got := mgr.checkedTexturePaths[1]; got != internalengine.ToAssetPath("hit.png") {
-		t.Fatalf("collision used texture %q, want %q", got, internalengine.ToAssetPath("hit.png"))
-	}
-	if sprite.runtimeState.isCostumeDirty {
-		t.Fatal("runtimeState.isCostumeDirty = true, want false after immediate query sync")
-	}
-
-	if !sprite.touchingColor(mathf.Color{}) {
-		t.Fatal("second touchingColor() = false, want synced costume to remain valid")
-	}
-	if got := mgr.setTextureCalls[1]; got != 1 {
-		t.Fatalf("SetTexture calls after second touchingColor = %d, want 1", got)
-	}
-}
-
-func TestTouchingColorSyncsDirtySceneSpritesImmediately(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	game := &Game{}
-	game.displayState.WorldWidth = 480
-	game.displayState.WorldHeight = 360
-	game.scene.init()
-	receiver := newTouchingTestSprite("receiver", 0, 0, 1)
-	target := newTouchingTestSprite("target", 0, 0, 2)
-	receiver.g = game
-	target.g = game
-	game.scene.add(receiver)
-	game.scene.add(target)
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-	mgr.positions[2] = mathf.NewVec2(0, 0)
-
-	target.SetXpos(42)
-	var queriedTargetPosition mathf.Vec2
-	mgr.onColorCollision = func() {
-		queriedTargetPosition = mgr.positions[2]
-	}
-	receiver.touchingColor(mathf.Color{})
-
-	if queriedTargetPosition != (mathf.Vec2{X: 42, Y: 0}) {
-		t.Fatalf("color query saw target at %v, want (42,0)", queriedTargetPosition)
-	}
-	firstTargetSyncs := mgr.setTransformCalls[2]
-	receiver.touchingColor(mathf.Color{})
-	if got := mgr.setTransformCalls[2]; got != firstTargetSyncs {
-		t.Fatalf("unchanged target was synchronized %d extra times, want 0", got-firstTargetSyncs)
-	}
-	target.SetXpos(84)
-	receiver.touchingColor(mathf.Color{})
-	if got := mgr.positions[2]; got != (mathf.Vec2{X: 84, Y: 0}) {
-		t.Fatalf("second color query saw target at %v, want (84,0)", got)
-	}
-	target.setLayer(7)
-	receiver.touchingColor(mathf.Color{})
-	if target.runtimeState.isLayerDirty {
-		t.Fatal("color query did not synchronize the target's dirty layer")
-	}
-}
-
-func TestTouchingColorSyncsDirtyTransientOwnerImmediately(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-
-	game := &Game{}
-	game.displayState.WorldWidth = 480
-	game.displayState.WorldHeight = 360
-	game.scene.init()
-	owner := newTouchingTestSprite("owner", 0, 0, 1)
-	owner.SetXpos(42)
-	owner.g = game
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-
-	owner.touchingColor(mathf.Color{})
-
-	if got := mgr.positions[1]; got != (mathf.Vec2{X: 42, Y: 0}) {
-		t.Fatalf("color query saw transient owner at %v, want (42,0)", got)
-	}
-	if got := mgr.setTransformCalls[1]; got != 1 {
-		t.Fatalf("transient owner was synchronized %d times, want 1", got)
-	}
-}
-
-func TestHiddenColorQueriesSyncDeferredCostume(t *testing.T) {
-	tests := []struct {
-		name  string
-		query func(*SpriteImpl) bool
-	}{
-		{name: "color", query: func(sprite *SpriteImpl) bool {
-			return sprite.touchingColor(mathf.Color{})
-		}},
-		{name: "colors", query: func(sprite *SpriteImpl) bool {
-			return sprite.touchingColors(mathf.Color{}, mathf.Color{})
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sprite, _, mgr := setupPreparedResourceSync(t)
-			game := sprite.g
-			flush := func() { game.flushSpriteProxyChanges(game.scene.items) }
-			flush()
-			sprite.Hide()
-			flush()
-			sprite.SetCostume__0("costume1")
-			flush()
-			if !sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() || len(game.scene.dirtySprites) != 0 {
-				t.Fatal("hidden frame did not leave only the deferred costume pending")
-			}
-			mgr.expectedTexturePaths[1] = internalengine.ToAssetPath(sprite.costumes[1].path)
-
-			if !tt.query(sprite) {
-				t.Fatal("color query used the stale hidden costume")
-			}
-			requirePreparedResource(t, sprite, mgr, 1, 1.5)
-			if sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() {
-				t.Fatal("color query did not finish the deferred costume synchronization")
-			}
-		})
-	}
-}
-
-func TestColorQueryIncludesReentrantSceneChanges(t *testing.T) {
-	sprite, later, mgr := setupPreparedResourceSync(t)
-	game := sprite.g
-	game.flushSpriteProxyChanges(game.scene.items)
-	sprite.SetXpos(42)
-	later.runtimeState.isCostumeDirty = true
-	later.markProxyDirty()
-	later.runtimeState.proxy.OnFramesSetChangedEvent.Subscribe(func() {
-		sprite.SetXpos(84)
-	})
-	var queriedPosition mathf.Vec2
-	mgr.onColorCollision = func() {
-		queriedPosition = mgr.positions[1]
-	}
-
-	later.touchingColor(mathf.Color{})
-
-	if queriedPosition != (mathf.Vec2{X: 84, Y: 20}) {
-		t.Fatalf("color query saw reentrant position %v, want (84,20)", queriedPosition)
-	}
-	if len(game.scene.dirtySprites) != 0 || sprite.needsProxyUpdate() {
-		t.Fatal("color query left the reentrant scene change pending")
-	}
-}
-
-func TestTouchingColorUsesConfiguredThreshold(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-	sprite := newTouchingTestSprite("sensor", 0, 0, 1)
-
-	result := true
-	mgr.colorQueryResult = &result
-	if !sprite.touchingColor(mathf.NewColorRGB(1, 0, 0)) {
-		t.Fatal("touchingColor() = false, want the configured query result")
-	}
-	if got := mgr.lastColorThreshold; math.Abs(got-0.035) > 1e-12 {
-		t.Fatalf("color threshold = %v, want 0.035", got)
-	}
-	if got := mgr.lastAlphaThreshold; math.Abs(got-alphaThreshold) > 1e-12 {
-		t.Fatalf("alpha threshold = %v, want %v", got, alphaThreshold)
-	}
-}
-
-func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
-	for _, front := range []string{"Player", "Ground"} {
-		t.Run(front+"InFront", func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			game.scene.init()
-			game.displayState.WorldWidth, game.displayState.WorldHeight = 480, 360
-			mgr := &cloneCollisionSpriteMgr{
-				spyCloneSpriteMgr: setupCloneSpriteMgr(t),
-				visible:           make(map[pkgengine.Object]bool),
-				ghost:             make(map[pkgengine.Object]float64),
-			}
-			pkgengine.SpriteMgr = mgr
-			clock.Start()
-
-			ground := newCloneLimitSprite(game, "Ground")
-			player := newCloneLimitSprite(game, "Player")
-			if front == "Ground" {
-				game.scene.items[0], game.scene.items[1] = game.scene.items[1], game.scene.items[0]
-			}
-			for _, sprite := range []*cloneLimitSprite{ground, player} {
-				sprite.runtimeState.scale = 1
-				sprite.Show()
-				sprite.initRuntimeProxy()
-			}
-			player.SetXYpos(100, 0)
-			if player.Touching__1("Ground") {
-				t.Fatal("the original Ground must not overlap Player")
-			}
-
-			created, deleted := 0, 0
-			ground.onClone = func(clone *cloneLimitSprite) {
-				clone.SetXYpos(100, 0)
-				clone.SetGraphicEffect(GhostEffect, 100)
-				created++
-				game.Wait(0.01)
-				deleted++
-				clone.DeleteThisClone()
-			}
-			ground.OnStart(func() { ground.Clone__0() })
-			ground.OnStart(func() { Forever(func() { ground.Clone__0() }) })
-			var samples, missedFrames []int64
-			player.OnStart(func() {
-				Forever(func() {
-					frame := clock.Frame()
-					touching := player.Touching__1("Ground")
-					if frame > 0 {
-						samples = append(samples, frame)
-						if !touching {
-							missedFrames = append(missedFrames, frame)
-						}
-					}
-					internalengine.RequestRedraw()
-				})
-			})
-
-			game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-			const frames = 12
-			for range frames {
-				currentScheduler.Update()
-				flushCloneProxyUpdates(game)
-				clock.Update(1.0/30, 30)
-			}
-			if len(samples) != frames-1 {
-				t.Fatalf("collision samples = %v, want one per frame after startup", samples)
-			}
-			if len(missedFrames) != 0 {
-				t.Errorf("Player missed Ground clones at frames %v", missedFrames)
-			}
-			if created < frames || deleted < frames-1 {
-				t.Errorf("created/deleted clones = %d/%d, want continuous replacement", created, deleted)
-			}
-			if !mgr.sensedGhost {
-				t.Error("collision queries never sensed a clone with GhostEffect 100")
-			}
-		})
-	}
-}
-
 func TestSpriteSensingWithoutProxyAndInvalidTargets(t *testing.T) {
 	var game Game
 	if game.touchingSpriteBy(nil, "target") != nil || game.touchingSpriteBy(&SpriteImpl{}, "target") != nil {
@@ -705,24 +236,6 @@ func TestSpriteMouseSensingUsesWorldPointWithoutVisibilityFilter(t *testing.T) {
 	sprite.Hide()
 	if !sprite.TouchingWith(Mouse) || pointMgr.point != mathf.NewVec2(12, 34) || pointMgr.visibleOnly {
 		t.Fatalf("mouse query point=%v visibleOnly=%v", pointMgr.point, pointMgr.visibleOnly)
-	}
-}
-
-func TestPendingCloneSensingReportsCleanupFailureAndDoubleRelease(t *testing.T) {
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-	sprite := newTouchingQuerySprite("receiver", 0, 0, 1)
-	sprite.beginCloneProxyPublication()
-	mgr.panicVisibleFalse = "cleanup failure"
-	failure := capturePendingCloneSensingPanic(func() { withPendingCloneSensingVisibility([]*SpriteImpl{&sprite.SpriteImpl}, func() {}) })
-	if failure != "cleanup failure" || sprite.proxyPublication.sensingVisibilityLeases.Load() != 0 {
-		t.Fatalf("cleanup failure=%v leases=%d", failure, sprite.proxyPublication.sensingVisibilityLeases.Load())
-	}
-	failure = capturePendingCloneSensingPanic(func() {
-		releasePendingCloneSensingVisibility(pendingCloneSensingVisibilityLease{sprite: &sprite.SpriteImpl, publication: sprite.proxyPublication, proxy: sprite.runtimeState.proxy})
-	})
-	if failure != "spx: negative pending clone sensing visibility lease count" {
-		t.Fatalf("double release failure=%v", failure)
 	}
 }
 
@@ -1106,6 +619,563 @@ func BenchmarkTouchingName(b *testing.B) {
 	}
 }
 
+type mouseSensingSpriteMgr struct {
+	*touchingSyncSpriteMgr
+	point       mathf.Vec2
+	visibleOnly bool
+}
+
+func (m *mouseSensingSpriteMgr) CheckCollisionWithPoint(_ pkgengine.Object, p mathf.Vec2, visibleOnly bool) bool {
+	m.point = p
+	m.visibleOnly = visibleOnly
+	return true
+}
+
+// Pending clone sensing, visibility leases, and cleanup.
+
+func TestPendingCloneSensingIsIndependentFromRenderPublication(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
+	target := newTouchingQuerySprite("target", 0, 0, 2)
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+
+	target.beginCloneProxyPublication()
+	mgr.visible[2] = false
+	if !receiver.Touching__0(target) {
+		t.Fatal("published sprite could not sense a logically visible pending clone")
+	}
+	if mgr.visible[2] {
+		t.Fatal("pending target remained render-visible after sensing")
+	}
+	if mgr.collisionChecks != 1 {
+		t.Fatalf("pending target collision checks = %d, want 1", mgr.collisionChecks)
+	}
+
+	target.proxyPublication = nil
+	mgr.visible[2] = true
+	receiver.beginCloneProxyPublication()
+	mgr.visible[1] = false
+	visibilityCalls := mgr.setVisibleCalls[1]
+	if !receiver.Touching__0(target) {
+		t.Fatal("pending clone could not sense a published sprite")
+	}
+	if mgr.visible[1] {
+		t.Fatal("pending clone remained natively visible after sensing")
+	}
+	if got := mgr.setVisibleCalls[1] - visibilityCalls; got != 2 {
+		t.Fatalf("pending sensing visibility calls = %d, want one show and one restore", got)
+	}
+	if !receiver.isCloneProxyPublicationBlocked() {
+		t.Fatal("sensing published the pending clone")
+	}
+}
+
+func TestPendingCloneSensingByNameIsIndependentFromRenderPublication(t *testing.T) {
+	_, mgr, receiver, target := newTouchingPair(t, false)
+
+	target.beginCloneProxyPublication()
+	mgr.visible[2] = false
+	if !receiver.Touching__1("target") {
+		t.Fatal("named sensing could not observe a logically visible pending clone")
+	}
+	if mgr.visible[2] {
+		t.Fatal("pending named target remained render-visible after sensing")
+	}
+	if mgr.collisionChecks != 1 {
+		t.Fatalf("pending named target collision checks = %d, want 1", mgr.collisionChecks)
+	}
+
+	target.proxyPublication = nil
+	mgr.visible[2] = true
+	receiver.beginCloneProxyPublication()
+	mgr.visible[1] = false
+	if !receiver.Touching__1("target") {
+		t.Fatal("pending clone could not sense a published named target")
+	}
+}
+
+func TestLogicallyHiddenPendingCloneDoesNotAcquireSensingVisibility(t *testing.T) {
+	mgr, receiver, target := newPendingCloneSensingPair(t)
+	receiver.spriteState.isVisible = false
+
+	if receiver.Touching__0(target) {
+		t.Fatal("logically hidden pending clone participated in sensing")
+	}
+	if got := mgr.setVisibleCalls[1]; got != 0 {
+		t.Fatalf("hidden pending clone visibility calls = %d, want 0", got)
+	}
+	if mgr.collisionChecks != 0 {
+		t.Fatalf("hidden pending clone collision checks = %d, want 0", mgr.collisionChecks)
+	}
+}
+
+func TestPendingCloneSensingVisibilityLeaseIsReentrant(t *testing.T) {
+	mgr, receiver, target := newPendingCloneSensingPair(t)
+
+	var nestedTouching bool
+	var hiddenBeforeOuterQueryReturned bool
+	mgr.onCollision = func() {
+		// Exercise the nested query-sync path: SetTransform must retain the
+		// visibility owned by the outer lease.
+		receiver.markProxyDirty()
+		nestedTouching = receiver.Touching__0(target)
+		hiddenBeforeOuterQueryReturned = !mgr.visible[1]
+	}
+	if !receiver.Touching__0(target) {
+		t.Fatal("outer pending-clone sensing query returned false")
+	}
+	if !nestedTouching {
+		t.Fatal("nested pending-clone sensing query returned false")
+	}
+	if hiddenBeforeOuterQueryReturned {
+		t.Fatal("nested query released the outer visibility lease")
+	}
+	if mgr.visible[1] {
+		t.Fatal("outer query did not restore pending clone visibility")
+	}
+	if got := mgr.setVisibleCalls[1]; got != 2 {
+		t.Fatalf("nested sensing visibility calls = %d, want one show and one restore", got)
+	}
+	if mgr.collisionChecks != 2 {
+		t.Fatalf("nested collision checks = %d, want 2", mgr.collisionChecks)
+	}
+}
+
+func TestPendingCloneSensingShowPanicRestoresLease(t *testing.T) {
+	mgr, receiver, target := newPendingCloneSensingPair(t)
+	mgr.panicVisibleTrue = "temporary sensing show failed"
+
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		receiver.Touching__0(target)
+	}()
+	if recovered != "temporary sensing show failed" {
+		t.Fatalf("sensing panic = %v, want original show failure", recovered)
+	}
+	if mgr.visible[1] {
+		t.Fatal("pending clone remained visible after partial show failure")
+	}
+	if got := receiver.proxyPublication.sensingVisibilityLeases.Load(); got != 0 {
+		t.Fatalf("visibility leases after show failure = %d, want 0", got)
+	}
+	if !receiver.Touching__0(target) {
+		t.Fatal("sensing lease did not recover after show failure")
+	}
+}
+
+func TestPendingCloneSensingQueryPanicPreservesFailureAndRestoresVisibility(t *testing.T) {
+	mgr, receiver, target := newPendingCloneSensingPair(t)
+	mgr.panicCollision = "sensing query failed"
+	mgr.panicVisibleFalse = "sensing visibility restore failed"
+
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		receiver.Touching__0(target)
+	}()
+	if recovered != "sensing query failed" {
+		t.Fatalf("sensing panic = %v, want query failure", recovered)
+	}
+	if mgr.visible[1] {
+		t.Fatal("pending clone remained visible after query failure")
+	}
+	if mgr.panicVisibleFalse != nil {
+		t.Fatal("query failure skipped visibility restoration")
+	}
+	if got := receiver.proxyPublication.sensingVisibilityLeases.Load(); got != 0 {
+		t.Fatalf("visibility leases after query failure = %d, want 0", got)
+	}
+}
+
+func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
+	for _, front := range []string{"Player", "Ground"} {
+		t.Run(front+"InFront", func(t *testing.T) {
+			currentScheduler, game := setupRuntimeEventGame(t)
+			game.scene.init()
+			game.displayState.WorldWidth, game.displayState.WorldHeight = 480, 360
+			mgr := &cloneCollisionSpriteMgr{
+				spyCloneSpriteMgr: setupCloneSpriteMgr(t),
+				visible:           make(map[pkgengine.Object]bool),
+				ghost:             make(map[pkgengine.Object]float64),
+			}
+			pkgengine.SpriteMgr = mgr
+			clock.Start()
+
+			ground := newCloneLimitSprite(game, "Ground")
+			player := newCloneLimitSprite(game, "Player")
+			if front == "Ground" {
+				game.scene.items[0], game.scene.items[1] = game.scene.items[1], game.scene.items[0]
+			}
+			for _, sprite := range []*cloneLimitSprite{ground, player} {
+				sprite.runtimeState.scale = 1
+				sprite.Show()
+				sprite.initRuntimeProxy()
+			}
+			player.SetXYpos(100, 0)
+			if player.Touching__1("Ground") {
+				t.Fatal("the original Ground must not overlap Player")
+			}
+
+			created, deleted := 0, 0
+			ground.onClone = func(clone *cloneLimitSprite) {
+				clone.SetXYpos(100, 0)
+				clone.SetGraphicEffect(GhostEffect, 100)
+				created++
+				game.Wait(0.01)
+				deleted++
+				clone.DeleteThisClone()
+			}
+			ground.OnStart(func() { ground.Clone__0() })
+			ground.OnStart(func() { Forever(func() { ground.Clone__0() }) })
+			var samples, missedFrames []int64
+			player.OnStart(func() {
+				Forever(func() {
+					frame := clock.Frame()
+					touching := player.Touching__1("Ground")
+					if frame > 0 {
+						samples = append(samples, frame)
+						if !touching {
+							missedFrames = append(missedFrames, frame)
+						}
+					}
+					internalengine.RequestRedraw()
+				})
+			})
+
+			game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+			const frames = 12
+			for range frames {
+				currentScheduler.Update()
+				flushCloneProxyUpdates(game)
+				clock.Update(1.0/30, 30)
+			}
+			if len(samples) != frames-1 {
+				t.Fatalf("collision samples = %v, want one per frame after startup", samples)
+			}
+			if len(missedFrames) != 0 {
+				t.Errorf("Player missed Ground clones at frames %v", missedFrames)
+			}
+			if created < frames || deleted < frames-1 {
+				t.Errorf("created/deleted clones = %d/%d, want continuous replacement", created, deleted)
+			}
+			if !mgr.sensedGhost {
+				t.Error("collision queries never sensed a clone with GhostEffect 100")
+			}
+		})
+	}
+}
+
+func TestPendingCloneSensingReportsCleanupFailureAndDoubleRelease(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+	sprite := newTouchingQuerySprite("receiver", 0, 0, 1)
+	sprite.beginCloneProxyPublication()
+	mgr.panicVisibleFalse = "cleanup failure"
+	failure := capturePendingCloneSensingPanic(func() { withPendingCloneSensingVisibility([]*SpriteImpl{&sprite.SpriteImpl}, func() {}) })
+	if failure != "cleanup failure" || sprite.proxyPublication.sensingVisibilityLeases.Load() != 0 {
+		t.Fatalf("cleanup failure=%v leases=%d", failure, sprite.proxyPublication.sensingVisibilityLeases.Load())
+	}
+	failure = capturePendingCloneSensingPanic(func() {
+		releasePendingCloneSensingVisibility(pendingCloneSensingVisibilityLease{sprite: &sprite.SpriteImpl, publication: sprite.proxyPublication, proxy: sprite.runtimeState.proxy})
+	})
+	if failure != "spx: negative pending clone sensing visibility lease count" {
+		t.Fatalf("double release failure=%v", failure)
+	}
+}
+
+type cloneCollisionSpriteMgr struct {
+	*spyCloneSpriteMgr
+	visible     map[pkgengine.Object]bool
+	ghost       map[pkgengine.Object]float64
+	sensedGhost bool
+}
+
+func (m *cloneCollisionSpriteMgr) SetVisible(id pkgengine.Object, visible bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.visible[id] = visible
+}
+
+func (m *cloneCollisionSpriteMgr) SetTransform(id pkgengine.Object, _ mathf.Vec2, _ float64, _ mathf.Vec2, visible bool, _ mathf.Vec2) {
+	m.SetVisible(id, visible)
+}
+
+func (m *cloneCollisionSpriteMgr) SetMaterialParams(id pkgengine.Object, effect string, amount float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if effect == GhostEffect.String() {
+		m.ghost[id] = amount
+	}
+}
+
+func (m *cloneCollisionSpriteMgr) BatchUpdateTransforms(buffer []float32) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	idx := 2
+	for range int(buffer[0]) {
+		m.visible[pkgengine.Object(buffer[idx])] = buffer[idx+internalengine.SyncFieldsPerSprite-1] != 0
+		idx += internalengine.SyncFieldsPerSprite
+	}
+	for range int(buffer[1]) {
+		id := pkgengine.Object(buffer[idx])
+		delete(m.visible, id)
+		delete(m.ghost, id)
+		idx++
+	}
+}
+
+func (m *cloneCollisionSpriteMgr) CheckCollisionWithSprite(a, b pkgengine.Object, _ float64, _ bool) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Broad phase checked overlap; ghost does not affect sensing.
+	if !m.visible[a] || !m.visible[b] {
+		return false
+	}
+	if m.ghost[a] == 1 || m.ghost[b] == 1 {
+		m.sensedGhost = true
+	}
+	return true
+}
+
+func newPendingCloneSensingPair(t *testing.T) (*touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
+	t.Helper()
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
+	target := newTouchingQuerySprite("target", 0, 0, 2)
+	receiver.beginCloneProxyPublication()
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+	mgr.visible[1] = false
+	return mgr, receiver, target
+}
+
+// Color queries and immediate scene synchronization.
+
+func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	sprite := newTouchingTestSprite("mover", 0, 0, 1)
+	sprite.costumes = []*costume{
+		{name: "idle", path: "idle.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
+		{name: "hit", path: "hit.png", frame: costumeFrame{BitmapResolution: 1, Width: 1, Height: 1}},
+	}
+	sprite.costumeIndex = 0
+	sprite.runtimeState.isCostumeDirty = false
+	sprite.runtimeState.isAnimating = false
+
+	mgr.texturePaths[1] = internalengine.ToAssetPath("idle.png")
+	mgr.expectedTexturePaths[1] = internalengine.ToAssetPath("hit.png")
+
+	sprite.SetCostume__0("hit")
+
+	if !sprite.touchingColor(mathf.Color{}) {
+		t.Fatal("touchingColor() = false, want true after immediate costume sync")
+	}
+	if got := mgr.setTextureCalls[1]; got != 1 {
+		t.Fatalf("SetTexture calls after first touchingColor = %d, want 1", got)
+	}
+	if got := mgr.checkedTexturePaths[1]; got != internalengine.ToAssetPath("hit.png") {
+		t.Fatalf("collision used texture %q, want %q", got, internalengine.ToAssetPath("hit.png"))
+	}
+	if sprite.runtimeState.isCostumeDirty {
+		t.Fatal("runtimeState.isCostumeDirty = true, want false after immediate query sync")
+	}
+
+	if !sprite.touchingColor(mathf.Color{}) {
+		t.Fatal("second touchingColor() = false, want synced costume to remain valid")
+	}
+	if got := mgr.setTextureCalls[1]; got != 1 {
+		t.Fatalf("SetTexture calls after second touchingColor = %d, want 1", got)
+	}
+}
+
+func TestTouchingColorSyncsDirtySceneSpritesImmediately(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	game := &Game{}
+	game.displayState.WorldWidth = 480
+	game.displayState.WorldHeight = 360
+	game.scene.init()
+	receiver := newTouchingTestSprite("receiver", 0, 0, 1)
+	target := newTouchingTestSprite("target", 0, 0, 2)
+	receiver.g = game
+	target.g = game
+	game.scene.add(receiver)
+	game.scene.add(target)
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+
+	target.SetXpos(42)
+	var queriedTargetPosition mathf.Vec2
+	mgr.onColorCollision = func() {
+		queriedTargetPosition = mgr.positions[2]
+	}
+	receiver.touchingColor(mathf.Color{})
+
+	if queriedTargetPosition != (mathf.Vec2{X: 42, Y: 0}) {
+		t.Fatalf("color query saw target at %v, want (42,0)", queriedTargetPosition)
+	}
+	firstTargetSyncs := mgr.setTransformCalls[2]
+	receiver.touchingColor(mathf.Color{})
+	if got := mgr.setTransformCalls[2]; got != firstTargetSyncs {
+		t.Fatalf("unchanged target was synchronized %d extra times, want 0", got-firstTargetSyncs)
+	}
+	target.SetXpos(84)
+	receiver.touchingColor(mathf.Color{})
+	if got := mgr.positions[2]; got != (mathf.Vec2{X: 84, Y: 0}) {
+		t.Fatalf("second color query saw target at %v, want (84,0)", got)
+	}
+	target.setLayer(7)
+	receiver.touchingColor(mathf.Color{})
+	if target.runtimeState.isLayerDirty {
+		t.Fatal("color query did not synchronize the target's dirty layer")
+	}
+}
+
+func TestTouchingColorSyncsDirtyTransientOwnerImmediately(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	game := &Game{}
+	game.displayState.WorldWidth = 480
+	game.displayState.WorldHeight = 360
+	game.scene.init()
+	owner := newTouchingTestSprite("owner", 0, 0, 1)
+	owner.SetXpos(42)
+	owner.g = game
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+
+	owner.touchingColor(mathf.Color{})
+
+	if got := mgr.positions[1]; got != (mathf.Vec2{X: 42, Y: 0}) {
+		t.Fatalf("color query saw transient owner at %v, want (42,0)", got)
+	}
+	if got := mgr.setTransformCalls[1]; got != 1 {
+		t.Fatalf("transient owner was synchronized %d times, want 1", got)
+	}
+}
+
+func TestHiddenColorQueriesSyncDeferredCostume(t *testing.T) {
+	tests := []struct {
+		name  string
+		query func(*SpriteImpl) bool
+	}{
+		{name: "color", query: func(sprite *SpriteImpl) bool {
+			return sprite.touchingColor(mathf.Color{})
+		}},
+		{name: "colors", query: func(sprite *SpriteImpl) bool {
+			return sprite.touchingColors(mathf.Color{}, mathf.Color{})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite, _, mgr := setupPreparedResourceSync(t)
+			game := sprite.g
+			flush := func() { game.flushSpriteProxyChanges(game.scene.items) }
+			flush()
+			sprite.Hide()
+			flush()
+			sprite.SetCostume__0("costume1")
+			flush()
+			if !sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() || len(game.scene.proxies.dirtySprites) != 0 {
+				t.Fatal("hidden frame did not leave only the deferred costume pending")
+			}
+			mgr.expectedTexturePaths[1] = internalengine.ToAssetPath(sprite.costumes[1].path)
+
+			if !tt.query(sprite) {
+				t.Fatal("color query used the stale hidden costume")
+			}
+			requirePreparedResource(t, sprite, mgr, 1, 1.5)
+			if sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() {
+				t.Fatal("color query did not finish the deferred costume synchronization")
+			}
+		})
+	}
+}
+
+func TestColorQueryIncludesReentrantSceneChanges(t *testing.T) {
+	sprite, later, mgr := setupPreparedResourceSync(t)
+	game := sprite.g
+	game.flushSpriteProxyChanges(game.scene.items)
+	sprite.SetXpos(42)
+	later.runtimeState.isCostumeDirty = true
+	later.markProxyDirty()
+	later.runtimeState.proxy.OnFramesSetChangedEvent.Subscribe(func() {
+		sprite.SetXpos(84)
+	})
+	var queriedPosition mathf.Vec2
+	mgr.onColorCollision = func() {
+		queriedPosition = mgr.positions[1]
+	}
+
+	later.touchingColor(mathf.Color{})
+
+	if queriedPosition != (mathf.Vec2{X: 84, Y: 20}) {
+		t.Fatalf("color query saw reentrant position %v, want (84,20)", queriedPosition)
+	}
+	if len(game.scene.proxies.dirtySprites) != 0 || sprite.needsProxyUpdate() {
+		t.Fatal("color query left the reentrant scene change pending")
+	}
+}
+
+func TestTouchingColorUsesConfiguredThreshold(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+	sprite := newTouchingTestSprite("sensor", 0, 0, 1)
+
+	result := true
+	mgr.colorQueryResult = &result
+	if !sprite.touchingColor(mathf.NewColorRGB(1, 0, 0)) {
+		t.Fatal("touchingColor() = false, want the configured query result")
+	}
+	if got := mgr.lastColorThreshold; math.Abs(got-0.035) > 1e-12 {
+		t.Fatalf("color threshold = %v, want 0.035", got)
+	}
+	if got := mgr.lastAlphaThreshold; math.Abs(got-alphaThreshold) > 1e-12 {
+		t.Fatalf("alpha threshold = %v, want %v", got, alphaThreshold)
+	}
+}
+
+// Shared fixtures.
+
+type touchingSyncSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	positions               map[pkgengine.Object]mathf.Vec2
+	visible                 map[pkgengine.Object]bool
+	texturePaths            map[pkgengine.Object]string
+	expectedTexturePaths    map[pkgengine.Object]string
+	checkedTexturePaths     map[pkgengine.Object]string
+	setTransformCalls       map[pkgengine.Object]int
+	setPositionCalls        map[pkgengine.Object]int
+	setRotationCalls        map[pkgengine.Object]int
+	setScaleCalls           map[pkgengine.Object]int
+	setPivotCalls           map[pkgengine.Object]int
+	setVisibleCalls         map[pkgengine.Object]int
+	setTextureCalls         map[pkgengine.Object]int
+	setTextureAtlasCalls    map[pkgengine.Object]int
+	setRenderScaleCalls     map[pkgengine.Object]int
+	setTextureDirectCalls   map[pkgengine.Object]int
+	setTextureAtlasPathByID map[pkgengine.Object]string
+	collisionChecks         int
+	lastUsePixels           bool
+	onCollision             func()
+	collisionResult         func(pkgengine.Object, pkgengine.Object) bool
+	onColorCollision        func()
+	lastColorThreshold      float64
+	lastAlphaThreshold      float64
+	colorQueryResult        *bool
+	panicVisibleTrue        any
+	panicVisibleFalse       any
+	panicCollision          any
+}
+
 func (s *touchingSyncSpriteMgr) SetTransform(
 	obj pkgengine.Object,
 	pos mathf.Vec2,
@@ -1229,60 +1299,11 @@ func (s *touchingSyncSpriteMgr) CheckCollisionByColors(obj pkgengine.Object, spr
 	return s.CheckCollisionByColor(obj, targetColor, colorThreshold, alphaThreshold)
 }
 
+type touchingQuerySprite struct {
+	SpriteImpl
+}
+
 func (*touchingQuerySprite) Main() {}
-
-func (m *cloneCollisionSpriteMgr) SetVisible(id pkgengine.Object, visible bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.visible[id] = visible
-}
-
-func (m *cloneCollisionSpriteMgr) SetTransform(id pkgengine.Object, _ mathf.Vec2, _ float64, _ mathf.Vec2, visible bool, _ mathf.Vec2) {
-	m.SetVisible(id, visible)
-}
-
-func (m *cloneCollisionSpriteMgr) SetMaterialParams(id pkgengine.Object, effect string, amount float64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if effect == GhostEffect.String() {
-		m.ghost[id] = amount
-	}
-}
-
-func (m *cloneCollisionSpriteMgr) BatchUpdateTransforms(buffer []float32) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	idx := 2
-	for range int(buffer[0]) {
-		m.visible[pkgengine.Object(buffer[idx])] = buffer[idx+internalengine.SyncFieldsPerSprite-1] != 0
-		idx += internalengine.SyncFieldsPerSprite
-	}
-	for range int(buffer[1]) {
-		id := pkgengine.Object(buffer[idx])
-		delete(m.visible, id)
-		delete(m.ghost, id)
-		idx++
-	}
-}
-
-func (m *cloneCollisionSpriteMgr) CheckCollisionWithSprite(a, b pkgengine.Object, _ float64, _ bool) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	// Broad phase checked overlap; ghost does not affect sensing.
-	if !m.visible[a] || !m.visible[b] {
-		return false
-	}
-	if m.ghost[a] == 1 || m.ghost[b] == 1 {
-		m.sensedGhost = true
-	}
-	return true
-}
-
-func (m *mouseSensingSpriteMgr) CheckCollisionWithPoint(_ pkgengine.Object, p mathf.Vec2, visibleOnly bool) bool {
-	m.point = p
-	m.visibleOnly = visibleOnly
-	return true
-}
 
 func newTouchingSyncSpriteMgr() *touchingSyncSpriteMgr {
 	return &touchingSyncSpriteMgr{
@@ -1356,19 +1377,6 @@ func newTouchingQuerySprite(name string, x, y float64, id pkgengine.Object) *tou
 		mgr.visible[id] = true
 	}
 	return sprite
-}
-
-func newPendingCloneSensingPair(t *testing.T) (*touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
-	t.Helper()
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
-	target := newTouchingQuerySprite("target", 0, 0, 2)
-	receiver.beginCloneProxyPublication()
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-	mgr.positions[2] = mathf.NewVec2(0, 0)
-	mgr.visible[1] = false
-	return mgr, receiver, target
 }
 
 func newTouchingPair(t *testing.T, byShape bool) (*Game, *touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {

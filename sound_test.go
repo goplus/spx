@@ -29,39 +29,7 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
-type soundControlBackend struct {
-	fakeAudioBackend
-	actions []string
-}
-
-type fakeAudioBackend struct {
-	pan          float64
-	pitch        float64
-	volume       float64
-	createCalls  int
-	destroyCalls int
-	plays        []fakeAudioPlay
-}
-
-type fakeAudioPlay struct {
-	owner       engine.Object
-	attenuation float64
-	maxDistance float64
-}
-
-type cloneSoundSettings struct{ volume, pan, pitch float64 }
-
-type cloneSoundBackend struct {
-	animationAudioBackend
-	next      engine.Object
-	settings  map[engine.Object]cloneSoundSettings
-	destroyed []engine.Object
-}
-
-type spritePlaybackBackend struct {
-	animationAudioBackend
-	paused, resumed []int64
-}
+// Game playback controls and audio settings.
 
 func TestGameSoundPlaybackControls(t *testing.T) {
 	backend := &soundControlBackend{}
@@ -244,6 +212,116 @@ func TestGamePlayUsesStageAudioParameters(t *testing.T) {
 	}
 }
 
+func TestGameSoundUnsupportedControls(t *testing.T) {
+	var game Game
+	game.soundMgr.Init(&fakeAudioBackend{})
+	if game.Loudness() != 0 {
+		t.Fatal("unsupported microphone loudness must be zero")
+	}
+	for _, test := range []struct {
+		name string
+		call func()
+		want string
+	}{
+		{"get", func() { game.GetSoundEffect(SoundEffectKind(-1)) }, "GetSoundEffect: invalid kind"},
+		{"set", func() { game.SetSoundEffect(SoundEffectKind(-1), 1) }, "SetSoundEffect: invalid kind"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != test.want {
+					t.Fatalf("panic=%v, want %q", got, test.want)
+				}
+			}()
+			test.call()
+		})
+	}
+}
+
+type fakeAudioPlay struct {
+	owner       engine.Object
+	attenuation float64
+	maxDistance float64
+}
+
+type fakeAudioBackend struct {
+	pan          float64
+	pitch        float64
+	volume       float64
+	createCalls  int
+	destroyCalls int
+	plays        []fakeAudioPlay
+}
+
+func (f *fakeAudioBackend) CreateAudio() engine.Object {
+	f.createCalls++
+	f.volume = 1
+	return 77
+}
+
+func (f *fakeAudioBackend) DestroyAudio(obj engine.Object) {
+	f.destroyCalls++
+}
+
+func (f *fakeAudioBackend) SetPitch(obj engine.Object, pitch float64) {
+	f.pitch = pitch
+}
+
+func (f *fakeAudioBackend) GetPitch(obj engine.Object) float64 {
+	return f.pitch
+}
+
+func (f *fakeAudioBackend) SetPan(obj engine.Object, pan float64) {
+	f.pan = pan
+}
+
+func (f *fakeAudioBackend) GetPan(obj engine.Object) float64 {
+	return f.pan
+}
+
+func (f *fakeAudioBackend) SetVolume(obj engine.Object, volume float64) {
+	f.volume = volume
+}
+
+func (f *fakeAudioBackend) GetVolume(obj engine.Object) float64 {
+	return f.volume
+}
+
+func (f *fakeAudioBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
+	f.plays = append(f.plays, fakeAudioPlay{owner: ownerID, attenuation: attenuation, maxDistance: maxDistance})
+	return 1
+}
+
+func (f *fakeAudioBackend) Pause(aid int64) {}
+
+func (f *fakeAudioBackend) Resume(aid int64) {}
+
+func (f *fakeAudioBackend) Stop(aid int64) {}
+
+func (f *fakeAudioBackend) Restart(aid int64) bool { return false }
+
+func (f *fakeAudioBackend) SetLoop(aid int64, loop bool) {}
+
+func (f *fakeAudioBackend) IsPlaying(aid int64) bool { return false }
+
+func (f *fakeAudioBackend) StopAll() {}
+
+type soundControlBackend struct {
+	fakeAudioBackend
+	actions []string
+}
+
+func (b *soundControlBackend) IsPlaying(int64) bool { return true }
+
+func (b *soundControlBackend) Pause(int64) { b.actions = append(b.actions, "pause") }
+
+func (b *soundControlBackend) Resume(int64) { b.actions = append(b.actions, "resume") }
+
+func (b *soundControlBackend) Stop(int64) { b.actions = append(b.actions, "stop") }
+
+func (b *soundControlBackend) StopAll() { b.actions = append(b.actions, "stop all") }
+
+// Sound loading and configuration caching.
+
 func TestLoadSoundCachesIndependentConfigs(t *testing.T) {
 	fs := gameTestFS{
 		"sounds/Jump/index.json": `{"path":"jump.wav","rate":1,"sampleCount":10}`,
@@ -311,30 +389,111 @@ func TestLoadSoundDoesNotCacheErrors(t *testing.T) {
 	}
 }
 
-func TestGameSoundUnsupportedControls(t *testing.T) {
-	var game Game
-	game.soundMgr.Init(&fakeAudioBackend{})
-	if game.Loudness() != 0 {
-		t.Fatal("unsupported microphone loudness must be zero")
+// Sprite playback controls and waits.
+
+func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+	anim.sprite.g.audioState.AudioAttenuation = 0.35
+	anim.sprite.g.audioState.AudioMaxDistance = 640
+	anim.sprite.runtimeState.proxy.Id = 42
+
+	anim.sprite.Play__1("walk", true)
+	playID := anim.sprite.sound().play("walk", true)
+	if playID == 0 {
+		t.Fatal("play returned no playback id")
 	}
-	for _, test := range []struct {
-		name string
-		call func()
-		want string
-	}{
-		{"get", func() { game.GetSoundEffect(SoundEffectKind(-1)) }, "GetSoundEffect: invalid kind"},
-		{"set", func() { game.SetSoundEffect(SoundEffectKind(-1), 1) }, "SetSoundEffect: invalid kind"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			defer func() {
-				if got := recover(); got != test.want {
-					t.Fatalf("panic=%v, want %q", got, test.want)
-				}
-			}()
-			test.call()
-		})
+	if backend.createCalls != 1 || anim.sprite.components.sound.soundObj != 77 {
+		t.Fatalf("sprite sound allocations = %d, object = %d; want 1 and 77", backend.createCalls, anim.sprite.components.sound.soundObj)
+	}
+	if anim.sprite.g.audioState.SoundObj != 0 {
+		t.Fatalf("sprite playback initialized game sound object %d", anim.sprite.g.audioState.SoundObj)
+	}
+	if len(backend.plays) != 2 {
+		t.Fatalf("plays = %d, want 2", len(backend.plays))
+	}
+	first, second := backend.plays[0], backend.plays[1]
+	if first != second {
+		t.Fatalf("play parameters differ: first=%+v second=%+v", first, second)
+	}
+	if first.soundObj != 77 || first.owner != 42 || first.attenation != 0.35 || first.maxDist != 640 {
+		t.Fatalf("sprite playback parameters = %+v", first)
+	}
+	if len(backend.loops) != 2 || !backend.loops[0].loop || !backend.loops[1].loop {
+		t.Fatalf("loop parameters = %+v, want two looping plays", backend.loops)
 	}
 }
+
+func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+	sprite := anim.sprite
+	sprite.runtimeState.proxy.Id = 42
+	sprite.g.audioState.AudioAttenuation = 0.35
+	sprite.g.audioState.AudioMaxDistance = 640
+	finished := false
+	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
+		sprite.PlayAndWait("walk")
+		finished = true
+	})
+	currentScheduler.JoinFirstSlice(thread)
+	if finished || len(backend.plays) != 1 {
+		t.Fatalf("blocking playback finished = %v, plays = %d; want false and 1", finished, len(backend.plays))
+	}
+	play := backend.plays[0]
+	if play.soundObj != 77 || play.owner != 42 || play.attenation != 0.35 || play.maxDist != 640 || len(backend.loops) != 0 {
+		t.Fatalf("blocking playback parameters = %+v, loops = %v", play, backend.loops)
+	}
+	clock.Update(0, 0)
+	currentScheduler.Update()
+	if finished {
+		t.Fatal("PlayAndWait returned while the backend still reported active playback")
+	}
+	backend.playing[backend.nextID] = false
+	clock.Update(0, 0)
+	currentScheduler.Update()
+	if !finished {
+		t.Fatal("PlayAndWait did not resume after playback completed")
+	}
+}
+
+func TestSpritePlaybackControlsResolveSoundNames(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &spritePlaybackBackend{}
+	initTestAnimationAudio(anim, &backend.animationAudioBackend)
+	anim.sprite.g.soundMgr.Init(backend)
+	sprite := anim.sprite
+	sprite.Play__0("walk")
+	firstID := backend.nextID
+	sprite.PlayWith("step", true)
+	secondID := backend.nextID
+	sprite.PausePlaying("walk")
+	sprite.ResumePlaying("walk")
+	sprite.StopPlaying("walk")
+	if !slices.Equal(backend.paused, []int64{firstID}) || !slices.Equal(backend.resumed, []int64{firstID}) || !slices.Equal(backend.stops, []int64{firstID}) {
+		t.Fatalf("sound controls addressed wrong playback: pause=%v resume=%v stop=%v", backend.paused, backend.resumed, backend.stops)
+	}
+	if backend.playing[firstID] || !backend.playing[secondID] {
+		t.Fatalf("stopping walk changed unrelated sound: playing=%v", backend.playing)
+	}
+	if len(backend.loops) != 1 || backend.loops[0] != (animationLoopCall{id: secondID, loop: true}) {
+		t.Fatalf("loop settings = %v, want only the second playback looping", backend.loops)
+	}
+}
+
+type spritePlaybackBackend struct {
+	animationAudioBackend
+	paused, resumed []int64
+}
+
+func (b *spritePlaybackBackend) Pause(id int64) { b.paused = append(b.paused, id) }
+
+func (b *spritePlaybackBackend) Resume(id int64) { b.resumed = append(b.resumed, id) }
+
+// Sprite effects and clone state.
 
 func TestSpriteClearSoundEffects(t *testing.T) {
 	type testGame struct{ Game }
@@ -493,161 +652,14 @@ func TestCloneSoundEffectsFromStageInstance(t *testing.T) {
 	}
 }
 
-func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
-	anim := newTestAnimationComponent()
-	backend := &animationAudioBackend{}
-	initTestAnimationAudio(anim, backend)
-	anim.sprite.g.audioState.AudioAttenuation = 0.35
-	anim.sprite.g.audioState.AudioMaxDistance = 640
-	anim.sprite.runtimeState.proxy.Id = 42
+type cloneSoundSettings struct{ volume, pan, pitch float64 }
 
-	anim.sprite.Play__1("walk", true)
-	playID := anim.sprite.sound().play("walk", true)
-	if playID == 0 {
-		t.Fatal("play returned no playback id")
-	}
-	if backend.createCalls != 1 || anim.sprite.components.sound.soundObj != 77 {
-		t.Fatalf("sprite sound allocations = %d, object = %d; want 1 and 77", backend.createCalls, anim.sprite.components.sound.soundObj)
-	}
-	if anim.sprite.g.audioState.SoundObj != 0 {
-		t.Fatalf("sprite playback initialized game sound object %d", anim.sprite.g.audioState.SoundObj)
-	}
-	if len(backend.plays) != 2 {
-		t.Fatalf("plays = %d, want 2", len(backend.plays))
-	}
-	first, second := backend.plays[0], backend.plays[1]
-	if first != second {
-		t.Fatalf("play parameters differ: first=%+v second=%+v", first, second)
-	}
-	if first.soundObj != 77 || first.owner != 42 || first.attenation != 0.35 || first.maxDist != 640 {
-		t.Fatalf("sprite playback parameters = %+v", first)
-	}
-	if len(backend.loops) != 2 || !backend.loops[0].loop || !backend.loops[1].loop {
-		t.Fatalf("loop parameters = %+v, want two looping plays", backend.loops)
-	}
+type cloneSoundBackend struct {
+	animationAudioBackend
+	next      engine.Object
+	settings  map[engine.Object]cloneSoundSettings
+	destroyed []engine.Object
 }
-
-func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
-	anim := newTestAnimationComponent()
-	backend := &animationAudioBackend{}
-	initTestAnimationAudio(anim, backend)
-	sprite := anim.sprite
-	sprite.runtimeState.proxy.Id = 42
-	sprite.g.audioState.AudioAttenuation = 0.35
-	sprite.g.audioState.AudioMaxDistance = 640
-	finished := false
-	thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
-		sprite.PlayAndWait("walk")
-		finished = true
-	})
-	currentScheduler.JoinFirstSlice(thread)
-	if finished || len(backend.plays) != 1 {
-		t.Fatalf("blocking playback finished = %v, plays = %d; want false and 1", finished, len(backend.plays))
-	}
-	play := backend.plays[0]
-	if play.soundObj != 77 || play.owner != 42 || play.attenation != 0.35 || play.maxDist != 640 || len(backend.loops) != 0 {
-		t.Fatalf("blocking playback parameters = %+v, loops = %v", play, backend.loops)
-	}
-	clock.Update(0, 0)
-	currentScheduler.Update()
-	if finished {
-		t.Fatal("PlayAndWait returned while the backend still reported active playback")
-	}
-	backend.playing[backend.nextID] = false
-	clock.Update(0, 0)
-	currentScheduler.Update()
-	if !finished {
-		t.Fatal("PlayAndWait did not resume after playback completed")
-	}
-}
-
-func TestSpritePlaybackControlsResolveSoundNames(t *testing.T) {
-	anim := newTestAnimationComponent()
-	backend := &spritePlaybackBackend{}
-	initTestAnimationAudio(anim, &backend.animationAudioBackend)
-	anim.sprite.g.soundMgr.Init(backend)
-	sprite := anim.sprite
-	sprite.Play__0("walk")
-	firstID := backend.nextID
-	sprite.PlayWith("step", true)
-	secondID := backend.nextID
-	sprite.PausePlaying("walk")
-	sprite.ResumePlaying("walk")
-	sprite.StopPlaying("walk")
-	if !slices.Equal(backend.paused, []int64{firstID}) || !slices.Equal(backend.resumed, []int64{firstID}) || !slices.Equal(backend.stops, []int64{firstID}) {
-		t.Fatalf("sound controls addressed wrong playback: pause=%v resume=%v stop=%v", backend.paused, backend.resumed, backend.stops)
-	}
-	if backend.playing[firstID] || !backend.playing[secondID] {
-		t.Fatalf("stopping walk changed unrelated sound: playing=%v", backend.playing)
-	}
-	if len(backend.loops) != 1 || backend.loops[0] != (animationLoopCall{id: secondID, loop: true}) {
-		t.Fatalf("loop settings = %v, want only the second playback looping", backend.loops)
-	}
-}
-
-func (b *soundControlBackend) IsPlaying(int64) bool { return true }
-
-func (b *soundControlBackend) Pause(int64) { b.actions = append(b.actions, "pause") }
-
-func (b *soundControlBackend) Resume(int64) { b.actions = append(b.actions, "resume") }
-
-func (b *soundControlBackend) Stop(int64) { b.actions = append(b.actions, "stop") }
-
-func (b *soundControlBackend) StopAll() { b.actions = append(b.actions, "stop all") }
-
-func (f *fakeAudioBackend) CreateAudio() engine.Object {
-	f.createCalls++
-	f.volume = 1
-	return 77
-}
-
-func (f *fakeAudioBackend) DestroyAudio(obj engine.Object) {
-	f.destroyCalls++
-}
-
-func (f *fakeAudioBackend) SetPitch(obj engine.Object, pitch float64) {
-	f.pitch = pitch
-}
-
-func (f *fakeAudioBackend) GetPitch(obj engine.Object) float64 {
-	return f.pitch
-}
-
-func (f *fakeAudioBackend) SetPan(obj engine.Object, pan float64) {
-	f.pan = pan
-}
-
-func (f *fakeAudioBackend) GetPan(obj engine.Object) float64 {
-	return f.pan
-}
-
-func (f *fakeAudioBackend) SetVolume(obj engine.Object, volume float64) {
-	f.volume = volume
-}
-
-func (f *fakeAudioBackend) GetVolume(obj engine.Object) float64 {
-	return f.volume
-}
-
-func (f *fakeAudioBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
-	f.plays = append(f.plays, fakeAudioPlay{owner: ownerID, attenuation: attenuation, maxDistance: maxDistance})
-	return 1
-}
-
-func (f *fakeAudioBackend) Pause(aid int64) {}
-
-func (f *fakeAudioBackend) Resume(aid int64) {}
-
-func (f *fakeAudioBackend) Stop(aid int64) {}
-
-func (f *fakeAudioBackend) Restart(aid int64) bool { return false }
-
-func (f *fakeAudioBackend) SetLoop(aid int64, loop bool) {}
-
-func (f *fakeAudioBackend) IsPlaying(aid int64) bool { return false }
-
-func (f *fakeAudioBackend) StopAll() {}
 
 func (b *cloneSoundBackend) CreateAudio() engine.Object {
 	b.next++
@@ -687,48 +699,7 @@ func (b *cloneSoundBackend) DestroyAudio(id engine.Object) {
 	delete(b.settings, id)
 }
 
-func (b *spritePlaybackBackend) Pause(id int64) { b.paused = append(b.paused, id) }
-
-func (b *spritePlaybackBackend) Resume(id int64) { b.resumed = append(b.resumed, id) }
-
-type soundManagerTestBackend struct {
-	nextID    int64
-	plays     []soundManagerPlayCall
-	pauses    []int64
-	resumes   []int64
-	stops     []int64
-	restarts  []int64
-	loops     []soundManagerLoopCall
-	volumes   []float64
-	destroys  []engine.Object
-	lifecycle []string
-	pan       float64
-	pitch     float64
-	volume    float64
-	playing   map[int64]bool
-}
-
-type soundManagerPlayCall struct {
-	path       string
-	owner      engine.Object
-	attenation float64
-	maxDist    float64
-}
-
-type soundManagerLoopCall struct {
-	id   int64
-	loop bool
-}
-
-type cloningSoundManagerBackend struct {
-	soundManagerTestBackend
-	pans, pitches map[engine.Object]float64
-}
-
-type immediateSoundManagerBackend struct {
-	soundManagerTestBackend
-	id int64
-}
+// Playback tracking and restart.
 
 func TestSoundManagerRepeatedPlayStopsPreviousPlayback(t *testing.T) {
 	backend := &soundManagerTestBackend{}
@@ -894,6 +865,33 @@ func TestSoundManagerRestartIDPrunesStalePlayback(t *testing.T) {
 	}
 }
 
+func TestSoundManagerFailedAndAlreadyFinishedPlayback(t *testing.T) {
+	for _, id := range []int64{invalidPlaybackID, 42} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			backend := &immediateSoundManagerBackend{id: id}
+			var mgr soundManager
+			mgr.Init(backend)
+			if got := mgr.Play(1, "sound", false, true, 0, 0, 0); got != id {
+				t.Fatalf("play=%d,want%d", got, id)
+			}
+			if len(mgr.playbacks) != 0 || len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 {
+				t.Fatal("failed/completed playback remained tracked")
+			}
+		})
+	}
+}
+
+type immediateSoundManagerBackend struct {
+	soundManagerTestBackend
+	id int64
+}
+
+func (b *immediateSoundManagerBackend) PlayWithAttenuation(engine.Object, string, engine.Object, float64, float64) int64 {
+	return b.id
+}
+
+// Manager volume and effect controls.
+
 func TestSoundManagerVolumeAndEffects(t *testing.T) {
 	backend := &soundManagerTestBackend{pan: 0.25, pitch: 2, volume: 0.8}
 	var mgr soundManager
@@ -973,6 +971,99 @@ func TestSoundManagerPitchEffectUsesScale(t *testing.T) {
 		t.Fatalf("GetPitch with non-positive backend scale = %v, want 0", got)
 	}
 }
+
+func TestSoundManagerControlRanges(t *testing.T) {
+	backend := &soundManagerTestBackend{}
+	var mgr soundManager
+	mgr.Init(backend)
+	for _, control := range []struct {
+		name                        string
+		set                         func(engine.Object, float64)
+		backendValue                func(engine.Object) float64
+		low, high                   float64
+		wantLow, wantHigh, wantZero float64
+	}{
+		{"volume", mgr.SetVolume, backend.GetVolume, 0, 100, 0, 1, 0},
+		{"pan", mgr.SetPan, backend.GetPan, -100, 100, -1, 1, 0},
+		{"pitch", mgr.SetPitch, backend.GetPitch, -360, 360, 0.125, 8, 1},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			for _, tt := range []struct {
+				name        string
+				input, want float64
+			}{
+				{"zero", 0, control.wantZero},
+				{"minimum", control.low, control.wantLow},
+				{"maximum", control.high, control.wantHigh},
+				{"below minimum", control.low - 30, control.wantLow},
+				{"above maximum", control.high + 30, control.wantHigh},
+				{"negative infinity", math.Inf(-1), control.wantLow},
+				{"positive infinity", math.Inf(1), control.wantHigh},
+				{"NaN", math.NaN(), control.wantZero},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					control.set(1, tt.input)
+					if got := control.backendValue(1); !soundManagerAlmostEqual(got, tt.want) {
+						t.Errorf("backend value = %g, want %g", got, tt.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestSoundManagerCloneAndInvalidPlayback(t *testing.T) {
+	backend := &cloningSoundManagerBackend{soundManagerTestBackend: soundManagerTestBackend{volume: 0.4}, pans: map[engine.Object]float64{9: 0.25}, pitches: map[engine.Object]float64{9: 2}}
+	var mgr soundManager
+	mgr.Init(backend)
+	if got := mgr.CloneSoundEffects(invalidSoundObject); got != invalidSoundObject {
+		t.Fatalf("unallocated clone=%d", got)
+	}
+	if got := mgr.CloneSoundEffects(9); got != 77 || backend.pans[77] != 0.25 || backend.pitches[77] != 2 || backend.volume != 0.4 || len(backend.plays) != 0 || len(backend.volumes) != 0 {
+		t.Fatalf("clone=%d backend=%+v", got, backend)
+	}
+	mgr.ReleaseSound(invalidSoundObject)
+	mgr.StopID(invalidPlaybackID)
+	if mgr.RestartID(invalidPlaybackID) || mgr.IsPlaying(invalidPlaybackID) || len(backend.stops) != 0 || len(backend.destroys) != 0 {
+		t.Fatal("invalid identifiers reached backend")
+	}
+	id := mgr.Play(9, "sound", false, false, 0, 0, 0)
+	if !mgr.IsPlaying(id) {
+		t.Fatal("live playback reported stopped")
+	}
+	backend.playing[id] = false
+	if mgr.IsPlaying(id) {
+		t.Fatal("stopped playback reported live")
+	}
+	var uninitialized soundManager
+	if uninitialized.RestartID(1) {
+		t.Fatal("restarted without backend")
+	}
+	ids := []int64{1, 2}
+	if got := uninitialized.PruneStoppedIDs(ids); len(got) != 2 {
+		t.Fatal("pruned without backend")
+	}
+	uninitialized.Update()
+}
+
+type cloningSoundManagerBackend struct {
+	soundManagerTestBackend
+	pans, pitches map[engine.Object]float64
+}
+
+func (b *cloningSoundManagerBackend) GetPan(id engine.Object) float64 { return b.pans[id] }
+
+func (b *cloningSoundManagerBackend) SetPan(id engine.Object, value float64) { b.pans[id] = value }
+
+func (b *cloningSoundManagerBackend) GetPitch(id engine.Object) float64 { return b.pitches[id] }
+
+func (b *cloningSoundManagerBackend) SetPitch(id engine.Object, value float64) { b.pitches[id] = value }
+
+func soundManagerAlmostEqual(got, want float64) bool {
+	return math.Abs(got-want) < 1e-9
+}
+
+// Sound release and playback cleanup.
 
 func TestSoundManagerAllocAndRelease(t *testing.T) {
 	backend := &soundManagerTestBackend{}
@@ -1182,96 +1273,6 @@ func TestSoundManagerCanReplayAfterRepeatedStopAll(t *testing.T) {
 	}
 }
 
-func TestSoundManagerControlRanges(t *testing.T) {
-	backend := &soundManagerTestBackend{}
-	var mgr soundManager
-	mgr.Init(backend)
-	for _, control := range []struct {
-		name                        string
-		set                         func(engine.Object, float64)
-		backendValue                func(engine.Object) float64
-		low, high                   float64
-		wantLow, wantHigh, wantZero float64
-	}{
-		{"volume", mgr.SetVolume, backend.GetVolume, 0, 100, 0, 1, 0},
-		{"pan", mgr.SetPan, backend.GetPan, -100, 100, -1, 1, 0},
-		{"pitch", mgr.SetPitch, backend.GetPitch, -360, 360, 0.125, 8, 1},
-	} {
-		t.Run(control.name, func(t *testing.T) {
-			for _, tt := range []struct {
-				name        string
-				input, want float64
-			}{
-				{"zero", 0, control.wantZero},
-				{"minimum", control.low, control.wantLow},
-				{"maximum", control.high, control.wantHigh},
-				{"below minimum", control.low - 30, control.wantLow},
-				{"above maximum", control.high + 30, control.wantHigh},
-				{"negative infinity", math.Inf(-1), control.wantLow},
-				{"positive infinity", math.Inf(1), control.wantHigh},
-				{"NaN", math.NaN(), control.wantZero},
-			} {
-				t.Run(tt.name, func(t *testing.T) {
-					control.set(1, tt.input)
-					if got := control.backendValue(1); !soundManagerAlmostEqual(got, tt.want) {
-						t.Errorf("backend value = %g, want %g", got, tt.want)
-					}
-				})
-			}
-		})
-	}
-}
-
-func TestSoundManagerCloneAndInvalidPlayback(t *testing.T) {
-	backend := &cloningSoundManagerBackend{soundManagerTestBackend: soundManagerTestBackend{volume: 0.4}, pans: map[engine.Object]float64{9: 0.25}, pitches: map[engine.Object]float64{9: 2}}
-	var mgr soundManager
-	mgr.Init(backend)
-	if got := mgr.CloneSoundEffects(invalidSoundObject); got != invalidSoundObject {
-		t.Fatalf("unallocated clone=%d", got)
-	}
-	if got := mgr.CloneSoundEffects(9); got != 77 || backend.pans[77] != 0.25 || backend.pitches[77] != 2 || backend.volume != 0.4 || len(backend.plays) != 0 || len(backend.volumes) != 0 {
-		t.Fatalf("clone=%d backend=%+v", got, backend)
-	}
-	mgr.ReleaseSound(invalidSoundObject)
-	mgr.StopID(invalidPlaybackID)
-	if mgr.RestartID(invalidPlaybackID) || mgr.IsPlaying(invalidPlaybackID) || len(backend.stops) != 0 || len(backend.destroys) != 0 {
-		t.Fatal("invalid identifiers reached backend")
-	}
-	id := mgr.Play(9, "sound", false, false, 0, 0, 0)
-	if !mgr.IsPlaying(id) {
-		t.Fatal("live playback reported stopped")
-	}
-	backend.playing[id] = false
-	if mgr.IsPlaying(id) {
-		t.Fatal("stopped playback reported live")
-	}
-	var uninitialized soundManager
-	if uninitialized.RestartID(1) {
-		t.Fatal("restarted without backend")
-	}
-	ids := []int64{1, 2}
-	if got := uninitialized.PruneStoppedIDs(ids); len(got) != 2 {
-		t.Fatal("pruned without backend")
-	}
-	uninitialized.Update()
-}
-
-func TestSoundManagerFailedAndAlreadyFinishedPlayback(t *testing.T) {
-	for _, id := range []int64{invalidPlaybackID, 42} {
-		t.Run(fmt.Sprint(id), func(t *testing.T) {
-			backend := &immediateSoundManagerBackend{id: id}
-			var mgr soundManager
-			mgr.Init(backend)
-			if got := mgr.Play(1, "sound", false, true, 0, 0, 0); got != id {
-				t.Fatalf("play=%d,want%d", got, id)
-			}
-			if len(mgr.playbacks) != 0 || len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 {
-				t.Fatal("failed/completed playback remained tracked")
-			}
-		})
-	}
-}
-
 // Every single-playback removal path must update all indexes and finalize only
 // the released sound, even when cleanup is repeated after the ID is gone.
 func TestSoundManagerPlaybackRemovalFinalizesOnlyReleasedSound(t *testing.T) {
@@ -1310,6 +1311,50 @@ func TestSoundManagerPlaybackRemovalFinalizesOnlyReleasedSound(t *testing.T) {
 			assertSoundManagerNoTracking(t, &mgr)
 		})
 	}
+}
+
+func assertSoundManagerNoTracking(t *testing.T, mgr *soundManager) {
+	t.Helper()
+	if len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
+		t.Fatalf(
+			"manager tracking not cleared: path2id=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
+			mgr.path2id,
+			mgr.obj2ids,
+			mgr.playbacks,
+			mgr.pendingDestroy,
+		)
+	}
+}
+
+// Shared sound manager fixtures.
+
+type soundManagerPlayCall struct {
+	path       string
+	owner      engine.Object
+	attenation float64
+	maxDist    float64
+}
+
+type soundManagerLoopCall struct {
+	id   int64
+	loop bool
+}
+
+type soundManagerTestBackend struct {
+	nextID    int64
+	plays     []soundManagerPlayCall
+	pauses    []int64
+	resumes   []int64
+	stops     []int64
+	restarts  []int64
+	loops     []soundManagerLoopCall
+	volumes   []float64
+	destroys  []engine.Object
+	lifecycle []string
+	pan       float64
+	pitch     float64
+	volume    float64
+	playing   map[int64]bool
 }
 
 func (f *soundManagerTestBackend) CreateAudio() engine.Object {
@@ -1395,33 +1440,4 @@ func (f *soundManagerTestBackend) IsPlaying(aid int64) bool {
 
 func (f *soundManagerTestBackend) StopAll() {
 	f.playing = make(map[int64]bool)
-}
-
-func (b *cloningSoundManagerBackend) GetPan(id engine.Object) float64 { return b.pans[id] }
-
-func (b *cloningSoundManagerBackend) SetPan(id engine.Object, value float64) { b.pans[id] = value }
-
-func (b *cloningSoundManagerBackend) GetPitch(id engine.Object) float64 { return b.pitches[id] }
-
-func (b *cloningSoundManagerBackend) SetPitch(id engine.Object, value float64) { b.pitches[id] = value }
-
-func (b *immediateSoundManagerBackend) PlayWithAttenuation(engine.Object, string, engine.Object, float64, float64) int64 {
-	return b.id
-}
-
-func assertSoundManagerNoTracking(t *testing.T, mgr *soundManager) {
-	t.Helper()
-	if len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
-		t.Fatalf(
-			"manager tracking not cleared: path2id=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
-			mgr.path2id,
-			mgr.obj2ids,
-			mgr.playbacks,
-			mgr.pendingDestroy,
-		)
-	}
-}
-
-func soundManagerAlmostEqual(got, want float64) bool {
-	return math.Abs(got-want) < 1e-9
 }

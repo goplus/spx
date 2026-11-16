@@ -73,7 +73,7 @@ CLI and `launchpack` share the `RuntimeNames` naming contract and complete-set `
 
 Historical installations have no bridge-version metadata. Co-location and selected file names do not prove binary version identity. An incomplete directory may fall through to a later complete one; mismatched Engine/PCK version names and wrong-platform bridge names are rejected. Legacy CLI now also requires regular non-symlink files; installations assembled with file symlinks are no longer accepted.
 
-`spriteLayout` records each type's first direct SpriteImpl field, generated owner slot, `InitFrom` calls and user fields. Clone hook signatures are checked only for actual cloning or nonempty stage groups, so they do not constrain sprites that are never cloned. Loading validates the owner before zeroing storage; lookup and cloning share the layout. Handwritten sprites may move the direct base field, while existing shallow-reference and List `InitFrom` behavior is preserved. `core/project.WritableField` centralizes access to unexported generated fields without changing public SPX APIs or interpreter-visible signatures.
+`spriteTypeInfo` records each type's first direct SpriteImpl field, generated owner slot, `InitFrom` calls and user fields. Clone hook signatures are checked only for actual cloning or nonempty stage groups, so they do not constrain sprites that are never cloned. Loading validates the owner before zeroing storage; lookup and cloning share the layout. Handwritten sprites may move the direct base field, while existing shallow-reference and List `InitFrom` behavior is preserved. `core/project.WritableField` centralizes access to unexported generated fields without changing public SPX APIs or interpreter-visible signatures.
 
 ### Verification boundaries
 

@@ -37,51 +37,82 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type engineStartTestGame struct {
-	*Game
-	mainCalls int
+// Shared scheduler setup and cleanup.
+
+func setupRuntimeScheduler(t *testing.T) *coroutine.Scheduler {
+	t.Helper()
+	currentScheduler := coroutine.New(nil)
+	installRuntimeScheduler(t, currentScheduler, nil)
+	return currentScheduler
 }
 
-type captureFlushTestShape struct {
-	updates int
+// beforeRestore runs after the test's coroutines stop, while their scheduler
+// remains bound. Register other resource cleanup before installing the scheduler.
+func installRuntimeScheduler(t testing.TB, currentScheduler *coroutine.Scheduler, beforeRestore func()) {
+	t.Helper()
+	original := scheduler
+	scheduler = currentScheduler
+	engine.SetScheduler(currentScheduler)
+	t.Cleanup(func() {
+		currentScheduler.RunAfterStop(nil)
+		if beforeRestore != nil {
+			beforeRestore()
+		}
+		scheduler = original
+		engine.SetScheduler(original)
+	})
 }
 
-type captureFlushSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	batches [][]float32
+func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
+	original := setupRuntimeScheduler(t)
+	stopped := make(chan struct{})
+	cleaned := false
+	t.Run("replacement", func(t *testing.T) {
+		currentScheduler := coroutine.New(nil)
+		installRuntimeScheduler(t, currentScheduler, func() {
+			if scheduler != currentScheduler {
+				t.Error("scheduler restored before resource cleanup")
+			}
+			select {
+			case <-stopped:
+			default:
+				t.Error("resource cleanup ran before coroutine completion")
+			}
+			cleaned = true
+		})
+		started := make(chan struct{})
+		currentScheduler.Create("fixture-drain", func(coroutine.Thread) {
+			defer close(stopped)
+			if !engine.IsInCoroutine() {
+				t.Error("engine scheduler binding does not match the test scheduler")
+			}
+			close(started)
+			engine.WaitNextFrame()
+		})
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("test coroutine did not start")
+		}
+	})
+	if !cleaned || scheduler != original {
+		t.Fatal("scheduler cleanup did not complete and restore its previous binding")
+	}
+	bound := make(chan bool, 1)
+	original.Create("fixture-restored", func(coroutine.Thread) {
+		bound <- engine.IsInCoroutine()
+	})
+	select {
+	case ok := <-bound:
+		if !ok {
+			t.Fatal("engine scheduler binding was not restored")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("restored scheduler did not start a coroutine")
+	}
 }
 
-type replayPauseTestExtMgr struct {
-	pauses int
-}
-
-type debugPanelUiMgr struct {
-	pkgengine.IUiMgr
-	text      string
-	destroyed []pkgengine.Object
-}
-
-// The backend advances independently of the Go sprite, as Godot physics does.
-type frameSyncSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	positions map[int64]mathf.Vec2
-	batches   [][]float32
-}
-
-type frameUpdateFunc func(float64)
-
-type frameMonitorWaitGame struct {
-	*Game
-	wait                       func()
-	thread                     coroutine.Thread
-	started, completed, active int
-}
-
-type stopAllAudioBackend struct {
-	animationAudioBackend
-	stopped   int
-	destroyed []engine.Object
-}
+// Randomness and runtime utilities.
 
 func TestRand0SwapsReversedBounds(t *testing.T) {
 	const (
@@ -394,6 +425,30 @@ func TestListRandomPositionKeepsCoroutineSource(t *testing.T) {
 	}
 }
 
+// Startup, reset and diagnostics.
+
+type engineStartTestGame struct {
+	*Game
+	mainCalls int
+}
+
+func (g *engineStartTestGame) MainEntry() { g.mainCalls++ }
+
+type debugPanelUiMgr struct {
+	pkgengine.IUiMgr
+	text      string
+	destroyed []pkgengine.Object
+}
+
+func (m *debugPanelUiMgr) SetText(_ pkgengine.Object, text string) { m.text = text }
+
+func (*debugPanelUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (m *debugPanelUiMgr) DestroyNode(id pkgengine.Object) bool {
+	m.destroyed = append(m.destroyed, id)
+	return m.IUiMgr.DestroyNode(id)
+}
+
 func TestOnEngineStartSchedulesBootstrapOnce(t *testing.T) {
 	for _, reset := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reset=%v", reset), func(t *testing.T) {
@@ -485,109 +540,6 @@ func TestDebugPanelShowsLatestCoroutineStats(t *testing.T) {
 	}
 }
 
-func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
-	spriteMgr := setupCaptureFlushSpriteMgr(t)
-
-	var game Game
-	game.lifecycle.loaded.Store(true)
-	game.camera = &cameraImpl{g: &game}
-	game.scene.init()
-	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
-
-	shape := &captureFlushTestShape{}
-	game.scene.add(shape)
-	destroyed := &SpriteImpl{}
-	destroyed.runtimeState.proxy = &engine.Sprite{}
-	game.scene.add(destroyed)
-	game.scene.removeShape(destroyed)
-
-	engine.SetGame(&game)
-	defer engine.SetGame(nil)
-	setupCaptureTest(t)
-	engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
-
-	game.OnEngineRender(0)
-	if shape.updates != 0 {
-		t.Fatalf("post-coroutine proxy flush advanced shape logic %d times, want 0", shape.updates)
-	}
-	if destroyed.runtimeState.proxy != nil {
-		t.Fatal("pending sprite destroy was not flushed on an ordinary frame")
-	}
-	if len(spriteMgr.batches) != 1 {
-		t.Fatalf("ordinary-frame proxy batches = %d, want 1", len(spriteMgr.batches))
-	}
-
-	destroyedWithCapture := &SpriteImpl{}
-	destroyedWithCapture.runtimeState.proxy = &engine.Sprite{}
-	game.scene.add(destroyedWithCapture)
-	game.scene.removeShape(destroyedWithCapture)
-	if err := engine.EnqueueCapture("after-coroutine", nil); err != nil {
-		t.Fatal(err)
-	}
-	game.OnEngineRender(0)
-	if shape.updates != 0 {
-		t.Fatalf("capture-frame proxy flush advanced shape logic %d times, want 0", shape.updates)
-	}
-	if destroyedWithCapture.runtimeState.proxy != nil {
-		t.Fatal("pending sprite destroy was not included in the capture-frame proxy flush")
-	}
-	if len(spriteMgr.batches) != 2 {
-		t.Fatalf("proxy batches after capture frame = %d, want 2", len(spriteMgr.batches))
-	}
-	if err := engine.FlushCaptures(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
-	resetInputSessionTest(t)
-	spriteMgr := setupCaptureFlushSpriteMgr(t)
-
-	var game Game
-	game.camera = &cameraImpl{g: &game}
-	game.scene.init()
-	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
-	shape := &captureFlushTestShape{}
-	game.scene.add(shape)
-	destroyed := &SpriteImpl{}
-	destroyed.runtimeState.proxy = &engine.Sprite{}
-	game.scene.add(destroyed)
-	game.scene.removeShape(destroyed)
-	if _, err := PrepareInputReplay(validRuntimeReplay(InputReplayFrame{Frame: 0, State: InputReplayState{}})); err != nil {
-		t.Fatal(err)
-	}
-
-	session := claimPreparedSession(t, &game)
-	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
-		t.Fatal(err)
-	}
-	game.lifecycle.loaded.Store(true)
-	game.OnEngineRender(0)
-
-	if shape.updates != 0 {
-		t.Fatalf("EOF-only proxy flush advanced shape logic %d times, want 0", shape.updates)
-	}
-	if destroyed.runtimeState.proxy != nil {
-		t.Fatal("pending sprite destroy was not flushed before EOF pause")
-	}
-	if len(spriteMgr.batches) != 1 {
-		t.Fatalf("EOF-only proxy batches = %d, want 1", len(spriteMgr.batches))
-	}
-
-	originalExtMgr := pkgengine.ExtMgr
-	extMgr := &replayPauseTestExtMgr{}
-	pkgengine.ExtMgr = extMgr
-	t.Cleanup(func() { pkgengine.ExtMgr = originalExtMgr })
-	game.OnEngineFrameEnd()
-	game.OnEngineFrameEnd()
-	if extMgr.pauses != 1 {
-		t.Fatalf("EOF frame-end pauses = %d, want one", extMgr.pauses)
-	}
-	if status := session.status(); status.Phase != InputSessionPhaseCompleted || !status.Completed {
-		t.Fatalf("EOF session status = %+v", status)
-	}
-}
-
 func TestEngineResetClearsBootstrapAndAllowsStartupAgain(t *testing.T) {
 	installAskTestUiMgr(t)
 	game := setupStageLoadTestGame(t, gameTestFS{}).baseGame()
@@ -647,6 +599,132 @@ func TestScheduleStartEventRejectsUnreadyAndDuplicateDispatch(t *testing.T) {
 	if game.lifecycle.scheduleStart() != nil {
 		t.Fatal("same bootstrap scheduled OnStart twice")
 	}
+}
+
+// Frame synchronization and suspended shape updates.
+
+// The backend advances independently of the Go sprite, as Godot physics does.
+type frameSyncSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	positions map[int64]mathf.Vec2
+	batches   [][]float32
+}
+
+func (m *frameSyncSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	for i, id := range ids {
+		pos := m.positions[id]
+		out[i*2], out[i*2+1] = float32(pos.X), float32(pos.Y)
+	}
+	return true
+}
+
+func (m *frameSyncSpriteMgr) SetPosition(id pkgengine.Object, pos mathf.Vec2) {
+	m.positions[int64(id)] = pos
+}
+
+func (*frameSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
+
+func (m *frameSyncSpriteMgr) BatchUpdateTransforms(data []float32) {
+	m.batches = append(m.batches, append([]float32(nil), data...))
+	for i := 0; i < int(data[0]); i++ {
+		at := 2 + i*engine.SyncFieldsPerSprite
+		m.positions[int64(data[at])] = mathf.NewVec2(float64(data[at+1]), float64(data[at+2]))
+	}
+}
+
+type frameUpdateFunc func(float64)
+
+func (f frameUpdateFunc) onUpdate(delta float64) { f(delta) }
+
+type frameMonitorWaitGame struct {
+	*Game
+	wait                       func()
+	thread                     coroutine.Thread
+	started, completed, active int
+}
+
+func (g *frameMonitorWaitGame) Value() float64 {
+	g.thread = scheduler.Caller()
+	g.started++
+	g.active++
+	defer func() { g.active-- }()
+	g.wait()
+	g.completed++
+	return 42
+}
+
+func setupFrameSyncGame(t *testing.T) (*coroutine.Scheduler, *Game, *frameSyncSpriteMgr) {
+	t.Helper()
+	currentScheduler, game, _ := setupInputSourceTest(t)
+	original := pkgengine.SpriteMgr
+	mgr := &frameSyncSpriteMgr{positions: make(map[int64]mathf.Vec2)}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = original })
+	game.scene.init()
+	game.camera = &cameraImpl{g: game}
+	game.syncBuffer = engine.NewSpriteSyncBuffer(2)
+	game.lifecycle.loaded.Store(true)
+	game.lifecycle.startDispatched.Store(true)
+	return currentScheduler, game, mgr
+}
+
+func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
+	sprite := &newCloneAwakeOrderSprite(game, name).SpriteImpl
+	sprite.runtimeState.proxy = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
+	sprite.runtimeState.proxy.SetId(id)
+	sprite.runtimeState.isCostumeDirty = false
+	sprite.spriteState.isVisible = true
+	sprite.physics().physicsMode = DynamicPhysics
+	sprite.markProxyDirty()
+	game.scene.add(sprite)
+	return sprite
+}
+
+func runFrameSyncGame(currentScheduler *coroutine.Scheduler, game *Game) {
+	const delta = 1.0 / 60
+	game.OnEngineBeforeUpdate(delta)
+	clock.Update(delta, 60)
+	game.OnEngineUpdate(delta)
+	currentScheduler.Update()
+	game.OnEngineRender(delta)
+}
+
+// A failed frame must release the host before fixture cleanup restores globals.
+func runFrameSyncCall(t *testing.T, currentScheduler *coroutine.Scheduler, call func()) {
+	t.Helper()
+	done := make(chan any, 1)
+	go func() {
+		defer func() { done <- recover() }()
+		call()
+	}()
+	select {
+	case recovered := <-done:
+		if recovered != nil {
+			t.Fatalf("frame panicked: %v", recovered)
+		}
+	case <-time.After(time.Second):
+		currentScheduler.StopAll()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("frame did not exit after stopping its scripts")
+		}
+		t.Fatal("frame waited for a future-frame continuation")
+	}
+}
+
+func addFrameSyncMonitor(t *testing.T, getter *frameMonitorWaitGame) (*Monitor, *monitorPanelSpy) {
+	t.Helper()
+	panel := &monitorPanelSpy{}
+	monitor := &Monitor{
+		visible: true, isDirty: true, panel: panel,
+		eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
+	}
+	if monitor.eval == nil {
+		t.Fatal("lowercase monitor property did not bind the Value getter")
+	}
+	getter.scene.add(monitor)
+	return monitor, panel
 }
 
 func TestFrameSyncUpdatesCustomShapesAndMonitors(t *testing.T) {
@@ -1088,6 +1166,280 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 	requirePosition(t, sprite, 50, 60)
 }
 
+func TestLogicFramePreservesPhasesAndShapeSnapshot(t *testing.T) {
+	setupRuntimeScheduler(t)
+	clock.ClearTimers()
+	clock.Start()
+	t.Cleanup(clock.ClearTimers)
+	game := &Game{sounds: make(map[string]sound)}
+	backend := &animationAudioBackend{}
+	game.soundMgr.Init(backend)
+
+	newSprite := func(name string) *SpriteImpl {
+		anim := newTestAnimationComponent()
+		sprite := anim.sprite
+		sprite.name, sprite.g = name, game
+		game.sounds[name] = &coreproject.SoundConfig{Path: name + ".wav"}
+		sprite.animation().pendingAudios = []string{name}
+		anim.curAnimState = &animationPlayback{Name: name}
+		anim.doneAnimations = []*animationPlayback{anim.curAnimState}
+		return sprite
+	}
+	first, second, late := newSprite("first"), newSprite("second"), newSprite("late")
+	destroyed, unbound := newSprite("destroyed"), newSprite("unbound")
+	destroyed.markDestroyed()
+	unbound.runtimeState.proxy = nil
+	game.scene.items = []Shape{first, struct{}{}, destroyed, second, unbound}
+	var steps []string
+	backend.onPlay = func(id int64) {
+		path := backend.plays[len(backend.plays)-1].path
+		steps = append(steps, "play:"+path)
+		switch id {
+		case 1:
+			first.animation().curAnimState.OnPlayAudioPlaybackID = id
+			// Both passes must finish the original snapshot, even if playback
+			// changes the live shape list.
+			game.scene.items = []Shape{late}
+		case 2:
+			if first.animation().curAnimState == nil {
+				t.Error("first animation completed before second audio played")
+			}
+			second.animation().curAnimState.OnPlayAudioPlaybackID = id
+		case 3:
+			late.animation().curAnimState.OnPlayAudioPlaybackID = id
+		}
+	}
+	backend.onStop = func(id int64) {
+		steps = append(steps, fmt.Sprintf("complete:%d", id))
+	}
+	clock.RegisterTimer(0.2)
+	clock.RegisterTimer(0.1)
+	clock.RegisterTimer(0.3)
+	clock.Update(0.2, 30)
+	audios, animations := make([]string, 0, 4), make([]*animationPlayback, 0, 4)
+	audioStorage, animationStorage := &audios[:cap(audios)][0], &animations[:cap(animations)][0]
+	audios, animations = game.processLogicFrame(audios, animations)
+	want := []string{"play:" + engine.ToAssetPath("first.wav"), "play:" + engine.ToAssetPath("second.wav"), "complete:1", "complete:2"}
+	if !slices.Equal(steps, want) {
+		t.Fatalf("logic phases = %v, want %v", steps, want)
+	}
+	if first.animation().curAnimState != nil || second.animation().curAnimState != nil {
+		t.Fatal("original snapshot did not complete both animations")
+	}
+	if len(late.animation().pendingAudios) != 1 || len(late.animation().doneAnimations) != 1 {
+		t.Fatal("newly added sprite was processed in the old snapshot")
+	}
+	for _, sprite := range []*SpriteImpl{destroyed, unbound} {
+		if len(sprite.animation().pendingAudios) != 0 || len(sprite.animation().doneAnimations) != 0 || sprite.animation().curAnimState == nil {
+			t.Fatalf("inactive sprite %s was not drained without playback", sprite.name)
+		}
+	}
+	// Timers belong to the frame event phase, not the audio/animation loop.
+	for _, timestamp := range []int64{100, 200} {
+		if timer, ok := clock.NextTimer(); !ok || timer != timestamp {
+			t.Fatalf("pending timer = %d, %v, want %d", timer, ok, timestamp)
+		}
+	}
+	if _, ok := clock.NextTimer(); ok {
+		t.Fatal("future timer became due early")
+	}
+	steps = nil
+	audios, animations = game.processLogicFrame(audios, animations)
+	want = []string{"play:" + engine.ToAssetPath("late.wav"), "complete:3"}
+	if !slices.Equal(steps, want) {
+		t.Fatalf("next frame = %v, want %v", steps, want)
+	}
+	if len(audios) != 0 || cap(audios) != 4 || &audios[:cap(audios)][0] != audioStorage ||
+		len(animations) != 0 || cap(animations) != 4 || &animations[:cap(animations)][0] != animationStorage {
+		t.Fatal("logic frames did not preserve both reusable scratch buffers")
+	}
+}
+
+func TestLogicFramePreservesEmptyScratch(t *testing.T) {
+	clock.ClearTimers()
+	t.Cleanup(clock.ClearTimers)
+	for _, items := range [][]Shape{nil, {struct{}{}}} {
+		game := &Game{}
+		game.scene.items = items
+		audios, animations := game.processLogicFrame([]string{}, []*animationPlayback{})
+		if audios == nil || animations == nil || len(audios) != 0 || len(animations) != 0 {
+			t.Fatalf("scratch = %#v, %#v, want non-nil empty slices", audios, animations)
+		}
+		audios, animations = game.processLogicFrame(nil, nil)
+		if audios != nil || animations != nil {
+			t.Fatalf("nil scratch = %#v, %#v, want nil slices", audios, animations)
+		}
+	}
+}
+
+// Rendering, capture and replay completion.
+
+type captureFlushTestShape struct {
+	updates int
+}
+
+func (s *captureFlushTestShape) onUpdate(float64) {
+	s.updates++
+}
+
+type captureFlushSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	batches [][]float32
+}
+
+func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
+	m.batches = append(m.batches, append([]float32(nil), buffer...))
+}
+
+type replayPauseTestExtMgr struct {
+	pauses int
+}
+
+func (*replayPauseTestExtMgr) RequestExit(int64) {}
+
+func (*replayPauseTestExtMgr) RequestReset(int64) {}
+
+func (*replayPauseTestExtMgr) RequestRestart() {}
+
+func (*replayPauseTestExtMgr) OnRuntimePanic(string) {}
+
+func (m *replayPauseTestExtMgr) Pause() { m.pauses++ }
+
+func (*replayPauseTestExtMgr) Resume() {}
+
+func (*replayPauseTestExtMgr) IsPaused() bool { return false }
+
+func (*replayPauseTestExtMgr) NextFrame() {}
+
+func (*replayPauseTestExtMgr) SetLayerSorterMode(int64) {}
+
+func setupCaptureFlushSpriteMgr(t *testing.T) *captureFlushSpriteMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	original := pkgengine.SpriteMgr
+	mgr := &captureFlushSpriteMgr{}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = original })
+	return mgr
+}
+
+func setupCaptureTest(t testing.TB) {
+	t.Helper()
+	clear := func() {
+		t.Helper()
+		engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
+		if err := engine.FlushCaptures(); err != nil {
+			t.Fatal(err)
+		}
+		engine.SetCaptureHandler(nil)
+	}
+	clear()
+	t.Cleanup(clear)
+}
+
+func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
+	spriteMgr := setupCaptureFlushSpriteMgr(t)
+
+	var game Game
+	game.lifecycle.loaded.Store(true)
+	game.camera = &cameraImpl{g: &game}
+	game.scene.init()
+	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+
+	shape := &captureFlushTestShape{}
+	game.scene.add(shape)
+	destroyed := &SpriteImpl{}
+	destroyed.runtimeState.proxy = &engine.Sprite{}
+	game.scene.add(destroyed)
+	game.scene.removeShape(destroyed)
+
+	engine.SetGame(&game)
+	defer engine.SetGame(nil)
+	setupCaptureTest(t)
+	engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
+
+	game.OnEngineRender(0)
+	if shape.updates != 0 {
+		t.Fatalf("post-coroutine proxy flush advanced shape logic %d times, want 0", shape.updates)
+	}
+	if destroyed.runtimeState.proxy != nil {
+		t.Fatal("pending sprite destroy was not flushed on an ordinary frame")
+	}
+	if len(spriteMgr.batches) != 1 {
+		t.Fatalf("ordinary-frame proxy batches = %d, want 1", len(spriteMgr.batches))
+	}
+
+	destroyedWithCapture := &SpriteImpl{}
+	destroyedWithCapture.runtimeState.proxy = &engine.Sprite{}
+	game.scene.add(destroyedWithCapture)
+	game.scene.removeShape(destroyedWithCapture)
+	if err := engine.EnqueueCapture("after-coroutine", nil); err != nil {
+		t.Fatal(err)
+	}
+	game.OnEngineRender(0)
+	if shape.updates != 0 {
+		t.Fatalf("capture-frame proxy flush advanced shape logic %d times, want 0", shape.updates)
+	}
+	if destroyedWithCapture.runtimeState.proxy != nil {
+		t.Fatal("pending sprite destroy was not included in the capture-frame proxy flush")
+	}
+	if len(spriteMgr.batches) != 2 {
+		t.Fatalf("proxy batches after capture frame = %d, want 2", len(spriteMgr.batches))
+	}
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
+	resetInputSessionTest(t)
+	spriteMgr := setupCaptureFlushSpriteMgr(t)
+
+	var game Game
+	game.camera = &cameraImpl{g: &game}
+	game.scene.init()
+	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+	shape := &captureFlushTestShape{}
+	game.scene.add(shape)
+	destroyed := &SpriteImpl{}
+	destroyed.runtimeState.proxy = &engine.Sprite{}
+	game.scene.add(destroyed)
+	game.scene.removeShape(destroyed)
+	if _, err := PrepareInputReplay(validRuntimeReplay(InputReplayFrame{Frame: 0, State: InputReplayState{}})); err != nil {
+		t.Fatal(err)
+	}
+
+	session := claimPreparedSession(t, &game)
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	game.lifecycle.loaded.Store(true)
+	game.OnEngineRender(0)
+
+	if shape.updates != 0 {
+		t.Fatalf("EOF-only proxy flush advanced shape logic %d times, want 0", shape.updates)
+	}
+	if destroyed.runtimeState.proxy != nil {
+		t.Fatal("pending sprite destroy was not flushed before EOF pause")
+	}
+	if len(spriteMgr.batches) != 1 {
+		t.Fatalf("EOF-only proxy batches = %d, want 1", len(spriteMgr.batches))
+	}
+
+	originalExtMgr := pkgengine.ExtMgr
+	extMgr := &replayPauseTestExtMgr{}
+	pkgengine.ExtMgr = extMgr
+	t.Cleanup(func() { pkgengine.ExtMgr = originalExtMgr })
+	game.OnEngineFrameEnd()
+	game.OnEngineFrameEnd()
+	if extMgr.pauses != 1 {
+		t.Fatalf("EOF frame-end pauses = %d, want one", extMgr.pauses)
+	}
+	if status := session.status(); status.Phase != InputSessionPhaseCompleted || !status.Completed {
+		t.Fatalf("EOF session status = %+v", status)
+	}
+}
+
 func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 	var got []string
 	engine.SetGame(struct{}{})
@@ -1108,117 +1460,6 @@ func TestCaptureQueuesRequestForActiveGame(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "step_001.png" {
 		t.Fatalf("FlushCaptures = %v, want [step_001.png]", got)
-	}
-}
-
-func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
-	original := setupRuntimeScheduler(t)
-	stopped := make(chan struct{})
-	cleaned := false
-	t.Run("replacement", func(t *testing.T) {
-		currentScheduler := coroutine.New(nil)
-		installRuntimeScheduler(t, currentScheduler, func() {
-			if scheduler != currentScheduler {
-				t.Error("scheduler restored before resource cleanup")
-			}
-			select {
-			case <-stopped:
-			default:
-				t.Error("resource cleanup ran before coroutine completion")
-			}
-			cleaned = true
-		})
-		started := make(chan struct{})
-		currentScheduler.Create("fixture-drain", func(coroutine.Thread) {
-			defer close(stopped)
-			if !engine.IsInCoroutine() {
-				t.Error("engine scheduler binding does not match the test scheduler")
-			}
-			close(started)
-			engine.WaitNextFrame()
-		})
-		select {
-		case <-started:
-		case <-time.After(time.Second):
-			t.Fatal("test coroutine did not start")
-		}
-	})
-	if !cleaned || scheduler != original {
-		t.Fatal("scheduler cleanup did not complete and restore its previous binding")
-	}
-	bound := make(chan bool, 1)
-	original.Create("fixture-restored", func(coroutine.Thread) {
-		bound <- engine.IsInCoroutine()
-	})
-	select {
-	case ok := <-bound:
-		if !ok {
-			t.Fatal("engine scheduler binding was not restored")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("restored scheduler did not start a coroutine")
-	}
-}
-
-func TestNonVisualLoopsShareFrame(t *testing.T) {
-	currentScheduler, _ := setupRuntimeEventGame(t)
-	clock.Start()
-	counts := [2]int{}
-	for i := range counts {
-		th := currentScheduler.Create(nil, func(coroutine.Thread) {
-			Repeat(5, func() { counts[i]++ })
-		})
-		currentScheduler.JoinFirstSlice(th)
-	}
-	currentScheduler.Update()
-	if counts != [2]int{5, 5} {
-		t.Fatalf("same-frame iterations = %v, want [5 5]", counts)
-	}
-}
-
-func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
-	for _, visible := range []bool{false, true} {
-		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
-			currentScheduler, _ := setupRuntimeEventGame(t)
-			clock.Start()
-			sprite := new(SpriteImpl)
-			sprite.spriteState.isVisible = visible
-			sprite.components.transform = &transformComponent{
-				sprite:    sprite,
-				direction: 45, rotationStyle: Normal,
-			}
-			var frames []int64
-			th := currentScheduler.Create(sprite, func(coroutine.Thread) {
-				Repeat(3, func() {
-					if len(frames)%2 == 0 {
-						sprite.SetRotationStyle(None)
-					} else {
-						sprite.SetRotationStyle(Normal)
-					}
-					frames = append(frames, clock.Frame())
-				})
-			})
-			currentScheduler.JoinFirstSlice(th)
-			for range 3 {
-				currentScheduler.Update()
-				clock.Update(1.0/30, 30)
-			}
-			if len(frames) != 3 {
-				t.Fatalf("iterations = %d, want 3", len(frames))
-			}
-			for i, frame := range frames {
-				want := int64(0)
-				if visible {
-					want = int64(i)
-				}
-				if frame != want {
-					t.Fatalf("iteration %d ran at frame %d, want %d", i, frame, want)
-				}
-			}
-			if sprite.spriteState.dirtyVersion == 0 {
-				t.Fatal("rotation style did not mark the render proxy dirty")
-			}
-		})
 	}
 }
 
@@ -1295,6 +1536,223 @@ func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 	}
 	if extMgr.pauses != 1 || session.status().Phase != InputSessionPhaseCompleted {
 		t.Fatalf("EOF pauses = %d, session = %+v", extMgr.pauses, session.status())
+	}
+}
+
+// Condition sampling across frame phases.
+
+func TestTimerTrackingHatDoesNotFire(t *testing.T) {
+	for _, redraw := range []bool{false, true} {
+		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
+			currentScheduler, game, _ := setupInputSourceTest(t)
+			game.lifecycle.markLoaded(game.lifecycle.generation())
+			clock.Start()
+			var tracked float64
+			fired := 0
+			game.OnStart(func() {
+				Forever(func() {
+					tracked = game.Timer()
+					if redraw {
+						engine.RequestRedraw()
+					}
+				})
+			})
+			game.OnCond(func() bool { return game.Timer() > tracked+0.01 }, func() { fired++ })
+			game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+			currentScheduler.Update()
+			// Slow frames must preserve the same sampling order.
+			for _, delta := range []float64{1.0 / 30, 1.0 / 60, 0.25, 1.0 / 30} {
+				game.OnEngineBeforeUpdate(1.0 / 30)
+				clock.Update(delta, 30)
+				withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+				currentScheduler.Update()
+			}
+			if fired != 0 {
+				t.Fatalf("tracking hat fired %d times", fired)
+			}
+			// Stopping tracking allows a timer edge to fire.
+			currentScheduler.StopIf(func(th coroutine.Thread) bool { return th.Owner == game })
+			game.OnEngineBeforeUpdate(1.0 / 30)
+			clock.Update(0.1, 30)
+			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+			currentScheduler.Update()
+			game.OnEngineBeforeUpdate(1.0 / 30)
+			clock.Update(0.1, 30)
+			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+			currentScheduler.Update()
+			if fired != 1 {
+				t.Fatalf("stopped tracking hat fired %d times, want 1", fired)
+			}
+		})
+	}
+}
+
+func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
+	for _, startDispatched := range []bool{false, true} {
+		t.Run(fmt.Sprintf("start_dispatched=%t", startDispatched), func(t *testing.T) {
+			currentScheduler, game := setupRuntimeEventGame(t)
+			game.lifecycle.startDispatched.Store(startDispatched)
+			started, release := make(chan struct{}), make(chan struct{})
+			var returned chan struct{}
+			t.Cleanup(func() {
+				close(release)
+				if returned != nil {
+					<-returned
+				}
+			})
+			currentScheduler.Create(game, func(coroutine.Thread) {
+				close(started)
+				<-release
+			})
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("bootstrap script did not start")
+			}
+			samples := 0
+			game.OnCond(func() bool { samples++; return true }, func() {})
+			returned = make(chan struct{})
+			go func() {
+				game.OnEngineBeforeUpdate(1.0 / 30)
+				close(returned)
+			}()
+			select {
+			case <-returned:
+			case <-time.After(time.Second):
+				t.Fatal("unstarted frame waited for a script sampling barrier")
+			}
+			if samples != 0 {
+				t.Fatalf("bootstrap condition samples = %d, want 0", samples)
+			}
+		})
+	}
+}
+
+func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
+	currentScheduler, game, _ := setupInputSourceTest(t)
+	game.lifecycle.markLoaded(game.lifecycle.generation())
+	clock.Start()
+	game.lifecycle.startDispatched.Store(true)
+	var sampled, handled float64
+	game.OnCond(func() bool { sampled = game.Timer(); return sampled > 0.01 }, func() { handled = game.Timer() })
+	clock.Update(0.05, 30)
+	game.OnEngineBeforeUpdate(1.0 / 30)
+	if handled != 0 {
+		t.Fatal("handler ran in predicate phase")
+	}
+	clock.Update(0.05, 30)
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+	currentScheduler.Update()
+	if sampled != 0.05 || handled != 0.1 {
+		t.Fatalf("predicate/handler time = %v/%v, want 0.05/0.1", sampled, handled)
+	}
+}
+
+func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
+	currentScheduler, game, _ := setupInputSourceTest(t)
+	game.lifecycle.markLoaded(game.lifecycle.generation())
+	clock.Start()
+	game.lifecycle.startDispatched.Store(true)
+	value := true
+	evaluations, calls := 0, 0
+	release := make(chan struct{}, 2)
+	completed := make(chan struct{}, 2)
+	game.OnCond(func() bool { evaluations++; return value }, func() {
+		calls++
+		defer func() { completed <- struct{}{} }()
+		engine.WaitForChan(release)
+	})
+	poll := func() {
+		game.OnEngineBeforeUpdate(1.0 / 30)
+		clock.Update(1.0/30, 30)
+		withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+		currentScheduler.Update()
+	}
+	poll()
+	value = false
+	poll()
+	value = true
+	poll()
+	if calls != 1 || evaluations != 1 {
+		t.Fatalf("running hat: calls/evaluations = %d/%d, want 1/1", calls, evaluations)
+	}
+	release <- struct{}{}
+	<-completed
+	poll()
+	if calls != 1 {
+		t.Fatal("sustained true condition restarted a completed handler")
+	}
+	value = false
+	poll()
+	value = true
+	poll()
+	if calls != 2 {
+		t.Fatalf("new rising edge calls = %d, want 2", calls)
+	}
+	release <- struct{}{}
+}
+
+// Redraw and explicit wait boundaries.
+
+func TestNonVisualLoopsShareFrame(t *testing.T) {
+	currentScheduler, _ := setupRuntimeEventGame(t)
+	clock.Start()
+	counts := [2]int{}
+	for i := range counts {
+		th := currentScheduler.Create(nil, func(coroutine.Thread) {
+			Repeat(5, func() { counts[i]++ })
+		})
+		currentScheduler.JoinFirstSlice(th)
+	}
+	currentScheduler.Update()
+	if counts != [2]int{5, 5} {
+		t.Fatalf("same-frame iterations = %v, want [5 5]", counts)
+	}
+}
+
+func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
+	for _, visible := range []bool{false, true} {
+		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
+			currentScheduler, _ := setupRuntimeEventGame(t)
+			clock.Start()
+			sprite := new(SpriteImpl)
+			sprite.spriteState.isVisible = visible
+			sprite.components.transform = &transformComponent{
+				sprite:    sprite,
+				direction: 45, rotationStyle: Normal,
+			}
+			var frames []int64
+			th := currentScheduler.Create(sprite, func(coroutine.Thread) {
+				Repeat(3, func() {
+					if len(frames)%2 == 0 {
+						sprite.SetRotationStyle(None)
+					} else {
+						sprite.SetRotationStyle(Normal)
+					}
+					frames = append(frames, clock.Frame())
+				})
+			})
+			currentScheduler.JoinFirstSlice(th)
+			for range 3 {
+				currentScheduler.Update()
+				clock.Update(1.0/30, 30)
+			}
+			if len(frames) != 3 {
+				t.Fatalf("iterations = %d, want 3", len(frames))
+			}
+			for i, frame := range frames {
+				want := int64(0)
+				if visible {
+					want = int64(i)
+				}
+				if frame != want {
+					t.Fatalf("iteration %d ran at frame %d, want %d", i, frame, want)
+				}
+			}
+			if sprite.spriteState.dirtyVersion == 0 {
+				t.Fatal("rotation style did not mark the render proxy dirty")
+			}
+		})
 	}
 }
 
@@ -1458,262 +1916,7 @@ func TestSoundControlsRequestRedrawBoundary(t *testing.T) {
 	}
 }
 
-func TestTimerTrackingHatDoesNotFire(t *testing.T) {
-	for _, redraw := range []bool{false, true} {
-		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
-			currentScheduler, game, _ := setupInputSourceTest(t)
-			game.lifecycle.markLoaded(game.lifecycle.generation())
-			clock.Start()
-			var tracked float64
-			fired := 0
-			game.OnStart(func() {
-				Forever(func() {
-					tracked = game.Timer()
-					if redraw {
-						engine.RequestRedraw()
-					}
-				})
-			})
-			game.OnCond(func() bool { return game.Timer() > tracked+0.01 }, func() { fired++ })
-			game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-			currentScheduler.Update()
-			// Slow frames must preserve the same sampling order.
-			for _, delta := range []float64{1.0 / 30, 1.0 / 60, 0.25, 1.0 / 30} {
-				game.OnEngineBeforeUpdate(1.0 / 30)
-				clock.Update(delta, 30)
-				withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-				currentScheduler.Update()
-			}
-			if fired != 0 {
-				t.Fatalf("tracking hat fired %d times", fired)
-			}
-			// Stopping tracking allows a timer edge to fire.
-			currentScheduler.StopIf(func(th coroutine.Thread) bool { return th.Owner == game })
-			game.OnEngineBeforeUpdate(1.0 / 30)
-			clock.Update(0.1, 30)
-			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-			currentScheduler.Update()
-			game.OnEngineBeforeUpdate(1.0 / 30)
-			clock.Update(0.1, 30)
-			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-			currentScheduler.Update()
-			if fired != 1 {
-				t.Fatalf("stopped tracking hat fired %d times, want 1", fired)
-			}
-		})
-	}
-}
-
-func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
-	for _, startDispatched := range []bool{false, true} {
-		t.Run(fmt.Sprintf("start_dispatched=%t", startDispatched), func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			game.lifecycle.startDispatched.Store(startDispatched)
-			started, release := make(chan struct{}), make(chan struct{})
-			var returned chan struct{}
-			t.Cleanup(func() {
-				close(release)
-				if returned != nil {
-					<-returned
-				}
-			})
-			currentScheduler.Create(game, func(coroutine.Thread) {
-				close(started)
-				<-release
-			})
-			select {
-			case <-started:
-			case <-time.After(time.Second):
-				t.Fatal("bootstrap script did not start")
-			}
-			samples := 0
-			game.OnCond(func() bool { samples++; return true }, func() {})
-			returned = make(chan struct{})
-			go func() {
-				game.OnEngineBeforeUpdate(1.0 / 30)
-				close(returned)
-			}()
-			select {
-			case <-returned:
-			case <-time.After(time.Second):
-				t.Fatal("unstarted frame waited for a script sampling barrier")
-			}
-			if samples != 0 {
-				t.Fatalf("bootstrap condition samples = %d, want 0", samples)
-			}
-		})
-	}
-}
-
-func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
-	currentScheduler, game, _ := setupInputSourceTest(t)
-	game.lifecycle.markLoaded(game.lifecycle.generation())
-	clock.Start()
-	game.lifecycle.startDispatched.Store(true)
-	var sampled, handled float64
-	game.OnCond(func() bool { sampled = game.Timer(); return sampled > 0.01 }, func() { handled = game.Timer() })
-	clock.Update(0.05, 30)
-	game.OnEngineBeforeUpdate(1.0 / 30)
-	if handled != 0 {
-		t.Fatal("handler ran in predicate phase")
-	}
-	clock.Update(0.05, 30)
-	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-	currentScheduler.Update()
-	if sampled != 0.05 || handled != 0.1 {
-		t.Fatalf("predicate/handler time = %v/%v, want 0.05/0.1", sampled, handled)
-	}
-}
-
-func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
-	currentScheduler, game, _ := setupInputSourceTest(t)
-	game.lifecycle.markLoaded(game.lifecycle.generation())
-	clock.Start()
-	game.lifecycle.startDispatched.Store(true)
-	value := true
-	evaluations, calls := 0, 0
-	release := make(chan struct{}, 2)
-	completed := make(chan struct{}, 2)
-	game.OnCond(func() bool { evaluations++; return value }, func() {
-		calls++
-		defer func() { completed <- struct{}{} }()
-		engine.WaitForChan(release)
-	})
-	poll := func() {
-		game.OnEngineBeforeUpdate(1.0 / 30)
-		clock.Update(1.0/30, 30)
-		withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-		currentScheduler.Update()
-	}
-	poll()
-	value = false
-	poll()
-	value = true
-	poll()
-	if calls != 1 || evaluations != 1 {
-		t.Fatalf("running hat: calls/evaluations = %d/%d, want 1/1", calls, evaluations)
-	}
-	release <- struct{}{}
-	<-completed
-	poll()
-	if calls != 1 {
-		t.Fatal("sustained true condition restarted a completed handler")
-	}
-	value = false
-	poll()
-	value = true
-	poll()
-	if calls != 2 {
-		t.Fatalf("new rising edge calls = %d, want 2", calls)
-	}
-	release <- struct{}{}
-}
-
-func TestLogicFramePreservesPhasesAndShapeSnapshot(t *testing.T) {
-	setupRuntimeScheduler(t)
-	clock.ClearTimers()
-	clock.Start()
-	t.Cleanup(clock.ClearTimers)
-	game := &Game{sounds: make(map[string]sound)}
-	backend := &animationAudioBackend{}
-	game.soundMgr.Init(backend)
-
-	newSprite := func(name string) *SpriteImpl {
-		anim := newTestAnimationComponent()
-		sprite := anim.sprite
-		sprite.name, sprite.g = name, game
-		game.sounds[name] = &coreproject.SoundConfig{Path: name + ".wav"}
-		sprite.animation().pendingAudios = []string{name}
-		anim.curAnimState = &animationPlayback{Name: name}
-		anim.doneAnimations = []*animationPlayback{anim.curAnimState}
-		return sprite
-	}
-	first, second, late := newSprite("first"), newSprite("second"), newSprite("late")
-	destroyed, unbound := newSprite("destroyed"), newSprite("unbound")
-	destroyed.markDestroyed()
-	unbound.runtimeState.proxy = nil
-	game.scene.items = []Shape{first, struct{}{}, destroyed, second, unbound}
-	var steps []string
-	backend.onPlay = func(id int64) {
-		path := backend.plays[len(backend.plays)-1].path
-		steps = append(steps, "play:"+path)
-		switch id {
-		case 1:
-			first.animation().curAnimState.OnPlayAudioPlaybackID = id
-			// Both passes must finish the original snapshot, even if playback
-			// changes the live shape list.
-			game.scene.items = []Shape{late}
-		case 2:
-			if first.animation().curAnimState == nil {
-				t.Error("first animation completed before second audio played")
-			}
-			second.animation().curAnimState.OnPlayAudioPlaybackID = id
-		case 3:
-			late.animation().curAnimState.OnPlayAudioPlaybackID = id
-		}
-	}
-	backend.onStop = func(id int64) {
-		steps = append(steps, fmt.Sprintf("complete:%d", id))
-	}
-	clock.RegisterTimer(0.2)
-	clock.RegisterTimer(0.1)
-	clock.RegisterTimer(0.3)
-	clock.Update(0.2, 30)
-	audios, animations := make([]string, 0, 4), make([]*animationPlayback, 0, 4)
-	audioStorage, animationStorage := &audios[:cap(audios)][0], &animations[:cap(animations)][0]
-	audios, animations = game.processLogicFrame(audios, animations)
-	want := []string{"play:" + engine.ToAssetPath("first.wav"), "play:" + engine.ToAssetPath("second.wav"), "complete:1", "complete:2"}
-	if !slices.Equal(steps, want) {
-		t.Fatalf("logic phases = %v, want %v", steps, want)
-	}
-	if first.animation().curAnimState != nil || second.animation().curAnimState != nil {
-		t.Fatal("original snapshot did not complete both animations")
-	}
-	if len(late.animation().pendingAudios) != 1 || len(late.animation().doneAnimations) != 1 {
-		t.Fatal("newly added sprite was processed in the old snapshot")
-	}
-	for _, sprite := range []*SpriteImpl{destroyed, unbound} {
-		if len(sprite.animation().pendingAudios) != 0 || len(sprite.animation().doneAnimations) != 0 || sprite.animation().curAnimState == nil {
-			t.Fatalf("inactive sprite %s was not drained without playback", sprite.name)
-		}
-	}
-	// Timers belong to the frame event phase, not the audio/animation loop.
-	for _, timestamp := range []int64{100, 200} {
-		if timer, ok := clock.NextTimer(); !ok || timer != timestamp {
-			t.Fatalf("pending timer = %d, %v, want %d", timer, ok, timestamp)
-		}
-	}
-	if _, ok := clock.NextTimer(); ok {
-		t.Fatal("future timer became due early")
-	}
-	steps = nil
-	audios, animations = game.processLogicFrame(audios, animations)
-	want = []string{"play:" + engine.ToAssetPath("late.wav"), "complete:3"}
-	if !slices.Equal(steps, want) {
-		t.Fatalf("next frame = %v, want %v", steps, want)
-	}
-	if len(audios) != 0 || cap(audios) != 4 || &audios[:cap(audios)][0] != audioStorage ||
-		len(animations) != 0 || cap(animations) != 4 || &animations[:cap(animations)][0] != animationStorage {
-		t.Fatal("logic frames did not preserve both reusable scratch buffers")
-	}
-}
-
-func TestLogicFramePreservesEmptyScratch(t *testing.T) {
-	clock.ClearTimers()
-	t.Cleanup(clock.ClearTimers)
-	for _, items := range [][]Shape{nil, {struct{}{}}} {
-		game := &Game{}
-		game.scene.items = items
-		audios, animations := game.processLogicFrame([]string{}, []*animationPlayback{})
-		if audios == nil || animations == nil || len(audios) != 0 || len(animations) != 0 {
-			t.Fatalf("scratch = %#v, %#v, want non-nil empty slices", audios, animations)
-		}
-		audios, animations = game.processLogicFrame(nil, nil)
-		if audios != nil || animations != nil {
-			t.Fatalf("nil scratch = %#v, %#v, want nil slices", audios, animations)
-		}
-	}
-}
+// Procedure and warp control flow.
 
 func TestProcedureConsumesStopThisScript(t *testing.T) {
 	Procedure(func() {
@@ -1869,6 +2072,21 @@ func TestWarpRestoresPreviousState(t *testing.T) {
 		t.Fatal("run-without-screen-refresh state should restore without blocking")
 	}
 }
+
+// Stopping scripts and releasing resources.
+
+type stopAllAudioBackend struct {
+	animationAudioBackend
+	stopped   int
+	destroyed []engine.Object
+}
+
+func (b *stopAllAudioBackend) StopAll() {
+	b.stopped++
+	clear(b.playing)
+}
+
+func (b *stopAllAudioBackend) DestroyAudio(obj engine.Object) { b.destroyed = append(b.destroyed, obj) }
 
 func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 	panicReported := make(chan struct{}, 1)
@@ -2066,203 +2284,3 @@ func TestStopAllClearsGraphicEffects(t *testing.T) {
 		t.Fatalf("right brightness effect = %v, want 0 after stop all reset", got)
 	}
 }
-
-func (g *engineStartTestGame) MainEntry() { g.mainCalls++ }
-
-func (s *captureFlushTestShape) onUpdate(float64) {
-	s.updates++
-}
-
-func (*replayPauseTestExtMgr) RequestExit(int64) {}
-
-func (*replayPauseTestExtMgr) RequestReset(int64) {}
-
-func (*replayPauseTestExtMgr) RequestRestart() {}
-
-func (*replayPauseTestExtMgr) OnRuntimePanic(string) {}
-
-func (m *replayPauseTestExtMgr) Pause() { m.pauses++ }
-
-func (*replayPauseTestExtMgr) Resume() {}
-
-func (*replayPauseTestExtMgr) IsPaused() bool { return false }
-
-func (*replayPauseTestExtMgr) NextFrame() {}
-
-func (*replayPauseTestExtMgr) SetLayerSorterMode(int64) {}
-
-func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
-	m.batches = append(m.batches, append([]float32(nil), buffer...))
-}
-
-func (m *debugPanelUiMgr) SetText(_ pkgengine.Object, text string) { m.text = text }
-
-func (*debugPanelUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
-
-func (m *debugPanelUiMgr) DestroyNode(id pkgengine.Object) bool {
-	m.destroyed = append(m.destroyed, id)
-	return m.IUiMgr.DestroyNode(id)
-}
-
-func (m *frameSyncSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
-	for i, id := range ids {
-		pos := m.positions[id]
-		out[i*2], out[i*2+1] = float32(pos.X), float32(pos.Y)
-	}
-	return true
-}
-
-func (m *frameSyncSpriteMgr) SetPosition(id pkgengine.Object, pos mathf.Vec2) {
-	m.positions[int64(id)] = pos
-}
-
-func (*frameSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
-
-func (m *frameSyncSpriteMgr) BatchUpdateTransforms(data []float32) {
-	m.batches = append(m.batches, append([]float32(nil), data...))
-	for i := 0; i < int(data[0]); i++ {
-		at := 2 + i*engine.SyncFieldsPerSprite
-		m.positions[int64(data[at])] = mathf.NewVec2(float64(data[at+1]), float64(data[at+2]))
-	}
-}
-
-func (f frameUpdateFunc) onUpdate(delta float64) { f(delta) }
-
-func (g *frameMonitorWaitGame) Value() float64 {
-	g.thread = scheduler.Caller()
-	g.started++
-	g.active++
-	defer func() { g.active-- }()
-	g.wait()
-	g.completed++
-	return 42
-}
-
-func setupCaptureFlushSpriteMgr(t *testing.T) *captureFlushSpriteMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	original := pkgengine.SpriteMgr
-	mgr := &captureFlushSpriteMgr{}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = original })
-	return mgr
-}
-
-func setupFrameSyncGame(t *testing.T) (*coroutine.Scheduler, *Game, *frameSyncSpriteMgr) {
-	t.Helper()
-	currentScheduler, game, _ := setupInputSourceTest(t)
-	original := pkgengine.SpriteMgr
-	mgr := &frameSyncSpriteMgr{positions: make(map[int64]mathf.Vec2)}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = original })
-	game.scene.init()
-	game.camera = &cameraImpl{g: game}
-	game.syncBuffer = engine.NewSpriteSyncBuffer(2)
-	game.lifecycle.loaded.Store(true)
-	game.lifecycle.startDispatched.Store(true)
-	return currentScheduler, game, mgr
-}
-
-func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
-	sprite := &newCloneAwakeOrderSprite(game, name).SpriteImpl
-	sprite.runtimeState.proxy = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
-	sprite.runtimeState.proxy.SetId(id)
-	sprite.runtimeState.isCostumeDirty = false
-	sprite.spriteState.isVisible = true
-	sprite.physics().physicsMode = DynamicPhysics
-	sprite.markProxyDirty()
-	game.scene.add(sprite)
-	return sprite
-}
-
-func runFrameSyncGame(currentScheduler *coroutine.Scheduler, game *Game) {
-	const delta = 1.0 / 60
-	game.OnEngineBeforeUpdate(delta)
-	clock.Update(delta, 60)
-	game.OnEngineUpdate(delta)
-	currentScheduler.Update()
-	game.OnEngineRender(delta)
-}
-
-// A failed frame must release the host before fixture cleanup restores globals.
-func runFrameSyncCall(t *testing.T, currentScheduler *coroutine.Scheduler, call func()) {
-	t.Helper()
-	done := make(chan any, 1)
-	go func() {
-		defer func() { done <- recover() }()
-		call()
-	}()
-	select {
-	case recovered := <-done:
-		if recovered != nil {
-			t.Fatalf("frame panicked: %v", recovered)
-		}
-	case <-time.After(time.Second):
-		currentScheduler.StopAll()
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			t.Fatal("frame did not exit after stopping its scripts")
-		}
-		t.Fatal("frame waited for a future-frame continuation")
-	}
-}
-
-func addFrameSyncMonitor(t *testing.T, getter *frameMonitorWaitGame) (*Monitor, *monitorPanelSpy) {
-	t.Helper()
-	panel := &monitorPanelSpy{}
-	monitor := &Monitor{
-		visible: true, isDirty: true, panel: panel,
-		eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
-	}
-	if monitor.eval == nil {
-		t.Fatal("lowercase monitor property did not bind the Value getter")
-	}
-	getter.scene.add(monitor)
-	return monitor, panel
-}
-
-func setupCaptureTest(t testing.TB) {
-	t.Helper()
-	clear := func() {
-		t.Helper()
-		engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
-		if err := engine.FlushCaptures(); err != nil {
-			t.Fatal(err)
-		}
-		engine.SetCaptureHandler(nil)
-	}
-	clear()
-	t.Cleanup(clear)
-}
-
-func setupRuntimeScheduler(t *testing.T) *coroutine.Scheduler {
-	t.Helper()
-	currentScheduler := coroutine.New(nil)
-	installRuntimeScheduler(t, currentScheduler, nil)
-	return currentScheduler
-}
-
-// beforeRestore runs after the test's coroutines stop, while their scheduler
-// remains bound. Register other resource cleanup before installing the scheduler.
-func installRuntimeScheduler(t testing.TB, currentScheduler *coroutine.Scheduler, beforeRestore func()) {
-	t.Helper()
-	original := scheduler
-	scheduler = currentScheduler
-	engine.SetScheduler(currentScheduler)
-	t.Cleanup(func() {
-		currentScheduler.RunAfterStop(nil)
-		if beforeRestore != nil {
-			beforeRestore()
-		}
-		scheduler = original
-		engine.SetScheduler(original)
-	})
-}
-
-func (b *stopAllAudioBackend) StopAll() {
-	b.stopped++
-	clear(b.playing)
-}
-
-func (b *stopAllAudioBackend) DestroyAudio(obj engine.Object) { b.destroyed = append(b.destroyed, obj) }

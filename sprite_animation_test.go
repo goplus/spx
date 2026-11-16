@@ -25,71 +25,7 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/coroutine"
 )
 
-type animationAudioBackend struct {
-	createCalls int
-	nextID      int64
-	plays       []animationPlayCall
-	loops       []animationLoopCall
-	restarts    []int64
-	stops       []int64
-	playing     map[int64]bool
-	onPlay      func(id int64)
-	onStop      func(id int64)
-	onRestart   func(id int64)
-}
-
-type animationPlayCall struct {
-	soundObj   engine.Object
-	path       string
-	owner      engine.Object
-	attenation float64
-	maxDist    float64
-}
-
-type animationLoopCall struct {
-	id   int64
-	loop bool
-}
-
-func TestTweenCancellationUnregistersState(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
-	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.isVisible = false
-	initTestMotionComponents(anim.sprite, 0, 0)
-	continued := false
-	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
-		anim.doTween(StateGlide, nil, tweenParams{aniType: coreproject.AniTypeGlide, duration: 10})
-		continued = true
-	})
-	currentScheduler.JoinFirstSlice(thread)
-	state := anim.getCurTweenState()
-	if state == nil {
-		t.Fatal("tween did not reach its first wait")
-	}
-	currentScheduler.Stop(thread)
-	currentScheduler.Join(thread)
-	if continued || !state.IsCanceled || len(anim.activeTweenStates) != 0 {
-		t.Fatalf("canceled tween continued=%v, canceled=%v, active=%d", continued, state.IsCanceled, len(anim.activeTweenStates))
-	}
-}
-
-func TestTweenInitializationFailureUnregistersState(t *testing.T) {
-	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.isVisible = false
-	base := &coreproject.AniConfig{IFrameFrom: 1, IFrameTo: 1}
-	anim.shared.animations[StateGlide] = &animationEntry{name: StateGlide, config: base}
-	var recovered any
-	func() {
-		defer func() { recovered = recover() }()
-		anim.doTween(StateGlide, base, tweenParams{aniType: coreproject.AniTypeGlide, duration: 10})
-	}()
-	if recovered == nil {
-		t.Fatal("invalid animation did not fail initialization")
-	}
-	if len(anim.activeTweenStates) != 0 || anim.curAnimState != nil {
-		t.Fatalf("initialization left tween=%v, playback=%v", anim.activeTweenStates, anim.curAnimState)
-	}
-}
+// Animation definitions, playback, and completion.
 
 func TestAnimationInitializeBuildsSingleAnimationEntryMap(t *testing.T) {
 	sprite := &SpriteImpl{name: "TestSprite"}
@@ -162,75 +98,78 @@ func TestPlayDefaultAnimIfIdleSkipsActiveDefaultAnimation(t *testing.T) {
 	}
 }
 
-func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
+func TestFlushCompletedAnimationsKeepsPlaybackIdentity(t *testing.T) {
+	for _, inactive := range []string{"", "destroyed", "unbound"} {
+		t.Run(inactive, func(t *testing.T) {
+			anim := newTestAnimationComponent()
+			old := &animationPlayback{Name: "walk"}
+			anim.curAnimState = old
+			anim.sprite.handleAnimationFinished()
+			anim.sprite.handleAnimationFinished()
+			replacement := &animationPlayback{Name: "walk"}
+			anim.curAnimState = replacement
+			switch inactive {
+			case "destroyed":
+				anim.sprite.markDestroyed()
+			case "unbound":
+				anim.sprite.runtimeState.proxy = nil
+			}
+			queued := anim.doneAnimations
+			buffer := make([]*animationPlayback, 0, 2)
+			buffer = anim.sprite.flushCompletedAnimations(buffer)
+			if anim.curAnimState != replacement || replacement.IsCanceled {
+				t.Fatal("queued completion canceled the replacement playback")
+			}
+			if len(anim.doneAnimations) != 0 || len(buffer) != 0 {
+				t.Fatal("completed animation buffers were not drained")
+			}
+			for _, states := range [][]*animationPlayback{queued, buffer[:cap(buffer)]} {
+				for _, state := range states {
+					if state != nil {
+						t.Fatal("reusable buffer retained completed playback")
+					}
+				}
+			}
+			if inactive == "" {
+				anim.sprite.handleAnimationFinished()
+				anim.sprite.handleAnimationFinished()
+				anim.sprite.flushCompletedAnimations(buffer)
+				if anim.curAnimState != nil || !replacement.IsCanceled {
+					t.Fatal("current playback did not complete")
+				}
+			}
+		})
+	}
+}
+
+func TestAnimationLookupBindingsAndUnboundLifecycle(t *testing.T) {
 	anim := newTestAnimationComponent()
-	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.defaultCostumeIndex = 0
-	anim.sprite.costumeIndex = 1
-
-	activeAnim := &animationPlayback{Name: "wave"}
-	tween := &animationPlayback{Name: StateGlide, AniType: coreproject.AniTypeGlide}
-	anim.curAnimState = activeAnim
-	anim.activeTweenStates = []*animationPlayback{tween}
-
-	anim.cleanupTween(tween, nil, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide}, false)
-
-	if anim.getCurTweenState() != nil {
-		t.Fatal("cleanupTween did not clear the completed tween state")
+	anim.shared.animBindings = map[string]string{StateStep: "walking", StateTurn: "turning"}
+	for _, tt := range []struct {
+		kind coreproject.AniType
+		want string
+	}{
+		{coreproject.AniTypeMove, "walking"}, {coreproject.AniTypeTurn, "turning"},
+		{coreproject.AniTypeGlide, StateGlide}, {coreproject.AniTypeFrame, ""},
+	} {
+		if got := anim.getTweenAnimName(tt.kind); got != tt.want {
+			t.Fatalf("tween %v animation = %q, want %q", tt.kind, got, tt.want)
+		}
 	}
-	if anim.curAnimState != activeAnim {
-		t.Fatal("cleanupTween replaced an unrelated active animation")
+	anim.curAnimState = &animationPlayback{Name: "running"}
+	anim.playAnimation("absent", false, false)
+	if anim.curAnimState.Name != "running" || anim.curAnimState.IsCanceled {
+		t.Fatal("unknown animation changed active playback")
 	}
-	if anim.sprite.costumeIndex != 1 {
-		t.Fatalf("costumeIndex = %d, want active animation costume 1", anim.sprite.costumeIndex)
+	unbound := &animationComponent{activeTweenStates: []*animationPlayback{{Name: "unbound"}}}
+	state := unbound.activeTweenStates[0]
+	unbound.onDestroy()
+	if !state.IsCanceled || unbound.activeTweenStates != nil || unbound.proxy() != nil {
+		t.Fatal("destroying an unbound animation retained its tween")
 	}
 }
 
-func TestCleanupTweenWithoutPlaybackRestoresDefaultWhenIdle(t *testing.T) {
-	anim := newTestAnimationComponent()
-	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.defaultCostumeIndex = 0
-	anim.sprite.costumeIndex = 1
-
-	tween := &animationPlayback{Name: StateGlide, AniType: coreproject.AniTypeGlide}
-	anim.activeTweenStates = []*animationPlayback{tween}
-
-	anim.cleanupTween(tween, nil, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide}, false)
-
-	if anim.getCurTweenState() != nil {
-		t.Fatal("cleanupTween did not clear the completed tween state")
-	}
-	if anim.sprite.costumeIndex != 0 {
-		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
-	}
-}
-
-func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
-	anim := newTestAnimationComponent()
-	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.defaultCostumeIndex = 0
-	anim.sprite.costumeIndex = 1
-
-	playback := &animationPlayback{Name: StateGlide}
-	tween := &animationPlayback{
-		Name:    StateGlide,
-		AniType: coreproject.AniTypeGlide,
-	}
-	anim.curAnimState = playback
-	anim.activeTweenStates = []*animationPlayback{tween}
-
-	anim.cleanupTween(tween, playback, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide}, false)
-
-	if anim.getCurTweenState() != nil {
-		t.Fatal("cleanupTween did not clear the completed tween state")
-	}
-	if anim.curAnimState != nil {
-		t.Fatal("cleanupTween did not clear its own animation playback state")
-	}
-	if anim.sprite.costumeIndex != 0 {
-		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
-	}
-}
+// Tween preparation, registration, and motion.
 
 func TestDoTweenRejectsNonPositiveDurationBeforeSideEffects(t *testing.T) {
 	for _, tt := range []struct {
@@ -377,6 +316,138 @@ func TestApplyTweenStepTurnUsesAbsoluteHeading(t *testing.T) {
 	}
 }
 
+func assertTweenStepUsesAbsolutePosition(t *testing.T, kind coreproject.AniType) {
+	t.Helper()
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.isVisible = false
+	initTestMotionComponents(anim.sprite, 100, 20)
+
+	params := &tweenParams{
+		aniType:  kind,
+		moveFrom: mathf.NewVec2(10, 20),
+		moveTo:   mathf.NewVec2(100, 20),
+	}
+
+	anim.applyTweenStep(nil, 0.5, params)
+
+	x, y := anim.sprite.getXY()
+	if x != 55 || y != 20 {
+		t.Fatalf("%v tween position = (%v, %v), want (55, 20)", kind, x, y)
+	}
+}
+
+// Tween cancellation and playback ownership.
+
+func TestTweenCancellationUnregistersState(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.isVisible = false
+	initTestMotionComponents(anim.sprite, 0, 0)
+	continued := false
+	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
+		anim.doTween(StateGlide, nil, tweenParams{aniType: coreproject.AniTypeGlide, duration: 10})
+		continued = true
+	})
+	currentScheduler.JoinFirstSlice(thread)
+	state := anim.getCurTweenState()
+	if state == nil {
+		t.Fatal("tween did not reach its first wait")
+	}
+	currentScheduler.Stop(thread)
+	currentScheduler.Join(thread)
+	if continued || !state.IsCanceled || len(anim.activeTweenStates) != 0 {
+		t.Fatalf("canceled tween continued=%v, canceled=%v, active=%d", continued, state.IsCanceled, len(anim.activeTweenStates))
+	}
+}
+
+func TestTweenInitializationFailureUnregistersState(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.isVisible = false
+	base := &coreproject.AniConfig{IFrameFrom: 1, IFrameTo: 1}
+	anim.shared.animations[StateGlide] = &animationEntry{name: StateGlide, config: base}
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		anim.doTween(StateGlide, base, tweenParams{aniType: coreproject.AniTypeGlide, duration: 10})
+	}()
+	if recovered == nil {
+		t.Fatal("invalid animation did not fail initialization")
+	}
+	if len(anim.activeTweenStates) != 0 || anim.curAnimState != nil {
+		t.Fatalf("initialization left tween=%v, playback=%v", anim.activeTweenStates, anim.curAnimState)
+	}
+}
+
+func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.defaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	activeAnim := &animationPlayback{Name: "wave"}
+	tween := &animationPlayback{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	anim.curAnimState = activeAnim
+	anim.activeTweenStates = []*animationPlayback{tween}
+
+	anim.cleanupTween(tween, nil, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide}, false)
+
+	if anim.getCurTweenState() != nil {
+		t.Fatal("cleanupTween did not clear the completed tween state")
+	}
+	if anim.curAnimState != activeAnim {
+		t.Fatal("cleanupTween replaced an unrelated active animation")
+	}
+	if anim.sprite.costumeIndex != 1 {
+		t.Fatalf("costumeIndex = %d, want active animation costume 1", anim.sprite.costumeIndex)
+	}
+}
+
+func TestCleanupTweenWithoutPlaybackRestoresDefaultWhenIdle(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.defaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	tween := &animationPlayback{Name: StateGlide, AniType: coreproject.AniTypeGlide}
+	anim.activeTweenStates = []*animationPlayback{tween}
+
+	anim.cleanupTween(tween, nil, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide}, false)
+
+	if anim.getCurTweenState() != nil {
+		t.Fatal("cleanupTween did not clear the completed tween state")
+	}
+	if anim.sprite.costumeIndex != 0 {
+		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
+
+func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	anim.sprite.spriteState.defaultCostumeIndex = 0
+	anim.sprite.costumeIndex = 1
+
+	playback := &animationPlayback{Name: StateGlide}
+	tween := &animationPlayback{
+		Name:    StateGlide,
+		AniType: coreproject.AniTypeGlide,
+	}
+	anim.curAnimState = playback
+	anim.activeTweenStates = []*animationPlayback{tween}
+
+	anim.cleanupTween(tween, playback, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide}, false)
+
+	if anim.getCurTweenState() != nil {
+		t.Fatal("cleanupTween did not clear the completed tween state")
+	}
+	if anim.curAnimState != nil {
+		t.Fatal("cleanupTween did not clear its own animation playback state")
+	}
+	if anim.sprite.costumeIndex != 0 {
+		t.Fatalf("costumeIndex = %d, want default costume 0", anim.sprite.costumeIndex)
+	}
+}
+
 func TestCleanupTweenStopsStaleOwnedPlayback(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
@@ -412,6 +483,8 @@ func TestCleanupTweenRestoresPreviousActiveTweenState(t *testing.T) {
 	}
 }
 
+// Animation audio start, loop, restart, and cleanup.
+
 func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
@@ -441,50 +514,6 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 	}
 	if anim.curAnimState != nil {
 		t.Fatal("onAnimationDone did not clear the finished animation state")
-	}
-}
-
-func TestFlushCompletedAnimationsKeepsPlaybackIdentity(t *testing.T) {
-	for _, inactive := range []string{"", "destroyed", "unbound"} {
-		t.Run(inactive, func(t *testing.T) {
-			anim := newTestAnimationComponent()
-			old := &animationPlayback{Name: "walk"}
-			anim.curAnimState = old
-			anim.sprite.handleAnimationFinished()
-			anim.sprite.handleAnimationFinished()
-			replacement := &animationPlayback{Name: "walk"}
-			anim.curAnimState = replacement
-			switch inactive {
-			case "destroyed":
-				anim.sprite.markDestroyed()
-			case "unbound":
-				anim.sprite.runtimeState.proxy = nil
-			}
-			queued := anim.doneAnimations
-			buffer := make([]*animationPlayback, 0, 2)
-			buffer = anim.sprite.flushCompletedAnimations(buffer)
-			if anim.curAnimState != replacement || replacement.IsCanceled {
-				t.Fatal("queued completion canceled the replacement playback")
-			}
-			if len(anim.doneAnimations) != 0 || len(buffer) != 0 {
-				t.Fatal("completed animation buffers were not drained")
-			}
-			for _, states := range [][]*animationPlayback{queued, buffer[:cap(buffer)]} {
-				for _, state := range states {
-					if state != nil {
-						t.Fatal("reusable buffer retained completed playback")
-					}
-				}
-			}
-			if inactive == "" {
-				anim.sprite.handleAnimationFinished()
-				anim.sprite.handleAnimationFinished()
-				anim.sprite.flushCompletedAnimations(buffer)
-				if anim.curAnimState != nil || !replacement.IsCanceled {
-					t.Fatal("current playback did not complete")
-				}
-			}
-		})
 	}
 }
 
@@ -737,33 +766,6 @@ func TestStopAnimStateLeavesOnStartSoundAlone(t *testing.T) {
 	}
 }
 
-func TestAnimationLookupBindingsAndUnboundLifecycle(t *testing.T) {
-	anim := newTestAnimationComponent()
-	anim.shared.animBindings = map[string]string{StateStep: "walking", StateTurn: "turning"}
-	for _, tt := range []struct {
-		kind coreproject.AniType
-		want string
-	}{
-		{coreproject.AniTypeMove, "walking"}, {coreproject.AniTypeTurn, "turning"},
-		{coreproject.AniTypeGlide, StateGlide}, {coreproject.AniTypeFrame, ""},
-	} {
-		if got := anim.getTweenAnimName(tt.kind); got != tt.want {
-			t.Fatalf("tween %v animation = %q, want %q", tt.kind, got, tt.want)
-		}
-	}
-	anim.curAnimState = &animationPlayback{Name: "running"}
-	anim.playAnimation("absent", false, false)
-	if anim.curAnimState.Name != "running" || anim.curAnimState.IsCanceled {
-		t.Fatal("unknown animation changed active playback")
-	}
-	unbound := &animationComponent{activeTweenStates: []*animationPlayback{{Name: "unbound"}}}
-	state := unbound.activeTweenStates[0]
-	unbound.onDestroy()
-	if !state.IsCanceled || unbound.activeTweenStates != nil || unbound.proxy() != nil {
-		t.Fatal("destroying an unbound animation retained its tween")
-	}
-}
-
 func TestAnimationAudioRejectsCanceledEmptyAndMissingReplay(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
@@ -790,6 +792,28 @@ func TestAnimationAudioRejectsCanceledEmptyAndMissingReplay(t *testing.T) {
 	if anim.curAnimState.OnPlayAudioRestartPending || anim.activeTweenStates[0].OnPlayAudioRestartPending {
 		t.Fatal("invalid replay requests were not consumed")
 	}
+}
+
+func lastOnPlayPlaybackID(state *animationPlayback) int64 {
+	if state == nil {
+		return 0
+	}
+	return state.OnPlayAudioPlaybackID
+}
+
+// Shared fixtures.
+
+type animationAudioBackend struct {
+	createCalls int
+	nextID      int64
+	plays       []animationPlayCall
+	loops       []animationLoopCall
+	restarts    []int64
+	stops       []int64
+	playing     map[int64]bool
+	onPlay      func(id int64)
+	onStop      func(id int64)
+	onRestart   func(id int64)
 }
 
 func (f *animationAudioBackend) CreateAudio() engine.Object {
@@ -871,11 +895,17 @@ func (f *animationAudioBackend) IsPlaying(aid int64) bool {
 
 func (f *animationAudioBackend) StopAll() {}
 
-func lastOnPlayPlaybackID(state *animationPlayback) int64 {
-	if state == nil {
-		return 0
-	}
-	return state.OnPlayAudioPlaybackID
+type animationPlayCall struct {
+	soundObj   engine.Object
+	path       string
+	owner      engine.Object
+	attenation float64
+	maxDist    float64
+}
+
+type animationLoopCall struct {
+	id   int64
+	loop bool
 }
 
 func newTestAnimationComponent() *animationComponent {
@@ -924,25 +954,5 @@ func initTestAnimationAudio(anim *animationComponent, backend *animationAudioBac
 	anim.sprite.g.sounds = map[string]sound{
 		"walk": &coreproject.SoundConfig{Path: "sounds/walk.wav"},
 		"step": &coreproject.SoundConfig{Path: "sounds/step.wav"},
-	}
-}
-
-func assertTweenStepUsesAbsolutePosition(t *testing.T, kind coreproject.AniType) {
-	t.Helper()
-	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.isVisible = false
-	initTestMotionComponents(anim.sprite, 100, 20)
-
-	params := &tweenParams{
-		aniType:  kind,
-		moveFrom: mathf.NewVec2(10, 20),
-		moveTo:   mathf.NewVec2(100, 20),
-	}
-
-	anim.applyTweenStep(nil, 0.5, params)
-
-	x, y := anim.sprite.getXY()
-	if x != 55 || y != 20 {
-		t.Fatalf("%v tween position = (%v, %v), want (55, 20)", kind, x, y)
 	}
 }

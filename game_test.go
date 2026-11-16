@@ -46,182 +46,14 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+// Shared engine setup.
+
 type mainThreadTestPlatform struct {
 	pkgengine.IPlatformMgr
 }
 
-type targetPropertyActor struct {
-	Score int
-	Power float64
-}
-
-type targetLookupSprite struct {
-	SpriteImpl
-}
-
-type targetPropertyGame struct {
-	Game
-	StageScore int
-	Actor      targetPropertyActor
-	Wrapped    Value
-}
-
-type stagePlanGame struct {
-	Game
-	Value    collisionLayerOrderSprite
-	Pointer  *collisionLayerOrderSprite
-	Dynamic  Sprite
-	values   []collisionLayerOrderSprite
-	pointers []*collisionLayerOrderSprite
-}
-
-type gameNavigationMgr struct {
-	pkgengine.INavigationMgr
-	grid, cell, from, to mathf.Vec2
-	jump, debug          bool
-	setups               int
-}
-
-type gameBackdropSpriteMgr struct {
-	pkgengine.ISpriteMgr
-	repeat        mathf.Vec4
-	position      mathf.Vec2
-	positionCalls int
-}
-
-type gameQueryPhysicsMgr struct {
-	pkgengine.IPhysicsMgr
-	result        engine.Array
-	from, to      mathf.Vec2
-	radius        float64
-	mask          int64
-	ignore        []int64
-	areas, bodies bool
-}
-
-type gameDebugDrawMgr struct {
-	pkgengine.IDebugMgr
-	lines  [][2]mathf.Vec2
-	colors []mathf.Color
-}
-
-type touchFilterSpriteMgr struct {
-	spyCloneSpriteMgr
-	onLayer func(pkgengine.Object, int64)
-	onMask  func(pkgengine.Object, int64)
-}
-
-type tilemapUnloadSceneMgr struct {
-	pkgengine.ISceneMgr
-	clearCalls int
-}
-
-type tilemapAPIMgr struct {
-	pkgengine.ITilemapMgr
-	positions []float32
-	path      string
-	pos       mathf.Vec2
-	layer     int64
-	erased    bool
-	collision []float32
-}
-
-type decoratorSceneMgr struct {
-	pkgengine.ISceneMgr
-	path                                  string
-	position, pivot, scale, colliderPivot mathf.Vec2
-	rotation                              float64
-	layer, collider                       int64
-	params                                []float64
-}
-
-type decoratorResMgr struct{ pkgengine.IResMgr }
-
-type cameraTestMgr struct {
-	pkgengine.ICameraMgr
-	position, zoom mathf.Vec2
-	viewport       mathf.Rect2
-	limits         map[int64]int64
-	smoothing      bool
-	positionWrites int
-}
-
-type bubbleLayoutCameraMgr struct{ pkgengine.ICameraMgr }
-
-const (
-	askScenePath = "res://engine/ui/UiAsk.tscn"
-	sayScenePath = "res://engine/ui/UiSay.tscn"
-)
-
-type askTestBinding struct {
-	parent pkgengine.Object
-	path   string
-}
-
-type askTestUiMgr struct {
-	pkgengine.IUiMgr
-	nextID       pkgengine.Object
-	ids          map[pkgengine.Object]struct{}
-	created      map[string]int
-	bound        map[askTestBinding]pkgengine.Object
-	visible      map[pkgengine.Object]bool
-	text         map[pkgengine.Object]string
-	askRoot      pkgengine.Object
-	onAskVisible func()
-	onDestroy    func()
-}
-
-type bubbleRenderTestUiMgr struct {
-	*askTestUiMgr
-	positions map[pkgengine.Object]mathf.Vec2
-	sizes     map[pkgengine.Object]mathf.Vec2
-}
-
-type askDelayedInputMgr struct{ pkgengine.IInputMgr }
-
-type monitorEvalFixture struct {
-	Game
-	score float64
-	unset any
-	calls int
-}
-
-type monitorPanelSpy struct {
-	visible bool
-	events  []string
-	value   ui.MonitorValue
-	scale   float64
-	pos     mathf.Vec2
-}
-
-type SliderMonitorGame struct {
-	Game
-	score float64
-	Dot   sliderMonitorSprite
-}
-
-type sliderMonitorSprite struct {
-	SpriteImpl
-	*SliderMonitorGame
-	score float64
-}
-
-type gameWidgetUiMgr struct {
-	*askTestUiMgr
-	rangeValue float64
-}
-
-type ListMonitorGame struct {
-	Game
-	items  List
-	values []string
-	Monkey listMonitorSprite
-}
-
-type listMonitorSprite struct {
-	SpriteImpl
-	*ListMonitorGame
-	items List
+func (mainThreadTestPlatform) IsMainThread() bool {
+	return true
 }
 
 // TestMain supplies the raw manager normally installed by gdengine.Link.
@@ -236,6 +68,14 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
+
+func setupImmediateEngineCalls(t testing.TB) {
+	t.Helper()
+	wrap.Init(func(call func()) { call() })
+	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
+}
+
+// Runtime configuration and diagnostics.
 
 func TestApplyRuntimeConfig(t *testing.T) {
 	t.Setenv("SPX_PROJECT_DIR", filepath.Join(t.TempDir(), "my-project"))
@@ -295,72 +135,74 @@ func TestRuntimeConfigTitleFallsBackToWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestResolveTargetPosition(t *testing.T) {
-	game := &Game{}
-	game.scene.init()
-	game.inputMgr.init(game)
-	game.inputMgr.mousePos = mathf.Vec2{X: 17, Y: -23}
-	original := newTargetLookupSprite(game, "actor", false)
-	original.components.transform = &transformComponent{sprite: &original.SpriteImpl, x: 12, y: -34}
-	clone := newTargetLookupSprite(game, "actor", true)
-	clone.components.transform = &transformComponent{sprite: &clone.SpriteImpl, x: 56, y: 78}
-	game.scene.add(&clone.SpriteImpl)
-	game.scene.add(&original.SpriteImpl)
-	var nilSprite *targetLookupSprite
-	for _, tt := range []struct {
-		name   string
-		target Target
-		x, y   float64
-		found  bool
-	}{
-		{"named original", "actor", 12, -34, true},
-		{"direct clone", clone, 56, 78, true},
-		{"mouse", Mouse, 17, -23, true},
-		{"missing name", "absent", 0, 0, false},
-		{"nil", nil, 0, 0, false},
-		{"typed nil sprite", nilSprite, 0, 0, false},
-		{"unsupported edge", Edge, 0, 0, false},
-		{"unsupported position", Pos(12345), 0, 0, false},
-		{"unsupported type", struct{}{}, 0, 0, false},
+func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+	var game Game
+	for _, flags := range []dbgFlags{
+		DbgFlagInstr | DbgFlagEvent | DbgFlagPerf,
+		DbgFlagInstr,
+		DbgFlagEvent,
+		DbgFlagPerf,
+		0,
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			x, y, found := game.resolveTargetPosition(tt.target)
-			if x != tt.x || y != tt.y || found != tt.found {
-				t.Fatalf("position = (%v, %v, %v), want (%v, %v, %v)", x, y, found, tt.x, tt.y, tt.found)
-			}
-		})
-	}
-	original.transform().setPositionRaw(0, 0)
-	if x, y, found := game.resolveTargetPosition("actor"); x != 0 || y != 0 || !found {
-		t.Fatalf("target at origin = (%v, %v, %v), want (0, 0, true)", x, y, found)
+		game.setDebugFlags(flags)
+		currentScheduler.Update()
+		if got, want := currentScheduler.UpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
+			t.Errorf("flags %v: performance statistics enabled = %v, want %v", flags, got, want)
+		}
+		if got, want := game.debugState.DebugInstr, flags&DbgFlagInstr != 0; got != want {
+			t.Errorf("flags %v: DebugInstr = %v, want %v", flags, got, want)
+		}
+		if got, want := game.debugState.DebugEvent, flags&DbgFlagEvent != 0; got != want {
+			t.Errorf("flags %v: DebugEvent = %v, want %v", flags, got, want)
+		}
 	}
 }
 
-func TestResolveRandomTargetUsesWorldBoundsAndSeed(t *testing.T) {
-	game := &Game{displayState: gameDisplayState{WorldWidth: 5, WorldHeight: 3, WindowWidth: 1, WindowHeight: 1}}
-	t.Cleanup(ResetRandomSeed)
-	sequence := func() [32][2]float64 {
-		SetRandomSeed(42)
-		var points [32][2]float64
-		for i := range points {
-			x, y, found := game.resolveTargetPosition(Random)
-			if !found || x < -2 || x > 2 || y < -1 || y > 1 {
-				t.Fatalf("random target = (%v, %v, %v), outside centered 5x3 world", x, y, found)
-			}
-			points[i] = [2]float64{x, y}
-		}
-		return points
+func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+	originalGame, originalFlags := engine.GetGame(), defaultDebugFlags.Load()
+	t.Cleanup(func() {
+		engine.SetGame(originalGame)
+		defaultDebugFlags.Store(originalFlags)
+		spxlog.SetLevel(spxlog.LevelInfo)
+	})
+	engine.SetGame(nil)
+	SetDebug(DbgFlagPerf | dbgFlags(1<<20))
+	currentScheduler.Update()
+	if defaultDebugFlags.Load() != uint32(DbgFlagPerf) || !currentScheduler.UpdateStats().GCStatsEnabled {
+		t.Fatal("default debug flags did not filter unknown flags or enable profiling")
 	}
-	first, second := sequence(), sequence()
-	if first != second {
-		t.Fatal("the same seed produced different random target sequences")
+	var game Game
+	engine.SetGame(&game)
+	SetDebug(DbgFlagInstr | DbgFlagEvent)
+	if !game.debugState.DebugInstr || !game.debugState.DebugEvent {
+		t.Fatalf("game debug=%+v", game.debugState)
 	}
-	var outsideWindow bool
-	for _, point := range first {
-		outsideWindow = outsideWindow || point != [2]float64{}
+}
+
+func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
+	previous := spxapi.Username()
+	t.Cleanup(func() { spxapi.SetUsername(previous) })
+
+	spxapi.SetUsername("scratch-user")
+
+	var g Game
+	if got := g.Username(); got != "scratch-user" {
+		t.Fatalf("Game.Username() = %q, want %q", got, "scratch-user")
 	}
-	if !outsideWindow {
-		t.Fatal("random targets stayed inside the 1x1 window instead of using the world")
+}
+
+func TestGameDayssince2000(t *testing.T) {
+	var g Game
+	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	lower := time.Since(base).Hours() / 24
+	got := g.Dayssince2000()
+	upper := time.Since(base).Hours() / 24
+
+	if got < lower || got > upper {
+		t.Fatalf("Dayssince2000 = %v, want in [%v, %v]", got, lower, upper)
 	}
 }
 
@@ -456,203 +298,130 @@ func TestScheduling(t *testing.T) {
 	}
 }
 
-func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
+func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
 	currentScheduler := setupRuntimeScheduler(t)
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
 	var game Game
-	for _, flags := range []dbgFlags{
-		DbgFlagInstr | DbgFlagEvent | DbgFlagPerf,
-		DbgFlagInstr,
-		DbgFlagEvent,
-		DbgFlagPerf,
-		0,
-	} {
-		game.setDebugFlags(flags)
-		currentScheduler.Update()
-		if got, want := currentScheduler.UpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
-			t.Errorf("flags %v: performance statistics enabled = %v, want %v", flags, got, want)
-		}
-		if got, want := game.debugState.DebugInstr, flags&DbgFlagInstr != 0; got != want {
-			t.Errorf("flags %v: DebugInstr = %v, want %v", flags, got, want)
-		}
-		if got, want := game.debugState.DebugEvent, flags&DbgFlagEvent != 0; got != want {
-			t.Errorf("flags %v: DebugEvent = %v, want %v", flags, got, want)
-		}
-	}
-}
-
-func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
-	originalGame, originalFlags := engine.GetGame(), defaultDebugFlags.Load()
-	t.Cleanup(func() {
-		engine.SetGame(originalGame)
-		defaultDebugFlags.Store(originalFlags)
-		spxlog.SetLevel(spxlog.LevelInfo)
+	count := 0
+	finished := false
+	thread := currentScheduler.Create(nil, func(coroutine.Thread) {
+		game.WaitNextFrame()
+		RepeatUntil(func() bool { return count == 3 }, func() { count++ })
+		finished = true
 	})
-	engine.SetGame(nil)
-	SetDebug(DbgFlagPerf | dbgFlags(1<<20))
-	currentScheduler.Update()
-	if defaultDebugFlags.Load() != uint32(DbgFlagPerf) || !currentScheduler.UpdateStats().GCStatsEnabled {
-		t.Fatal("default debug flags did not filter unknown flags or enable profiling")
+	currentScheduler.JoinFirstSlice(thread)
+	if finished {
+		t.Fatal("WaitNextFrame completed before a frame update")
 	}
-	var game Game
-	engine.SetGame(&game)
-	SetDebug(DbgFlagInstr | DbgFlagEvent)
-	if !game.debugState.DebugInstr || !game.debugState.DebugEvent {
-		t.Fatalf("game debug=%+v", game.debugState)
+	for range 5 {
+		clock.Update(1.0/30, 30)
+		currentScheduler.Update()
+	}
+	if !finished || count != 3 {
+		t.Fatalf("loop completed=%v, count=%d", finished, count)
 	}
 }
 
-func TestDisplaySizesDefaultToBackdropAndPreserveConfiguredValues(t *testing.T) {
+// Target, property and widget lookup.
+
+type targetPropertyActor struct {
+	Score int
+	Power float64
+}
+
+func (a *targetPropertyActor) Health() float64 {
+	return a.Power
+}
+
+type targetLookupSprite struct {
+	SpriteImpl
+}
+
+func (*targetLookupSprite) Main() {}
+
+type targetPropertyGame struct {
+	Game
+	StageScore int
+	Actor      targetPropertyActor
+	Wrapped    Value
+}
+
+func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
+	sprite := &targetLookupSprite{}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.spriteState.cloned = cloned
+	return sprite
+}
+
+func TestResolveTargetPosition(t *testing.T) {
+	game := &Game{}
+	game.scene.init()
+	game.inputMgr.init(game)
+	game.inputMgr.mousePos = mathf.Vec2{X: 17, Y: -23}
+	original := newTargetLookupSprite(game, "actor", false)
+	original.components.transform = &transformComponent{sprite: &original.SpriteImpl, x: 12, y: -34}
+	clone := newTargetLookupSprite(game, "actor", true)
+	clone.components.transform = &transformComponent{sprite: &clone.SpriteImpl, x: 56, y: 78}
+	game.scene.add(&clone.SpriteImpl)
+	game.scene.add(&original.SpriteImpl)
+	var nilSprite *targetLookupSprite
 	for _, tt := range []struct {
-		name          string
-		display       gameDisplayState
-		window, world [2]int
+		name   string
+		target Target
+		x, y   float64
+		found  bool
 	}{
-		{
-			name: "backdrop defaults", window: [2]int{320, 240}, world: [2]int{320, 240},
-		},
-		{
-			name:    "configured window",
-			display: gameDisplayState{WindowWidth: 384, WindowHeight: 216},
-			window:  [2]int{384, 216}, world: [2]int{320, 240},
-		},
-		{
-			name:    "configured world",
-			display: gameDisplayState{WorldWidth: 1024, WorldHeight: 768},
-			window:  [2]int{320, 240}, world: [2]int{1024, 768},
-		},
+		{"named original", "actor", 12, -34, true},
+		{"direct clone", clone, 56, 78, true},
+		{"mouse", Mouse, 17, -23, true},
+		{"missing name", "absent", 0, 0, false},
+		{"nil", nil, 0, 0, false},
+		{"typed nil sprite", nilSprite, 0, 0, false},
+		{"unsupported edge", Edge, 0, 0, false},
+		{"unsupported position", Pos(12345), 0, 0, false},
+		{"unsupported type", struct{}{}, 0, 0, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			game := &Game{
-				visualObject: visualObject{costumes: []*costume{newCostume(&coreproject.CostumeConfig{
-					ImageWidth:       641.5,
-					ImageHeight:      481.25,
-					BitmapResolution: 2,
-				})}},
-				displayState: tt.display,
-			}
-
-			windowW, windowH := game.windowSize()
-			if got := [2]int{windowW, windowH}; got != tt.window {
-				t.Fatalf("windowSize() = %v, want %v", got, tt.window)
-			}
-			worldW, worldH := game.worldSize()
-			if got := [2]int{worldW, worldH}; got != tt.world {
-				t.Fatalf("worldSize() = %v, want %v", got, tt.world)
+			x, y, found := game.resolveTargetPosition(tt.target)
+			if x != tt.x || y != tt.y || found != tt.found {
+				t.Fatalf("position = (%v, %v, %v), want (%v, %v, %v)", x, y, found, tt.x, tt.y, tt.found)
 			}
 		})
 	}
+	original.transform().setPositionRaw(0, 0)
+	if x, y, found := game.resolveTargetPosition("actor"); x != 0 || y != 0 || !found {
+		t.Fatalf("target at origin = (%v, %v, %v), want (0, 0, true)", x, y, found)
+	}
 }
 
-func TestGameGoSetBackdropRandom(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		selector any
-		costumes []*costume
-		initial  int
-	}{
-		{
-			name: "action", selector: Random, initial: 1,
-			costumes: []*costume{{name: "backdrop1"}, {name: "backdrop2"}, {name: "backdrop3"}},
-		},
-		{
-			name: "float64", selector: float64(Random),
-			costumes: []*costume{{name: "backdrop1"}, {name: "backdrop2"}},
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			game := &Game{visualObject: visualObject{costumes: test.costumes, costumeIndex: test.initial}}
-			SetRandomSeed(1)
-			t.Cleanup(ResetRandomSeed)
-
-			if !game.selectBackdrop(test.selector) {
-				t.Fatal("selectBackdrop(Random) = false, want true")
+func TestResolveRandomTargetUsesWorldBoundsAndSeed(t *testing.T) {
+	game := &Game{displayState: gameDisplayState{WorldWidth: 5, WorldHeight: 3, WindowWidth: 1, WindowHeight: 1}}
+	t.Cleanup(ResetRandomSeed)
+	sequence := func() [32][2]float64 {
+		SetRandomSeed(42)
+		var points [32][2]float64
+		for i := range points {
+			x, y, found := game.resolveTargetPosition(Random)
+			if !found || x < -2 || x > 2 || y < -1 || y > 1 {
+				t.Fatalf("random target = (%v, %v, %v), outside centered 5x3 world", x, y, found)
 			}
-			if got := game.costumeIndex; got < 0 || got >= len(game.costumes) || got == test.initial {
-				t.Fatalf("costumeIndex = %d, want in [0, %d) and different from %d", got, len(game.costumes), test.initial)
-			}
-		})
+			points[i] = [2]float64{x, y}
+		}
+		return points
 	}
-}
-
-func TestGameSetRandomBackdropWithoutChoice(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		costumes []*costume
-		wantOK   bool
-	}{
-		{name: "no backdrops"},
-		{name: "single backdrop", costumes: []*costume{{name: "backdrop1"}}, wantOK: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			game := &Game{visualObject: visualObject{costumes: test.costumes}}
-			if got := game.setRandomBackdrop(); got != test.wantOK {
-				t.Fatalf("setRandomBackdrop() = %v, want %v", got, test.wantOK)
-			}
-			if got := game.costumeIndex; got != 0 {
-				t.Fatalf("costumeIndex = %d, want unchanged index 0", got)
-			}
-		})
+	first, second := sequence(), sequence()
+	if first != second {
+		t.Fatal("the same seed produced different random target sequences")
 	}
-}
-
-func TestSetupWorldAndWindowClampsBackdropWindowToWorld(t *testing.T) {
-	game := &Game{}
-	proj := &coreproject.ProjectConfig{
-		Map: coreproject.MapConfig{
-			Width:  320,
-			Height: 180,
-			Mode:   "repeat",
-		},
-		Backdrops: []*coreproject.BackdropConfig{
-			{
-				CostumeConfig: coreproject.CostumeConfig{
-					Path:        "bg.png",
-					ImageWidth:  640,
-					ImageHeight: 480,
-				},
-			},
-		},
+	var outsideWindow bool
+	for _, point := range first {
+		outsideWindow = outsideWindow || point != [2]float64{}
 	}
-
-	game.setupWorldAndWindow(proj)
-
-	if game.displayState.WorldWidth != 320 || game.displayState.WorldHeight != 180 {
-		t.Fatalf("world size = %dx%d, want 320x180", game.displayState.WorldWidth, game.displayState.WorldHeight)
-	}
-	if game.displayState.WindowWidth != 320 || game.displayState.WindowHeight != 180 {
-		t.Fatalf("window size = %dx%d, want 320x180", game.displayState.WindowWidth, game.displayState.WindowHeight)
-	}
-	if game.displayState.MinWorldX != -160 || game.displayState.MinWorldY != -90 {
-		t.Fatalf("world min = (%d, %d), want (-160, -90)", game.displayState.MinWorldX, game.displayState.MinWorldY)
-	}
-	if game.displayState.MapMode != coreproject.MapModeRepeat {
-		t.Fatalf("map mode = %d, want %d", game.displayState.MapMode, coreproject.MapModeRepeat)
-	}
-}
-
-func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
-	previous := spxapi.Username()
-	t.Cleanup(func() { spxapi.SetUsername(previous) })
-
-	spxapi.SetUsername("scratch-user")
-
-	var g Game
-	if got := g.Username(); got != "scratch-user" {
-		t.Fatalf("Game.Username() = %q, want %q", got, "scratch-user")
-	}
-}
-
-func TestGameDayssince2000(t *testing.T) {
-	var g Game
-	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-	lower := time.Since(base).Hours() / 24
-	got := g.Dayssince2000()
-	upper := time.Since(base).Hours() / 24
-
-	if got < lower || got > upper {
-		t.Fatalf("Dayssince2000 = %v, want in [%v, %v]", got, lower, upper)
+	if !outsideWindow {
+		t.Fatal("random targets stayed inside the 1x1 window instead of using the world")
 	}
 }
 
@@ -697,16 +466,6 @@ func TestGameWidgetLookup(t *testing.T) {
 			}()
 			test.call()
 		})
-	}
-}
-
-func TestGameGetTargetPropertyMissing(t *testing.T) {
-	game := &targetPropertyGame{}
-	game.gamer = game
-	for _, target := range []string{"", "Actor", "Missing"} {
-		if got := game.GetTargetProperty(target, "Missing"); got.Raw() != nil {
-			t.Errorf("GetTargetProperty(%q, Missing) = %v, want empty value", target, got)
-		}
 	}
 }
 
@@ -787,6 +546,282 @@ func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
 	if got.Float() != 3.5 {
 		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
 	}
+}
+
+func TestGameGetTargetPropertyMissing(t *testing.T) {
+	game := &targetPropertyGame{}
+	game.gamer = game
+	for _, target := range []string{"", "Actor", "Missing"} {
+		if got := game.GetTargetProperty(target, "Missing"); got.Raw() != nil {
+			t.Errorf("GetTargetProperty(%q, Missing) = %v, want empty value", target, got)
+		}
+	}
+}
+
+func TestGamePropertyResolutionScopes(t *testing.T) {
+	var plain Game
+	if got := plain.propertyRootValue(); got.Addr().Interface() != &plain {
+		t.Fatal("unbound game root changed")
+	}
+	if got := plain.GetTargetProperty("", ""); got.Raw() != nil {
+		t.Fatalf("empty property = %v, want zero Value", got)
+	}
+	if plain.setStageMonitor("", "missing", true) {
+		t.Fatal("missing monitor resolved")
+	}
+	game := &struct {
+		Game
+		Sprite spriteLoadTestSprite
+	}{}
+	game.gamer = game
+	if got, from := resolvePropertyTarget(game.propertyRootValue(), "Sprite"); from != 2 || got.Addr().Interface() != &game.Sprite {
+		t.Fatalf("sprite scope=%v, %d", got, from)
+	}
+}
+
+// Display, backdrops and graphic effects.
+
+type gameBackdropSpriteMgr struct {
+	pkgengine.ISpriteMgr
+	repeat        mathf.Vec4
+	position      mathf.Vec2
+	positionCalls int
+}
+
+func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ pkgengine.Object, effect string, x, y, z, w float64) {
+	if effect == "repeat_scale" {
+		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
+	}
+}
+
+func (m *gameBackdropSpriteMgr) SetPosition(_ pkgengine.Object, pos mathf.Vec2) {
+	m.position = pos
+	m.positionCalls++
+}
+
+func TestDisplaySizesDefaultToBackdropAndPreserveConfiguredValues(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		display       gameDisplayState
+		window, world [2]int
+	}{
+		{
+			name: "backdrop defaults", window: [2]int{320, 240}, world: [2]int{320, 240},
+		},
+		{
+			name:    "configured window",
+			display: gameDisplayState{WindowWidth: 384, WindowHeight: 216},
+			window:  [2]int{384, 216}, world: [2]int{320, 240},
+		},
+		{
+			name:    "configured world",
+			display: gameDisplayState{WorldWidth: 1024, WorldHeight: 768},
+			window:  [2]int{320, 240}, world: [2]int{1024, 768},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			game := &Game{
+				visualObject: visualObject{costumes: []*costume{newCostume(&coreproject.CostumeConfig{
+					ImageWidth:       641.5,
+					ImageHeight:      481.25,
+					BitmapResolution: 2,
+				})}},
+				displayState: tt.display,
+			}
+
+			windowW, windowH := game.windowSize()
+			if got := [2]int{windowW, windowH}; got != tt.window {
+				t.Fatalf("windowSize() = %v, want %v", got, tt.window)
+			}
+			worldW, worldH := game.worldSize()
+			if got := [2]int{worldW, worldH}; got != tt.world {
+				t.Fatalf("worldSize() = %v, want %v", got, tt.world)
+			}
+		})
+	}
+}
+
+func TestSetupWorldAndWindowClampsBackdropWindowToWorld(t *testing.T) {
+	game := &Game{}
+	proj := &coreproject.ProjectConfig{
+		Map: coreproject.MapConfig{
+			Width:  320,
+			Height: 180,
+			Mode:   "repeat",
+		},
+		Backdrops: []*coreproject.BackdropConfig{
+			{
+				CostumeConfig: coreproject.CostumeConfig{
+					Path:        "bg.png",
+					ImageWidth:  640,
+					ImageHeight: 480,
+				},
+			},
+		},
+	}
+
+	game.setupWorldAndWindow(proj)
+
+	if game.displayState.WorldWidth != 320 || game.displayState.WorldHeight != 180 {
+		t.Fatalf("world size = %dx%d, want 320x180", game.displayState.WorldWidth, game.displayState.WorldHeight)
+	}
+	if game.displayState.WindowWidth != 320 || game.displayState.WindowHeight != 180 {
+		t.Fatalf("window size = %dx%d, want 320x180", game.displayState.WindowWidth, game.displayState.WindowHeight)
+	}
+	if game.displayState.MinWorldX != -160 || game.displayState.MinWorldY != -90 {
+		t.Fatalf("world min = (%d, %d), want (-160, -90)", game.displayState.MinWorldX, game.displayState.MinWorldY)
+	}
+	if game.displayState.MapMode != coreproject.MapModeRepeat {
+		t.Fatalf("map mode = %d, want %d", game.displayState.MapMode, coreproject.MapModeRepeat)
+	}
+}
+
+func TestGameBackdropOverloads(t *testing.T) {
+	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
+	game := setupStageLoadTestGame(t, gameTestFS{})
+	game.visualObject.initWithSize(480, 360)
+	manager := &gameBackdropSpriteMgr{ISpriteMgr: pkgengine.SpriteMgr}
+	pkgengine.SpriteMgr = manager
+	game.displayState.WorldWidth, game.displayState.WorldHeight = 960, 720
+	game.costumes = []*costume{newCostumeWithSize(480, 360), newCostumeWithSize(480, 360)}
+	game.costumes[0].name = "first"
+	game.costumes[1].name = "second"
+	game.runtimeState.proxy = &engine.Sprite{Sprite: pkgengine.Sprite{Id: 89801}}
+	for _, test := range []struct {
+		name string
+		call func()
+		want int
+	}{
+		{"name", func() { game.SetBackdrop__0("second") }, 1},
+		{"float", func() { game.SetBackdrop__1(0) }, 0},
+		{"int", func() { game.SetBackdrop__2(1) }, 1},
+		{"action", func() { game.SetBackdrop__3(Next) }, 0},
+		{"wait name", func() { game.SetBackdropAndWait__0("second") }, 1},
+		{"wait float", func() { game.SetBackdropAndWait__1(0) }, 0},
+		{"wait int", func() { game.SetBackdropAndWait__2(1) }, 1},
+		{"wait action", func() { game.SetBackdropAndWait__3(Next) }, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.want == 1 {
+				game.displayState.MapMode = coreproject.MapModeRepeat
+			} else {
+				game.displayState.MapMode = coreproject.MapModeActualSize
+			}
+			test.call()
+			if test.want == 1 && manager.repeat != (mathf.Vec4{X: 2, Y: 2}) {
+				t.Fatalf("repeat scale=%v", manager.repeat)
+			}
+			if test.want == 0 && (manager.positionCalls == 0 || manager.position != (mathf.Vec2{})) {
+				t.Fatalf("actual size position=%v (%d calls)", manager.position, manager.positionCalls)
+			}
+			if game.BackdropIndex() != test.want || game.BackdropName() != game.costumes[test.want].name {
+				t.Fatalf("backdrop index/name=%d/%s", game.BackdropIndex(), game.BackdropName())
+			}
+		})
+	}
+}
+
+func TestGameGoSetBackdropRandom(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		selector any
+		costumes []*costume
+		initial  int
+	}{
+		{
+			name: "action", selector: Random, initial: 1,
+			costumes: []*costume{{name: "backdrop1"}, {name: "backdrop2"}, {name: "backdrop3"}},
+		},
+		{
+			name: "float64", selector: float64(Random),
+			costumes: []*costume{{name: "backdrop1"}, {name: "backdrop2"}},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &Game{visualObject: visualObject{costumes: test.costumes, costumeIndex: test.initial}}
+			SetRandomSeed(1)
+			t.Cleanup(ResetRandomSeed)
+
+			if !game.selectBackdrop(test.selector) {
+				t.Fatal("selectBackdrop(Random) = false, want true")
+			}
+			if got := game.costumeIndex; got < 0 || got >= len(game.costumes) || got == test.initial {
+				t.Fatalf("costumeIndex = %d, want in [0, %d) and different from %d", got, len(game.costumes), test.initial)
+			}
+		})
+	}
+}
+
+func TestGameSetRandomBackdropWithoutChoice(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		costumes []*costume
+		wantOK   bool
+	}{
+		{name: "no backdrops"},
+		{name: "single backdrop", costumes: []*costume{{name: "backdrop1"}}, wantOK: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &Game{visualObject: visualObject{costumes: test.costumes}}
+			if got := game.setRandomBackdrop(); got != test.wantOK {
+				t.Fatalf("setRandomBackdrop() = %v, want %v", got, test.wantOK)
+			}
+			if got := game.costumeIndex; got != 0 {
+				t.Fatalf("costumeIndex = %d, want unchanged index 0", got)
+			}
+		})
+	}
+}
+
+func TestGameGraphicEffectsAndClock(t *testing.T) {
+	setupRuntimeScheduler(t)
+	clock.Start()
+	t.Cleanup(func() { clock.Start() })
+	var game Game
+	game.SetGraphicEffect(ColorEffect, 10)
+	game.ChangeGraphicEffect(ColorEffect, 5)
+	if game.graphicEffects[ColorEffect] != 15 {
+		t.Fatalf("effect=%v", game.graphicEffects)
+	}
+	game.ClearGraphicEffects()
+	for kind, value := range game.graphicEffects {
+		if value != 0 {
+			t.Fatalf("cleared %v=%v", kind, value)
+		}
+	}
+	game.ResetTimer()
+	if game.Timer() != 0 {
+		t.Fatalf("reset timer=%v", game.Timer())
+	}
+	before := time.Now()
+	got := game.Now()
+	after := time.Now()
+	if got.Before(before) || got.After(after) {
+		t.Fatalf("Now=%v outside %v..%v", got, before, after)
+	}
+}
+
+// Stage preparation and sprite overrides.
+
+type stagePlanGame struct {
+	Game
+	Value    collisionLayerOrderSprite
+	Pointer  *collisionLayerOrderSprite
+	Dynamic  Sprite
+	values   []collisionLayerOrderSprite
+	pointers []*collisionLayerOrderSprite
+}
+
+// Stage-focused tests execute the same prepare/apply phases as project loading,
+// while retaining the already-live sprite fixtures they supply.
+func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
+	plan := projectPlan{sprites: make(map[string]spritePlan)}
+	var err error
+	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
+	if err != nil {
+		return nil, err
+	}
+	return p.applyStageEntries(gamer, &plan), nil
 }
 
 func TestStageUsesDirectFieldsAndPreservesSpriteOrder(t *testing.T) {
@@ -873,73 +908,6 @@ func TestPreparedDisplayShapesOwnAllConfiguration(t *testing.T) {
 	})
 }
 
-func TestStageRejectsPromotedFieldTargets(t *testing.T) {
-	type embedded struct{ Target *collisionLayerOrderSprite }
-	type holder struct{ embedded }
-	game := holder{embedded{Target: &collisionLayerOrderSprite{}}}
-	var stage Game
-	_, err := stage.loadStageEntries(reflect.ValueOf(&game).Elem(), []any{
-		coreproject.StageShape{"type": "sprite", "target": "Target"},
-	})
-	if err == nil {
-		t.Fatal("promoted field unexpectedly accepted as direct stage target")
-	}
-}
-
-func TestColdLoadKeepsUnregisteredSpriteFieldsUnloaded(t *testing.T) {
-	game := &struct {
-		Game
-		DirectLoadSprite *DirectLoadSprite
-		Data             any
-	}{}
-	files := gameTestFS{}
-	setupGameTestRuntime(t, files, game, nil, false)
-	game.spriteTypes["Data"] = reflect.TypeFor[int]()
-	gamer := reflect.ValueOf(game).Elem()
-	plan, err := game.prepareProject(files, &coreproject.ProjectConfig{}, gamer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if game.DirectLoadSprite != nil || game.Data != nil {
-		t.Fatal("preparation allocated live fields")
-	}
-	game.applySpriteFields(gamer, &plan)
-	if game.DirectLoadSprite == nil {
-		t.Fatal("cold load did not allocate the sprite field")
-	}
-	if data, ok := game.Data.(*int); !ok || data == nil {
-		t.Fatalf("registered non-sprite field = %v, want allocated *int", game.Data)
-	}
-	if len(game.spritePrototypes) != 0 {
-		t.Fatalf("cold load initialized unregistered sprites: %v", game.spritePrototypes)
-	}
-}
-
-func TestColdStageKeepsLazyLoadFailureBeforeLaterParseFailure(t *testing.T) {
-	var game Game
-	game.scene.init()
-	game.spritePrototypes = make(map[string]Sprite)
-	game.spriteTypes = map[string]reflect.Type{"Sprite": reflect.TypeFor[collisionLayerOrderSprite]()}
-	game.fs = gameTestFS{}
-	_, err := game.loadStageEntries(reflect.Value{}, []any{
-		"Sprite", coreproject.StageShape{"type": "measure", "size": "invalid"},
-	})
-	if err == nil || !strings.Contains(err.Error(), `zorder[0]: load sprite "Sprite": file not found:`) {
-		t.Fatalf("cold load failure = %v, want indexed first sprite config error", err)
-	}
-}
-
-func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
-	game := &stagePlanGame{}
-	game.scene.init()
-	_, err := game.loadStageEntries(reflect.ValueOf(game).Elem(), []any{
-		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
-	})
-	if err == nil || err.Error() != "zorder[1]: invalid stage shape type" {
-		t.Fatalf("cold load failure = %v, want indexed stage shape error", err)
-	}
-}
-
 func TestStageLoadsEmptyValues(t *testing.T) {
 	for _, target := range []string{"values", "pointers"} {
 		t.Run(target, func(t *testing.T) {
@@ -968,6 +936,36 @@ func TestStageLoadsEmptyValues(t *testing.T) {
 			t.Fatalf("empty named sprite: loaded=%v, error=%v", sprites, err)
 		}
 	})
+}
+
+func TestStageInstantiatesDisplayWidgets(t *testing.T) {
+	setupGameWidgetUi(t)
+	game := &monitorEvalFixture{score: 3}
+	root := reflect.ValueOf(game).Elem()
+	shapes := []any{
+		coreproject.StageShape{"type": "monitor", "name": "score", "val": "score", "target": "", "label": "Score", "mode": 1.0, "x": 0.0, "y": 0.0, "visible": true},
+		coreproject.StageShape{"type": "measure", "size": 12.0, "x": 0.0, "y": 0.0},
+	}
+	sprites, err := game.loadStageEntries(root, shapes)
+	if err != nil || len(sprites) != 0 || len(game.getAllShapes()) != 2 {
+		t.Fatalf("display widgets=%v, sprites=%v, error=%v", game.getAllShapes(), sprites, err)
+	}
+	if got := GetWidget(&game.Game, "score"); got.GetName() != "score" {
+		t.Fatalf("widget=%v", got)
+	}
+}
+
+func TestStageRejectsPromotedFieldTargets(t *testing.T) {
+	type embedded struct{ Target *collisionLayerOrderSprite }
+	type holder struct{ embedded }
+	game := holder{embedded{Target: &collisionLayerOrderSprite{}}}
+	var stage Game
+	_, err := stage.loadStageEntries(reflect.ValueOf(&game).Elem(), []any{
+		coreproject.StageShape{"type": "sprite", "target": "Target"},
+	})
+	if err == nil {
+		t.Fatal("promoted field unexpectedly accepted as direct stage target")
+	}
 }
 
 func TestStageGroupValidatesAllItemsBeforeLoading(t *testing.T) {
@@ -1046,171 +1044,6 @@ func TestStageEntryValidationErrors(t *testing.T) {
 	}
 }
 
-func TestStageInstantiatesDisplayWidgets(t *testing.T) {
-	setupGameWidgetUi(t)
-	game := &monitorEvalFixture{score: 3}
-	root := reflect.ValueOf(game).Elem()
-	shapes := []any{
-		coreproject.StageShape{"type": "monitor", "name": "score", "val": "score", "target": "", "label": "Score", "mode": 1.0, "x": 0.0, "y": 0.0, "visible": true},
-		coreproject.StageShape{"type": "measure", "size": 12.0, "x": 0.0, "y": 0.0},
-	}
-	sprites, err := game.loadStageEntries(root, shapes)
-	if err != nil || len(sprites) != 0 || len(game.getAllShapes()) != 2 {
-		t.Fatalf("display widgets=%v, sprites=%v, error=%v", game.getAllShapes(), sprites, err)
-	}
-	if got := GetWidget(&game.Game, "score"); got.GetName() != "score" {
-		t.Fatalf("widget=%v", got)
-	}
-}
-
-func TestGamePropertyResolutionScopes(t *testing.T) {
-	var plain Game
-	if got := plain.propertyRootValue(); got.Addr().Interface() != &plain {
-		t.Fatal("unbound game root changed")
-	}
-	if got := plain.GetTargetProperty("", ""); got.Raw() != nil {
-		t.Fatalf("empty property = %v, want zero Value", got)
-	}
-	if plain.setStageMonitor("", "missing", true) {
-		t.Fatal("missing monitor resolved")
-	}
-	game := &struct {
-		Game
-		Sprite spriteLoadTestSprite
-	}{}
-	game.gamer = game
-	if got, from := resolvePropertyTarget(game.propertyRootValue(), "Sprite"); from != 2 || got.Addr().Interface() != &game.Sprite {
-		t.Fatalf("sprite scope=%v, %d", got, from)
-	}
-}
-
-func TestGamePathFinderConfigurationAndQueries(t *testing.T) {
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.NavigationMgr
-	manager := &gameNavigationMgr{}
-	pkgengine.NavigationMgr = manager
-	t.Cleanup(func() { pkgengine.NavigationMgr = previous })
-	game := &Game{displayState: gameDisplayState{WorldWidth: 480, WorldHeight: 360}, pathfindingState: gamePathfindingState{PathCellSizeX: 24, PathCellSizeY: 12}}
-	game.SetupPathFinder__0()
-	if manager.grid != mathf.NewVec2(20, 30) || manager.cell != mathf.NewVec2(24, 12) || !manager.jump || manager.debug {
-		t.Fatalf("default navigation=%+v", manager)
-	}
-	game.SetupPathFinder__1(10, 12, 3, 4, false, true)
-	if manager.grid != mathf.NewVec2(10, 12) || manager.cell != mathf.NewVec2(3, 4) || manager.jump || !manager.debug {
-		t.Fatalf("explicit navigation=%+v", manager)
-	}
-	for _, call := range []func() []float64{
-		func() []float64 { return game.FindPath__0(1, 2, 3, 4) },
-		func() []float64 { return game.FindPath__1(1, 2, 3, 4, true) },
-		func() []float64 { return game.FindPath__2(1, 2, 3, 4, false, false) },
-	} {
-		if got := call(); !slices.Equal(got, []float64{1, 2, 3, 4}) {
-			t.Fatalf("path=%v", got)
-		}
-	}
-	if manager.setups != 3 || manager.from != mathf.NewVec2(1, 2) || manager.to != mathf.NewVec2(3, 4) || manager.jump {
-		t.Fatalf("navigation query=%+v", manager)
-	}
-}
-
-func TestGameBackdropOverloads(t *testing.T) {
-	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
-	game := setupStageLoadTestGame(t, gameTestFS{})
-	game.visualObject.initWithSize(480, 360)
-	manager := &gameBackdropSpriteMgr{ISpriteMgr: pkgengine.SpriteMgr}
-	pkgengine.SpriteMgr = manager
-	game.displayState.WorldWidth, game.displayState.WorldHeight = 960, 720
-	game.costumes = []*costume{newCostumeWithSize(480, 360), newCostumeWithSize(480, 360)}
-	game.costumes[0].name = "first"
-	game.costumes[1].name = "second"
-	game.runtimeState.proxy = &engine.Sprite{Sprite: pkgengine.Sprite{Id: 89801}}
-	for _, test := range []struct {
-		name string
-		call func()
-		want int
-	}{
-		{"name", func() { game.SetBackdrop__0("second") }, 1},
-		{"float", func() { game.SetBackdrop__1(0) }, 0},
-		{"int", func() { game.SetBackdrop__2(1) }, 1},
-		{"action", func() { game.SetBackdrop__3(Next) }, 0},
-		{"wait name", func() { game.SetBackdropAndWait__0("second") }, 1},
-		{"wait float", func() { game.SetBackdropAndWait__1(0) }, 0},
-		{"wait int", func() { game.SetBackdropAndWait__2(1) }, 1},
-		{"wait action", func() { game.SetBackdropAndWait__3(Next) }, 0},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if test.want == 1 {
-				game.displayState.MapMode = coreproject.MapModeRepeat
-			} else {
-				game.displayState.MapMode = coreproject.MapModeActualSize
-			}
-			test.call()
-			if test.want == 1 && manager.repeat != (mathf.Vec4{X: 2, Y: 2}) {
-				t.Fatalf("repeat scale=%v", manager.repeat)
-			}
-			if test.want == 0 && (manager.positionCalls == 0 || manager.position != (mathf.Vec2{})) {
-				t.Fatalf("actual size position=%v (%d calls)", manager.position, manager.positionCalls)
-			}
-			if game.BackdropIndex() != test.want || game.BackdropName() != game.costumes[test.want].name {
-				t.Fatalf("backdrop index/name=%d/%s", game.BackdropIndex(), game.BackdropName())
-			}
-		})
-	}
-}
-
-func TestGameGraphicEffectsAndClock(t *testing.T) {
-	setupRuntimeScheduler(t)
-	clock.Start()
-	t.Cleanup(func() { clock.Start() })
-	var game Game
-	game.SetGraphicEffect(ColorEffect, 10)
-	game.ChangeGraphicEffect(ColorEffect, 5)
-	if game.graphicEffects[ColorEffect] != 15 {
-		t.Fatalf("effect=%v", game.graphicEffects)
-	}
-	game.ClearGraphicEffects()
-	for kind, value := range game.graphicEffects {
-		if value != 0 {
-			t.Fatalf("cleared %v=%v", kind, value)
-		}
-	}
-	game.ResetTimer()
-	if game.Timer() != 0 {
-		t.Fatalf("reset timer=%v", game.Timer())
-	}
-	before := time.Now()
-	got := game.Now()
-	after := time.Now()
-	if got.Before(before) || got.After(after) {
-		t.Fatalf("Now=%v outside %v..%v", got, before, after)
-	}
-}
-
-func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
-	clock.Start()
-	t.Cleanup(func() { clock.Start() })
-	var game Game
-	count := 0
-	finished := false
-	thread := currentScheduler.Create(nil, func(coroutine.Thread) {
-		game.WaitNextFrame()
-		RepeatUntil(func() bool { return count == 3 }, func() { count++ })
-		finished = true
-	})
-	currentScheduler.JoinFirstSlice(thread)
-	if finished {
-		t.Fatal("WaitNextFrame completed before a frame update")
-	}
-	for range 5 {
-		clock.Update(1.0/30, 30)
-		currentScheduler.Update()
-	}
-	if !finished || count != 3 {
-		t.Fatalf("loop completed=%v, count=%d", finished, count)
-	}
-}
-
 func TestStagePreparationChecksInitFromOnlyForNonemptyGroups(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -1236,6 +1069,60 @@ func TestStagePreparationChecksInitFromOnlyForNonemptyGroups(t *testing.T) {
 				t.Fatalf("non-cloning stage entry rejected an unused InitFrom: %v", err)
 			}
 		})
+	}
+}
+
+func TestColdLoadKeepsUnregisteredSpriteFieldsUnloaded(t *testing.T) {
+	game := &struct {
+		Game
+		DirectLoadSprite *DirectLoadSprite
+		Data             any
+	}{}
+	files := gameTestFS{}
+	setupGameTestRuntime(t, files, game, nil, false)
+	game.spriteTypes["Data"] = reflect.TypeFor[int]()
+	gamer := reflect.ValueOf(game).Elem()
+	plan, err := game.prepareProject(files, &coreproject.ProjectConfig{}, gamer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if game.DirectLoadSprite != nil || game.Data != nil {
+		t.Fatal("preparation allocated live fields")
+	}
+	game.applySpriteFields(gamer, &plan)
+	if game.DirectLoadSprite == nil {
+		t.Fatal("cold load did not allocate the sprite field")
+	}
+	if data, ok := game.Data.(*int); !ok || data == nil {
+		t.Fatalf("registered non-sprite field = %v, want allocated *int", game.Data)
+	}
+	if len(game.spritePrototypes) != 0 {
+		t.Fatalf("cold load initialized unregistered sprites: %v", game.spritePrototypes)
+	}
+}
+
+func TestColdStageKeepsLazyLoadFailureBeforeLaterParseFailure(t *testing.T) {
+	var game Game
+	game.scene.init()
+	game.spritePrototypes = make(map[string]Sprite)
+	game.spriteTypes = map[string]reflect.Type{"Sprite": reflect.TypeFor[collisionLayerOrderSprite]()}
+	game.fs = gameTestFS{}
+	_, err := game.loadStageEntries(reflect.Value{}, []any{
+		"Sprite", coreproject.StageShape{"type": "measure", "size": "invalid"},
+	})
+	if err == nil || !strings.Contains(err.Error(), `zorder[0]: load sprite "Sprite": file not found:`) {
+		t.Fatalf("cold load failure = %v, want indexed first sprite config error", err)
+	}
+}
+
+func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
+	game := &stagePlanGame{}
+	game.scene.init()
+	_, err := game.loadStageEntries(reflect.ValueOf(game).Elem(), []any{
+		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
+	})
+	if err == nil || err.Error() != "zorder[1]: invalid stage shape type" {
+		t.Fatalf("cold load failure = %v, want indexed stage shape error", err)
 	}
 }
 
@@ -1312,6 +1199,106 @@ func TestParseSpriteOverridesRejectsWrongTypes(t *testing.T) {
 	}
 }
 
+// Spatial queries and pathfinding.
+
+type gameNavigationMgr struct {
+	pkgengine.INavigationMgr
+	grid, cell, from, to mathf.Vec2
+	jump, debug          bool
+	setups               int
+}
+
+func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
+	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
+	m.setups++
+}
+
+func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) pkgengine.Array {
+	m.from, m.to, m.jump = from, to, jump
+	return []float32{1, 2, 3, 4}
+}
+
+type gameQueryPhysicsMgr struct {
+	pkgengine.IPhysicsMgr
+	result        engine.Array
+	from, to      mathf.Vec2
+	radius        float64
+	mask          int64
+	ignore        []int64
+	areas, bodies bool
+}
+
+func (m *gameQueryPhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, mask int64) engine.Array {
+	m.from, m.to, m.mask = pos, size, mask
+	return m.result
+}
+
+func (m *gameQueryPhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, mask int64) engine.Array {
+	m.from, m.radius, m.mask = pos, radius, mask
+	return m.result
+}
+
+func (m *gameQueryPhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignore engine.Array, mask int64, areas, bodies bool) engine.Array {
+	m.from, m.to, m.mask = from, to, mask
+	m.ignore = ignore.([]int64)
+	m.areas, m.bodies = areas, bodies
+	return m.result
+}
+
+func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLookupSprite) {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.PhysicsMgr
+	manager := &gameQueryPhysicsMgr{}
+	pkgengine.PhysicsMgr = manager
+	t.Cleanup(func() { pkgengine.PhysicsMgr = previous })
+	game := &Game{}
+	sprite := newTargetLookupSprite(game, "target", false)
+	const id = 89001
+	proxy := &engine.Sprite{Sprite: pkgengine.Sprite{Id: id}, Target: &sprite.SpriteImpl}
+	sprite.runtimeState.proxy = proxy
+	registry := pkgengine.Sprites()
+	old, existed := registry[id]
+	registry[id] = proxy
+	t.Cleanup(func() {
+		if existed {
+			registry[id] = old
+		} else {
+			delete(registry, id)
+		}
+	})
+	return game, manager, sprite
+}
+
+func TestGamePathFinderConfigurationAndQueries(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.NavigationMgr
+	manager := &gameNavigationMgr{}
+	pkgengine.NavigationMgr = manager
+	t.Cleanup(func() { pkgengine.NavigationMgr = previous })
+	game := &Game{displayState: gameDisplayState{WorldWidth: 480, WorldHeight: 360}, pathfindingState: gamePathfindingState{PathCellSizeX: 24, PathCellSizeY: 12}}
+	game.SetupPathFinder__0()
+	if manager.grid != mathf.NewVec2(20, 30) || manager.cell != mathf.NewVec2(24, 12) || !manager.jump || manager.debug {
+		t.Fatalf("default navigation=%+v", manager)
+	}
+	game.SetupPathFinder__1(10, 12, 3, 4, false, true)
+	if manager.grid != mathf.NewVec2(10, 12) || manager.cell != mathf.NewVec2(3, 4) || manager.jump || !manager.debug {
+		t.Fatalf("explicit navigation=%+v", manager)
+	}
+	for _, call := range []func() []float64{
+		func() []float64 { return game.FindPath__0(1, 2, 3, 4) },
+		func() []float64 { return game.FindPath__1(1, 2, 3, 4, true) },
+		func() []float64 { return game.FindPath__2(1, 2, 3, 4, false, false) },
+	} {
+		if got := call(); !slices.Equal(got, []float64{1, 2, 3, 4}) {
+			t.Fatalf("path=%v", got)
+		}
+	}
+	if manager.setups != 3 || manager.from != mathf.NewVec2(1, 2) || manager.to != mathf.NewVec2(3, 4) || manager.jump {
+		t.Fatalf("navigation query=%+v", manager)
+	}
+}
+
 func TestGameIntersectionQueriesResolveLiveSprites(t *testing.T) {
 	game, manager, sprite := setupGameQueryPhysics(t)
 	// A missing engine object is ignored while the registered sprite is retained.
@@ -1375,51 +1362,6 @@ func TestGameRaycastResolvesTargetsAndIgnores(t *testing.T) {
 	}
 }
 
-func TestGameDebugDrawLinesValidatesCompleteSegments(t *testing.T) {
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.DebugMgr
-	manager := &gameDebugDrawMgr{}
-	pkgengine.DebugMgr = manager
-	t.Cleanup(func() { pkgengine.DebugMgr = previous })
-	var game Game
-	color := NewColor("#12345678")
-	for _, points := range [][]float64{nil, {1, 2}, {1, 2, 3}, {1, 2, 3, 4, 5}} {
-		game.DebugDrawLines(points, color)
-	}
-	if len(manager.lines) != 0 {
-		t.Fatal("incomplete point pairs drew segments")
-	}
-	game.DebugDrawLines([]float64{1, 2, 3, 4, 5, 6}, color)
-	want := [][2]mathf.Vec2{{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)}, {mathf.NewVec2(3, 4), mathf.NewVec2(5, 6)}}
-	if !slices.Equal(manager.lines, want) {
-		t.Fatalf("segments = %v, want %v", manager.lines, want)
-	}
-	for _, got := range manager.colors {
-		if got != toMathfColor(color) {
-			t.Fatalf("segment color = %v, want %v", got, toMathfColor(color))
-		}
-	}
-}
-
-func TestManualModeClearsAutoTouchSetup(t *testing.T) {
-	g := Game{physicsEnabled: true}
-	g.touchFilters = map[string]*touchFilter{
-		"SpriteA": {Layer: 1 << 0, Mask: 1 << 1},
-	}
-	g.touchEntries = []touchEntry{{
-		filter: g.touchFilters["SpriteA"],
-	}}
-
-	g.setupTouchEntries(nil)
-
-	if g.touchFilters != nil {
-		t.Fatalf("touchFilters = %#v, want nil", g.touchFilters)
-	}
-	if g.touchEntries != nil {
-		t.Fatalf("touchEntries = %#v, want nil", g.touchEntries)
-	}
-}
-
 func TestTryRaycastResult(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -1472,28 +1414,6 @@ func TestTryRaycastResult(t *testing.T) {
 	}
 }
 
-func TestGameDebugDrawingPrimitives(t *testing.T) {
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.DebugMgr
-	manager := &gameDebugDrawMgr{}
-	pkgengine.DebugMgr = manager
-	t.Cleanup(func() { pkgengine.DebugMgr = previous })
-	var game Game
-	color := NewColor("#123456")
-	game.DebugDrawRect(1, 2, 3, 4, color)
-	game.DebugDrawCircle(5, 6, 7, color)
-	game.DebugDrawLine(8, 9, 10, 11, color)
-	want := [][2]mathf.Vec2{{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)}, {mathf.NewVec2(5, 6), mathf.NewVec2(7, 7)}, {mathf.NewVec2(8, 9), mathf.NewVec2(10, 11)}}
-	if !slices.Equal(manager.lines, want) {
-		t.Fatalf("draw commands=%v", manager.lines)
-	}
-	for _, got := range manager.colors {
-		if got != mathf.NewColorRGBAi(0x12, 0x34, 0x56, 0xff) {
-			t.Fatalf("draw color=%v", got)
-		}
-	}
-}
-
 func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 	game, _, sprite := setupGameQueryPhysics(t)
 	game.autoTouchLayers = true
@@ -1505,6 +1425,22 @@ func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 	if got := game.checkCollision([]engine.Object{sprite.proxyID()}); len(got) != 0 {
 		t.Fatalf("nil target collision=%v", got)
 	}
+}
+
+// Physics configuration and touch filters.
+
+type touchFilterSpriteMgr struct {
+	spyCloneSpriteMgr
+	onLayer func(pkgengine.Object, int64)
+	onMask  func(pkgengine.Object, int64)
+}
+
+func (m *touchFilterSpriteMgr) SetTriggerMask(id pkgengine.Object, mask int64) {
+	m.onMask(id, mask)
+}
+
+func (m *touchFilterSpriteMgr) SetTriggerLayer(id pkgengine.Object, layer int64) {
+	m.onLayer(id, layer)
 }
 
 func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
@@ -1527,6 +1463,25 @@ func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
 	}
 	if wantSteps := []int64{collision.PixelPrecisionHigh, collision.PixelPrecisionHigh, collision.PixelPrecisionHigh}; !slices.Equal(spriteMgr.pixelCollisionSamplingSteps, wantSteps) {
 		t.Fatalf("pixel collision sampling steps = %v, want %v", spriteMgr.pixelCollisionSamplingSteps, wantSteps)
+	}
+}
+
+func TestManualModeClearsAutoTouchSetup(t *testing.T) {
+	g := Game{physicsEnabled: true}
+	g.touchFilters = map[string]*touchFilter{
+		"SpriteA": {Layer: 1 << 0, Mask: 1 << 1},
+	}
+	g.touchEntries = []touchEntry{{
+		filter: g.touchFilters["SpriteA"],
+	}}
+
+	g.setupTouchEntries(nil)
+
+	if g.touchFilters != nil {
+		t.Fatalf("touchFilters = %#v, want nil", g.touchFilters)
+	}
+	if g.touchEntries != nil {
+		t.Fatalf("touchEntries = %#v, want nil", g.touchEntries)
 	}
 }
 
@@ -1643,6 +1598,146 @@ func TestTouchFiltersCommitBeforeProxyWrites(t *testing.T) {
 	}
 }
 
+// Debug drawing.
+
+type gameDebugDrawMgr struct {
+	pkgengine.IDebugMgr
+	lines  [][2]mathf.Vec2
+	colors []mathf.Color
+}
+
+func (m *gameDebugDrawMgr) DebugDrawLine(from, to mathf.Vec2, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{from, to})
+	m.colors = append(m.colors, color)
+}
+
+func (m *gameDebugDrawMgr) DebugDrawRect(pos, size mathf.Vec2, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{pos, size})
+	m.colors = append(m.colors, color)
+}
+
+func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{pos, mathf.NewVec2(radius, radius)})
+	m.colors = append(m.colors, color)
+}
+
+func TestGameDebugDrawingPrimitives(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.DebugMgr
+	manager := &gameDebugDrawMgr{}
+	pkgengine.DebugMgr = manager
+	t.Cleanup(func() { pkgengine.DebugMgr = previous })
+	var game Game
+	color := NewColor("#123456")
+	game.DebugDrawRect(1, 2, 3, 4, color)
+	game.DebugDrawCircle(5, 6, 7, color)
+	game.DebugDrawLine(8, 9, 10, 11, color)
+	want := [][2]mathf.Vec2{{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)}, {mathf.NewVec2(5, 6), mathf.NewVec2(7, 7)}, {mathf.NewVec2(8, 9), mathf.NewVec2(10, 11)}}
+	if !slices.Equal(manager.lines, want) {
+		t.Fatalf("draw commands=%v", manager.lines)
+	}
+	for _, got := range manager.colors {
+		if got != mathf.NewColorRGBAi(0x12, 0x34, 0x56, 0xff) {
+			t.Fatalf("draw color=%v", got)
+		}
+	}
+}
+
+func TestGameDebugDrawLinesValidatesCompleteSegments(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.DebugMgr
+	manager := &gameDebugDrawMgr{}
+	pkgengine.DebugMgr = manager
+	t.Cleanup(func() { pkgengine.DebugMgr = previous })
+	var game Game
+	color := NewColor("#12345678")
+	for _, points := range [][]float64{nil, {1, 2}, {1, 2, 3}, {1, 2, 3, 4, 5}} {
+		game.DebugDrawLines(points, color)
+	}
+	if len(manager.lines) != 0 {
+		t.Fatal("incomplete point pairs drew segments")
+	}
+	game.DebugDrawLines([]float64{1, 2, 3, 4, 5, 6}, color)
+	want := [][2]mathf.Vec2{{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)}, {mathf.NewVec2(3, 4), mathf.NewVec2(5, 6)}}
+	if !slices.Equal(manager.lines, want) {
+		t.Fatalf("segments = %v, want %v", manager.lines, want)
+	}
+	for _, got := range manager.colors {
+		if got != toMathfColor(color) {
+			t.Fatalf("segment color = %v, want %v", got, toMathfColor(color))
+		}
+	}
+}
+
+// Tilemap loading and editing.
+
+type tilemapUnloadSceneMgr struct {
+	pkgengine.ISceneMgr
+	clearCalls int
+}
+
+func (m *tilemapUnloadSceneMgr) ClearPureSprites() { m.clearCalls++ }
+
+type tilemapAPIMgr struct {
+	pkgengine.ITilemapMgr
+	positions []float32
+	path      string
+	pos       mathf.Vec2
+	layer     int64
+	erased    bool
+	collision []float32
+}
+
+func (m *tilemapAPIMgr) PlaceTiles(positions pkgengine.Array, path string) {
+	m.positions = positions.([]float32)
+	m.path = path
+}
+
+func (m *tilemapAPIMgr) PlaceTile(pos mathf.Vec2, path string) {
+	m.pos, m.path, m.erased = pos, path, false
+}
+
+func (m *tilemapAPIMgr) EraseTile(pos mathf.Vec2) { m.pos, m.erased = pos, true }
+
+func (m *tilemapAPIMgr) EraseTileWithLayer(pos mathf.Vec2, layer int64) {
+	m.pos, m.layer, m.erased = pos, layer, true
+}
+
+func (m *tilemapAPIMgr) GetTile(pos mathf.Vec2) string {
+	m.pos = pos
+	if m.erased {
+		return ""
+	}
+	return m.path
+}
+
+func (m *tilemapAPIMgr) GetTileWithLayer(pos mathf.Vec2, layer int64) string {
+	m.layer = layer
+	return m.GetTile(pos)
+}
+
+func (m *tilemapAPIMgr) SetTileWithCollisionInfo(path string, points pkgengine.Array) {
+	m.path, m.collision = path, points.([]float32)
+}
+
+type decoratorSceneMgr struct {
+	pkgengine.ISceneMgr
+	path                                  string
+	position, pivot, scale, colliderPivot mathf.Vec2
+	rotation                              float64
+	layer, collider                       int64
+	params                                []float64
+}
+
+func (m *decoratorSceneMgr) CreateStaticSprite(path string, pos mathf.Vec2, rotation float64, scale mathf.Vec2, layer int64, pivot mathf.Vec2, collider int64, colliderPivot mathf.Vec2, params pkgengine.Array) pkgengine.Object {
+	m.path, m.position, m.rotation, m.scale, m.layer, m.pivot, m.collider, m.colliderPivot, m.params = path, pos, rotation, scale, layer, pivot, collider, colliderPivot, params.([]float64)
+	return 991
+}
+
+type decoratorResMgr struct{ pkgengine.IResMgr }
+
+func (*decoratorResMgr) GetImageSize(string) mathf.Vec2 { return mathf.NewVec2(20, 10) }
+
 func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
 	for _, test := range []struct{ name, decorators string }{
 		{"missing decorators", ""},
@@ -1686,35 +1781,49 @@ func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
 	}
 }
 
-func TestUnloadTilemapClearsStateOnce(t *testing.T) {
+func TestTilemapLoadAndEmptyBounds(t *testing.T) {
+	var game Game
+	files := gameTestFS{"map.json": `{"tilemap":{"layers":[]}}`}
+	game.tilemapMgr.g, game.tilemapMgr.fs = &game, files
+	game.tilemapMgr.loadMap("map.json")
+	if game.TilemapName() != "map" {
+		t.Fatalf("map name=%q", game.TilemapName())
+	}
+	game.tilemapMgr.loadMap("")
+	if game.TilemapName() != "map" {
+		t.Fatal("empty path replaced map")
+	}
+	game.displayState.WorldWidth, game.displayState.WorldHeight = 480, 360
+	for _, raw := range []string{`{}`, `{"tilemap":{"layers":[{"tile_data":[]}]}}`, `null`} {
+		var data *tm.TscnMapData
+		if err := json.Unmarshal([]byte(raw), &data); err != nil {
+			t.Fatal(err)
+		}
+		game.tilemapMgr.mapData = data
+		game.tilemapMgr.calcWorldSize()
+		if game.displayState.WorldWidth != 480 || game.displayState.WorldHeight != 360 {
+			t.Fatal("empty bounds changed world")
+		}
+	}
+	defer func() {
+		if got := recover(); got == nil || !strings.Contains(fmt.Sprint(got), "Failed to load tilemap") {
+			t.Fatalf("missing map panic=%v", got)
+		}
+	}()
+	game.tilemapMgr.loadMap("missing.json")
+}
+
+func TestTilemapDecoratorCoordinates(t *testing.T) {
 	setupImmediateEngineCalls(t)
-	for _, tt := range []struct {
-		name        string
-		newLoader   bool
-		wantDestroy int
-	}{
-		{"legacy", false, 0},
-		{"native", true, 1},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			previousScene, previousParser := pkgengine.SceneMgr, pkgengine.TilemapparserMgr
-			scene := &tilemapUnloadSceneMgr{}
-			parser := &gameTestTilemapparserMgr{}
-			pkgengine.SceneMgr, pkgengine.TilemapparserMgr = scene, parser
-			t.Cleanup(func() { pkgengine.SceneMgr, pkgengine.TilemapparserMgr = previousScene, previousParser })
-			var game Game
-			game.tilemapMgr.currentMap = "map1"
-			game.tilemapMgr.tilemapDir = "tilemaps/map1"
-			game.tilemapMgr.usesNativeParser = tt.newLoader
-			game.UnloadTilemap()
-			game.UnloadTilemap()
-			if game.TilemapName() != "" || game.tilemapMgr.tilemapDir != "" || game.tilemapMgr.usesNativeParser || game.tilemapMgr.hasData() {
-				t.Fatalf("unloaded map retained state: %+v", game.tilemapMgr)
-			}
-			if scene.clearCalls != 1 || parser.destroyCalls != tt.wantDestroy {
-				t.Fatalf("cleanup calls: scene=%d, native=%d; want 1, %d", scene.clearCalls, parser.destroyCalls, tt.wantDestroy)
-			}
-		})
+	previousScene, previousRes := pkgengine.SceneMgr, pkgengine.ResMgr
+	scene := &decoratorSceneMgr{}
+	pkgengine.SceneMgr, pkgengine.ResMgr = scene, &decoratorResMgr{}
+	t.Cleanup(func() { pkgengine.SceneMgr, pkgengine.ResMgr = previousScene, previousRes })
+	var game Game
+	game.tilemapMgr = tilemapManager{g: &game, usesNativeParser: true, tilemapDir: "tilemaps/map", decoratorData: &DecoratorJSON{Decorators: []tm.DecoratorNode{{Path: "tree.png", Position: tm.Vec2{X: 3, Y: 4}, Pivot: tm.Vec2{X: 12, Y: 8}, Scale: tm.Vec2{X: 2, Y: 3}, Ratation: 120, ZIndex: 7, ColliderType: "rect", ColliderPivot: tm.Vec2{X: 1, Y: 2}, ColliderParams: []float64{4, 5}}}}}
+	game.tilemapMgr.applyMapContents()
+	if scene.path != engine.ToAssetPath("tilemaps/map/tree.png") || scene.position != mathf.NewVec2(3, 4) || scene.pivot != mathf.NewVec2(2, 3) || scene.rotation != 30 || scene.scale != mathf.NewVec2(2, 3) || scene.layer != 7 || scene.collider != collision.ColliderRect || scene.colliderPivot != mathf.NewVec2(13, 10) || !reflect.DeepEqual(scene.params, []float64{4, 5}) {
+		t.Fatalf("decorator=%+v", scene)
 	}
 }
 
@@ -1751,50 +1860,74 @@ func TestGameTilePlacementAndQueries(t *testing.T) {
 	}
 }
 
-func TestTilemapDecoratorCoordinates(t *testing.T) {
+func TestUnloadTilemapClearsStateOnce(t *testing.T) {
 	setupImmediateEngineCalls(t)
-	previousScene, previousRes := pkgengine.SceneMgr, pkgengine.ResMgr
-	scene := &decoratorSceneMgr{}
-	pkgengine.SceneMgr, pkgengine.ResMgr = scene, &decoratorResMgr{}
-	t.Cleanup(func() { pkgengine.SceneMgr, pkgengine.ResMgr = previousScene, previousRes })
-	var game Game
-	game.tilemapMgr = tilemapManager{g: &game, usesNativeParser: true, tilemapDir: "tilemaps/map", decoratorData: &DecoratorJSON{Decorators: []tm.DecoratorNode{{Path: "tree.png", Position: tm.Vec2{X: 3, Y: 4}, Pivot: tm.Vec2{X: 12, Y: 8}, Scale: tm.Vec2{X: 2, Y: 3}, Ratation: 120, ZIndex: 7, ColliderType: "rect", ColliderPivot: tm.Vec2{X: 1, Y: 2}, ColliderParams: []float64{4, 5}}}}}
-	game.tilemapMgr.applyMapContents()
-	if scene.path != engine.ToAssetPath("tilemaps/map/tree.png") || scene.position != mathf.NewVec2(3, 4) || scene.pivot != mathf.NewVec2(2, 3) || scene.rotation != 30 || scene.scale != mathf.NewVec2(2, 3) || scene.layer != 7 || scene.collider != collision.ColliderRect || scene.colliderPivot != mathf.NewVec2(13, 10) || !reflect.DeepEqual(scene.params, []float64{4, 5}) {
-		t.Fatalf("decorator=%+v", scene)
+	for _, tt := range []struct {
+		name        string
+		newLoader   bool
+		wantDestroy int
+	}{
+		{"legacy", false, 0},
+		{"native", true, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			previousScene, previousParser := pkgengine.SceneMgr, pkgengine.TilemapparserMgr
+			scene := &tilemapUnloadSceneMgr{}
+			parser := &gameTestTilemapparserMgr{}
+			pkgengine.SceneMgr, pkgengine.TilemapparserMgr = scene, parser
+			t.Cleanup(func() { pkgengine.SceneMgr, pkgengine.TilemapparserMgr = previousScene, previousParser })
+			var game Game
+			game.tilemapMgr.currentMap = "map1"
+			game.tilemapMgr.tilemapDir = "tilemaps/map1"
+			game.tilemapMgr.usesNativeParser = tt.newLoader
+			game.UnloadTilemap()
+			game.UnloadTilemap()
+			if game.TilemapName() != "" || game.tilemapMgr.tilemapDir != "" || game.tilemapMgr.usesNativeParser || game.tilemapMgr.hasData() {
+				t.Fatalf("unloaded map retained state: %+v", game.tilemapMgr)
+			}
+			if scene.clearCalls != 1 || parser.destroyCalls != tt.wantDestroy {
+				t.Fatalf("cleanup calls: scene=%d, native=%d; want 1, %d", scene.clearCalls, parser.destroyCalls, tt.wantDestroy)
+			}
+		})
 	}
 }
 
-func TestTilemapLoadAndEmptyBounds(t *testing.T) {
-	var game Game
-	files := gameTestFS{"map.json": `{"tilemap":{"layers":[]}}`}
-	game.tilemapMgr.g, game.tilemapMgr.fs = &game, files
-	game.tilemapMgr.loadMap("map.json")
-	if game.TilemapName() != "map" {
-		t.Fatalf("map name=%q", game.TilemapName())
-	}
-	game.tilemapMgr.loadMap("")
-	if game.TilemapName() != "map" {
-		t.Fatal("empty path replaced map")
-	}
-	game.displayState.WorldWidth, game.displayState.WorldHeight = 480, 360
-	for _, raw := range []string{`{}`, `{"tilemap":{"layers":[{"tile_data":[]}]}}`, `null`} {
-		var data *tm.TscnMapData
-		if err := json.Unmarshal([]byte(raw), &data); err != nil {
-			t.Fatal(err)
-		}
-		game.tilemapMgr.mapData = data
-		game.tilemapMgr.calcWorldSize()
-		if game.displayState.WorldWidth != 480 || game.displayState.WorldHeight != 360 {
-			t.Fatal("empty bounds changed world")
-		}
-	}
-	defer func() {
-		if got := recover(); got == nil || !strings.Contains(fmt.Sprint(got), "Failed to load tilemap") {
-			t.Fatalf("missing map panic=%v", got)
-		}
-	}()
-	game.tilemapMgr.loadMap("missing.json")
+// Camera coordinates and following.
+
+type cameraTestMgr struct {
+	pkgengine.ICameraMgr
+	position, zoom mathf.Vec2
+	viewport       mathf.Rect2
+	limits         map[int64]int64
+	smoothing      bool
+	positionWrites int
+}
+
+func (m *cameraTestMgr) GetCameraPosition() mathf.Vec2 { return m.position }
+
+func (m *cameraTestMgr) SetCameraPosition(pos mathf.Vec2) {
+	m.position = pos
+	m.positionWrites++
+}
+
+func (m *cameraTestMgr) GetCameraZoom() mathf.Vec2 { return m.zoom }
+
+func (m *cameraTestMgr) SetCameraZoom(zoom mathf.Vec2) { m.zoom = zoom }
+
+func (m *cameraTestMgr) GetGlobalCameraRect() mathf.Rect2 { return m.viewport }
+
+func (m *cameraTestMgr) SetCameraLimit(side, value int64) { m.limits[side] = value }
+
+func (m *cameraTestMgr) SetCameraSmoothing(enabled bool) { m.smoothing = enabled }
+
+func setupCameraTestMgr(t *testing.T) *cameraTestMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.CameraMgr
+	mgr := &cameraTestMgr{limits: make(map[int64]int64)}
+	pkgengine.CameraMgr = mgr
+	t.Cleanup(func() { pkgengine.CameraMgr = previous })
+	return mgr
 }
 
 func TestCameraCoordinatesAndWindowScale(t *testing.T) {
@@ -1959,6 +2092,157 @@ func TestCameraFollowObservesMousePositionChanges(t *testing.T) {
 	}
 }
 
+// Dialogue fixtures.
+
+const (
+	askScenePath = "res://engine/ui/UiAsk.tscn"
+	sayScenePath = "res://engine/ui/UiSay.tscn"
+)
+
+type bubbleLayoutCameraMgr struct{ pkgengine.ICameraMgr }
+
+func (bubbleLayoutCameraMgr) GetCameraPosition() mathf.Vec2 { return mathf.Vec2{} }
+
+func (bubbleLayoutCameraMgr) GetCameraZoom() mathf.Vec2 { return mathf.NewVec2(1, 1) }
+
+func (bubbleLayoutCameraMgr) GetViewportRect() mathf.Rect2 {
+	return mathf.NewRect2(0, 0, 480, 360)
+}
+
+type askTestBinding struct {
+	parent pkgengine.Object
+	path   string
+}
+
+type askTestUiMgr struct {
+	pkgengine.IUiMgr
+	nextID       pkgengine.Object
+	ids          map[pkgengine.Object]struct{}
+	created      map[string]int
+	bound        map[askTestBinding]pkgengine.Object
+	visible      map[pkgengine.Object]bool
+	text         map[pkgengine.Object]string
+	askRoot      pkgengine.Object
+	onAskVisible func()
+	onDestroy    func()
+}
+
+func (m *askTestUiMgr) CreateNode(path string) pkgengine.Object {
+	id := m.newID()
+	m.created[path]++
+	if path == askScenePath {
+		m.askRoot = id
+	}
+	return id
+}
+
+func (m *askTestUiMgr) BindNode(parent pkgengine.Object, path string) pkgengine.Object {
+	id := m.newID()
+	m.bound[askTestBinding{parent: parent, path: path}] = id
+	return id
+}
+
+func (m *askTestUiMgr) DestroyNode(pkgengine.Object) bool {
+	if m.onDestroy != nil {
+		m.onDestroy()
+	}
+	return true
+}
+
+func (m *askTestUiMgr) SetVisible(id pkgengine.Object, visible bool) {
+	m.visible[id] = visible
+	if id == m.askRoot && visible && m.onAskVisible != nil {
+		onAskVisible := m.onAskVisible
+		m.onAskVisible = nil
+		onAskVisible()
+	}
+}
+
+func (m *askTestUiMgr) SetText(id pkgengine.Object, text string) {
+	m.text[id] = text
+}
+
+func (m *askTestUiMgr) GetText(id pkgengine.Object) string {
+	return m.text[id]
+}
+
+func (m *askTestUiMgr) newID() pkgengine.Object {
+	m.nextID++
+	m.ids[m.nextID] = struct{}{}
+	return m.nextID
+}
+
+type bubbleRenderTestUiMgr struct {
+	*askTestUiMgr
+	positions map[pkgengine.Object]mathf.Vec2
+	sizes     map[pkgengine.Object]mathf.Vec2
+}
+
+func (*bubbleRenderTestUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (m *bubbleRenderTestUiMgr) SetPosition(id pkgengine.Object, position mathf.Vec2) {
+	m.positions[id] = position
+}
+
+func (m *bubbleRenderTestUiMgr) SetGlobalPosition(id pkgengine.Object, position mathf.Vec2) {
+	m.positions[id] = position
+}
+
+func (m *bubbleRenderTestUiMgr) SetSize(id pkgengine.Object, size mathf.Vec2) {
+	m.sizes[id] = size
+}
+
+type askDelayedInputMgr struct{ pkgengine.IInputMgr }
+
+func (askDelayedInputMgr) GetKey(int64) bool { return false }
+
+func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
+	game := &Game{}
+	game.scene.init()
+	sprite := &SpriteImpl{g: game}
+	sprite.spriteState.isVisible = true
+	component := &bubbleComponent{sprite: sprite}
+	sprite.components.bubble = component
+	return game, sprite, component
+}
+
+func newAskTestUiMgr(base pkgengine.IUiMgr) *askTestUiMgr {
+	return &askTestUiMgr{
+		IUiMgr:  base,
+		nextID:  100,
+		ids:     make(map[pkgengine.Object]struct{}),
+		created: make(map[string]int),
+		bound:   make(map[askTestBinding]pkgengine.Object),
+		visible: make(map[pkgengine.Object]bool),
+		text:    make(map[pkgengine.Object]string),
+	}
+}
+
+func installAskTestUiMgr(t *testing.T) *askTestUiMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	original := pkgengine.UiMgr
+	mgr := newAskTestUiMgr(original)
+	pkgengine.UiMgr = mgr
+	t.Cleanup(func() {
+		for id := range mgr.ids {
+			pkgengine.DeleteUINode(id)
+		}
+		pkgengine.UiMgr = original
+	})
+	return mgr
+}
+
+func bubbleRenderedTexts(values map[pkgengine.Object]string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
+}
+
+// Bubble lifetime and deferred rendering.
+
 func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	installAskTestUiMgr(t)
 	_, sprite, component := newBubbleTestSprite()
@@ -2101,82 +2385,6 @@ func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 		t.Fatal("timed Quote did not schedule quote bubble removal")
 	}
 	component.stopAll()
-}
-
-func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
-	sprite := &SpriteImpl{}
-	sprite.spriteState.isVisible = true
-	camera := &cameraImpl{}
-	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
-
-	if !bubble.needsUpdate() {
-		t.Fatal("new bubble should need an initial update")
-	}
-	bubble.markClean()
-	if bubble.needsUpdate() {
-		t.Fatal("clean bubble unexpectedly needs an update")
-	}
-
-	camera.setDirtyFlag(true)
-	camera.setDirtyFlag(false)
-	if !bubble.needsUpdate() {
-		t.Fatal("camera change was lost when its dirty flag was cleared")
-	}
-
-	bubble.markClean()
-	if bubble.needsUpdate() {
-		t.Fatal("bubble still needs an update after observing the camera change")
-	}
-}
-
-func TestBubbleObservesSpriteChangesAfterProxySync(t *testing.T) {
-	installTouchingSyncSpriteMgr(t, newTouchingSyncSpriteMgr())
-	sprite := newTouchingTestSprite("sprite", 0, 0, 1)
-	camera := &cameraImpl{}
-	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
-	bubble.markClean()
-
-	sprite.markProxyDirty()
-	buffer := engine.NewSpriteSyncBuffer(1)
-	sprite.collectProxyUpdate(buffer)
-	if got := buffer.UpdateCount(); got != 1 {
-		t.Fatalf("proxy sync batched %d transforms, want 1", got)
-	}
-	if !bubble.needsUpdate() {
-		t.Fatal("sprite change was lost after its proxy was synchronized")
-	}
-	bubble.markClean()
-	if bubble.needsUpdate() {
-		t.Fatal("bubble still needs an update after observing the sprite change")
-	}
-}
-
-func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
-	_, game := setupRuntimeEventGame(t)
-	sprite := &SpriteImpl{}
-	sprite.spriteState.isVisible = true
-	quote := &quoteBubble{
-		bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true},
-	}
-	text := &textBubble{
-		bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true},
-	}
-	component := &bubbleComponent{sprite: sprite, textObj: text}
-	sprite.components.bubble = component
-	items := []Shape{sprite, quote, text}
-	game.scene.items = items
-	withEventRegistrationBarrier(game, game.dispatchShapeUpdates)
-	if !quote.isDirty || !text.isDirty {
-		t.Fatal("update phase unexpectedly committed bubble visuals")
-	}
-
-	game.scene.flushBubbleVisuals(items)
-	if quote.isDirty || text.isDirty {
-		t.Fatal("frame-end phase did not commit bubble visuals")
-	}
-	if len(game.scene.bubbles) != 2 {
-		t.Fatalf("collected %d bubbles, want 2", len(game.scene.bubbles))
-	}
 }
 
 func TestTimedTextRemovalWaitsForNextFrame(t *testing.T) {
@@ -2327,6 +2535,174 @@ func TestQuoteBubbleTokenOnlyExpiresCurrentGeneration(t *testing.T) {
 	component.expireQuote(bubbleToken{bubble: &quote.bubbleBase, generation: 2})
 }
 
+func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	original := newCloneLimitSprite(game, "original")
+	originalBubble := original.bubble()
+	originalText := &textBubble{bubbleBase: original.newBubbleBase()}
+	originalBubble.textObj = originalText
+	game.scene.add(originalText)
+
+	clone := createRuntimeClone(&original.SpriteImpl)
+	if clone.components.bubble != nil {
+		t.Fatal("clone inherited an allocated bubble component")
+	}
+	if originalBubble.textObj != originalText {
+		t.Fatal("cloning changed the original bubble")
+	}
+
+	cloneBubble := clone.bubble()
+	if cloneBubble == originalBubble || cloneBubble.sprite != clone {
+		t.Fatal("lazy bubble component is not owned by the clone")
+	}
+	cloneText := &textBubble{bubbleBase: clone.newBubbleBase()}
+	cloneBubble.textObj = cloneText
+	game.scene.add(cloneText)
+
+	clone.Destroy()
+	if cloneBubble.textObj != nil || cloneBubble.quoteObj != nil {
+		t.Fatal("destroy left clone bubble state active")
+	}
+	for _, shape := range game.getAllShapes() {
+		if shape == cloneText {
+			t.Fatal("destroy left the clone bubble in the shape list")
+		}
+	}
+	if originalBubble.textObj != originalText {
+		t.Fatal("destroying the clone changed the original bubble")
+	}
+}
+
+func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
+	sprite := &SpriteImpl{}
+	sprite.spriteState.isVisible = true
+	camera := &cameraImpl{}
+	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
+
+	if !bubble.needsUpdate() {
+		t.Fatal("new bubble should need an initial update")
+	}
+	bubble.markClean()
+	if bubble.needsUpdate() {
+		t.Fatal("clean bubble unexpectedly needs an update")
+	}
+
+	camera.setDirtyFlag(true)
+	camera.setDirtyFlag(false)
+	if !bubble.needsUpdate() {
+		t.Fatal("camera change was lost when its dirty flag was cleared")
+	}
+
+	bubble.markClean()
+	if bubble.needsUpdate() {
+		t.Fatal("bubble still needs an update after observing the camera change")
+	}
+}
+
+func TestBubbleObservesSpriteChangesAfterProxySync(t *testing.T) {
+	installTouchingSyncSpriteMgr(t, newTouchingSyncSpriteMgr())
+	sprite := newTouchingTestSprite("sprite", 0, 0, 1)
+	camera := &cameraImpl{}
+	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
+	bubble.markClean()
+
+	sprite.markProxyDirty()
+	buffer := engine.NewSpriteSyncBuffer(1)
+	sprite.collectProxyUpdate(buffer)
+	if got := buffer.UpdateCount(); got != 1 {
+		t.Fatalf("proxy sync batched %d transforms, want 1", got)
+	}
+	if !bubble.needsUpdate() {
+		t.Fatal("sprite change was lost after its proxy was synchronized")
+	}
+	bubble.markClean()
+	if bubble.needsUpdate() {
+		t.Fatal("bubble still needs an update after observing the sprite change")
+	}
+}
+
+func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
+	_, game := setupRuntimeEventGame(t)
+	sprite := &SpriteImpl{}
+	sprite.spriteState.isVisible = true
+	quote := &quoteBubble{
+		bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true},
+	}
+	text := &textBubble{
+		bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true},
+	}
+	component := &bubbleComponent{sprite: sprite, textObj: text}
+	sprite.components.bubble = component
+	items := []Shape{sprite, quote, text}
+	game.scene.items = items
+	withEventRegistrationBarrier(game, game.dispatchShapeUpdates)
+	if !quote.isDirty || !text.isDirty {
+		t.Fatal("update phase unexpectedly committed bubble visuals")
+	}
+
+	game.scene.bubbles.flushBubbleVisuals(items)
+	if quote.isDirty || text.isDirty {
+		t.Fatal("frame-end phase did not commit bubble visuals")
+	}
+	if len(game.scene.bubbles.bubbles) != 2 {
+		t.Fatalf("collected %d bubbles, want 2", len(game.scene.bubbles.bubbles))
+	}
+}
+
+func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
+	mgr := &bubbleRenderTestUiMgr{
+		askTestUiMgr: installAskTestUiMgr(t),
+		positions:    make(map[pkgengine.Object]mathf.Vec2), sizes: make(map[pkgengine.Object]mathf.Vec2),
+	}
+	pkgengine.UiMgr = mgr
+	originalCamera, originalScale := pkgengine.CameraMgr, engine.WindowScale()
+	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
+	engine.SetWindowScale(1)
+	t.Cleanup(func() { pkgengine.CameraMgr = originalCamera; engine.SetWindowScale(originalScale) })
+	sprite := newRenderOffsetTestSprite()
+	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
+	sprite.spriteState.isVisible = true
+	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true}, panel: ui.NewUiSay(), content: ui.NewSayBubbleContent("first", ui.StyleSay)}
+	manager := sceneObjects{}
+	sprite.spriteState.isVisible = false
+	manager.bubbles.flushBubbleVisuals([]Shape{bubble})
+	if bubble.hasLayout || !bubble.isDirty || slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
+		t.Fatal("hidden bubble initialized or rendered its layout")
+	}
+	sprite.spriteState.isVisible = true
+	manager.bubbles.flushBubbleVisuals([]Shape{bubble})
+	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
+		t.Fatalf("text bubble was not rendered: dirty=%v text=%v", bubble.isDirty, mgr.text)
+	}
+	layout := ui.NewSayBubbleLayoutContext(mathf.NewVec2(480, 360)).NewLayout(1, mathf.Vec2{}, mathf.NewVec2(20, 20), ui.NewSayBubbleContent("planned", ui.StyleThink))
+	bubble.setLayout(layout)
+	bubble.onUpdate()
+	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "planned") {
+		t.Fatal("precomputed layout did not replace the visible text")
+	}
+	sprite.spriteState.isVisible = false
+	bubble.markDirty()
+	bubble.onUpdate()
+	if !bubble.isDirty {
+		t.Fatal("hidden bubble consumed its pending visual update")
+	}
+	sprite.spriteState.isVisible = true
+	panel := bubble.panel
+	bubble.panel = nil
+	bubble.markDirty()
+	manager.bubbles.flushBubbleVisuals([]Shape{bubble})
+	bubble.panel = panel
+	quote := &quoteBubble{bubbleBase: bubbleBase{sprite: sprite, camera: bubble.camera, isDirty: true}, panel: ui.NewUiQuote(), message: "quotation", description: "speaker"}
+	quote.onUpdate()
+	container := mgr.bound[askTestBinding{parent: quote.panel.GetId(), path: "C"}]
+	_, size := quote.getBounds()
+	if mgr.sizes[container] != size.Addf(20) || !slices.Contains(bubbleRenderedTexts(mgr.text), "quotation") || !slices.Contains(bubbleRenderedTexts(mgr.text), "speaker") || quote.isDirty {
+		t.Fatalf("quote layout = size %v, text %v, dirty %v", mgr.sizes[container], mgr.text, quote.isDirty)
+	}
+}
+
+// Bubble layout and identity.
+
 func TestLayoutTextBubblesPreservesEmptyActiveSlice(t *testing.T) {
 	for _, active := range [][]*textBubble{nil, {}} {
 		shapes := bubbleLayout{activeTextBubbles: active, textBubbles: active}
@@ -2361,39 +2737,39 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 	first, second := newBubble(1), newBubble(2)
 	shapes := sceneObjects{}
 	layout := func(items []Shape) {
-		shapes.collectBubbles(items)
-		shapes.layoutTextBubbles()
+		shapes.bubbles.collectBubbles(items)
+		shapes.bubbles.layoutTextBubbles()
 	}
 	layout([]Shape{second, first})
-	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{first, second}) || !first.hasLayout || !second.hasLayout {
+	if !slices.Equal(shapes.bubbles.activeTextBubbles, []*textBubble{first, second}) || !first.hasLayout || !second.hasLayout {
 		t.Fatal("new bubbles were not laid out in stable ID order")
 	}
-	storage := &shapes.activeTextBubbles[0]
+	storage := &shapes.bubbles.activeTextBubbles[0]
 	firstLayout, secondLayout := first.layout, second.layout
 	layout([]Shape{first, second})
-	if &shapes.activeTextBubbles[0] != storage || first.layout != firstLayout || second.layout != secondLayout {
+	if &shapes.bubbles.activeTextBubbles[0] != storage || first.layout != firstLayout || second.layout != secondLayout {
 		t.Fatal("unchanged bubble identities replaced storage or resolved cached layouts")
 	}
 
 	replacement := *first
 	layout([]Shape{second, &replacement})
-	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement, second}) {
+	if !slices.Equal(shapes.bubbles.activeTextBubbles, []*textBubble{&replacement, second}) {
 		t.Fatal("equal-valued replacement bubble was not detected by pointer identity")
 	}
 	second.sprite.spriteState.isVisible = false
 	layout([]Shape{&replacement, second})
-	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement}) {
+	if !slices.Equal(shapes.bubbles.activeTextBubbles, []*textBubble{&replacement}) {
 		t.Fatal("hidden bubble remained active")
 	}
-	if shapes.activeTextBubbles[:2][1] != nil || shapes.textBubbles[:2][1] != nil {
+	if shapes.bubbles.activeTextBubbles[:2][1] != nil || shapes.bubbles.textBubbles[:2][1] != nil {
 		t.Fatal("removed bubble reference was retained in reusable storage")
 	}
 	replacement.panel = nil
 	layout([]Shape{&replacement, second})
-	if len(shapes.activeTextBubbles) != 0 || shapes.activeTextBubbles[:1][0] != nil {
+	if len(shapes.bubbles.activeTextBubbles) != 0 || shapes.bubbles.activeTextBubbles[:1][0] != nil {
 		t.Fatal("panel removal did not clear the final active bubble")
 	}
-	for _, bubble := range shapes.textBubbles[:cap(shapes.textBubbles)] {
+	for _, bubble := range shapes.bubbles.textBubbles[:cap(shapes.bubbles.textBubbles)] {
 		if bubble != nil {
 			t.Fatal("filtered bubble remained in collected storage")
 		}
@@ -2410,15 +2786,15 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 					bubbles[removed].panel = nil
 				}
 				var shapes sceneObjects
-				shapes.collectBubbles([]Shape{first, second, third})
-				storage := shapes.textBubbles[:cap(shapes.textBubbles)]
-				shapes.layoutTextBubbles()
+				shapes.bubbles.collectBubbles([]Shape{first, second, third})
+				storage := shapes.bubbles.textBubbles[:cap(shapes.bubbles.textBubbles)]
+				shapes.bubbles.layoutTextBubbles()
 				want := slices.Delete(slices.Clone(bubbles), removed, removed+1)
-				if !slices.Equal(shapes.textBubbles, want) || &shapes.textBubbles[0] != &storage[0] || storage[2] != nil {
+				if !slices.Equal(shapes.bubbles.textBubbles, want) || &shapes.bubbles.textBubbles[0] != &storage[0] || storage[2] != nil {
 					t.Fatal("filtering lost order, replaced storage, or retained removed bubble")
 				}
-				shapes.collectBubbles(nil)
-				shapes.layoutTextBubbles()
+				shapes.bubbles.collectBubbles(nil)
+				shapes.bubbles.layoutTextBubbles()
 				shapes.init()
 				for _, bubble := range storage {
 					if bubble != nil {
@@ -2429,6 +2805,37 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestBubbleLayoutIDWrapsWithoutUsingZero(t *testing.T) {
+	manager := sceneObjects{bubbles: bubbleLayout{nextTextBubbleLayoutID: ^uint64(0)}}
+	bubble := &textBubble{}
+	manager.add(bubble)
+	if bubble.layoutID != 1 {
+		t.Fatalf("wrapped layout ID = %d, want 1", bubble.layoutID)
+	}
+}
+
+func TestSceneObjectsRelayoutsChangedBubbleInput(t *testing.T) {
+	mgr := setupCameraTestMgr(t)
+	mgr.zoom = mathf.NewVec2(1, 1)
+	previousScale := engine.WindowScale()
+	engine.SetWindowScale(1)
+	t.Cleanup(func() { engine.SetWindowScale(previousScale) })
+	sprite := newRenderOffsetTestSprite()
+	sprite.spriteState.isVisible = true
+	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
+	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite}, layoutID: 1, panel: &ui.UiSay{}, content: ui.NewSayBubbleContent("hello", ui.StyleSay)}
+	manager := bubbleLayout{textBubbles: []*textBubble{bubble}}
+	manager.layoutTextBubbles()
+	previous := bubble.layout
+	sprite.SetXYpos(80, 60)
+	manager.layoutTextBubbles()
+	if bubble.layout.SameInput(previous) {
+		t.Fatal("moving bubble owner did not refresh cached layout input")
+	}
+}
+
+// Questions and answers.
 
 func TestAskQuestionPlacement(t *testing.T) {
 	tests := []struct {
@@ -2479,58 +2886,6 @@ func TestAskQuestionPlacement(t *testing.T) {
 	}
 }
 
-func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
-	mgr := &bubbleRenderTestUiMgr{
-		askTestUiMgr: installAskTestUiMgr(t),
-		positions:    make(map[pkgengine.Object]mathf.Vec2), sizes: make(map[pkgengine.Object]mathf.Vec2),
-	}
-	pkgengine.UiMgr = mgr
-	originalCamera, originalScale := pkgengine.CameraMgr, engine.WindowScale()
-	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
-	engine.SetWindowScale(1)
-	t.Cleanup(func() { pkgengine.CameraMgr = originalCamera; engine.SetWindowScale(originalScale) })
-	sprite := newRenderOffsetTestSprite()
-	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
-	sprite.spriteState.isVisible = true
-	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true}, panel: ui.NewUiSay(), content: ui.NewSayBubbleContent("first", ui.StyleSay)}
-	manager := sceneObjects{}
-	sprite.spriteState.isVisible = false
-	manager.flushBubbleVisuals([]Shape{bubble})
-	if bubble.hasLayout || !bubble.isDirty || slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
-		t.Fatal("hidden bubble initialized or rendered its layout")
-	}
-	sprite.spriteState.isVisible = true
-	manager.flushBubbleVisuals([]Shape{bubble})
-	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
-		t.Fatalf("text bubble was not rendered: dirty=%v text=%v", bubble.isDirty, mgr.text)
-	}
-	layout := ui.NewSayBubbleLayoutContext(mathf.NewVec2(480, 360)).NewLayout(1, mathf.Vec2{}, mathf.NewVec2(20, 20), ui.NewSayBubbleContent("planned", ui.StyleThink))
-	bubble.setLayout(layout)
-	bubble.onUpdate()
-	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "planned") {
-		t.Fatal("precomputed layout did not replace the visible text")
-	}
-	sprite.spriteState.isVisible = false
-	bubble.markDirty()
-	bubble.onUpdate()
-	if !bubble.isDirty {
-		t.Fatal("hidden bubble consumed its pending visual update")
-	}
-	sprite.spriteState.isVisible = true
-	panel := bubble.panel
-	bubble.panel = nil
-	bubble.markDirty()
-	manager.flushBubbleVisuals([]Shape{bubble})
-	bubble.panel = panel
-	quote := &quoteBubble{bubbleBase: bubbleBase{sprite: sprite, camera: bubble.camera, isDirty: true}, panel: ui.NewUiQuote(), message: "quotation", description: "speaker"}
-	quote.onUpdate()
-	container := mgr.bound[askTestBinding{parent: quote.panel.GetId(), path: "C"}]
-	_, size := quote.getBounds()
-	if mgr.sizes[container] != size.Addf(20) || !slices.Contains(bubbleRenderedTexts(mgr.text), "quotation") || !slices.Contains(bubbleRenderedTexts(mgr.text), "speaker") || quote.isDirty {
-		t.Fatalf("quote layout = size %v, text %v, dirty %v", mgr.sizes[container], mgr.text, quote.isDirty)
-	}
-}
-
 func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	mgr := installAskTestUiMgr(t)
 	originalInput := pkgengine.InputMgr
@@ -2556,44 +2911,6 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	currentScheduler.Join(thread)
 }
 
-func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	original := newCloneLimitSprite(game, "original")
-	originalBubble := original.bubble()
-	originalText := &textBubble{bubbleBase: original.newBubbleBase()}
-	originalBubble.textObj = originalText
-	game.scene.add(originalText)
-
-	clone := createRuntimeClone(&original.SpriteImpl)
-	if clone.components.bubble != nil {
-		t.Fatal("clone inherited an allocated bubble component")
-	}
-	if originalBubble.textObj != originalText {
-		t.Fatal("cloning changed the original bubble")
-	}
-
-	cloneBubble := clone.bubble()
-	if cloneBubble == originalBubble || cloneBubble.sprite != clone {
-		t.Fatal("lazy bubble component is not owned by the clone")
-	}
-	cloneText := &textBubble{bubbleBase: clone.newBubbleBase()}
-	cloneBubble.textObj = cloneText
-	game.scene.add(cloneText)
-
-	clone.Destroy()
-	if cloneBubble.textObj != nil || cloneBubble.quoteObj != nil {
-		t.Fatal("destroy left clone bubble state active")
-	}
-	for _, shape := range game.getAllShapes() {
-		if shape == cloneText {
-			t.Fatal("destroy left the clone bubble in the shape list")
-		}
-	}
-	if originalBubble.textObj != originalText {
-		t.Fatal("destroying the clone changed the original bubble")
-	}
-}
-
 func TestSpriteDialogueDebugModeKeepsPresentationAndAnswer(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	game.debugState.DebugInstr = true
@@ -2614,34 +2931,133 @@ func TestSpriteDialogueDebugModeKeepsPresentationAndAnswer(t *testing.T) {
 	sprite.bubble().stopAll()
 }
 
-func TestBubbleLayoutIDWrapsWithoutUsingZero(t *testing.T) {
-	manager := sceneObjects{bubbleLayout: bubbleLayout{nextTextBubbleLayoutID: ^uint64(0)}}
-	bubble := &textBubble{}
-	manager.add(bubble)
-	if bubble.layoutID != 1 {
-		t.Fatalf("wrapped layout ID = %d, want 1", bubble.layoutID)
+// Monitor and widget fixtures.
+
+type monitorEvalFixture struct {
+	Game
+	score float64
+	unset any
+	calls int
+}
+
+func (g *monitorEvalFixture) Value() float64 {
+	g.calls++
+	return g.score
+}
+
+type monitorPanelSpy struct {
+	visible bool
+	events  []string
+	value   ui.MonitorValue
+	scale   float64
+	pos     mathf.Vec2
+}
+
+func (p *monitorPanelSpy) Render(value ui.MonitorValue) {
+	p.events = append(p.events, "render")
+	p.value = value
+}
+
+func (p *monitorPanelSpy) SetVisible(visible bool) {
+	p.visible = visible
+	if visible {
+		p.events = append(p.events, "show")
+	} else {
+		p.events = append(p.events, "hide")
 	}
 }
 
-func TestSceneObjectsRelayoutsChangedBubbleInput(t *testing.T) {
-	mgr := setupCameraTestMgr(t)
-	mgr.zoom = mathf.NewVec2(1, 1)
-	previousScale := engine.WindowScale()
-	engine.SetWindowScale(1)
-	t.Cleanup(func() { engine.SetWindowScale(previousScale) })
-	sprite := newRenderOffsetTestSprite()
-	sprite.spriteState.isVisible = true
-	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
-	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite}, layoutID: 1, panel: &ui.UiSay{}, content: ui.NewSayBubbleContent("hello", ui.StyleSay)}
-	manager := bubbleLayout{textBubbles: []*textBubble{bubble}}
-	manager.layoutTextBubbles()
-	previous := bubble.layout
-	sprite.SetXYpos(80, 60)
-	manager.layoutTextBubbles()
-	if bubble.layout.SameInput(previous) {
-		t.Fatal("moving bubble owner did not refresh cached layout input")
-	}
+func (p *monitorPanelSpy) UpdateScale(scale float64) {
+	p.events = append(p.events, "scale")
+	p.scale = scale
 }
+
+func (p *monitorPanelSpy) UpdatePos(pos mathf.Vec2) {
+	p.events = append(p.events, "position")
+	p.pos = pos
+}
+
+type SliderMonitorGame struct {
+	Game
+	score float64
+	Dot   sliderMonitorSprite
+}
+
+type sliderMonitorSprite struct {
+	SpriteImpl
+	*SliderMonitorGame
+	score float64
+}
+
+type gameWidgetUiMgr struct {
+	*askTestUiMgr
+	rangeValue float64
+}
+
+func (*gameWidgetUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2 { return mathf.NewVec2(1, 1) }
+
+func (*gameWidgetUiMgr) SetGlobalPosition(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameWidgetUiMgr) SetColor(pkgengine.Object, mathf.Color) {}
+
+func (*gameWidgetUiMgr) SetSize(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameWidgetUiMgr) SetRotation(pkgengine.Object, float64) {}
+
+func (m *gameWidgetUiMgr) SetRange(_ pkgengine.Object, _, _, _, value float64) { m.rangeValue = value }
+
+func (m *gameWidgetUiMgr) GetRangeValue(pkgengine.Object) float64 { return m.rangeValue }
+
+type ListMonitorGame struct {
+	Game
+	items  List
+	values []string
+	Monkey listMonitorSprite
+}
+
+func (g *ListMonitorGame) Current() *List { return &g.items }
+
+type listMonitorSprite struct {
+	SpriteImpl
+	*ListMonitorGame
+	items List
+}
+
+func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
+	binding, _ := bindMonitor(g, target, val, appearance)
+	return binding.read
+}
+
+func testMonitorShape(t *testing.T, fields coreproject.StageShape) coreproject.MonitorShape {
+	t.Helper()
+	shape := coreproject.StageShape{
+		"target": "", "val": "score", "name": "score", "label": "score",
+		"mode": 1.0, "x": 0.0, "y": 0.0, "visible": true,
+	}
+	for key, value := range fields {
+		shape[key] = value
+	}
+	parsed, err := coreproject.ParseMonitorShape(shape)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}
+
+func setupGameWidgetUi(t *testing.T) *gameWidgetUiMgr {
+	t.Helper()
+	base := installAskTestUiMgr(t)
+	previousCamera := pkgengine.CameraMgr
+	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
+	t.Cleanup(func() { pkgengine.CameraMgr = previousCamera })
+	manager := &gameWidgetUiMgr{askTestUiMgr: base}
+	pkgengine.UiMgr = manager
+	return manager
+}
+
+// Monitor values, bindings and refresh.
 
 func TestMonitorEvalPreservesFormatting(t *testing.T) {
 	g := monitorEvalFixture{score: 1.23456789, unset: nil}
@@ -2680,6 +3096,35 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 		if monitorEvalForTest(root, binding[0], binding[1], ui.MonitorAppearanceDefault) != nil {
 			t.Errorf("unexpected binding for %v", binding)
 		}
+	}
+}
+
+func TestMonitorBindingCapabilities(t *testing.T) {
+	game := monitorEvalFixture{score: 1}
+	root := reflect.ValueOf(&game).Elem()
+	for _, appearance := range []ui.MonitorAppearance{ui.MonitorAppearanceDefault, ui.MonitorAppearanceCompatibleLarge} {
+		binding, err := bindMonitor(root, "", "score", appearance)
+		if err != nil || binding.read == nil || binding.write != nil {
+			t.Fatal("display-only monitor gained a writer")
+		}
+	}
+	for _, tt := range []struct {
+		target, name string
+		want         error
+	}{
+		{"", "value", syscall.EINVAL},
+		{"", "Value", syscall.EINVAL},
+		{"", "missing", syscall.ENOENT},
+		{"missing", "score", syscall.ENOENT},
+		{"", "getVar:", syscall.ENOENT},
+	} {
+		binding, err := bindMonitor(root, tt.target, tt.name, ui.MonitorAppearanceSlider)
+		if err != tt.want || binding.read != nil || binding.write != nil {
+			t.Errorf("binding %q/%q: error %v, want %v without partial binding", tt.target, tt.name, err, tt.want)
+		}
+	}
+	if game.calls != 0 {
+		t.Fatal("binding invoked a reporter")
 	}
 }
 
@@ -2757,6 +3202,44 @@ func TestMonitorGetterVisibilityTakesEffectNextRefresh(t *testing.T) {
 	}
 }
 
+func TestMonitorConstructionAndWidgetTransforms(t *testing.T) {
+	manager := setupGameWidgetUi(t)
+	game := &monitorEvalFixture{score: 5}
+	prepared, err := prepareMonitor(coreproject.StageShape{"name": "score", "val": "score", "label": "Score", "target": "", "mode": "slider", "x": 1.0, "y": 2.0, "visible": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := newMonitor(reflect.ValueOf(game).Elem(), prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if monitor.GetName() != "score" || monitor.updateInput == nil {
+		t.Fatalf("monitor=%+v", monitor)
+	}
+	monitor.SetXpos(10)
+	monitor.SetYpos(20)
+	monitor.ChangeYpos(-3)
+	monitor.ChangeXYpos(4, 5)
+	monitor.SetSize(2)
+	monitor.ChangeSize(0.5)
+	if monitor.Xpos() != 14 || monitor.Ypos() != 22 || monitor.Size() != 2.5 || !monitor.isDirty {
+		t.Fatalf("widget transform=%+v", monitor)
+	}
+	monitor.onUpdate(0)
+	if monitor.updateInput() {
+		t.Fatal("unchanged slider reports input")
+	}
+	manager.rangeValue = 42
+	if !monitor.updateInput() || game.score != 42 {
+		t.Fatalf("slider input=%g", game.score)
+	}
+	prepared.style.Appearance = ui.MonitorAppearanceDefault
+	plain, err := newMonitor(reflect.ValueOf(game).Elem(), prepared)
+	if err != nil || plain.updateInput != nil {
+		t.Fatalf("plain monitor=%+v, err=%v", plain, err)
+	}
+}
+
 func TestMonitorAppearance(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -2785,6 +3268,43 @@ func TestMonitorAppearance(t *testing.T) {
 				t.Fatalf("monitorAppearance(%v) = %v, want %v", shape, got, test.want)
 			}
 		})
+	}
+}
+
+func TestParseMonitorModes(t *testing.T) {
+	shape := coreproject.StageShape{"target": "", "val": "score", "name": "score", "label": "score", "x": 0.0, "y": 0.0, "visible": true}
+	for _, mode := range []any{1.0, 2.0, 3.0, 4.0, "slider", "list"} {
+		shape["mode"] = mode
+		if _, err := coreproject.ParseMonitorShape(shape); err != nil {
+			t.Errorf("mode %v: %v", mode, err)
+		}
+	}
+	for _, mode := range []any{nil, true, "unknown"} {
+		shape["mode"] = mode
+		if _, err := coreproject.ParseMonitorShape(shape); err == nil {
+			t.Errorf("accepted invalid mode %v", mode)
+		}
+	}
+}
+
+func TestMonitorColorDefaultsAndOverride(t *testing.T) {
+	for _, test := range []struct {
+		appearance ui.MonitorAppearance
+		want       mathf.Color
+	}{
+		{ui.MonitorAppearanceDefault, mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)},
+		{ui.MonitorAppearanceCompatible, mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)},
+		{ui.MonitorAppearanceList, mathf.NewColorRGBAi(0xff, 0x66, 0x1a, 0xff)},
+	} {
+		for _, invalid := range []any{nil, "invalid color"} {
+			if got := parseMonitorColor(coreproject.StageShape{"color": invalid}, test.appearance); got != test.want {
+				t.Errorf("appearance %v: color = %v, want %v", test.appearance, got, test.want)
+			}
+		}
+		want := mathf.NewColorRGBAi(0x12, 0x34, 0x56, 0xff)
+		if got := parseMonitorColor(coreproject.StageShape{"color": "#123456"}, test.appearance); got != want {
+			t.Errorf("appearance %v: explicit color = %v, want %v", test.appearance, got, want)
+		}
 	}
 }
 
@@ -2895,6 +3415,33 @@ func TestTutorialMonitorFixtures(t *testing.T) {
 	}
 }
 
+func TestSpriteVariableMonitorsPreferLocalThenStage(t *testing.T) {
+	game := &Game{}
+	sprite := &SpriteImpl{g: game, name: "actor"}
+	local := &Monitor{target: "actor", val: "score"}
+	global := &Monitor{target: "", val: "score"}
+	fallback := &Monitor{target: "", val: "lives"}
+	game.scene.items = []Shape{local, global, fallback}
+	sprite.ShowVar("score")
+	if !local.visible || global.visible {
+		t.Fatal("local show changed the shadowed stage monitor")
+	}
+	sprite.HideVar("score")
+	if local.visible {
+		t.Fatal("local monitor remained visible")
+	}
+	sprite.ShowVar("lives")
+	if !fallback.visible {
+		t.Fatal("stage fallback was not shown")
+	}
+	sprite.HideVar("lives")
+	if fallback.visible {
+		t.Fatal("stage fallback remained visible")
+	}
+}
+
+// Slider and list monitors.
+
 func TestMonitorSliderConfig(t *testing.T) {
 	for _, mode := range []any{"slider", float64(3)} {
 		if got := monitorAppearance(testMonitorShape(t, coreproject.StageShape{"mode": mode})); got != ui.MonitorAppearanceSlider {
@@ -2916,27 +3463,6 @@ func TestMonitorSliderConfig(t *testing.T) {
 	} {
 		if got := parseMonitorSlider(tt.config); got != tt.want {
 			t.Errorf("got %+v, want %+v", got, tt.want)
-		}
-	}
-}
-
-func TestMonitorColorDefaultsAndOverride(t *testing.T) {
-	for _, test := range []struct {
-		appearance ui.MonitorAppearance
-		want       mathf.Color
-	}{
-		{ui.MonitorAppearanceDefault, mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)},
-		{ui.MonitorAppearanceCompatible, mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)},
-		{ui.MonitorAppearanceList, mathf.NewColorRGBAi(0xff, 0x66, 0x1a, 0xff)},
-	} {
-		for _, invalid := range []any{nil, "invalid color"} {
-			if got := parseMonitorColor(coreproject.StageShape{"color": invalid}, test.appearance); got != test.want {
-				t.Errorf("appearance %v: color = %v, want %v", test.appearance, got, test.want)
-			}
-		}
-		want := mathf.NewColorRGBAi(0x12, 0x34, 0x56, 0xff)
-		if got := parseMonitorColor(coreproject.StageShape{"color": "#123456"}, test.appearance); got != want {
-			t.Errorf("appearance %v: explicit color = %v, want %v", test.appearance, got, want)
 		}
 	}
 }
@@ -2990,89 +3516,6 @@ func TestMonitorSliderTargetScope(t *testing.T) {
 	binding, err = bindMonitor(root, "", "score", ui.MonitorAppearanceSlider)
 	if err != nil || !binding.write(9) || game.score != 9 || game.Dot.score != 7.5 {
 		t.Fatal("stage slider wrote the wrong scope")
-	}
-}
-
-func TestParseMonitorModes(t *testing.T) {
-	shape := coreproject.StageShape{"target": "", "val": "score", "name": "score", "label": "score", "x": 0.0, "y": 0.0, "visible": true}
-	for _, mode := range []any{1.0, 2.0, 3.0, 4.0, "slider", "list"} {
-		shape["mode"] = mode
-		if _, err := coreproject.ParseMonitorShape(shape); err != nil {
-			t.Errorf("mode %v: %v", mode, err)
-		}
-	}
-	for _, mode := range []any{nil, true, "unknown"} {
-		shape["mode"] = mode
-		if _, err := coreproject.ParseMonitorShape(shape); err == nil {
-			t.Errorf("accepted invalid mode %v", mode)
-		}
-	}
-}
-
-func TestMonitorBindingCapabilities(t *testing.T) {
-	game := monitorEvalFixture{score: 1}
-	root := reflect.ValueOf(&game).Elem()
-	for _, appearance := range []ui.MonitorAppearance{ui.MonitorAppearanceDefault, ui.MonitorAppearanceCompatibleLarge} {
-		binding, err := bindMonitor(root, "", "score", appearance)
-		if err != nil || binding.read == nil || binding.write != nil {
-			t.Fatal("display-only monitor gained a writer")
-		}
-	}
-	for _, tt := range []struct {
-		target, name string
-		want         error
-	}{
-		{"", "value", syscall.EINVAL},
-		{"", "Value", syscall.EINVAL},
-		{"", "missing", syscall.ENOENT},
-		{"missing", "score", syscall.ENOENT},
-		{"", "getVar:", syscall.ENOENT},
-	} {
-		binding, err := bindMonitor(root, tt.target, tt.name, ui.MonitorAppearanceSlider)
-		if err != tt.want || binding.read != nil || binding.write != nil {
-			t.Errorf("binding %q/%q: error %v, want %v without partial binding", tt.target, tt.name, err, tt.want)
-		}
-	}
-	if game.calls != 0 {
-		t.Fatal("binding invoked a reporter")
-	}
-}
-
-func TestMonitorConstructionAndWidgetTransforms(t *testing.T) {
-	manager := setupGameWidgetUi(t)
-	game := &monitorEvalFixture{score: 5}
-	prepared, err := prepareMonitor(coreproject.StageShape{"name": "score", "val": "score", "label": "Score", "target": "", "mode": "slider", "x": 1.0, "y": 2.0, "visible": true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	monitor, err := newMonitor(reflect.ValueOf(game).Elem(), prepared)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if monitor.GetName() != "score" || monitor.updateInput == nil {
-		t.Fatalf("monitor=%+v", monitor)
-	}
-	monitor.SetXpos(10)
-	monitor.SetYpos(20)
-	monitor.ChangeYpos(-3)
-	monitor.ChangeXYpos(4, 5)
-	monitor.SetSize(2)
-	monitor.ChangeSize(0.5)
-	if monitor.Xpos() != 14 || monitor.Ypos() != 22 || monitor.Size() != 2.5 || !monitor.isDirty {
-		t.Fatalf("widget transform=%+v", monitor)
-	}
-	monitor.onUpdate(0)
-	if monitor.updateInput() {
-		t.Fatal("unchanged slider reports input")
-	}
-	manager.rangeValue = 42
-	if !monitor.updateInput() || game.score != 42 {
-		t.Fatalf("slider input=%g", game.score)
-	}
-	prepared.style.Appearance = ui.MonitorAppearanceDefault
-	plain, err := newMonitor(reflect.ValueOf(game).Elem(), prepared)
-	if err != nil || plain.updateInput != nil {
-		t.Fatalf("plain monitor=%+v, err=%v", plain, err)
 	}
 }
 
@@ -3204,413 +3647,4 @@ func TestListMonitorVisibility(t *testing.T) {
 	if !g.setStageMonitor("Monkey", "getVar:items", true) || !local.Visible() || global.Visible() {
 		t.Fatal("sprite list visibility mismatch")
 	}
-}
-
-func TestSpriteVariableMonitorsPreferLocalThenStage(t *testing.T) {
-	game := &Game{}
-	sprite := &SpriteImpl{g: game, name: "actor"}
-	local := &Monitor{target: "actor", val: "score"}
-	global := &Monitor{target: "", val: "score"}
-	fallback := &Monitor{target: "", val: "lives"}
-	game.scene.items = []Shape{local, global, fallback}
-	sprite.ShowVar("score")
-	if !local.visible || global.visible {
-		t.Fatal("local show changed the shadowed stage monitor")
-	}
-	sprite.HideVar("score")
-	if local.visible {
-		t.Fatal("local monitor remained visible")
-	}
-	sprite.ShowVar("lives")
-	if !fallback.visible {
-		t.Fatal("stage fallback was not shown")
-	}
-	sprite.HideVar("lives")
-	if fallback.visible {
-		t.Fatal("stage fallback remained visible")
-	}
-}
-
-func (mainThreadTestPlatform) IsMainThread() bool {
-	return true
-}
-
-func (*targetLookupSprite) Main() {}
-
-func (a *targetPropertyActor) Health() float64 {
-	return a.Power
-}
-
-func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
-	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
-	m.setups++
-}
-
-func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) pkgengine.Array {
-	m.from, m.to, m.jump = from, to, jump
-	return []float32{1, 2, 3, 4}
-}
-
-func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ pkgengine.Object, effect string, x, y, z, w float64) {
-	if effect == "repeat_scale" {
-		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
-	}
-}
-
-func (m *gameBackdropSpriteMgr) SetPosition(_ pkgengine.Object, pos mathf.Vec2) {
-	m.position = pos
-	m.positionCalls++
-}
-
-// Stage-focused tests execute the same prepare/apply phases as project loading,
-// while retaining the already-live sprite fixtures they supply.
-func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
-	plan := projectPlan{sprites: make(map[string]spritePlan)}
-	var err error
-	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
-	if err != nil {
-		return nil, err
-	}
-	return p.applyStageEntries(gamer, &plan), nil
-}
-
-func (m *gameQueryPhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, mask int64) engine.Array {
-	m.from, m.to, m.mask = pos, size, mask
-	return m.result
-}
-
-func (m *gameQueryPhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, mask int64) engine.Array {
-	m.from, m.radius, m.mask = pos, radius, mask
-	return m.result
-}
-
-func (m *gameQueryPhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignore engine.Array, mask int64, areas, bodies bool) engine.Array {
-	m.from, m.to, m.mask = from, to, mask
-	m.ignore = ignore.([]int64)
-	m.areas, m.bodies = areas, bodies
-	return m.result
-}
-
-func (m *gameDebugDrawMgr) DebugDrawLine(from, to mathf.Vec2, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{from, to})
-	m.colors = append(m.colors, color)
-}
-
-func (m *gameDebugDrawMgr) DebugDrawRect(pos, size mathf.Vec2, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{pos, size})
-	m.colors = append(m.colors, color)
-}
-
-func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{pos, mathf.NewVec2(radius, radius)})
-	m.colors = append(m.colors, color)
-}
-
-func (m *touchFilterSpriteMgr) SetTriggerMask(id pkgengine.Object, mask int64) {
-	m.onMask(id, mask)
-}
-
-func (m *touchFilterSpriteMgr) SetTriggerLayer(id pkgengine.Object, layer int64) {
-	m.onLayer(id, layer)
-}
-
-func (m *tilemapUnloadSceneMgr) ClearPureSprites() { m.clearCalls++ }
-
-func (m *tilemapAPIMgr) PlaceTiles(positions pkgengine.Array, path string) {
-	m.positions = positions.([]float32)
-	m.path = path
-}
-
-func (m *tilemapAPIMgr) PlaceTile(pos mathf.Vec2, path string) {
-	m.pos, m.path, m.erased = pos, path, false
-}
-
-func (m *tilemapAPIMgr) EraseTile(pos mathf.Vec2) { m.pos, m.erased = pos, true }
-
-func (m *tilemapAPIMgr) EraseTileWithLayer(pos mathf.Vec2, layer int64) {
-	m.pos, m.layer, m.erased = pos, layer, true
-}
-
-func (m *tilemapAPIMgr) GetTile(pos mathf.Vec2) string {
-	m.pos = pos
-	if m.erased {
-		return ""
-	}
-	return m.path
-}
-
-func (m *tilemapAPIMgr) GetTileWithLayer(pos mathf.Vec2, layer int64) string {
-	m.layer = layer
-	return m.GetTile(pos)
-}
-
-func (m *tilemapAPIMgr) SetTileWithCollisionInfo(path string, points pkgengine.Array) {
-	m.path, m.collision = path, points.([]float32)
-}
-
-func (m *decoratorSceneMgr) CreateStaticSprite(path string, pos mathf.Vec2, rotation float64, scale mathf.Vec2, layer int64, pivot mathf.Vec2, collider int64, colliderPivot mathf.Vec2, params pkgengine.Array) pkgengine.Object {
-	m.path, m.position, m.rotation, m.scale, m.layer, m.pivot, m.collider, m.colliderPivot, m.params = path, pos, rotation, scale, layer, pivot, collider, colliderPivot, params.([]float64)
-	return 991
-}
-
-func (*decoratorResMgr) GetImageSize(string) mathf.Vec2 { return mathf.NewVec2(20, 10) }
-
-func (m *cameraTestMgr) GetCameraPosition() mathf.Vec2 { return m.position }
-
-func (m *cameraTestMgr) SetCameraPosition(pos mathf.Vec2) {
-	m.position = pos
-	m.positionWrites++
-}
-
-func (m *cameraTestMgr) GetCameraZoom() mathf.Vec2 { return m.zoom }
-
-func (m *cameraTestMgr) SetCameraZoom(zoom mathf.Vec2) { m.zoom = zoom }
-
-func (m *cameraTestMgr) GetGlobalCameraRect() mathf.Rect2 { return m.viewport }
-
-func (m *cameraTestMgr) SetCameraLimit(side, value int64) { m.limits[side] = value }
-
-func (m *cameraTestMgr) SetCameraSmoothing(enabled bool) { m.smoothing = enabled }
-
-func setupImmediateEngineCalls(t testing.TB) {
-	t.Helper()
-	wrap.Init(func(call func()) { call() })
-	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
-}
-
-func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
-	sprite := &targetLookupSprite{}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.spriteState.cloned = cloned
-	return sprite
-}
-
-func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLookupSprite) {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.PhysicsMgr
-	manager := &gameQueryPhysicsMgr{}
-	pkgengine.PhysicsMgr = manager
-	t.Cleanup(func() { pkgengine.PhysicsMgr = previous })
-	game := &Game{}
-	sprite := newTargetLookupSprite(game, "target", false)
-	const id = 89001
-	proxy := &engine.Sprite{Sprite: pkgengine.Sprite{Id: id}, Target: &sprite.SpriteImpl}
-	sprite.runtimeState.proxy = proxy
-	registry := pkgengine.Sprites()
-	old, existed := registry[id]
-	registry[id] = proxy
-	t.Cleanup(func() {
-		if existed {
-			registry[id] = old
-		} else {
-			delete(registry, id)
-		}
-	})
-	return game, manager, sprite
-}
-
-func setupCameraTestMgr(t *testing.T) *cameraTestMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.CameraMgr
-	mgr := &cameraTestMgr{limits: make(map[int64]int64)}
-	pkgengine.CameraMgr = mgr
-	t.Cleanup(func() { pkgengine.CameraMgr = previous })
-	return mgr
-}
-
-func (bubbleLayoutCameraMgr) GetCameraPosition() mathf.Vec2 { return mathf.Vec2{} }
-
-func (bubbleLayoutCameraMgr) GetCameraZoom() mathf.Vec2 { return mathf.NewVec2(1, 1) }
-
-func (bubbleLayoutCameraMgr) GetViewportRect() mathf.Rect2 {
-	return mathf.NewRect2(0, 0, 480, 360)
-}
-
-func (m *askTestUiMgr) CreateNode(path string) pkgengine.Object {
-	id := m.newID()
-	m.created[path]++
-	if path == askScenePath {
-		m.askRoot = id
-	}
-	return id
-}
-
-func (m *askTestUiMgr) BindNode(parent pkgengine.Object, path string) pkgengine.Object {
-	id := m.newID()
-	m.bound[askTestBinding{parent: parent, path: path}] = id
-	return id
-}
-
-func (m *askTestUiMgr) DestroyNode(pkgengine.Object) bool {
-	if m.onDestroy != nil {
-		m.onDestroy()
-	}
-	return true
-}
-
-func (m *askTestUiMgr) SetVisible(id pkgengine.Object, visible bool) {
-	m.visible[id] = visible
-	if id == m.askRoot && visible && m.onAskVisible != nil {
-		onAskVisible := m.onAskVisible
-		m.onAskVisible = nil
-		onAskVisible()
-	}
-}
-
-func (m *askTestUiMgr) SetText(id pkgengine.Object, text string) {
-	m.text[id] = text
-}
-
-func (m *askTestUiMgr) GetText(id pkgengine.Object) string {
-	return m.text[id]
-}
-
-func (m *askTestUiMgr) newID() pkgengine.Object {
-	m.nextID++
-	m.ids[m.nextID] = struct{}{}
-	return m.nextID
-}
-
-func (*bubbleRenderTestUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
-
-func (m *bubbleRenderTestUiMgr) SetPosition(id pkgengine.Object, position mathf.Vec2) {
-	m.positions[id] = position
-}
-
-func (m *bubbleRenderTestUiMgr) SetGlobalPosition(id pkgengine.Object, position mathf.Vec2) {
-	m.positions[id] = position
-}
-
-func (m *bubbleRenderTestUiMgr) SetSize(id pkgengine.Object, size mathf.Vec2) {
-	m.sizes[id] = size
-}
-
-func (askDelayedInputMgr) GetKey(int64) bool { return false }
-
-func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
-	game := &Game{}
-	game.scene.init()
-	sprite := &SpriteImpl{g: game}
-	sprite.spriteState.isVisible = true
-	component := &bubbleComponent{sprite: sprite}
-	sprite.components.bubble = component
-	return game, sprite, component
-}
-
-func newAskTestUiMgr(base pkgengine.IUiMgr) *askTestUiMgr {
-	return &askTestUiMgr{
-		IUiMgr:  base,
-		nextID:  100,
-		ids:     make(map[pkgengine.Object]struct{}),
-		created: make(map[string]int),
-		bound:   make(map[askTestBinding]pkgengine.Object),
-		visible: make(map[pkgengine.Object]bool),
-		text:    make(map[pkgengine.Object]string),
-	}
-}
-
-func installAskTestUiMgr(t *testing.T) *askTestUiMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	original := pkgengine.UiMgr
-	mgr := newAskTestUiMgr(original)
-	pkgengine.UiMgr = mgr
-	t.Cleanup(func() {
-		for id := range mgr.ids {
-			pkgengine.DeleteUINode(id)
-		}
-		pkgengine.UiMgr = original
-	})
-	return mgr
-}
-
-func bubbleRenderedTexts(values map[pkgengine.Object]string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = append(out, value)
-	}
-	return out
-}
-
-func (g *monitorEvalFixture) Value() float64 {
-	g.calls++
-	return g.score
-}
-
-func (p *monitorPanelSpy) Render(value ui.MonitorValue) {
-	p.events = append(p.events, "render")
-	p.value = value
-}
-
-func (p *monitorPanelSpy) SetVisible(visible bool) {
-	p.visible = visible
-	if visible {
-		p.events = append(p.events, "show")
-	} else {
-		p.events = append(p.events, "hide")
-	}
-}
-
-func (p *monitorPanelSpy) UpdateScale(scale float64) {
-	p.events = append(p.events, "scale")
-	p.scale = scale
-}
-
-func (p *monitorPanelSpy) UpdatePos(pos mathf.Vec2) {
-	p.events = append(p.events, "position")
-	p.pos = pos
-}
-
-func (*gameWidgetUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
-
-func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2 { return mathf.NewVec2(1, 1) }
-
-func (*gameWidgetUiMgr) SetGlobalPosition(pkgengine.Object, mathf.Vec2) {}
-
-func (*gameWidgetUiMgr) SetColor(pkgengine.Object, mathf.Color) {}
-
-func (*gameWidgetUiMgr) SetSize(pkgengine.Object, mathf.Vec2) {}
-
-func (*gameWidgetUiMgr) SetRotation(pkgengine.Object, float64) {}
-
-func (m *gameWidgetUiMgr) SetRange(_ pkgengine.Object, _, _, _, value float64) { m.rangeValue = value }
-
-func (m *gameWidgetUiMgr) GetRangeValue(pkgengine.Object) float64 { return m.rangeValue }
-
-func (g *ListMonitorGame) Current() *List { return &g.items }
-
-func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
-	binding, _ := bindMonitor(g, target, val, appearance)
-	return binding.read
-}
-
-func testMonitorShape(t *testing.T, fields coreproject.StageShape) coreproject.MonitorShape {
-	t.Helper()
-	shape := coreproject.StageShape{
-		"target": "", "val": "score", "name": "score", "label": "score",
-		"mode": 1.0, "x": 0.0, "y": 0.0, "visible": true,
-	}
-	for key, value := range fields {
-		shape[key] = value
-	}
-	parsed, err := coreproject.ParseMonitorShape(shape)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return parsed
-}
-
-func setupGameWidgetUi(t *testing.T) *gameWidgetUiMgr {
-	t.Helper()
-	base := installAskTestUiMgr(t)
-	previousCamera := pkgengine.CameraMgr
-	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
-	t.Cleanup(func() { pkgengine.CameraMgr = previousCamera })
-	manager := &gameWidgetUiMgr{askTestUiMgr: base}
-	pkgengine.UiMgr = manager
-	return manager
 }

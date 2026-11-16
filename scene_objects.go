@@ -35,8 +35,8 @@ const (
 const maxClones = 300
 
 type sceneObjects struct {
-	proxyQueue
-	bubbleLayout
+	proxies       proxyQueue
+	bubbles       bubbleLayout
 	layersDirty   bool
 	cloneCount    int
 	pendingClones int
@@ -92,8 +92,8 @@ func (s *sceneObjects) init() {
 	s.named = nil
 	s.items = base.Reset(s.items, 64)
 	s.tempItems = base.Reset(s.tempItems, 50)
-	s.proxyQueue.reset()
-	s.bubbleLayout.reset()
+	s.proxies.reset()
+	s.bubbles.reset()
 }
 
 func (s *sceneObjects) reset() {
@@ -107,14 +107,10 @@ func (s *sceneObjects) add(shape Shape) {
 		if sprite.IsCloned() {
 			s.cloneCount++
 		}
-		s.trackExistingDirtySprite(sprite)
+		s.proxies.trackExistingDirtySprite(sprite)
 	}
-	if bubble, ok := shape.(*textBubble); ok && bubble.layoutID == 0 {
-		s.nextTextBubbleLayoutID++
-		if s.nextTextBubbleLayoutID == 0 {
-			s.nextTextBubbleLayoutID++
-		}
-		bubble.layoutID = s.nextTextBubbleLayoutID
+	if bubble, ok := shape.(*textBubble); ok {
+		s.bubbles.ensureLayoutID(bubble)
 	}
 	s.items = append(s.items, shape)
 	clear(s.named)
@@ -135,7 +131,7 @@ func (s *sceneObjects) addClonedShape(src, clone Shape) {
 	clear(s.named)
 	if sprite, ok := clone.(*SpriteImpl); ok && sprite.IsCloned() {
 		s.cloneCount++
-		s.trackExistingDirtySprite(sprite)
+		s.proxies.trackExistingDirtySprite(sprite)
 	}
 	s.updateRenderLayers()
 }
@@ -164,9 +160,7 @@ func (s *sceneObjects) removeShape(child Shape) {
 		if sprite.IsCloned() {
 			s.cloneCount--
 		}
-		if sprite.runtimeState.proxy != nil {
-			s.destroyItems = append(s.destroyItems, sprite)
-		}
+		s.proxies.queueDestroy(sprite)
 	}
 	s.updateRenderLayers()
 }

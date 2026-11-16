@@ -46,10 +46,24 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+// Shared native loading and subprocess fixtures.
+
 type loadGameFS struct {
 	gameTestFS
 	closeCalls int
 	closeErr   error
+}
+
+func (f *loadGameFS) Open(name string) (io.ReadCloser, error) {
+	if _, ok := f.gameTestFS[name]; !ok {
+		return nil, os.ErrNotExist
+	}
+	return f.gameTestFS.Open(name)
+}
+
+func (f *loadGameFS) Close() error {
+	f.closeCalls++
+	return f.closeErr
 }
 
 type loadGameResMgr struct {
@@ -58,14 +72,23 @@ type loadGameResMgr struct {
 	applyCalls int
 }
 
+func (m *loadGameResMgr) ApplyProjectFonts(string, pkgengine.Array, pkgengine.Array, pkgengine.Array) string {
+	m.applyCalls++
+	return m.fontError
+}
+
 type loadGamePlatformMgr struct {
 	gameTestPlatformMgr
 	title string
 }
 
+func (m *loadGamePlatformMgr) SetWindowTitle(title string) { m.title = title }
+
 type loadGameAudioMgr struct {
 	pkgengine.IAudioMgr
 }
+
+func (*loadGameAudioMgr) CreateAudio() pkgengine.Object { return 1 }
 
 type runtimePanicRecorder struct {
 	pkgengine.IExtMgr
@@ -73,20 +96,46 @@ type runtimePanicRecorder struct {
 	exits    []int64
 }
 
-type preflightLoadGame struct {
-	Game
-	First, Second *preflightLoadSprite
+func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
+	m.messages = append(m.messages, message)
 }
 
-type preflightLoadSprite struct {
-	SpriteImpl
-	*preflightLoadGame
+func (m *runtimePanicRecorder) RequestExit(code int64) {
+	m.exits = append(m.exits, code)
 }
 
-type singleReadProjectFS struct {
-	loadGameFS
-	reads map[string]int
+func setupLoadGameFlags(t *testing.T, args ...string) {
+	t.Helper()
+	previousFlags, previousArgs := flag.CommandLine, os.Args
+	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Args = append([]string{t.Name()}, args...)
+	t.Cleanup(func() {
+		flag.CommandLine, os.Args = previousFlags, previousArgs
+	})
 }
+
+func isolatedGameTest(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("SPX_TEST_NATIVE_GAME_CASE") == t.Name() {
+		return false
+	}
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+t.Name()+"$")
+	// Keep native startup and os.Exit coverage in the same report as the parent.
+	if coverDir := flag.Lookup("test.gocoverdir"); coverDir != nil && coverDir.Value.String() != "" {
+		command.Args = append(command.Args, "-test.gocoverdir="+coverDir.Value.String())
+		command.Env = append(os.Environ(), "GOCOVERDIR="+coverDir.Value.String())
+	} else {
+		command.Env = os.Environ()
+	}
+	command.Env = append(command.Env, "SPX_TEST_NATIVE_GAME_CASE="+t.Name())
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("isolated game test: %v\n%s", err, output)
+	}
+	return true
+}
+
+// Project loading and resource ownership.
 
 func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	files := gameTestFS{
@@ -171,6 +220,40 @@ func TestLoadGameAppliesPhysicsBeforeLoadingSprites(t *testing.T) {
 	}
 }
 
+func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	setupLoadGameFlags(t)
+	setupImmediateEngineCalls(t)
+	var game Game
+	if err := game.loadGame(42, 0); err == nil || !strings.Contains(err.Error(), "unsupported resource") {
+		t.Fatalf("invalid resource=%v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resources := &loadGameResMgr{fontError: "font rejected"}
+	pkgengine.ResMgr = resources
+	if err := game.loadGame(dir, 0); err == nil || !strings.Contains(err.Error(), "font rejected") {
+		t.Fatalf("asset directory load=%v", err)
+	}
+	if !slices.Equal(resources.loadModes, []bool{testFilesystemMode}) {
+		t.Fatalf("resource load modes = %v, want [%v]", resources.loadModes, testFilesystemMode)
+	}
+}
+
+func TestLoadGameValidatesProjectSettings(t *testing.T) {
+	files := gameTestFS{"index.json": `{"physics":true}`}
+	setupLoadGameFlags(t)
+	err := new(Game).loadGame(&loadGameFS{gameTestFS: files}, 0)
+	const want = "project config: autoSetCollisionLayer and physics must have different enabled states"
+	if err == nil || err.Error() != want {
+		t.Fatalf("loadGame error = %v, want %q", err, want)
+	}
+}
+
 func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
 	files := gameTestFS{"index.json": `{}`}
 	game := setupStageLoadTestGame(t, files)
@@ -187,16 +270,6 @@ func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
 	}
 	if game.inputMgr.frame.pending != pending || scheduler.LastThreadID() != 0 {
 		t.Fatal("font failure changed pending input or the game loops")
-	}
-}
-
-func TestLoadGameValidatesProjectSettings(t *testing.T) {
-	files := gameTestFS{"index.json": `{"physics":true}`}
-	setupLoadGameFlags(t)
-	err := new(Game).loadGame(&loadGameFS{gameTestFS: files}, 0)
-	const want = "project config: autoSetCollisionLayer and physics must have different enabled states"
-	if err == nil || err.Error() != want {
-		t.Fatalf("loadGame error = %v, want %q", err, want)
 	}
 }
 
@@ -356,160 +429,33 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 	}
 }
 
-func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
-	// Restore real frame timing after the bubble advances it with its fake clock.
-	t.Cleanup(func() { clock.Start() })
-	synctest.Test(t, func(t *testing.T) {
-		var warnings bytes.Buffer
-		spxlog.SetStdoutOutput(&warnings)
-		recorder := &runtimePanicRecorder{}
-		originalExt := pkgengine.ExtMgr
-		pkgengine.ExtMgr = recorder
-		wrap.Init(engine.WaitMainThread)
-		t.Cleanup(func() {
-			pkgengine.ExtMgr = originalExt
-			spxlog.SetStdoutOutput(os.Stdout)
-		})
-		currentScheduler := setupRuntimeScheduler(t)
-		timedOut := make(chan struct{})
-		returned := false
-		thread := currentScheduler.Create("loop", func(coroutine.Thread) {
-			// Start the frame's timeout clock, then expire it without advancing a frame.
-			if got := Sched(); got != 0 {
-				t.Errorf("initial Sched() = %d, want 0", got)
-			}
-			time.Sleep(schedTimeoutMs*time.Millisecond + time.Nanosecond)
-			close(timedOut)
-			Sched()
-			returned = true
-		})
-		<-timedOut
-		synctest.Wait()
+// Prepared configuration and live fields.
 
-		if got := warnings.String(); !strings.Contains(got, "[WARN] [SPX] "+coreruntime.LoopExecutionTimedOutMsg) {
-			t.Fatalf("timeout warning = %q, want loop timeout warning", got)
-		}
-		if got := warnings.String(); !strings.Contains(got, "goroutine ") || !strings.Contains(got, "spx/v4.Sched(") {
-			t.Fatalf("timeout warning lacks the calling goroutine stack: %q", got)
-		}
-		// Processing the current frame must leave the timeout suspended.
-		currentScheduler.Update()
-		synctest.Wait()
-		if returned || len(recorder.messages) != 0 || len(recorder.exits) != 0 || thread.Stopped() {
-			t.Fatalf("timeout reported before the next frame: returned=%v, messages=%v, exits=%v, stopped=%v",
-				returned, recorder.messages, recorder.exits, thread.Stopped())
-		}
-
-		clock.Update(0, 0)
-		currentScheduler.Update()
-		synctest.Wait()
-		if want := []string{coreruntime.LoopExecutionTimedOutMsg}; !slices.Equal(recorder.messages, want) {
-			t.Errorf("runtime panic messages = %v, want %v", recorder.messages, want)
-		}
-		if want := []int64{1}; !slices.Equal(recorder.exits, want) {
-			t.Errorf("runtime exit codes = %v, want %v", recorder.exits, want)
-		}
-		// Reporting requests exit and cancels this script during its engine call.
-		if returned || !thread.Stopped() {
-			t.Errorf("timeout completion: returned=%v, stopped=%v, want false/true", returned, thread.Stopped())
-		}
-	})
+type preflightLoadGame struct {
+	Game
+	First, Second *preflightLoadSprite
 }
 
-func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
-	if isolatedGameTest(t) {
-		return
-	}
-	setupRuntimeScheduler(t)
-	game := &stageLoadTestGame{}
-	XGot_Game_Main(game, &stageLoadTestSprite{})
-	if engine.GetGame() != &game.Game || game.gamer != game || game.spriteTypes["stageLoadTestSprite"] != reflect.TypeFor[stageLoadTestSprite]() {
-		t.Fatal("main did not bind and initialize the game")
-	}
-	defer func() {
-		if err, ok := recover().(error); !ok || !errors.Is(err, engine.ErrGameAlreadyRunning) {
-			t.Fatalf("second startup panic=%v", err)
+type preflightLoadSprite struct {
+	SpriteImpl
+	*preflightLoadGame
+}
+
+func (*preflightLoadSprite) Main() {}
+
+type singleReadProjectFS struct {
+	loadGameFS
+	reads map[string]int
+}
+
+func (fs *singleReadProjectFS) Open(name string) (io.ReadCloser, error) {
+	if _, exists := fs.gameTestFS[name]; exists {
+		fs.reads[name]++
+		if fs.reads[name] > 1 {
+			return nil, fmt.Errorf("project metadata %q was read more than once", name)
 		}
-	}()
-	XGot_Game_Main(&stageLoadTestGame{})
-}
-
-func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {
-	if isolatedGameTest(t) {
-		return
 	}
-	setupLoadGameFlags(t)
-	setupImmediateEngineCalls(t)
-	var game Game
-	if err := game.loadGame(42, 0); err == nil || !strings.Contains(err.Error(), "unsupported resource") {
-		t.Fatalf("invalid resource=%v", err)
-	}
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	resources := &loadGameResMgr{fontError: "font rejected"}
-	pkgengine.ResMgr = resources
-	if err := game.loadGame(dir, 0); err == nil || !strings.Contains(err.Error(), "font rejected") {
-		t.Fatalf("asset directory load=%v", err)
-	}
-	if !slices.Equal(resources.loadModes, []bool{testFilesystemMode}) {
-		t.Fatalf("resource load modes = %v, want [%v]", resources.loadModes, testFilesystemMode)
-	}
-}
-
-func TestGameCommandLineHelp(t *testing.T) {
-	if isolatedGameTest(t) {
-		return
-	}
-	setupLoadGameFlags(t, "-h")
-	parseCommandLineFlags(&Config{})
-	t.Fatal("help returned instead of terminating successfully")
-}
-
-func TestGameCommandLineVerboseAndErrors(t *testing.T) {
-	for _, arg := range []string{"-v", "-unknown"} {
-		t.Run(arg, func(t *testing.T) {
-			recorder := setupRuntimeFailureRecorder(t)
-			currentScheduler := scheduler
-			engine.SetScheduler(nil)
-			t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
-			originalFlags := defaultDebugFlags.Load()
-			t.Cleanup(func() { defaultDebugFlags.Store(originalFlags); spxlog.SetLevel(spxlog.LevelInfo) })
-			setupLoadGameFlags(t, arg)
-			parseCommandLineFlags(&Config{})
-			if arg == "-v" {
-				if defaultDebugFlags.Load() != uint32(DbgFlagInstr|DbgFlagEvent|DbgFlagPerf) {
-					t.Fatalf("verbose flags=%v", defaultDebugFlags.Load())
-				}
-			} else if len(recorder.messages) != 1 || !slices.Equal(recorder.exits, []int64{1}) {
-				t.Fatalf("parse error messages=%v, exits=%v", recorder.messages, recorder.exits)
-			}
-		})
-	}
-}
-
-func TestGameInitializationReportsClaimedInput(t *testing.T) {
-	recorder := setupRuntimeFailureRecorder(t)
-	currentScheduler := scheduler
-	engine.SetScheduler(nil)
-	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
-	game := &Game{inputSlot: inputSessionSlot{claimed: true}}
-	game.initGame(nil)
-	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], ErrInputSessionActive.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
-		t.Fatalf("claimed input panic=%v, exits=%v", recorder.messages, recorder.exits)
-	}
-}
-
-func TestUnknownTouchTargetReportsRuntimeFailure(t *testing.T) {
-	recorder := setupRuntimeFailureRecorder(t)
-	currentScheduler := scheduler
-	engine.SetScheduler(nil)
-	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
-	info := new(Game).getTouchFilter("missing")
-	if *info != (touchFilter{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
-		t.Fatalf("unknown touch filter=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
-	}
+	return fs.loadGameFS.Open(name)
 }
 
 func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
@@ -635,76 +581,147 @@ func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
 	}
 }
 
-func (f *loadGameFS) Open(name string) (io.ReadCloser, error) {
-	if _, ok := f.gameTestFS[name]; !ok {
-		return nil, os.ErrNotExist
+// Native startup and command-line diagnostics.
+
+func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
 	}
-	return f.gameTestFS.Open(name)
-}
-
-func (f *loadGameFS) Close() error {
-	f.closeCalls++
-	return f.closeErr
-}
-
-func (m *loadGameResMgr) ApplyProjectFonts(string, pkgengine.Array, pkgengine.Array, pkgengine.Array) string {
-	m.applyCalls++
-	return m.fontError
-}
-
-func (m *loadGamePlatformMgr) SetWindowTitle(title string) { m.title = title }
-
-func (*loadGameAudioMgr) CreateAudio() pkgengine.Object { return 1 }
-
-func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
-	m.messages = append(m.messages, message)
-}
-
-func (m *runtimePanicRecorder) RequestExit(code int64) {
-	m.exits = append(m.exits, code)
-}
-
-func (*preflightLoadSprite) Main() {}
-
-func (fs *singleReadProjectFS) Open(name string) (io.ReadCloser, error) {
-	if _, exists := fs.gameTestFS[name]; exists {
-		fs.reads[name]++
-		if fs.reads[name] > 1 {
-			return nil, fmt.Errorf("project metadata %q was read more than once", name)
+	setupRuntimeScheduler(t)
+	game := &stageLoadTestGame{}
+	XGot_Game_Main(game, &stageLoadTestSprite{})
+	if engine.GetGame() != &game.Game || game.gamer != game || game.spriteTypes["stageLoadTestSprite"] != reflect.TypeFor[stageLoadTestSprite]() {
+		t.Fatal("main did not bind and initialize the game")
+	}
+	defer func() {
+		if err, ok := recover().(error); !ok || !errors.Is(err, engine.ErrGameAlreadyRunning) {
+			t.Fatalf("second startup panic=%v", err)
 		}
-	}
-	return fs.loadGameFS.Open(name)
+	}()
+	XGot_Game_Main(&stageLoadTestGame{})
 }
 
-func setupLoadGameFlags(t *testing.T, args ...string) {
-	t.Helper()
-	previousFlags, previousArgs := flag.CommandLine, os.Args
-	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)
-	os.Args = append([]string{t.Name()}, args...)
-	t.Cleanup(func() {
-		flag.CommandLine, os.Args = previousFlags, previousArgs
+func TestGameCommandLineHelp(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	setupLoadGameFlags(t, "-h")
+	parseCommandLineFlags(&Config{})
+	t.Fatal("help returned instead of terminating successfully")
+}
+
+func TestGameCommandLineVerboseAndErrors(t *testing.T) {
+	for _, arg := range []string{"-v", "-unknown"} {
+		t.Run(arg, func(t *testing.T) {
+			recorder := setupRuntimeFailureRecorder(t)
+			currentScheduler := scheduler
+			engine.SetScheduler(nil)
+			t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
+			originalFlags := defaultDebugFlags.Load()
+			t.Cleanup(func() { defaultDebugFlags.Store(originalFlags); spxlog.SetLevel(spxlog.LevelInfo) })
+			setupLoadGameFlags(t, arg)
+			parseCommandLineFlags(&Config{})
+			if arg == "-v" {
+				if defaultDebugFlags.Load() != uint32(DbgFlagInstr|DbgFlagEvent|DbgFlagPerf) {
+					t.Fatalf("verbose flags=%v", defaultDebugFlags.Load())
+				}
+			} else if len(recorder.messages) != 1 || !slices.Equal(recorder.exits, []int64{1}) {
+				t.Fatalf("parse error messages=%v, exits=%v", recorder.messages, recorder.exits)
+			}
+		})
+	}
+}
+
+func TestGameInitializationReportsClaimedInput(t *testing.T) {
+	recorder := setupRuntimeFailureRecorder(t)
+	currentScheduler := scheduler
+	engine.SetScheduler(nil)
+	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
+	game := &Game{inputSlot: inputSessionSlot{claimed: true}}
+	game.initGame(nil)
+	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], ErrInputSessionActive.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("claimed input panic=%v, exits=%v", recorder.messages, recorder.exits)
+	}
+}
+
+func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
+	// Restore real frame timing after the bubble advances it with its fake clock.
+	t.Cleanup(func() { clock.Start() })
+	synctest.Test(t, func(t *testing.T) {
+		var warnings bytes.Buffer
+		spxlog.SetStdoutOutput(&warnings)
+		recorder := &runtimePanicRecorder{}
+		originalExt := pkgengine.ExtMgr
+		pkgengine.ExtMgr = recorder
+		wrap.Init(engine.WaitMainThread)
+		t.Cleanup(func() {
+			pkgengine.ExtMgr = originalExt
+			spxlog.SetStdoutOutput(os.Stdout)
+		})
+		currentScheduler := setupRuntimeScheduler(t)
+		timedOut := make(chan struct{})
+		returned := false
+		thread := currentScheduler.Create("loop", func(coroutine.Thread) {
+			// Start the frame's timeout clock, then expire it without advancing a frame.
+			if got := Sched(); got != 0 {
+				t.Errorf("initial Sched() = %d, want 0", got)
+			}
+			time.Sleep(schedTimeoutMs*time.Millisecond + time.Nanosecond)
+			close(timedOut)
+			Sched()
+			returned = true
+		})
+		<-timedOut
+		synctest.Wait()
+
+		if got := warnings.String(); !strings.Contains(got, "[WARN] [SPX] "+coreruntime.LoopExecutionTimedOutMsg) {
+			t.Fatalf("timeout warning = %q, want loop timeout warning", got)
+		}
+		if got := warnings.String(); !strings.Contains(got, "goroutine ") || !strings.Contains(got, "spx/v4.Sched(") {
+			t.Fatalf("timeout warning lacks the calling goroutine stack: %q", got)
+		}
+		// Processing the current frame must leave the timeout suspended.
+		currentScheduler.Update()
+		synctest.Wait()
+		if returned || len(recorder.messages) != 0 || len(recorder.exits) != 0 || thread.Stopped() {
+			t.Fatalf("timeout reported before the next frame: returned=%v, messages=%v, exits=%v, stopped=%v",
+				returned, recorder.messages, recorder.exits, thread.Stopped())
+		}
+
+		clock.Update(0, 0)
+		currentScheduler.Update()
+		synctest.Wait()
+		if want := []string{coreruntime.LoopExecutionTimedOutMsg}; !slices.Equal(recorder.messages, want) {
+			t.Errorf("runtime panic messages = %v, want %v", recorder.messages, want)
+		}
+		if want := []int64{1}; !slices.Equal(recorder.exits, want) {
+			t.Errorf("runtime exit codes = %v, want %v", recorder.exits, want)
+		}
+		// Reporting requests exit and cancels this script during its engine call.
+		if returned || !thread.Stopped() {
+			t.Errorf("timeout completion: returned=%v, stopped=%v, want false/true", returned, thread.Stopped())
+		}
 	})
 }
 
-func isolatedGameTest(t *testing.T) bool {
-	t.Helper()
-	if os.Getenv("SPX_TEST_NATIVE_GAME_CASE") == t.Name() {
-		return false
+// Touch filter failures.
+
+type touchFilterPanicObserver struct {
+	pkgengine.IExtMgr
+	observe func(string)
+}
+
+func (m *touchFilterPanicObserver) OnRuntimePanic(message string) { m.observe(message) }
+
+func TestUnknownTouchTargetReportsRuntimeFailure(t *testing.T) {
+	recorder := setupRuntimeFailureRecorder(t)
+	currentScheduler := scheduler
+	engine.SetScheduler(nil)
+	t.Cleanup(func() { engine.SetScheduler(currentScheduler) })
+	info := new(Game).getTouchFilter("missing")
+	if *info != (touchFilter{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("unknown touch filter=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
 	}
-	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+t.Name()+"$")
-	// Keep native startup and os.Exit coverage in the same report as the parent.
-	if coverDir := flag.Lookup("test.gocoverdir"); coverDir != nil && coverDir.Value.String() != "" {
-		command.Args = append(command.Args, "-test.gocoverdir="+coverDir.Value.String())
-		command.Env = append(os.Environ(), "GOCOVERDIR="+coverDir.Value.String())
-	} else {
-		command.Env = os.Environ()
-	}
-	command.Env = append(command.Env, "SPX_TEST_NATIVE_GAME_CASE="+t.Name())
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("isolated game test: %v\n%s", err, output)
-	}
-	return true
 }
 
 func TestTouchFilterFailurePreservesMasks(t *testing.T) {
@@ -769,12 +786,7 @@ func TestTouchFilterFailurePreservesMasks(t *testing.T) {
 	}
 }
 
-type touchFilterPanicObserver struct {
-	pkgengine.IExtMgr
-	observe func(string)
-}
-
-func (m *touchFilterPanicObserver) OnRuntimePanic(message string) { m.observe(message) }
+// Resource configuration fixtures.
 
 type configTestResMgr struct {
 	pkgengine.IResMgr
@@ -783,10 +795,44 @@ type configTestResMgr struct {
 	lists map[string]string
 }
 
+func (m *configTestResMgr) HasFile(path string) bool {
+	_, ok := m.files[path]
+	return ok
+}
+
+func (m *configTestResMgr) ReadAllText(path string) string {
+	m.reads[path]++
+	return m.files[path]
+}
+
+func (m *configTestResMgr) ListDirectories(path string) string {
+	if listing, ok := m.lists[path]; ok {
+		return listing
+	}
+	return "[]"
+}
+
 type sourceConfigDir struct {
 	resourceTestDir
 	files   map[string]string
 	openErr error
+}
+
+func (d *sourceConfigDir) Open(name string) (io.ReadCloser, error) {
+	if value, ok := d.files[name]; ok {
+		return io.NopCloser(strings.NewReader(value)), nil
+	}
+	if d.openErr != nil {
+		return nil, d.openErr
+	}
+	return nil, os.ErrNotExist
+}
+
+func (d *sourceConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	if name == "fonts" {
+		return []spxfs.DirEntry{{Name: "Local", IsDir: true}, {Name: "README.txt"}}, nil
+	}
+	return nil, os.ErrNotExist
 }
 
 type closeErrorReader struct {
@@ -794,10 +840,28 @@ type closeErrorReader struct {
 	err error
 }
 
+func (r closeErrorReader) Close() error { return r.err }
+
 type closeErrorDir struct {
 	resourceTestDir
 	err error
 }
+
+func (d *closeErrorDir) Open(string) (io.ReadCloser, error) {
+	return closeErrorReader{err: d.err}, nil
+}
+
+func installConfigTestResMgr(t *testing.T, files map[string]string) *configTestResMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	manager := &configTestResMgr{files: files, reads: make(map[string]int)}
+	previous := pkgengine.ResMgr
+	pkgengine.ResMgr = manager
+	t.Cleanup(func() { pkgengine.ResMgr = previous })
+	return manager
+}
+
+// Resource overlays and configuration reads.
 
 func TestOpenResourcesKeepsEngineReadsBelowPackedOverlay(t *testing.T) {
 	manager := installConfigTestResMgr(t, map[string]string{
@@ -944,6 +1008,70 @@ func TestLoadJSONReadsBareEngineConfigStrictly(t *testing.T) {
 	}
 }
 
+func TestOpenResourcesPreservesStringAssetDirWithoutPathCapability(t *testing.T) {
+	base := &sourceConfigDir{files: map[string]string{"index.json": `{}`}}
+	spxfs.RegisterSchema("projectloader-test", func(string) (spxfs.Dir, error) {
+		return struct{ spxfs.Dir }{base}, nil
+	})
+	const resource = "projectloader-test://assets"
+	opened, err := openGameResources(resource, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.AssetDir != resource {
+		t.Fatalf("asset directory = %q, want original resource %q", opened.AssetDir, resource)
+	}
+	if base.closed != 0 {
+		t.Fatal("loader closed successfully transferred resources")
+	}
+	if err := opened.FS.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if base.closed != 1 {
+		t.Fatalf("source closes = %d, want 1", base.closed)
+	}
+}
+
+func TestOpenResourcesReportsMalformedEngineDirectoryListing(t *testing.T) {
+	manager := installConfigTestResMgr(t, map[string]string{"res://assets/index.json": `{}`})
+	manager.lists = map[string]string{"res://assets/fonts": `{}`}
+	base := &resourceTestDir{path: "res://assets"}
+	if _, err := openGameResources(base, nil); err == nil || !strings.Contains(err.Error(), "scan fonts") {
+		t.Fatalf("directory listing error = %v", err)
+	}
+	if base.closed != 1 {
+		t.Fatalf("source closes = %d, want 1 after failed listing", base.closed)
+	}
+}
+
+func TestOpenResourcesDoesNotReadPreviousProjectAssets(t *testing.T) {
+	manager := installConfigTestResMgr(t, map[string]string{
+		"res://next-assets/index.json": `{}`,
+	})
+	for _, root := range []string{"../assets", "res://assets"} {
+		manager.files[root+"/sprites/Hero/index.json"] = `{"costumes":[{"path":"old.png"}]}`
+		manager.files[root+"/fonts/Local/local.ttf"] = "old-font"
+	}
+	opened, err := openGameResources(&resourceTestDir{path: "res://next-assets"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.FS.Close()
+	if _, err := coreproject.LoadSpriteConfig(opened.FS, "Hero"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("missing sprite error = %v, want ErrNotExist without previous project fallback", err)
+	}
+	if err := spxfs.VerifyFile(opened.FS, "fonts/Local/local.ttf"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("missing font error = %v, want ErrNotExist without previous project fallback", err)
+	}
+	for file := range manager.reads {
+		if file != "res://next-assets/index.json" {
+			t.Fatalf("read %q from the previous project", file)
+		}
+	}
+}
+
+// Font discovery and file verification.
+
 func TestOpenResourcesPreservesNativeAndWebFontSources(t *testing.T) {
 	for _, test := range []struct {
 		name, root, engineFile string
@@ -1017,42 +1145,6 @@ func TestEngineFontVerificationDoesNotFallBackToSource(t *testing.T) {
 	}
 }
 
-func TestOpenResourcesPreservesStringAssetDirWithoutPathCapability(t *testing.T) {
-	base := &sourceConfigDir{files: map[string]string{"index.json": `{}`}}
-	spxfs.RegisterSchema("projectloader-test", func(string) (spxfs.Dir, error) {
-		return struct{ spxfs.Dir }{base}, nil
-	})
-	const resource = "projectloader-test://assets"
-	opened, err := openGameResources(resource, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if opened.AssetDir != resource {
-		t.Fatalf("asset directory = %q, want original resource %q", opened.AssetDir, resource)
-	}
-	if base.closed != 0 {
-		t.Fatal("loader closed successfully transferred resources")
-	}
-	if err := opened.FS.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if base.closed != 1 {
-		t.Fatalf("source closes = %d, want 1", base.closed)
-	}
-}
-
-func TestOpenResourcesReportsMalformedEngineDirectoryListing(t *testing.T) {
-	manager := installConfigTestResMgr(t, map[string]string{"res://assets/index.json": `{}`})
-	manager.lists = map[string]string{"res://assets/fonts": `{}`}
-	base := &resourceTestDir{path: "res://assets"}
-	if _, err := openGameResources(base, nil); err == nil || !strings.Contains(err.Error(), "scan fonts") {
-		t.Fatalf("directory listing error = %v", err)
-	}
-	if base.closed != 1 {
-		t.Fatalf("source closes = %d, want 1 after failed listing", base.closed)
-	}
-}
-
 func TestVerifyFileDoesNotMaskSourceCloseErrorWithEngineFallback(t *testing.T) {
 	installConfigTestResMgr(t, map[string]string{"res://assets/font.ttf": "mounted font"})
 	wantErr := errors.New("source close failed")
@@ -1073,80 +1165,4 @@ func TestVerifyFilePreservesSourceOpenErrorWhenEngineFileMissing(t *testing.T) {
 	if len(manager.reads) != 0 {
 		t.Fatalf("binary verification read through text bridge: %v", manager.reads)
 	}
-}
-
-func TestOpenResourcesDoesNotReadPreviousProjectAssets(t *testing.T) {
-	manager := installConfigTestResMgr(t, map[string]string{
-		"res://next-assets/index.json": `{}`,
-	})
-	for _, root := range []string{"../assets", "res://assets"} {
-		manager.files[root+"/sprites/Hero/index.json"] = `{"costumes":[{"path":"old.png"}]}`
-		manager.files[root+"/fonts/Local/local.ttf"] = "old-font"
-	}
-	opened, err := openGameResources(&resourceTestDir{path: "res://next-assets"}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer opened.FS.Close()
-	if _, err := coreproject.LoadSpriteConfig(opened.FS, "Hero"); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("missing sprite error = %v, want ErrNotExist without previous project fallback", err)
-	}
-	if err := spxfs.VerifyFile(opened.FS, "fonts/Local/local.ttf"); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("missing font error = %v, want ErrNotExist without previous project fallback", err)
-	}
-	for file := range manager.reads {
-		if file != "res://next-assets/index.json" {
-			t.Fatalf("read %q from the previous project", file)
-		}
-	}
-}
-
-func (m *configTestResMgr) HasFile(path string) bool {
-	_, ok := m.files[path]
-	return ok
-}
-
-func (m *configTestResMgr) ReadAllText(path string) string {
-	m.reads[path]++
-	return m.files[path]
-}
-
-func (m *configTestResMgr) ListDirectories(path string) string {
-	if listing, ok := m.lists[path]; ok {
-		return listing
-	}
-	return "[]"
-}
-
-func (d *sourceConfigDir) Open(name string) (io.ReadCloser, error) {
-	if value, ok := d.files[name]; ok {
-		return io.NopCloser(strings.NewReader(value)), nil
-	}
-	if d.openErr != nil {
-		return nil, d.openErr
-	}
-	return nil, os.ErrNotExist
-}
-
-func (d *sourceConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	if name == "fonts" {
-		return []spxfs.DirEntry{{Name: "Local", IsDir: true}, {Name: "README.txt"}}, nil
-	}
-	return nil, os.ErrNotExist
-}
-
-func (r closeErrorReader) Close() error { return r.err }
-
-func (d *closeErrorDir) Open(string) (io.ReadCloser, error) {
-	return closeErrorReader{err: d.err}, nil
-}
-
-func installConfigTestResMgr(t *testing.T, files map[string]string) *configTestResMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	manager := &configTestResMgr{files: files, reads: make(map[string]int)}
-	previous := pkgengine.ResMgr
-	pkgengine.ResMgr = manager
-	t.Cleanup(func() { pkgengine.ResMgr = previous })
-	return manager
 }

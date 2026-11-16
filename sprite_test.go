@@ -25,60 +25,7 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type shiftedSprite struct {
-	value int
-	SpriteImpl
-}
-
-type spriteWithoutImplementation struct{ Sprite }
-
-type layoutExtraBaseSprite struct {
-	SpriteImpl
-	owner *Game
-	Extra SpriteImpl
-	value int
-}
-
-type colliderSpy struct {
-	wrap.SpriteMgrImpl
-	clearedShapes         []bool
-	collisionCenter       mathf.Vec2
-	collisionPoints       []float32
-	collisionEnabled      []bool
-	collisionLayer        int64
-	collisionMask         int64
-	collisionFilterWrites int
-	triggerCenter         mathf.Vec2
-	triggerPoints         []float32
-	triggerEnabled        []bool
-	triggerLayer          int64
-	triggerMask           int64
-	triggerLayerWrites    int
-	triggerMaskWrites     int
-	physicsWrites         int
-	rectCalls             int
-	rectCenter            mathf.Vec2
-	rectSize              mathf.Vec2
-	rectIsTrigger         bool
-}
-
-type spritePhysicsAPIManager struct {
-	colliderSpy
-	velocity, impulse mathf.Vec2
-	gravity           float64
-	floor             bool
-	circleRadius      float64
-	capsuleSize       mathf.Vec2
-	shapeCenter       mathf.Vec2
-	shapeTrigger      bool
-}
-
-type fakeEdgePhysicsMgr struct {
-	stageTouching  int64
-	cameraTouching int64
-	stageNearest   int64
-	cameraNearest  int64
-}
+// Sprite identity, lifecycle, and type layout.
 
 func TestSpriteInitFromSelfPreservesStageCloneFamily(t *testing.T) {
 	template := &SpriteImpl{}
@@ -231,6 +178,26 @@ func TestSpriteTypeKeepsFirstImplementation(t *testing.T) {
 		t.Fatal("cloning did not invoke InitFrom for both SpriteImpl fields")
 	}
 }
+
+type shiftedSprite struct {
+	value int
+	SpriteImpl
+}
+
+func (*shiftedSprite) Main() {}
+
+type spriteWithoutImplementation struct{ Sprite }
+
+type layoutExtraBaseSprite struct {
+	SpriteImpl
+	owner *Game
+	Extra SpriteImpl
+	value int
+}
+
+func (*layoutExtraBaseSprite) Main() {}
+
+// Motion, headings, and target resolution.
 
 func TestMotionInputsTreatNaNAsZero(t *testing.T) {
 	tests := []struct {
@@ -604,160 +571,6 @@ func TestSpriteStepToRandomUsesRandomPositionTarget(t *testing.T) {
 	}
 }
 
-func TestFixWorldRange(t *testing.T) {
-	tests := []struct {
-		name           string
-		width, height  int
-		scale          float64
-		heading        Direction
-		startX, startY float64
-		x, y           float64
-		wantX, wantY   float64
-	}{
-		{
-			name:  "oversized stays centered",
-			width: 480, height: 360, scale: 3,
-			startY: 45, y: 45,
-			wantY: 45,
-		},
-		{
-			name:  "normal sprite is fenced",
-			width: 100, height: 80, scale: 1, heading: 90,
-			x: 500, y: 300,
-			wantX: 275, wantY: 205,
-		},
-		{
-			name:  "oversized is fenced when fully outside",
-			width: 480, height: 360, scale: 3,
-			startY: 45, x: 1000, y: 45, heading: 90,
-			wantX: 945, wantY: 45,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sprite := newTestTransformSprite(tt.startX, tt.startY)
-			sprite.g.displayState.WorldWidth = 480
-			sprite.g.displayState.WorldHeight = 360
-			sprite.g.displayState.MinWorldX = -240
-			sprite.g.displayState.MinWorldY = -180
-			sprite.costumes = []*costume{{
-				atlas: true,
-				frame: costumeFrame{
-					Width:            tt.width,
-					Height:           tt.height,
-					BitmapResolution: 1,
-					Center:           mathf.NewVec2(float64(tt.width)/2, float64(tt.height)/2),
-				},
-			}}
-			sprite.costumeIndex = 0
-			sprite.runtimeState.scale = tt.scale
-			sprite.transform().direction = tt.heading
-
-			x, y := sprite.transform().fixWorldRange(tt.x, tt.y)
-			if x != tt.wantX || y != tt.wantY {
-				t.Fatalf("fixWorldRange(%v, %v) = (%v, %v), want (%v, %v)", tt.x, tt.y, x, y, tt.wantX, tt.wantY)
-			}
-		})
-	}
-}
-
-func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T) {
-	sprite := newTestTransformSprite(-186, 0)
-	sprite.g.displayState.WorldWidth = 480
-	sprite.g.displayState.WorldHeight = 360
-	sprite.g.displayState.MinWorldX = -240
-	sprite.g.displayState.MinWorldY = -180
-	sprite.visualObject.costumes = []*costume{{
-		atlas: true,
-		frame: costumeFrame{
-			Width:            55,
-			Height:           54,
-			BitmapResolution: 2,
-			Center:           mathf.NewVec2(52, 89),
-		},
-	}}
-	sprite.visualObject.costumeIndex = 0
-	sprite.runtimeState.scale = 1
-	sprite.runtimeState.proxy = &engine.Sprite{}
-	sprite.transform().direction = 90
-	sprite.physics().triggerCollider.Type = collision.ColliderAuto
-	sprite.physics().triggerCollider.Pivot = mathf.NewVec2(0.25, 0)
-	sprite.physics().triggerCollider.Params = []float64{29.5, 29}
-
-	gotX, gotY := sprite.transform().fixWorldRange(1000, 0)
-	if gotX != 253 || gotY != 0 {
-		t.Fatalf("fixWorldRange(1000, 0) = (%v, %v), want (253, 0)", gotX, gotY)
-	}
-}
-
-func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
-	sprite := newTestTransformSprite(0, 0)
-	sprite.visualObject.costumes = []*costume{{
-		atlas: true,
-		frame: costumeFrame{
-			Width:            100,
-			Height:           40,
-			BitmapResolution: 1,
-			Center:           mathf.NewVec2(50, 20),
-		},
-	}}
-	sprite.visualObject.costumeIndex = 0
-	sprite.runtimeState.scale = 1
-	sprite.transform().direction = 0
-
-	got := sprite.fenceBounds()
-	if got == nil {
-		t.Fatal("fenceBounds() = nil")
-	}
-	if !(math.Abs(got.Position.X+20) <= 1e-9 && math.Abs(got.Position.Y+50) <= 1e-9 &&
-		math.Abs(got.Size.X-40) <= 1e-9 && math.Abs(got.Size.Y-100) <= 1e-9) {
-		t.Fatalf("fenceBounds() = %+v, want position (-20, -50), size (40, 100)", *got)
-	}
-}
-
-func TestClampSpriteScaleToMaxScale(t *testing.T) {
-	sprite := newTestTransformSprite(0, 0)
-	sprite.g.displayState.WorldWidth = 480
-	sprite.g.displayState.WorldHeight = 360
-	sprite.visualObject.costumes = []*costume{{
-		atlas: true,
-		frame: costumeFrame{
-			Width:            480,
-			Height:           360,
-			BitmapResolution: 1,
-			Center:           mathf.NewVec2(240, 180),
-		},
-	}}
-	sprite.visualObject.costumeIndex = 0
-
-	got := sprite.transform().clampSpriteScale(3)
-
-	if got != 1.5 {
-		t.Fatalf("clampSpriteScale(3) = %v, want 1.5", got)
-	}
-}
-
-func TestFractionalCostumeFenceUsesLogicalGeometry(t *testing.T) {
-	sprite := newTestTransformSprite(-393, 5)
-	sprite.g.displayState.WorldWidth = 480
-	sprite.g.displayState.WorldHeight = 360
-	sprite.g.displayState.MinWorldX = -240
-	sprite.g.displayState.MinWorldY = -180
-	sprite.visualObject.costumes = []*costume{newCostume(&coreproject.CostumeConfig{
-		ImageWidth: 247.24325, ImageHeight: 476.42829,
-		X: 76.0323911558041, Y: 208.79720845345383,
-		BitmapResolution: 1,
-	})}
-	sprite.visualObject.costumeIndex = 0
-	sprite.runtimeState.scale = 1
-	sprite.transform().direction = 90
-	sprite.transform().changeX(-5)
-	if got := sprite.Xpos(); got != -396 {
-		t.Fatalf("fenced X = %v, want -396", got)
-	}
-}
-
 func TestNormalizeDirection(t *testing.T) {
 	for _, tt := range []struct {
 		input, want float64
@@ -1056,51 +869,6 @@ func TestSpriteMotionOverloadsKeepTargetAndOptionSemantics(t *testing.T) {
 	}
 }
 
-func TestTransformComponentScaleFallbacksAndTinyStage(t *testing.T) {
-	sprite := newTestTransformSprite(0, 0)
-	transform := sprite.transform()
-	if got := transform.clampSpriteScale(3); got != 3 {
-		t.Fatalf("unconfigured sprite scale = %v, want 3", got)
-	}
-	sprite.costumes = []*costume{newCostumeWithSize(0, 0)}
-	if got := transform.clampSpriteScale(3); got != 3 {
-		t.Fatalf("empty costume scale = %v, want 3", got)
-	}
-	sprite.costumes = []*costume{newCostumeWithSize(10, 10)}
-	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 1, 1
-	if got := transform.clampSpriteScale(3); got != 0.5 {
-		t.Fatalf("tiny stage scale = %v, want minimum visible scale 0.5", got)
-	}
-	transform.setSize(-2)
-	if sprite.runtimeState.scale != 0.5 {
-		t.Fatalf("negative size = %v, want clamped visible size 0.5", sprite.runtimeState.scale)
-	}
-}
-
-func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T) {
-	sprite := newTestTransformSprite(0, 0)
-	sprite.runtimeState.scale = 1
-	sprite.costumes = []*costume{newCostumeWithSize(20, 20)}
-	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 100, 100
-	sprite.g.displayState.MinWorldX, sprite.g.displayState.MinWorldY = -50, -50
-	transform := sprite.transform()
-	if x, y := transform.fixWorldRange(0, -100); x != 0 || y != -50 {
-		t.Fatalf("bottom fenced position = (%v, %v), want (0, -50)", x, y)
-	}
-	transform.direction = 35
-	if got := transform.headingToPosition(0, 0); got != 35 {
-		t.Fatalf("direction to current position = %v, want 35", got)
-	}
-	sprite.g.inputMgr.mousePos = mathf.NewVec2(0, 10)
-	if got := transform.directionToTarget(Mouse); !(math.Abs(got) <= 1e-9) {
-		t.Fatalf("direction to mouse above sprite = %v, want 0", got)
-	}
-	transform.bounceOffEdge(edgeAreaStage)
-	if transform.direction != 35 {
-		t.Fatal("sprite away from edges changed its heading")
-	}
-}
-
 func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
 	t.Cleanup(clock.ClearTimers)
 	currentScheduler := setupRuntimeScheduler(t)
@@ -1156,6 +924,209 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	}
 	scheduler.Join(thread)
 }
+
+// Scale limits and stage fencing.
+
+func TestFixWorldRange(t *testing.T) {
+	tests := []struct {
+		name           string
+		width, height  int
+		scale          float64
+		heading        Direction
+		startX, startY float64
+		x, y           float64
+		wantX, wantY   float64
+	}{
+		{
+			name:  "oversized stays centered",
+			width: 480, height: 360, scale: 3,
+			startY: 45, y: 45,
+			wantY: 45,
+		},
+		{
+			name:  "normal sprite is fenced",
+			width: 100, height: 80, scale: 1, heading: 90,
+			x: 500, y: 300,
+			wantX: 275, wantY: 205,
+		},
+		{
+			name:  "oversized is fenced when fully outside",
+			width: 480, height: 360, scale: 3,
+			startY: 45, x: 1000, y: 45, heading: 90,
+			wantX: 945, wantY: 45,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite := newTestTransformSprite(tt.startX, tt.startY)
+			sprite.g.displayState.WorldWidth = 480
+			sprite.g.displayState.WorldHeight = 360
+			sprite.g.displayState.MinWorldX = -240
+			sprite.g.displayState.MinWorldY = -180
+			sprite.costumes = []*costume{{
+				atlas: true,
+				frame: costumeFrame{
+					Width:            tt.width,
+					Height:           tt.height,
+					BitmapResolution: 1,
+					Center:           mathf.NewVec2(float64(tt.width)/2, float64(tt.height)/2),
+				},
+			}}
+			sprite.costumeIndex = 0
+			sprite.runtimeState.scale = tt.scale
+			sprite.transform().direction = tt.heading
+
+			x, y := sprite.transform().fixWorldRange(tt.x, tt.y)
+			if x != tt.wantX || y != tt.wantY {
+				t.Fatalf("fixWorldRange(%v, %v) = (%v, %v), want (%v, %v)", tt.x, tt.y, x, y, tt.wantX, tt.wantY)
+			}
+		})
+	}
+}
+
+func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T) {
+	sprite := newTestTransformSprite(-186, 0)
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.g.displayState.MinWorldX = -240
+	sprite.g.displayState.MinWorldY = -180
+	sprite.visualObject.costumes = []*costume{{
+		atlas: true,
+		frame: costumeFrame{
+			Width:            55,
+			Height:           54,
+			BitmapResolution: 2,
+			Center:           mathf.NewVec2(52, 89),
+		},
+	}}
+	sprite.visualObject.costumeIndex = 0
+	sprite.runtimeState.scale = 1
+	sprite.runtimeState.proxy = &engine.Sprite{}
+	sprite.transform().direction = 90
+	sprite.physics().triggerCollider.Type = collision.ColliderAuto
+	sprite.physics().triggerCollider.Pivot = mathf.NewVec2(0.25, 0)
+	sprite.physics().triggerCollider.Params = []float64{29.5, 29}
+
+	gotX, gotY := sprite.transform().fixWorldRange(1000, 0)
+	if gotX != 253 || gotY != 0 {
+		t.Fatalf("fixWorldRange(1000, 0) = (%v, %v), want (253, 0)", gotX, gotY)
+	}
+}
+
+func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.visualObject.costumes = []*costume{{
+		atlas: true,
+		frame: costumeFrame{
+			Width:            100,
+			Height:           40,
+			BitmapResolution: 1,
+			Center:           mathf.NewVec2(50, 20),
+		},
+	}}
+	sprite.visualObject.costumeIndex = 0
+	sprite.runtimeState.scale = 1
+	sprite.transform().direction = 0
+
+	got := sprite.fenceBounds()
+	if got == nil {
+		t.Fatal("fenceBounds() = nil")
+	}
+	if !(math.Abs(got.Position.X+20) <= 1e-9 && math.Abs(got.Position.Y+50) <= 1e-9 &&
+		math.Abs(got.Size.X-40) <= 1e-9 && math.Abs(got.Size.Y-100) <= 1e-9) {
+		t.Fatalf("fenceBounds() = %+v, want position (-20, -50), size (40, 100)", *got)
+	}
+}
+
+func TestClampSpriteScaleToMaxScale(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.visualObject.costumes = []*costume{{
+		atlas: true,
+		frame: costumeFrame{
+			Width:            480,
+			Height:           360,
+			BitmapResolution: 1,
+			Center:           mathf.NewVec2(240, 180),
+		},
+	}}
+	sprite.visualObject.costumeIndex = 0
+
+	got := sprite.transform().clampSpriteScale(3)
+
+	if got != 1.5 {
+		t.Fatalf("clampSpriteScale(3) = %v, want 1.5", got)
+	}
+}
+
+func TestFractionalCostumeFenceUsesLogicalGeometry(t *testing.T) {
+	sprite := newTestTransformSprite(-393, 5)
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.g.displayState.MinWorldX = -240
+	sprite.g.displayState.MinWorldY = -180
+	sprite.visualObject.costumes = []*costume{newCostume(&coreproject.CostumeConfig{
+		ImageWidth: 247.24325, ImageHeight: 476.42829,
+		X: 76.0323911558041, Y: 208.79720845345383,
+		BitmapResolution: 1,
+	})}
+	sprite.visualObject.costumeIndex = 0
+	sprite.runtimeState.scale = 1
+	sprite.transform().direction = 90
+	sprite.transform().changeX(-5)
+	if got := sprite.Xpos(); got != -396 {
+		t.Fatalf("fenced X = %v, want -396", got)
+	}
+}
+
+func TestTransformComponentScaleFallbacksAndTinyStage(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	transform := sprite.transform()
+	if got := transform.clampSpriteScale(3); got != 3 {
+		t.Fatalf("unconfigured sprite scale = %v, want 3", got)
+	}
+	sprite.costumes = []*costume{newCostumeWithSize(0, 0)}
+	if got := transform.clampSpriteScale(3); got != 3 {
+		t.Fatalf("empty costume scale = %v, want 3", got)
+	}
+	sprite.costumes = []*costume{newCostumeWithSize(10, 10)}
+	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 1, 1
+	if got := transform.clampSpriteScale(3); got != 0.5 {
+		t.Fatalf("tiny stage scale = %v, want minimum visible scale 0.5", got)
+	}
+	transform.setSize(-2)
+	if sprite.runtimeState.scale != 0.5 {
+		t.Fatalf("negative size = %v, want clamped visible size 0.5", sprite.runtimeState.scale)
+	}
+}
+
+func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.runtimeState.scale = 1
+	sprite.costumes = []*costume{newCostumeWithSize(20, 20)}
+	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 100, 100
+	sprite.g.displayState.MinWorldX, sprite.g.displayState.MinWorldY = -50, -50
+	transform := sprite.transform()
+	if x, y := transform.fixWorldRange(0, -100); x != 0 || y != -50 {
+		t.Fatalf("bottom fenced position = (%v, %v), want (0, -50)", x, y)
+	}
+	transform.direction = 35
+	if got := transform.headingToPosition(0, 0); got != 35 {
+		t.Fatalf("direction to current position = %v, want 35", got)
+	}
+	sprite.g.inputMgr.mousePos = mathf.NewVec2(0, 10)
+	if got := transform.directionToTarget(Mouse); !(math.Abs(got) <= 1e-9) {
+		t.Fatalf("direction to mouse above sprite = %v, want 0", got)
+	}
+	transform.bounceOffEdge(edgeAreaStage)
+	if transform.direction != 35 {
+		t.Fatal("sprite away from edges changed its heading")
+	}
+}
+
+// Physics configuration, shapes, and touch subscriptions.
 
 func TestPhysicsComponentCloneCopiesFilters(t *testing.T) {
 	sprite, mgr := newColliderTestSprite(t)
@@ -1616,6 +1587,217 @@ func TestPhysicsShapeValidation(t *testing.T) {
 	}
 }
 
+func TestPhysicsComponentRejectsMalformedConfiguredShapes(t *testing.T) {
+	var warnings bytes.Buffer
+	spxlog.SetStdoutOutput(&warnings)
+	t.Cleanup(func() { spxlog.SetStdoutOutput(os.Stdout) })
+
+	sprite := &SpriteImpl{g: &Game{}, name: "invalid"}
+	component := &physicsComponent{}
+	component.initialize(sprite, &coreproject.SpriteConfig{
+		CollisionShapeType: "rect", CollisionShapeParams: []float64{1},
+		TriggerShapeType: "circle", TriggerShapeParams: []float64{1, 2},
+	})
+	if component.bodyCollider.Type != collision.ColliderNone || component.bodyCollider.Params != nil ||
+		component.triggerCollider.Type != collision.ColliderAuto || component.triggerCollider.Params != nil {
+		t.Fatalf("invalid shapes were retained: collision=%+v trigger=%+v", component.bodyCollider, component.triggerCollider)
+	}
+	output := warnings.String()
+	if strings.Count(output, "[WARN]") != 2 ||
+		!strings.Contains(output, "Invalid collider for sprite invalid: invalid rect parameter count: got 1, want 2; using none") ||
+		!strings.Contains(output, "Invalid trigger for sprite invalid: invalid circle parameter count: got 2, want 1; using auto") {
+		t.Fatalf("warnings must report each shape's error and fallback once: %q", output)
+	}
+}
+
+func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
+	sprite := newRenderOffsetTestSprite()
+	sprite.runtimeState.scale = 2
+
+	config := colliderConfig{Pivot: mathf.NewVec2(3, 4), Type: collision.ColliderRect}
+	if got, want := config.shapePivot(sprite), mathf.NewVec2(6, 8); got != want {
+		t.Fatalf("explicit shape pivot = %v, want %v", got, want)
+	}
+
+	config.Type = collision.ColliderAuto
+	if got, want := config.shapePivot(sprite), mathf.NewVec2(80, -40); got != want {
+		t.Fatalf("auto shape pivot = %v, want %v", got, want)
+	}
+}
+
+type colliderSpy struct {
+	wrap.SpriteMgrImpl
+	clearedShapes         []bool
+	collisionCenter       mathf.Vec2
+	collisionPoints       []float32
+	collisionEnabled      []bool
+	collisionLayer        int64
+	collisionMask         int64
+	collisionFilterWrites int
+	triggerCenter         mathf.Vec2
+	triggerPoints         []float32
+	triggerEnabled        []bool
+	triggerLayer          int64
+	triggerMask           int64
+	triggerLayerWrites    int
+	triggerMaskWrites     int
+	physicsWrites         int
+	rectCalls             int
+	rectCenter            mathf.Vec2
+	rectSize              mathf.Vec2
+	rectIsTrigger         bool
+}
+
+func (m *colliderSpy) ClearColliderShape(_ pkgengine.Object, trigger bool) {
+	m.clearedShapes = append(m.clearedShapes, trigger)
+}
+
+func (m *colliderSpy) SetCollisionLayer(_ pkgengine.Object, layer int64) {
+	m.collisionLayer = layer
+	m.collisionFilterWrites++
+}
+
+func (m *colliderSpy) SetCollisionMask(_ pkgengine.Object, mask int64) {
+	m.collisionMask = mask
+	m.collisionFilterWrites++
+}
+
+func (m *colliderSpy) SetTriggerLayer(_ pkgengine.Object, layer int64) {
+	m.triggerLayer = layer
+	m.triggerLayerWrites++
+}
+
+func (m *colliderSpy) SetTriggerMask(_ pkgengine.Object, mask int64) {
+	m.triggerMask = mask
+	m.triggerMaskWrites++
+}
+
+func (m *colliderSpy) SetGravityScale(pkgengine.Object, float64) {
+	m.physicsWrites++
+}
+
+func (m *colliderSpy) SetPhysicsMode(pkgengine.Object, int64) {
+	m.physicsWrites++
+}
+
+func (m *colliderSpy) SetColliderPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
+	m.collisionCenter = center
+	m.collisionPoints = slices.Clone(points.([]float32))
+}
+
+func (m *colliderSpy) SetCollisionEnabled(_ pkgengine.Object, enabled bool) {
+	m.collisionEnabled = append(m.collisionEnabled, enabled)
+}
+
+func (m *colliderSpy) SetTriggerPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
+	m.triggerCenter = center
+	m.triggerPoints = slices.Clone(points.([]float32))
+}
+
+func (m *colliderSpy) SetTriggerEnabled(_ pkgengine.Object, enabled bool) {
+	m.triggerEnabled = append(m.triggerEnabled, enabled)
+}
+
+func (m *colliderSpy) SetTriggerRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
+	m.rectCalls++
+	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, true
+}
+
+func (m *colliderSpy) SetColliderRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
+	m.rectCalls++
+	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, false
+}
+
+type spritePhysicsAPIManager struct {
+	colliderSpy
+	velocity, impulse mathf.Vec2
+	gravity           float64
+	floor             bool
+	circleRadius      float64
+	capsuleSize       mathf.Vec2
+	shapeCenter       mathf.Vec2
+	shapeTrigger      bool
+}
+
+func (m *spritePhysicsAPIManager) GetVelocity(pkgengine.Object) mathf.Vec2 { return m.velocity }
+
+func (m *spritePhysicsAPIManager) SetVelocity(_ pkgengine.Object, v mathf.Vec2) { m.velocity = v }
+
+func (m *spritePhysicsAPIManager) AddImpulse(_ pkgengine.Object, v mathf.Vec2) { m.impulse = v }
+
+func (m *spritePhysicsAPIManager) GetGravity(pkgengine.Object) float64 { return m.gravity }
+
+func (m *spritePhysicsAPIManager) SetGravity(_ pkgengine.Object, v float64) { m.gravity = v }
+
+func (m *spritePhysicsAPIManager) IsOnFloor(pkgengine.Object) bool { return m.floor }
+
+func (m *spritePhysicsAPIManager) GetCollisionLayer(pkgengine.Object) int64 { return m.collisionLayer }
+
+func (m *spritePhysicsAPIManager) GetCollisionMask(pkgengine.Object) int64 { return m.collisionMask }
+
+func (m *spritePhysicsAPIManager) IsCollisionEnabled(pkgengine.Object) bool {
+	return m.collisionEnabled[len(m.collisionEnabled)-1]
+}
+
+func (m *spritePhysicsAPIManager) GetTriggerLayer(pkgengine.Object) int64 { return m.triggerLayer }
+
+func (m *spritePhysicsAPIManager) GetTriggerMask(pkgengine.Object) int64 { return m.triggerMask }
+
+func (m *spritePhysicsAPIManager) IsTriggerEnabled(pkgengine.Object) bool {
+	return m.triggerEnabled[len(m.triggerEnabled)-1]
+}
+
+func (m *spritePhysicsAPIManager) SetColliderCircle(_ pkgengine.Object, c mathf.Vec2, r float64) {
+	m.shapeCenter = c
+	m.circleRadius = r
+	m.shapeTrigger = false
+}
+
+func (m *spritePhysicsAPIManager) SetTriggerCircle(_ pkgengine.Object, c mathf.Vec2, r float64) {
+	m.shapeCenter = c
+	m.circleRadius = r
+	m.shapeTrigger = true
+}
+
+func (m *spritePhysicsAPIManager) SetColliderCapsule(_ pkgengine.Object, c, s mathf.Vec2) {
+	m.shapeCenter = c
+	m.capsuleSize = s
+	m.shapeTrigger = false
+}
+
+func (m *spritePhysicsAPIManager) SetTriggerCapsule(_ pkgengine.Object, c, s mathf.Vec2) {
+	m.shapeCenter = c
+	m.capsuleSize = s
+	m.shapeTrigger = true
+}
+
+func newColliderTestSprite(t *testing.T) (*SpriteImpl, *colliderSpy) {
+	t.Helper()
+	original := pkgengine.SpriteMgr
+	mgr := &colliderSpy{}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = original
+	})
+
+	sprite := newRenderOffsetTestSprite()
+	sprite.runtimeState.scale = 2
+	sprite.runtimeState.proxy = &engine.Sprite{
+		Sprite: pkgengine.Sprite{Id: 1},
+	}
+	return sprite, mgr
+}
+
+func assertColliderParams(t *testing.T, sprite *SpriteImpl, isTrigger bool, wantType ColliderShapeType, want []float64) {
+	t.Helper()
+	typ, got := sprite.ColliderShape(isTrigger)
+	if typ != wantType || !slices.Equal(got, want) {
+		t.Fatalf("shape(trigger=%t) = type %d params %v, want type %d params %v", isTrigger, typ, got, wantType, want)
+	}
+}
+
+// Stage and camera edge sensing.
+
 func TestNormalizeEdgeArea(t *testing.T) {
 	for _, tt := range []struct {
 		area, want string
@@ -1704,28 +1886,99 @@ func TestSpriteBounceOffEdgeWithCameraArea(t *testing.T) {
 	}
 }
 
-func TestPhysicsComponentRejectsMalformedConfiguredShapes(t *testing.T) {
-	var warnings bytes.Buffer
-	spxlog.SetStdoutOutput(&warnings)
-	t.Cleanup(func() { spxlog.SetStdoutOutput(os.Stdout) })
-
-	sprite := &SpriteImpl{g: &Game{}, name: "invalid"}
-	component := &physicsComponent{}
-	component.initialize(sprite, &coreproject.SpriteConfig{
-		CollisionShapeType: "rect", CollisionShapeParams: []float64{1},
-		TriggerShapeType: "circle", TriggerShapeParams: []float64{1, 2},
-	})
-	if component.bodyCollider.Type != collision.ColliderNone || component.bodyCollider.Params != nil ||
-		component.triggerCollider.Type != collision.ColliderAuto || component.triggerCollider.Params != nil {
-		t.Fatalf("invalid shapes were retained: collision=%+v trigger=%+v", component.bodyCollider, component.triggerCollider)
-	}
-	output := warnings.String()
-	if strings.Count(output, "[WARN]") != 2 ||
-		!strings.Contains(output, "Invalid collider for sprite invalid: invalid rect parameter count: got 1, want 2; using none") ||
-		!strings.Contains(output, "Invalid trigger for sprite invalid: invalid circle parameter count: got 2, want 1; using auto") {
-		t.Fatalf("warnings must report each shape's error and fallback once: %q", output)
-	}
+type fakeEdgePhysicsMgr struct {
+	stageTouching  int64
+	cameraTouching int64
+	stageNearest   int64
+	cameraNearest  int64
 }
+
+func (f *fakeEdgePhysicsMgr) Raycast(from, to mathf.Vec2, collisionMask int64) pkgengine.Object {
+	return 0
+}
+
+func (f *fakeEdgePhysicsMgr) CheckCollision(from, to mathf.Vec2, collisionMask int64, collideWithAreas, collideWithBodies bool) bool {
+	return false
+}
+
+func (f *fakeEdgePhysicsMgr) CheckTouchedCameraBoundaries(obj pkgengine.Object) int64 {
+	return f.cameraTouching
+}
+
+func (f *fakeEdgePhysicsMgr) CheckTouchedCameraBoundary(obj pkgengine.Object, boardType int64) bool {
+	return f.cameraTouching&boardType != 0
+}
+
+func (f *fakeEdgePhysicsMgr) CheckNearestTouchedCameraBoundary(obj pkgengine.Object) int64 {
+	return f.cameraNearest
+}
+
+func (f *fakeEdgePhysicsMgr) CheckTouchedStageBoundaries(obj pkgengine.Object) int64 {
+	return f.stageTouching
+}
+
+func (f *fakeEdgePhysicsMgr) CheckTouchedStageBoundary(obj pkgengine.Object, boardType int64) bool {
+	return f.stageTouching&boardType != 0
+}
+
+func (f *fakeEdgePhysicsMgr) CheckNearestTouchedStageBoundary(obj pkgengine.Object) int64 {
+	return f.stageNearest
+}
+
+func (f *fakeEdgePhysicsMgr) SetCollisionSystemType(bool) {}
+
+func (f *fakeEdgePhysicsMgr) SetGlobalGravity(float64) {}
+
+func (f *fakeEdgePhysicsMgr) GetGlobalGravity() float64 {
+	return 0
+}
+
+func (f *fakeEdgePhysicsMgr) SetGlobalFriction(float64) {}
+
+func (f *fakeEdgePhysicsMgr) GetGlobalFriction() float64 {
+	return 0
+}
+
+func (f *fakeEdgePhysicsMgr) SetGlobalAirDrag(float64) {}
+
+func (f *fakeEdgePhysicsMgr) GetGlobalAirDrag() float64 {
+	return 0
+}
+
+func (f *fakeEdgePhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, collisionMask int64) pkgengine.Array {
+	return nil
+}
+
+func (f *fakeEdgePhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, collisionMask int64) pkgengine.Array {
+	return nil
+}
+
+func (f *fakeEdgePhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignoreSprites pkgengine.Array, collisionMask int64, collideWithAreas, collideWithBodies bool) pkgengine.Array {
+	return nil
+}
+
+func installEdgePhysicsMgr(t *testing.T, mgr pkgengine.IPhysicsMgr) {
+	t.Helper()
+
+	setupImmediateEngineCalls(t)
+
+	original := pkgengine.PhysicsMgr
+	pkgengine.PhysicsMgr = mgr
+	t.Cleanup(func() {
+		pkgengine.PhysicsMgr = original
+	})
+}
+
+func newEdgeTestSprite(direction Direction) *SpriteImpl {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.spriteState.isVisible = true
+	sprite.transform().direction = direction
+	sprite.runtimeState.proxy = &engine.Sprite{}
+	sprite.runtimeState.proxy.SetId(42)
+	return sprite
+}
+
+// Costume selection and prepared layouts.
 
 func TestBaseObjGetCostumeAssetPath(t *testing.T) {
 	obj := visualObject{
@@ -1802,74 +2055,6 @@ func TestBaseObjInitializesSingleCostumeSetWithRect(t *testing.T) {
 	}
 }
 
-func TestBaseObjGraphicEffectsAccumulateBeforeProxyExists(t *testing.T) {
-	var obj visualObject
-	obj.changeGraphicEffect(ColorEffect, 25)
-	obj.changeGraphicEffect(ColorEffect, -75)
-	if obj.graphicEffects[ColorEffect] != -50 {
-		t.Fatalf("accumulated color effect = %v, want -50", obj.graphicEffects[ColorEffect])
-	}
-	if got := normalizeEffectValue(ColorEffect, -50); got != 0.75 {
-		t.Fatalf("wrapped color effect = %v, want 0.75", got)
-	}
-	if got := normalizeEffectValue(EffectKind(999), 42); got != 42 {
-		t.Fatalf("unknown effect = %v, want unchanged 42", got)
-	}
-	obj.setMaterialParams("color", 0.75, true)
-	obj.setMaterialParamsVec4("remap", mathf.Vec4{X: 1}, false)
-	if obj.runtimeState.hasShader {
-		t.Fatal("unbound material update created a shader")
-	}
-}
-
-func TestBaseObjGraphicEffectLimits(t *testing.T) {
-	for _, tt := range []struct {
-		name                string
-		kind                EffectKind
-		value, delta        float64
-		wantSet, wantChange float64
-	}{
-		{"brightness below minimum", BrightnessEffect, -125, 5, -100, -95},
-		{"brightness above maximum", BrightnessEffect, 125, -5, 100, 95},
-		{"brightness crosses minimum", BrightnessEffect, -95, -10, -95, -100},
-		{"brightness crosses maximum", BrightnessEffect, 95, 10, 95, 100},
-		{"brightness fractional", BrightnessEffect, -12.5, -0.5, -12.5, -13},
-		{"ghost below minimum", GhostEffect, -25, 5, 0, 5},
-		{"ghost above maximum", GhostEffect, 125, -5, 100, 95},
-		{"ghost crosses minimum", GhostEffect, 5, -10, 5, 0},
-		{"ghost crosses maximum", GhostEffect, 95, 10, 95, 100},
-		{"ghost fractional", GhostEffect, 12.5, 0.5, 12.5, 13},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			var obj visualObject
-			obj.setGraphicEffect(tt.kind, tt.value)
-			if got := obj.graphicEffects[tt.kind]; got != tt.wantSet {
-				t.Errorf("effect after set = %v, want %v", got, tt.wantSet)
-			}
-			obj.changeGraphicEffect(tt.kind, tt.delta)
-			if got := obj.graphicEffects[tt.kind]; got != tt.wantChange {
-				t.Errorf("effect after change = %v, want %v", got, tt.wantChange)
-			}
-		})
-	}
-}
-
-func TestBaseObjOtherGraphicEffectsRemainUnbounded(t *testing.T) {
-	for _, kind := range []EffectKind{ColorEffect, FishEyeEffect, WhirlEffect, PixelateEffect, MosaicEffect} {
-		t.Run(kind.String(), func(t *testing.T) {
-			var obj visualObject
-			obj.setGraphicEffect(kind, 1000)
-			if got := obj.graphicEffects[kind]; got != 1000 {
-				t.Fatalf("effect after set = %v, want 1000", got)
-			}
-			obj.changeGraphicEffect(kind, -2000)
-			if got := obj.graphicEffects[kind]; got != -1000 {
-				t.Fatalf("effect after change = %v, want -1000", got)
-			}
-		})
-	}
-}
-
 func TestInitSpriteCostumesConsumesPreparedLayout(t *testing.T) {
 	assetPath := costumeAssetPath("sprites/hero.png")
 	costumeSizeCache.Store(costumeSizeKey{path: assetPath}, mathf.NewVec2(20, 10))
@@ -1918,6 +2103,121 @@ func TestInitSpriteCostumesConsumesPreparedLayout(t *testing.T) {
 		t.Fatalf("costume index = %d, want 2", obj.costumeIndex)
 	}
 }
+
+func TestSpriteSetCostume(t *testing.T) {
+	for _, tt := range []struct {
+		name                    string
+		costume                 SpriteCostumeName
+		defaultIndex, wantIndex int
+		wantVersion             uint64
+		wantDirty               bool
+	}{
+		{name: "missing name is no-op", costume: "missing", wantIndex: 1},
+		{name: "valid name updates state", costume: "idle", defaultIndex: 1, wantVersion: 1, wantDirty: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite := newTestRenderSprite()
+			sprite.spriteState.defaultCostumeIndex = tt.defaultIndex
+
+			sprite.setCostume(tt.costume)
+
+			if got := sprite.costumeIndex; got != tt.wantIndex {
+				t.Errorf("costumeIndex = %d, want %d", got, tt.wantIndex)
+			}
+			if got := sprite.spriteState.defaultCostumeIndex; got != 0 {
+				t.Errorf("DefaultCostumeIndex = %d, want 0", got)
+			}
+			if got := uint64(sprite.spriteState.dirtyVersion); got != tt.wantVersion {
+				t.Errorf("DirtyVersion = %d, want %d", got, tt.wantVersion)
+			}
+			if got := sprite.runtimeState.isCostumeDirty; got != tt.wantDirty {
+				t.Errorf("IsCostumeDirty = %v, want %v", got, tt.wantDirty)
+			}
+		})
+	}
+}
+
+func TestResolveCostumeIndex(t *testing.T) {
+	sprite := newTestRenderSprite()
+
+	tests := []struct {
+		name    string
+		costume string
+		want    int
+	}{
+		{name: "name", costume: "run", want: 1},
+		{name: "zero", costume: "0", want: -1},
+		{name: "in range", costume: "2", want: 1},
+		{name: "wrap", costume: "3", want: 0},
+		{name: "wrap to zero", costume: "4", want: 1},
+		{name: "negative whole cycle", costume: "-1", want: 0},
+		{name: "negative remainder", costume: "-2", want: -1},
+		{name: "explicit positive sign", costume: "+2", want: 1},
+		{name: "minimum integer wraps subtraction", costume: strconv.Itoa(math.MinInt), want: 1},
+		{name: "maximum integer", costume: strconv.Itoa(math.MaxInt), want: 0},
+		{name: "integer overflow", costume: strconv.Itoa(math.MaxInt) + "0", want: -1},
+		{name: "fraction is not an integer", costume: "2.5", want: -1},
+		{name: "whitespace is not trimmed", costume: " 2 ", want: -1},
+		{name: "compound signs are not accepted", costume: "--2", want: -1},
+		{name: "invalid", costume: "missing", want: -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sprite.ResolveCostumeIndex(tt.costume); got != tt.want {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveCostumeIndexPrefersNames(t *testing.T) {
+	for _, name := range []string{"1", "0", "-2", " 2 ", strconv.Itoa(math.MaxInt) + "0"} {
+		t.Run(name, func(t *testing.T) {
+			sprite := newTestRenderSprite()
+			sprite.costumes[1].name = name
+			if got := sprite.ResolveCostumeIndex(name); got != 1 {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want named costume at 1", name, got)
+			}
+		})
+	}
+}
+
+func TestResolveCostumeIndexWithNoCostumes(t *testing.T) {
+	sprite := &SpriteImpl{}
+
+	for _, tt := range []struct {
+		costume string
+		want    int
+	}{
+		{"3", 2},
+		{"0", -1},
+		{"-2", -3},
+		{strconv.Itoa(math.MinInt), math.MaxInt},
+		{"missing", -1},
+	} {
+		t.Run(tt.costume, func(t *testing.T) {
+			if got := sprite.ResolveCostumeIndex(tt.costume); got != tt.want {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
+			}
+		})
+	}
+}
+
+func newTestRenderSprite() *SpriteImpl {
+	return &SpriteImpl{
+		name: "TestSprite",
+		visualObject: visualObject{
+			costumes: []*costume{
+				{name: "idle"},
+				{name: "run"},
+			},
+			costumeIndex: 1,
+		},
+	}
+}
+
+// Costume frame geometry and render anchors.
 
 func TestToBitmapResolution(t *testing.T) {
 	if got := normalizeBitmapResolution(0); got != defaultBitmapResolution {
@@ -2052,106 +2352,6 @@ func TestCostumeFrameFallback(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("fallback calls = %d, want 2", calls)
-	}
-}
-
-func TestSpriteSetCostume(t *testing.T) {
-	for _, tt := range []struct {
-		name                    string
-		costume                 SpriteCostumeName
-		defaultIndex, wantIndex int
-		wantVersion             uint64
-		wantDirty               bool
-	}{
-		{name: "missing name is no-op", costume: "missing", wantIndex: 1},
-		{name: "valid name updates state", costume: "idle", defaultIndex: 1, wantVersion: 1, wantDirty: true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			sprite := newTestRenderSprite()
-			sprite.spriteState.defaultCostumeIndex = tt.defaultIndex
-
-			sprite.setCostume(tt.costume)
-
-			if got := sprite.costumeIndex; got != tt.wantIndex {
-				t.Errorf("costumeIndex = %d, want %d", got, tt.wantIndex)
-			}
-			if got := sprite.spriteState.defaultCostumeIndex; got != 0 {
-				t.Errorf("DefaultCostumeIndex = %d, want 0", got)
-			}
-			if got := uint64(sprite.spriteState.dirtyVersion); got != tt.wantVersion {
-				t.Errorf("DirtyVersion = %d, want %d", got, tt.wantVersion)
-			}
-			if got := sprite.runtimeState.isCostumeDirty; got != tt.wantDirty {
-				t.Errorf("IsCostumeDirty = %v, want %v", got, tt.wantDirty)
-			}
-		})
-	}
-}
-
-func TestResolveCostumeIndex(t *testing.T) {
-	sprite := newTestRenderSprite()
-
-	tests := []struct {
-		name    string
-		costume string
-		want    int
-	}{
-		{name: "name", costume: "run", want: 1},
-		{name: "zero", costume: "0", want: -1},
-		{name: "in range", costume: "2", want: 1},
-		{name: "wrap", costume: "3", want: 0},
-		{name: "wrap to zero", costume: "4", want: 1},
-		{name: "negative whole cycle", costume: "-1", want: 0},
-		{name: "negative remainder", costume: "-2", want: -1},
-		{name: "explicit positive sign", costume: "+2", want: 1},
-		{name: "minimum integer wraps subtraction", costume: strconv.Itoa(math.MinInt), want: 1},
-		{name: "maximum integer", costume: strconv.Itoa(math.MaxInt), want: 0},
-		{name: "integer overflow", costume: strconv.Itoa(math.MaxInt) + "0", want: -1},
-		{name: "fraction is not an integer", costume: "2.5", want: -1},
-		{name: "whitespace is not trimmed", costume: " 2 ", want: -1},
-		{name: "compound signs are not accepted", costume: "--2", want: -1},
-		{name: "invalid", costume: "missing", want: -1},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := sprite.ResolveCostumeIndex(tt.costume); got != tt.want {
-				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestResolveCostumeIndexPrefersNames(t *testing.T) {
-	for _, name := range []string{"1", "0", "-2", " 2 ", strconv.Itoa(math.MaxInt) + "0"} {
-		t.Run(name, func(t *testing.T) {
-			sprite := newTestRenderSprite()
-			sprite.costumes[1].name = name
-			if got := sprite.ResolveCostumeIndex(name); got != 1 {
-				t.Fatalf("ResolveCostumeIndex(%q) = %d, want named costume at 1", name, got)
-			}
-		})
-	}
-}
-
-func TestResolveCostumeIndexWithNoCostumes(t *testing.T) {
-	sprite := &SpriteImpl{}
-
-	for _, tt := range []struct {
-		costume string
-		want    int
-	}{
-		{"3", 2},
-		{"0", -1},
-		{"-2", -3},
-		{strconv.Itoa(math.MinInt), math.MaxInt},
-		{"missing", -1},
-	} {
-		t.Run(tt.costume, func(t *testing.T) {
-			if got := sprite.ResolveCostumeIndex(tt.costume); got != tt.want {
-				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
-			}
-		})
 	}
 }
 
@@ -2291,18 +2491,73 @@ func TestLegacyLeftRightRotationStyleFlipsNegativeHeading(t *testing.T) {
 	}
 }
 
-func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
-	sprite := newRenderOffsetTestSprite()
-	sprite.runtimeState.scale = 2
+// Graphic effects and rendering controls.
 
-	config := colliderConfig{Pivot: mathf.NewVec2(3, 4), Type: collision.ColliderRect}
-	if got, want := config.shapePivot(sprite), mathf.NewVec2(6, 8); got != want {
-		t.Fatalf("explicit shape pivot = %v, want %v", got, want)
+func TestBaseObjGraphicEffectsAccumulateBeforeProxyExists(t *testing.T) {
+	var obj visualObject
+	obj.changeGraphicEffect(ColorEffect, 25)
+	obj.changeGraphicEffect(ColorEffect, -75)
+	if obj.graphicEffects[ColorEffect] != -50 {
+		t.Fatalf("accumulated color effect = %v, want -50", obj.graphicEffects[ColorEffect])
 	}
+	if got := normalizeEffectValue(ColorEffect, -50); got != 0.75 {
+		t.Fatalf("wrapped color effect = %v, want 0.75", got)
+	}
+	if got := normalizeEffectValue(EffectKind(999), 42); got != 42 {
+		t.Fatalf("unknown effect = %v, want unchanged 42", got)
+	}
+	obj.setMaterialParams("color", 0.75, true)
+	obj.setMaterialParamsVec4("remap", mathf.Vec4{X: 1}, false)
+	if obj.runtimeState.hasShader {
+		t.Fatal("unbound material update created a shader")
+	}
+}
 
-	config.Type = collision.ColliderAuto
-	if got, want := config.shapePivot(sprite), mathf.NewVec2(80, -40); got != want {
-		t.Fatalf("auto shape pivot = %v, want %v", got, want)
+func TestBaseObjGraphicEffectLimits(t *testing.T) {
+	for _, tt := range []struct {
+		name                string
+		kind                EffectKind
+		value, delta        float64
+		wantSet, wantChange float64
+	}{
+		{"brightness below minimum", BrightnessEffect, -125, 5, -100, -95},
+		{"brightness above maximum", BrightnessEffect, 125, -5, 100, 95},
+		{"brightness crosses minimum", BrightnessEffect, -95, -10, -95, -100},
+		{"brightness crosses maximum", BrightnessEffect, 95, 10, 95, 100},
+		{"brightness fractional", BrightnessEffect, -12.5, -0.5, -12.5, -13},
+		{"ghost below minimum", GhostEffect, -25, 5, 0, 5},
+		{"ghost above maximum", GhostEffect, 125, -5, 100, 95},
+		{"ghost crosses minimum", GhostEffect, 5, -10, 5, 0},
+		{"ghost crosses maximum", GhostEffect, 95, 10, 95, 100},
+		{"ghost fractional", GhostEffect, 12.5, 0.5, 12.5, 13},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var obj visualObject
+			obj.setGraphicEffect(tt.kind, tt.value)
+			if got := obj.graphicEffects[tt.kind]; got != tt.wantSet {
+				t.Errorf("effect after set = %v, want %v", got, tt.wantSet)
+			}
+			obj.changeGraphicEffect(tt.kind, tt.delta)
+			if got := obj.graphicEffects[tt.kind]; got != tt.wantChange {
+				t.Errorf("effect after change = %v, want %v", got, tt.wantChange)
+			}
+		})
+	}
+}
+
+func TestBaseObjOtherGraphicEffectsRemainUnbounded(t *testing.T) {
+	for _, kind := range []EffectKind{ColorEffect, FishEyeEffect, WhirlEffect, PixelateEffect, MosaicEffect} {
+		t.Run(kind.String(), func(t *testing.T) {
+			var obj visualObject
+			obj.setGraphicEffect(kind, 1000)
+			if got := obj.graphicEffects[kind]; got != 1000 {
+				t.Fatalf("effect after set = %v, want 1000", got)
+			}
+			obj.changeGraphicEffect(kind, -2000)
+			if got := obj.graphicEffects[kind]; got != -1000 {
+				t.Fatalf("effect after change = %v, want -1000", got)
+			}
+		})
 	}
 }
 
@@ -2367,6 +2622,8 @@ func TestSpriteGhostFadeOutAfterExtendedFadeIn(t *testing.T) {
 		t.Fatalf("sprite remains visible after fade-out: ghost = %v", sprite.graphicEffects[GhostEffect])
 	}
 }
+
+// Animation payload validation and geometry.
 
 func TestAnimationPayloadBoundsError(t *testing.T) {
 	tests := []struct {
@@ -2477,185 +2734,7 @@ func TestAnimationPayloadNormalPreservesDescriptorGeometry(t *testing.T) {
 	}
 }
 
-func (*shiftedSprite) Main() {}
-
-func (*layoutExtraBaseSprite) Main() {}
-
-func (m *colliderSpy) ClearColliderShape(_ pkgengine.Object, trigger bool) {
-	m.clearedShapes = append(m.clearedShapes, trigger)
-}
-
-func (m *colliderSpy) SetCollisionLayer(_ pkgengine.Object, layer int64) {
-	m.collisionLayer = layer
-	m.collisionFilterWrites++
-}
-
-func (m *colliderSpy) SetCollisionMask(_ pkgengine.Object, mask int64) {
-	m.collisionMask = mask
-	m.collisionFilterWrites++
-}
-
-func (m *colliderSpy) SetTriggerLayer(_ pkgengine.Object, layer int64) {
-	m.triggerLayer = layer
-	m.triggerLayerWrites++
-}
-
-func (m *colliderSpy) SetTriggerMask(_ pkgengine.Object, mask int64) {
-	m.triggerMask = mask
-	m.triggerMaskWrites++
-}
-
-func (m *colliderSpy) SetGravityScale(pkgengine.Object, float64) {
-	m.physicsWrites++
-}
-
-func (m *colliderSpy) SetPhysicsMode(pkgengine.Object, int64) {
-	m.physicsWrites++
-}
-
-func (m *colliderSpy) SetColliderPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
-	m.collisionCenter = center
-	m.collisionPoints = slices.Clone(points.([]float32))
-}
-
-func (m *colliderSpy) SetCollisionEnabled(_ pkgengine.Object, enabled bool) {
-	m.collisionEnabled = append(m.collisionEnabled, enabled)
-}
-
-func (m *colliderSpy) SetTriggerPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
-	m.triggerCenter = center
-	m.triggerPoints = slices.Clone(points.([]float32))
-}
-
-func (m *colliderSpy) SetTriggerEnabled(_ pkgengine.Object, enabled bool) {
-	m.triggerEnabled = append(m.triggerEnabled, enabled)
-}
-
-func (m *colliderSpy) SetTriggerRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
-	m.rectCalls++
-	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, true
-}
-
-func (m *colliderSpy) SetColliderRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
-	m.rectCalls++
-	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, false
-}
-
-func (m *spritePhysicsAPIManager) GetVelocity(pkgengine.Object) mathf.Vec2 { return m.velocity }
-
-func (m *spritePhysicsAPIManager) SetVelocity(_ pkgengine.Object, v mathf.Vec2) { m.velocity = v }
-
-func (m *spritePhysicsAPIManager) AddImpulse(_ pkgengine.Object, v mathf.Vec2) { m.impulse = v }
-
-func (m *spritePhysicsAPIManager) GetGravity(pkgengine.Object) float64 { return m.gravity }
-
-func (m *spritePhysicsAPIManager) SetGravity(_ pkgengine.Object, v float64) { m.gravity = v }
-
-func (m *spritePhysicsAPIManager) IsOnFloor(pkgengine.Object) bool { return m.floor }
-
-func (m *spritePhysicsAPIManager) GetCollisionLayer(pkgengine.Object) int64 { return m.collisionLayer }
-
-func (m *spritePhysicsAPIManager) GetCollisionMask(pkgengine.Object) int64 { return m.collisionMask }
-
-func (m *spritePhysicsAPIManager) IsCollisionEnabled(pkgengine.Object) bool {
-	return m.collisionEnabled[len(m.collisionEnabled)-1]
-}
-
-func (m *spritePhysicsAPIManager) GetTriggerLayer(pkgengine.Object) int64 { return m.triggerLayer }
-
-func (m *spritePhysicsAPIManager) GetTriggerMask(pkgengine.Object) int64 { return m.triggerMask }
-
-func (m *spritePhysicsAPIManager) IsTriggerEnabled(pkgengine.Object) bool {
-	return m.triggerEnabled[len(m.triggerEnabled)-1]
-}
-
-func (m *spritePhysicsAPIManager) SetColliderCircle(_ pkgengine.Object, c mathf.Vec2, r float64) {
-	m.shapeCenter = c
-	m.circleRadius = r
-	m.shapeTrigger = false
-}
-
-func (m *spritePhysicsAPIManager) SetTriggerCircle(_ pkgengine.Object, c mathf.Vec2, r float64) {
-	m.shapeCenter = c
-	m.circleRadius = r
-	m.shapeTrigger = true
-}
-
-func (m *spritePhysicsAPIManager) SetColliderCapsule(_ pkgengine.Object, c, s mathf.Vec2) {
-	m.shapeCenter = c
-	m.capsuleSize = s
-	m.shapeTrigger = false
-}
-
-func (m *spritePhysicsAPIManager) SetTriggerCapsule(_ pkgengine.Object, c, s mathf.Vec2) {
-	m.shapeCenter = c
-	m.capsuleSize = s
-	m.shapeTrigger = true
-}
-
-func (f *fakeEdgePhysicsMgr) Raycast(from, to mathf.Vec2, collisionMask int64) pkgengine.Object {
-	return 0
-}
-
-func (f *fakeEdgePhysicsMgr) CheckCollision(from, to mathf.Vec2, collisionMask int64, collideWithAreas, collideWithBodies bool) bool {
-	return false
-}
-
-func (f *fakeEdgePhysicsMgr) CheckTouchedCameraBoundaries(obj pkgengine.Object) int64 {
-	return f.cameraTouching
-}
-
-func (f *fakeEdgePhysicsMgr) CheckTouchedCameraBoundary(obj pkgengine.Object, boardType int64) bool {
-	return f.cameraTouching&boardType != 0
-}
-
-func (f *fakeEdgePhysicsMgr) CheckNearestTouchedCameraBoundary(obj pkgengine.Object) int64 {
-	return f.cameraNearest
-}
-
-func (f *fakeEdgePhysicsMgr) CheckTouchedStageBoundaries(obj pkgengine.Object) int64 {
-	return f.stageTouching
-}
-
-func (f *fakeEdgePhysicsMgr) CheckTouchedStageBoundary(obj pkgengine.Object, boardType int64) bool {
-	return f.stageTouching&boardType != 0
-}
-
-func (f *fakeEdgePhysicsMgr) CheckNearestTouchedStageBoundary(obj pkgengine.Object) int64 {
-	return f.stageNearest
-}
-
-func (f *fakeEdgePhysicsMgr) SetCollisionSystemType(bool) {}
-
-func (f *fakeEdgePhysicsMgr) SetGlobalGravity(float64) {}
-
-func (f *fakeEdgePhysicsMgr) GetGlobalGravity() float64 {
-	return 0
-}
-
-func (f *fakeEdgePhysicsMgr) SetGlobalFriction(float64) {}
-
-func (f *fakeEdgePhysicsMgr) GetGlobalFriction() float64 {
-	return 0
-}
-
-func (f *fakeEdgePhysicsMgr) SetGlobalAirDrag(float64) {}
-
-func (f *fakeEdgePhysicsMgr) GetGlobalAirDrag() float64 {
-	return 0
-}
-
-func (f *fakeEdgePhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, collisionMask int64) pkgengine.Array {
-	return nil
-}
-
-func (f *fakeEdgePhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, collisionMask int64) pkgengine.Array {
-	return nil
-}
-
-func (f *fakeEdgePhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignoreSprites pkgengine.Array, collisionMask int64, collideWithAreas, collideWithBodies bool) pkgengine.Array {
-	return nil
-}
+// Shared fixtures.
 
 func newTestTransformSprite(x, y float64) *SpriteImpl {
 	sprite := &SpriteImpl{
@@ -2670,65 +2749,6 @@ func newTestTransformSprite(x, y float64) *SpriteImpl {
 		AnimBindings:  map[string]string{},
 	})
 	return sprite
-}
-
-func newColliderTestSprite(t *testing.T) (*SpriteImpl, *colliderSpy) {
-	t.Helper()
-	original := pkgengine.SpriteMgr
-	mgr := &colliderSpy{}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() {
-		pkgengine.SpriteMgr = original
-	})
-
-	sprite := newRenderOffsetTestSprite()
-	sprite.runtimeState.scale = 2
-	sprite.runtimeState.proxy = &engine.Sprite{
-		Sprite: pkgengine.Sprite{Id: 1},
-	}
-	return sprite, mgr
-}
-
-func assertColliderParams(t *testing.T, sprite *SpriteImpl, isTrigger bool, wantType ColliderShapeType, want []float64) {
-	t.Helper()
-	typ, got := sprite.ColliderShape(isTrigger)
-	if typ != wantType || !slices.Equal(got, want) {
-		t.Fatalf("shape(trigger=%t) = type %d params %v, want type %d params %v", isTrigger, typ, got, wantType, want)
-	}
-}
-
-func installEdgePhysicsMgr(t *testing.T, mgr pkgengine.IPhysicsMgr) {
-	t.Helper()
-
-	setupImmediateEngineCalls(t)
-
-	original := pkgengine.PhysicsMgr
-	pkgengine.PhysicsMgr = mgr
-	t.Cleanup(func() {
-		pkgengine.PhysicsMgr = original
-	})
-}
-
-func newEdgeTestSprite(direction Direction) *SpriteImpl {
-	sprite := newTestTransformSprite(0, 0)
-	sprite.spriteState.isVisible = true
-	sprite.transform().direction = direction
-	sprite.runtimeState.proxy = &engine.Sprite{}
-	sprite.runtimeState.proxy.SetId(42)
-	return sprite
-}
-
-func newTestRenderSprite() *SpriteImpl {
-	return &SpriteImpl{
-		name: "TestSprite",
-		visualObject: visualObject{
-			costumes: []*costume{
-				{name: "idle"},
-				{name: "run"},
-			},
-			costumeIndex: 1,
-		},
-	}
 }
 
 func newRenderOffsetTestSprite() *SpriteImpl {

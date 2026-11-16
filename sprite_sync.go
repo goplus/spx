@@ -249,7 +249,7 @@ func (p *SpriteImpl) syncProxyForQueryOnMainThread() {
 func (p *SpriteImpl) prepareProxyForQueryOnMainThread() {
 	if p.isDestroyed() || p.runtimeState.proxy == nil {
 		if p.g != nil {
-			p.g.scene.removeDirtySprite(p)
+			p.g.scene.proxies.removeDirtySprite(p)
 		}
 		return
 	}
@@ -262,13 +262,13 @@ func (p *SpriteImpl) prepareProxyForQueryOnMainThread() {
 func (p *SpriteImpl) submitProxyForQueryOnMainThread() {
 	if p.isDestroyed() || p.runtimeState.proxy == nil {
 		if p.g != nil {
-			p.g.scene.removeDirtySprite(p)
+			p.g.scene.proxies.removeDirtySprite(p)
 		}
 		return
 	}
 	if !p.needsProxyUpdate() {
 		if p.g != nil {
-			p.g.scene.removeDirtySprite(p)
+			p.g.scene.proxies.removeDirtySprite(p)
 		}
 		return
 	}
@@ -370,16 +370,16 @@ func (p *SpriteImpl) captureProxyVisual() preparedProxyVisual {
 // Frame Sync.
 // Color queries sample every native scene sprite, so synchronize all queued
 // proxy changes before querying.
-func (p *Game) syncSpriteProxiesForQuery(owner *SpriteImpl) {
-	if len(p.scene.dirtySprites) == 0 &&
+func (s *proxyQueue) syncForQuery(owner *SpriteImpl) {
+	if len(s.dirtySprites) == 0 &&
 		(owner == nil || !owner.needsQueryProxyUpdate()) {
 		return
 	}
 	engine.WaitMainThread(func() {
-		sprites := make([]*SpriteImpl, 0, len(p.scene.dirtySprites)+1)
+		sprites := make([]*SpriteImpl, 0, len(s.dirtySprites)+1)
 		seen := make(map[*SpriteImpl]struct{}, cap(sprites))
 		appendPending := func() {
-			for _, sprite := range p.scene.dirtySprites {
+			for _, sprite := range s.dirtySprites {
 				if _, ok := seen[sprite]; ok {
 					continue
 				}
@@ -409,15 +409,13 @@ func (p *Game) syncSpriteProxiesForQuery(owner *SpriteImpl) {
 }
 
 func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
-	batch := proxyBatch{changes: p.scene.proxyChangeBuffer}
-	p.scene.proxyChangeBuffer = nil
-	defer func() {
-		p.scene.proxyChangeBuffer = base.Reset(batch.changes, 0)
-	}()
+	queue := &p.scene.proxies
+	batch := queue.acquireBatch()
+	defer queue.releaseBatch(&batch)
 	p.syncBuffer.Clear()
-	p.scene.collectProxyChanges(activeShapes, p.syncBuffer, &batch)
+	queue.collectProxyChanges(activeShapes, p.syncBuffer, &batch)
 	p.flushSyncBuffer()
-	p.scene.commitProxyChanges(batch)
+	queue.commitProxyChanges(batch)
 	p.camera.setDirtyFlag(false)
 }
 
@@ -511,6 +509,24 @@ func (s *proxyQueue) reset() {
 	clear(s.dirtySpriteIndex)
 	s.destroyItems = base.Reset(s.destroyItems, 16)
 	s.proxyChangeBuffer = base.Reset(s.proxyChangeBuffer, 0)
+}
+
+func (s *proxyQueue) queueDestroy(sprite *SpriteImpl) {
+	if sprite.runtimeState.proxy != nil {
+		s.destroyItems = append(s.destroyItems, sprite)
+	}
+}
+
+func (s *proxyQueue) acquireBatch() proxyBatch {
+	batch := proxyBatch{changes: s.proxyChangeBuffer}
+	s.proxyChangeBuffer = nil
+	return batch
+}
+
+// releaseBatch returns scratch storage even when collection or submission fails.
+// Deletions remain pending until commitProxyChanges acknowledges them.
+func (s *proxyQueue) releaseBatch(batch *proxyBatch) {
+	s.proxyChangeBuffer = base.Reset(batch.changes, 0)
 }
 
 func (s *proxyQueue) noteProxyDirty(sprite *SpriteImpl) {
@@ -614,7 +630,7 @@ func commitProxyChange(update proxyChange) {
 	if update.destroy {
 		p.runtimeState.proxy = nil
 		if p.g != nil {
-			p.g.scene.removeDirtySprite(p)
+			p.g.scene.proxies.removeDirtySprite(p)
 		}
 		return
 	}
@@ -630,7 +646,7 @@ func commitProxyChange(update proxyChange) {
 		pending.y = 0
 	}
 	if p.g != nil && !p.needsProxyUpdate() {
-		p.g.scene.removeDirtySprite(p)
+		p.g.scene.proxies.removeDirtySprite(p)
 	}
 }
 

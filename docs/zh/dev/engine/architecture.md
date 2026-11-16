@@ -73,7 +73,7 @@ CLI 与 `launchpack` 使用同一个 `RuntimeNames` 命名契约和 `Assets.Vali
 
 旧安装目录没有 bridge 版本元数据，只能断言同目录与选定文件名，不能将其称为已验证的二进制版本一致性。缺少组件的目录可继续向后查找；混合版本的 Engine/PCK 文件名和错误平台 bridge 会被拒绝。旧 CLI 现在也使用普通非符号链接文件检查，不再接受用文件符号链接拼装的安装。
 
-`spriteLayout` 按类型集中记录首个直接 SpriteImpl 字段、生成代码的 owner 槽位、`InitFrom` 调用及用户字段。克隆 hook 的签名只在实际克隆或非空舞台组准备时约束，不影响无需克隆的普通精灵。加载在清零之前验证 owner，查找和克隆复用同一布局；手写精灵可以调整直接基类字段位置，现有浅引用与 List 的 `InitFrom` 行为不变。`core/project.WritableField` 收口对生成器非导出字段的访问，公开 SPX 接口与解释器可见签名不变。
+`spriteTypeInfo` 按类型集中记录首个直接 SpriteImpl 字段、生成代码的 owner 槽位、`InitFrom` 调用及用户字段。克隆 hook 的签名只在实际克隆或非空舞台组准备时约束，不影响无需克隆的普通精灵。加载在清零之前验证 owner，查找和克隆复用同一布局；手写精灵可以调整直接基类字段位置，现有浅引用与 List 的 `InitFrom` 行为不变。`core/project.WritableField` 收口对生成器非导出字段的访问，公开 SPX 接口与解释器可见签名不变。
 
 ### 验证边界
 

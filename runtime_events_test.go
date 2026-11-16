@@ -34,41 +34,106 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type clickThroughSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	hits          map[pkgengine.Object]bool
-	lastIsTrigger map[pkgengine.Object]bool
+// Shared event scheduling and ordering fixtures.
+
+func setupRuntimeEventGame(t *testing.T) (*coroutine.Scheduler, *Game) {
+	t.Helper()
+
+	currentScheduler := setupRuntimeScheduler(t)
+	game := new(Game)
+	game.bindScriptEvents()
+	game.inputMgr.init(game)
+	engine.SetGame(game)
+	t.Cleanup(func() { engine.SetGame(nil) })
+	return currentScheduler, game
 }
 
-type disappearingClickTarget struct {
-	proxy      engine.Sprite
-	proxyReads int
-	clicks     int
+func updateRuntimeEventSchedulerUntil(t *testing.T, currentScheduler *coroutine.Scheduler, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatal("coroutine scheduler did not reach the expected state")
+		}
+		currentScheduler.Update()
+		runtime.Gosched()
+	}
 }
 
-type touchEventSprite struct{ SpriteImpl }
+type eventOrderLog struct {
+	mu      sync.Mutex
+	entries []string
+}
 
-func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
+func (l *eventOrderLog) add(entry string) {
+	l.mu.Lock()
+	l.entries = append(l.entries, entry)
+	l.mu.Unlock()
+}
+
+func (l *eventOrderLog) len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.entries)
+}
+
+func (l *eventOrderLog) reset() {
+	l.mu.Lock()
+	l.entries = l.entries[:0]
+	l.mu.Unlock()
+}
+
+func (l *eventOrderLog) snapshot() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.entries...)
+}
+
+func newEventOrderSprite(game *Game, name string) *SpriteImpl {
+	sprite := &SpriteImpl{name: name, g: game}
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+	return sprite
+}
+
+func setupEventOrderGame(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl, *SpriteImpl) {
+	t.Helper()
+
 	currentScheduler, game := setupRuntimeEventGame(t)
-	started := make(chan struct{})
-	release := make(chan struct{})
-	thread := currentScheduler.Create(game, func(coroutine.Thread) {
-		close(started)
-		<-release
-	})
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("active coroutine did not start")
-	}
+	game.scene.init()
+	setupCaptureTest(t)
 
-	game.Stop(AllOtherScripts)
-	if !thread.Stopped() {
-		t.Fatal("external Stop(AllOtherScripts) did not stop active coroutine")
-	}
-	close(release)
-	currentScheduler.Join(thread)
+	back := newEventOrderSprite(game, "back")
+	front := newEventOrderSprite(game, "front")
+	game.scene.add(back)
+	game.scene.add(front)
+	game.scene.updateRenderLayers()
+	return currentScheduler, game, back, front
 }
+
+func waitForEventOrderEntries(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
+	t.Helper()
+	// Drain once before observing the log; a handler may write its final entry
+	// while its coroutine is still tearing down.
+	currentScheduler.Update()
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, func() bool {
+		return log.len() >= count
+	})
+}
+
+func advanceEventFrame(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
+	t.Helper()
+	clock.Update(0, 0)
+	waitForEventOrderEntries(t, currentScheduler, log, count)
+}
+
+func requireEventOrder(t *testing.T, log *eventOrderLog, want []string) {
+	t.Helper()
+	if got := log.snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+}
+
+// Startup admission and reset boundaries.
 
 func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
@@ -161,6 +226,215 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 	if !game.lifecycle.startDispatched.Load() {
 		t.Fatal("start event was not marked dispatched")
 	}
+}
+
+func TestOnStartIgnoresStaleBootstrapGeneration(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+
+	var game Game
+	game.bindScriptEvents()
+	stale := game.lifecycle.generation()
+	game.lifecycle.reset()
+
+	calls := 0
+	game.OnStart(func() { calls++ })
+	game.handleEvent(&eventStart{generation: stale})
+	currentScheduler.Update()
+	if calls != 0 || game.lifecycle.startDispatched.Load() {
+		t.Fatal("stale start event affected the current lifecycle")
+	}
+
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
+	if calls != 1 {
+		t.Fatalf("current start calls = %d, want 1", calls)
+	}
+}
+
+func TestOnStartWithoutSchedulerDoesNotCrossReset(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	scheduler = nil
+	defer func() { scheduler = currentScheduler }()
+
+	var calls []string
+	game.OnStart(func() {
+		calls = append(calls, "first")
+		game.lifecycle.reset()
+	})
+	game.OnStart(func() { calls = append(calls, "stale") })
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	if want := []string{"first"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("start callbacks after reset = %v, want %v", calls, want)
+	}
+	if game.lifecycle.startDispatched.Load() {
+		t.Fatal("stale OnStart completion reopened the start gate")
+	}
+}
+
+func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+
+	var game Game
+	game.bindScriptEvents()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	game.OnStart(func() {
+		close(entered)
+		<-release
+	})
+	staleCalls := 0
+	game.OnStart(func() { staleCalls++ })
+
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("OnStart did not begin")
+	}
+
+	game.lifecycle.reset()
+	game.scriptEvents.manager.Reset()
+	close(release)
+	currentScheduler.Update()
+	if game.lifecycle.startDispatched.Load() {
+		t.Fatal("stale OnStart completion reopened the start gate")
+	}
+	if staleCalls != 0 {
+		t.Fatalf("stale pending OnStart calls = %d, want 0", staleCalls)
+	}
+
+	calls := 0
+	game.OnStart(func() { calls++ })
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
+	if calls != 1 {
+		t.Fatalf("new lifecycle start calls = %d, want 1", calls)
+	}
+}
+
+func TestGameRunBootstrapTasksExecutesQueuedHooksOnce(t *testing.T) {
+	var g Game
+	generation := g.lifecycle.generation()
+
+	var got []string
+	g.lifecycle.queue(generation, func() {
+		got = append(got, "first")
+	})
+	g.lifecycle.queue(generation, func() {
+		got = append(got, "second")
+	})
+
+	g.lifecycle.runTasks(generation)
+	g.lifecycle.runTasks(generation)
+
+	want := []string{"first", "second"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("runBootstrapTasks got %v, want %v", got, want)
+	}
+}
+
+func TestStartBatchCleansPendingThreadCanceledBeforeRun(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+	var registry scriptEventRegistry
+	var canceled coroutine.Thread
+	var pendingBeforeCancel, runningMarkedPending, canceledRan bool
+	dispatcher := currentScheduler.Create("dispatcher", func(coroutine.Thread) {
+		registry.dispatchStartEventBatch([]eventSink{{Owner: "first"}, {Owner: "canceled"}}, scriptEventDispatch{
+			mode: coroutine.BatchWaitFirstSlice,
+			run: func(thread coroutine.Thread, sink *eventSink) {
+				if sink.Owner == "canceled" {
+					canceledRan = true
+					return
+				}
+				runningMarkedPending = registry.isPendingStartThread(thread)
+				currentScheduler.StopIf(func(thread coroutine.Thread) bool {
+					if thread.Owner != "canceled" {
+						return false
+					}
+					canceled = thread
+					pendingBeforeCancel = registry.isPendingStartThread(thread)
+					return true
+				})
+			},
+		})
+	})
+	currentScheduler.Join(dispatcher)
+	if canceled == nil || !pendingBeforeCancel {
+		t.Fatal("later start thread was not registered as pending before cancellation")
+	}
+	currentScheduler.Join(canceled)
+	if canceledRan {
+		t.Fatal("canceled start handler ran")
+	}
+	if registry.isPendingStartThread(canceled) {
+		t.Fatal("canceled start thread retained its pending marker after cleanup")
+	}
+	if runningMarkedPending {
+		t.Fatal("running start handler retained its pending marker")
+	}
+}
+
+func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
+	currentScheduler, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
+
+	front.OnStart(func() {
+		log.add("front-before-yield")
+		engine.WaitNextFrame()
+		log.add("front-after-yield")
+	})
+	front.OnStart(func() {
+		log.add("front-stop")
+		front.Stop(AllStop)
+		log.add("front-after-stop")
+	})
+	back.OnStart(func() {
+		log.add("back-before-yield")
+		engine.WaitNextFrame()
+		log.add("back-after-yield")
+	})
+	game.OnStart(func() {
+		log.add("stage-start")
+		game.Broadcast__0("after-stop")
+	})
+	game.OnMsg__1("after-stop", func() {
+		log.add("message-before-yield")
+		engine.WaitNextFrame()
+		log.add("message-after-yield")
+	})
+
+	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
+	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
+	waitForEventOrderEntries(t, currentScheduler, &log, 5)
+	requireEventOrder(t, &log, []string{
+		"front-before-yield",
+		"front-stop",
+		"back-before-yield",
+		"stage-start",
+		"message-before-yield",
+	})
+
+	advanceEventFrame(t, currentScheduler, &log, 6)
+	requireEventOrder(t, &log, []string{
+		"front-before-yield",
+		"front-stop",
+		"back-before-yield",
+		"stage-start",
+		"message-before-yield",
+		"message-after-yield",
+	})
+}
+
+// Timer and condition events.
+
+func pollRuntimeConditions(registry *scriptEventRegistry) {
+	scheduler.RunBetweenScripts(registry.sampleConditions)
+	withEventRegistrationBarrier(registry.game, registry.dispatchConditions)
+}
+
+func pollRuntimeEventConditions(game *Game) {
+	game.OnEngineBeforeUpdate(1.0 / 30)
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 }
 
 func TestOnTimerMatchesMilliseconds(t *testing.T) {
@@ -382,89 +656,1082 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 	currentScheduler.Update()
 }
 
-func TestOnStartIgnoresStaleBootstrapGeneration(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
+func TestConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
+	currentScheduler, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
-	var game Game
-	game.bindScriptEvents()
-	stale := game.lifecycle.generation()
-	game.lifecycle.reset()
-
-	calls := 0
-	game.OnStart(func() { calls++ })
-	game.handleEvent(&eventStart{generation: stale})
-	currentScheduler.Update()
-	if calls != 0 || game.lifecycle.startDispatched.Load() {
-		t.Fatal("stale start event affected the current lifecycle")
+	register := func(events *scriptEventBindings, name string) {
+		events.OnCond(func() bool {
+			log.add("check-" + name)
+			return true
+		}, func() {
+			log.add("run-" + name)
+		})
 	}
+	register(&game.scriptEventBindings, "stage")
+	register(&back.scriptEventBindings, "back")
+	register(&front.scriptEventBindings, "front")
 
-	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
-	if calls != 1 {
-		t.Fatalf("current start calls = %d, want 1", calls)
+	pollRuntimeConditions(&game.scriptEvents)
+	waitForEventOrderEntries(t, currentScheduler, &log, 6)
+	requireEventOrder(t, &log, []string{
+		"check-front",
+		"check-back",
+		"check-stage",
+		"run-front",
+		"run-back",
+		"run-stage",
+	})
+}
+
+// Click targeting and pointer routing.
+
+type clickThroughSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	hits          map[pkgengine.Object]bool
+	lastIsTrigger map[pkgengine.Object]bool
+}
+
+func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, point mathf.Vec2, isTrigger bool) bool {
+	if s.lastIsTrigger != nil {
+		s.lastIsTrigger[obj] = isTrigger
+	}
+	return s.hits[obj]
+}
+
+func (s *clickThroughSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {}
+
+type disappearingClickTarget struct {
+	proxy      engine.Sprite
+	proxyReads int
+	clicks     int
+}
+
+func (c *disappearingClickTarget) Visible() bool { return true }
+
+func (c *disappearingClickTarget) getProxy() *engine.Sprite {
+	c.proxyReads++
+	if c.proxyReads > 1 {
+		return nil
+	}
+	return &c.proxy
+}
+
+func (c *disappearingClickTarget) doWhenClick() { c.clicks++ }
+
+func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
+	t.Helper()
+
+	setupImmediateEngineCalls(t)
+
+	original := pkgengine.SpriteMgr
+	mgr := &clickThroughSpriteMgr{
+		hits:          hits,
+		lastIsTrigger: make(map[pkgengine.Object]bool),
+	}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = original
+	})
+	return mgr
+}
+
+func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick bool) *SpriteImpl {
+	sprite := &SpriteImpl{}
+	sprite.g = g
+	sprite.name = name
+	sprite.spriteState.isVisible = true
+	sprite.runtimeState.proxy = &engine.Sprite{}
+	sprite.runtimeState.proxy.SetId(id)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
+	if registerClick {
+		sprite.OnClick(func() {})
+	}
+	return sprite
+}
+
+func TestFindClickTargetRespectsLayerOrderAndVisibility(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		handler    bool
+		moveBack   bool
+		ghost      bool
+		wantBottom bool
+	}{
+		{name: "topmost without handler"},
+		{name: "topmost with handler", handler: true},
+		{name: "changed layer order", handler: true, moveBack: true, wantBottom: true},
+		{name: "fully ghosted with handler", handler: true, ghost: true, wantBottom: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{1: true, 2: true})
+			var game Game
+			game.scene.init()
+			bottom := newClickTestSprite(&game, "bottom", 1, true)
+			top := newClickTestSprite(&game, "top", 2, test.handler)
+			if test.ghost {
+				top.graphicEffects = map[EffectKind]float64{GhostEffect: 100}
+			}
+			game.scene.add(bottom)
+			game.scene.add(top)
+			if test.moveBack {
+				top.SetLayerTo(Back)
+			}
+			want := top
+			if test.wantBottom {
+				want = bottom
+			}
+			if target := game.findClickTarget(mathf.NewVec2(0, 0)); target != want {
+				t.Fatalf("target = %p, want %p", target, want)
+			}
+		})
 	}
 }
 
-func TestOnStartWithoutSchedulerDoesNotCrossReset(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
+func TestTouchPointUsesSensingQuery(t *testing.T) {
+	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
+		1: true,
+	})
+
+	var g Game
+	sprite := newClickTestSprite(&g, "probe", 1, false)
+	sprite.spriteState.isVisible = false
+
+	if !sprite.touchPoint(12, 34) {
+		t.Fatal("expected touchPoint hit")
+	}
+	if got := mgr.lastIsTrigger[1]; got {
+		t.Fatalf("touchPoint used click query, want sensing query")
+	}
+}
+
+func TestPointHitsClickTargetUsesClickQuery(t *testing.T) {
+	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
+		1: true,
+	})
+
+	var g Game
+	sprite := newClickTestSprite(&g, "button", 1, true)
+
+	if !g.pointHitsClickTarget(sprite, mathf.NewVec2(0, 0)) {
+		t.Fatal("expected click hit")
+	}
+	if got := mgr.lastIsTrigger[1]; !got {
+		t.Fatalf("pointHitsClickTarget used sensing query, want click query")
+	}
+}
+
+func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
+	previous := scheduler
 	scheduler = nil
-	defer func() { scheduler = currentScheduler }()
+	t.Cleanup(func() { scheduler = previous })
 
-	var calls []string
-	game.OnStart(func() {
-		calls = append(calls, "first")
-		game.lifecycle.reset()
-	})
-	game.OnStart(func() { calls = append(calls, "stale") })
-	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-	if want := []string{"first"}; !reflect.DeepEqual(calls, want) {
-		t.Fatalf("start callbacks after reset = %v, want %v", calls, want)
-	}
-	if game.lifecycle.startDispatched.Load() {
-		t.Fatal("stale OnStart completion reopened the start gate")
+	for _, tt := range []struct {
+		name       string
+		hit        bool
+		noHandler  bool
+		blocked    []pkgengine.Object
+		wantClicks []string
+		wantGates  int
+	}{
+		{name: "target", hit: true, wantClicks: []string{"target"}, wantGates: 2},
+		{name: "target without handler", hit: true, noHandler: true, wantGates: 2},
+		{name: "stage", wantClicks: []string{"stage"}, wantGates: 2},
+		{name: "global blocks target", hit: true, blocked: []pkgengine.Object{clickTimerGlobal}, wantGates: 1},
+		{name: "target blocked", hit: true, blocked: []pkgengine.Object{7}, wantGates: 2},
+		{name: "global blocks stage", blocked: []pkgengine.Object{clickTimerGlobal}, wantGates: 1},
+		{name: "stage blocked", blocked: []pkgengine.Object{clickTimerStage}, wantGates: 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: tt.hit})
+			var game Game
+			game.scene.init()
+			game.bindScriptEvents()
+			game.inputMgr.g = &game
+			now := time.Unix(100, 0)
+			var steps, clicks, swipes []string
+			game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
+				steps = append(steps, "gate")
+				return now
+			})
+			game.inputMgr.swipe.InitWithClock(func() time.Time {
+				steps = append(steps, "swipe")
+				return now
+			})
+			sprite := newClickTestSprite(&game, "target", 7, false)
+			if !tt.noHandler {
+				sprite.OnClick(func() { clicks = append(clicks, "target") })
+			}
+			sprite.OnSwipe__0(90, func() { swipes = append(swipes, "target") })
+			game.scene.add(sprite)
+			game.OnClick(func() { clicks = append(clicks, "stage") })
+			game.OnSwipe__0(90, func() { swipes = append(swipes, "stage") })
+			for _, id := range tt.blocked {
+				game.inputMgr.clickGate.Allow(id)
+			}
+			steps = nil
+
+			game.handleEvent(&eventLeftButtonDown{Pos: mathf.Vec2{X: 10, Y: 20}})
+			wantSteps := []string{"swipe"}
+			for range tt.wantGates {
+				wantSteps = append(wantSteps, "gate")
+			}
+			if !reflect.DeepEqual(steps, wantSteps) {
+				t.Fatalf("dispatch steps = %v, want %v", steps, wantSteps)
+			}
+			if !reflect.DeepEqual(clicks, tt.wantClicks) {
+				t.Fatalf("clicks = %v, want %v", clicks, tt.wantClicks)
+			}
+			// A blocked global gate must not consume the target/stage gate.
+			routedID := pkgengine.Object(clickTimerStage)
+			if tt.hit {
+				routedID = 7
+			}
+			if allowed := game.inputMgr.clickGate.Allow(routedID); allowed != (tt.wantGates == 1) {
+				t.Fatalf("routed gate remains available = %v, want %v", allowed, tt.wantGates == 1)
+			}
+			// The global gate is always consumed, including when the routed gate blocks.
+			if game.inputMgr.clickGate.Allow(clickTimerGlobal) {
+				t.Fatal("global gate was not consumed before routing")
+			}
+			now = now.Add(100 * time.Millisecond)
+			game.handleEvent(&eventLeftButtonUp{Pos: mathf.Vec2{X: 110, Y: 20}})
+			wantSwipe := "stage"
+			if tt.hit {
+				wantSwipe = "target"
+			}
+			if !reflect.DeepEqual(swipes, []string{wantSwipe}) {
+				t.Fatalf("swipes = %v, want [%s]", swipes, wantSwipe)
+			}
+		})
 	}
 }
 
-func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
+func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T) {
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
+	setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: true})
 
-	var game Game
+	for _, blocked := range []bool{false, true} {
+		var game Game
+		game.scene.init()
+		game.bindScriptEvents()
+		game.inputMgr.init(&game)
+		game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
+			return time.Unix(100, 0)
+		})
+		if blocked {
+			game.inputMgr.clickGate.Allow(clickTimerGlobal)
+		}
+		target := &disappearingClickTarget{}
+		target.proxy.SetId(7)
+		game.scene.add(target)
+		stageClicks := 0
+		game.OnClick(func() { stageClicks++ })
+
+		game.handleEvent(&eventLeftButtonDown{})
+		wantReads := 2
+		if blocked {
+			wantReads = 1
+		}
+		if target.proxyReads != wantReads || target.clicks != 0 || stageClicks != 0 {
+			t.Fatalf("global blocked %v: proxy reads / target clicks / stage clicks = %d / %d / %d, want %d / 0 / 0", blocked, target.proxyReads, target.clicks, stageClicks, wantReads)
+		}
+		if !game.inputMgr.clickGate.Allow(clickTimerStage) {
+			t.Fatalf("global blocked %v: missing target proxy consumed the stage gate", blocked)
+		}
+	}
+}
+
+func TestPointHitsClickTargetRejectsInvalidTarget(t *testing.T) {
+	game := &Game{}
+	for _, state := range []string{"missing proxy", "hidden", "destroyed"} {
+		t.Run(state, func(t *testing.T) {
+			sprite := newClickTestSprite(game, state, 1, false)
+			switch state {
+			case "missing proxy":
+				sprite.runtimeState.proxy = nil
+			case "hidden":
+				sprite.spriteState.isVisible = false
+			case "destroyed":
+				sprite.markDestroyed()
+			}
+			// No backend: rejection must precede the hit query.
+			if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
+				t.Fatal("invalid target accepted a click")
+			}
+		})
+	}
+}
+
+// Target matching and handler admission.
+
+type touchEventSprite struct{ SpriteImpl }
+
+func (*touchEventSprite) Main() {}
+
+func newTouchEventSprite(game *Game, name string) *touchEventSprite {
+	sprite := &touchEventSprite{}
+	sprite.g, sprite.name, sprite.sprite = game, name, sprite
+	sprite.scriptEventBindings.bind(&game.scriptEvents, &sprite.SpriteImpl)
+	return sprite
+}
+
+func TestTouchStartGate(t *testing.T) {
+	previous := scheduler
+	scheduler = nil
+	defer func() { scheduler = previous }()
+
+	game := new(Game)
 	game.bindScriptEvents()
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	game.OnStart(func() {
-		close(entered)
-		<-release
-	})
-	staleCalls := 0
-	game.OnStart(func() { staleCalls++ })
-
-	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("OnStart did not begin")
-	}
-
-	game.lifecycle.reset()
-	game.scriptEvents.manager.Reset()
-	close(release)
-	currentScheduler.Update()
-	if game.lifecycle.startDispatched.Load() {
-		t.Fatal("stale OnStart completion reopened the start gate")
-	}
-	if staleCalls != 0 {
-		t.Fatalf("stale pending OnStart calls = %d, want 0", staleCalls)
+	source := newTouchEventSprite(game, "source")
+	target := newTouchEventSprite(game, "target")
+	source.doWhenTouchStart(&target.SpriteImpl)
+	if source.spriteState.hasOnTouchStart {
+		t.Fatal("touch without a handler enabled dispatch")
 	}
 
 	calls := 0
-	game.OnStart(func() { calls++ })
-	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
+	source.addTouchStartHandler(func(Sprite) { calls++ })
+	if !source.spriteState.hasOnTouchStart {
+		t.Fatal("registered touch handler did not enable dispatch")
+	}
+	source.doWhenTouchStart(&target.SpriteImpl)
 	if calls != 1 {
-		t.Fatalf("new lifecycle start calls = %d, want 1", calls)
+		t.Fatalf("registered touch calls = %d, want 1", calls)
+	}
+
+	clone := newTouchEventSprite(game, "source")
+	clone.SpriteImpl.InitFrom(&source.SpriteImpl)
+	clone.doWhenTouchStart(&target.SpriteImpl)
+	if clone.spriteState.hasOnTouchStart || calls != 1 {
+		t.Fatal("clone inherited the source handler gate")
+	}
+	clone.addTouchStartHandler(func(Sprite) { calls++ })
+	if !clone.spriteState.hasOnTouchStart {
+		t.Fatal("clone touch handler did not enable dispatch")
+	}
+	clone.doWhenTouchStart(&target.SpriteImpl)
+	if calls != 2 {
+		t.Fatalf("clone touch calls = %d, want 2", calls)
+	}
+	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketTouchStart)); got != 2 {
+		t.Fatalf("touch handlers = %d, want 2", got)
 	}
 }
+
+func TestDebugEventBindingsAndBroadcastOverloads(t *testing.T) {
+	_, game := setupRuntimeEventGame(t)
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
+	game.debugState.DebugEvent = true
+	game.debugState.DebugInstr = true
+	sprite := &SpriteImpl{g: game, name: "actor"}
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+	game.scene.add(sprite)
+	var got []string
+	game.OnTimer(0, func() { got = append(got, "timer") })
+	game.OnKey__0(KeyA, func() { got = append(got, "key") })
+	game.OnKey__1([]Key{KeyA}, func(Key) { got = append(got, "keys") })
+	game.OnKey__1(nil, func(Key) { t.Error("empty key set invoked") })
+	game.OnSwipe__0(90, func() { got = append(got, "swipe") })
+	game.OnMsg__1("message", func() { got = append(got, "message") })
+	game.OnBackdrop__1("scene", func() { got = append(got, "backdrop") })
+	game.OnClick(func() { got = append(got, "click") })
+	sprite.OnCloned__1(func(any) { got = append(got, "clone") })
+	sprite.addTouchStartHandler(func(Sprite) { got = append(got, "touch") })
+	game.doWhenTimer(0)
+	game.doWhenKeyPressed(KeyA)
+	game.doWhenSwipe(90)
+	game.Broadcast__1("message", 123)
+	game.BroadcastAndWait__1("message", 456)
+	game.doWhenBackdropChanged("scene", true)
+	game.doWhenClick()
+	sprite.doWhenCloned(nil)
+	sprite.doWhenTouchStart(&SpriteImpl{name: "peer"})
+	want := []string{"timer", "key", "keys", "swipe", "message", "message", "backdrop", "click", "clone", "touch"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debug handlers = %v, want %v", got, want)
+	}
+	game.scriptEvents.manager.SnapshotStartOnce()
+	sprite.spriteState.cloned = true
+	sprite.OnStart(func() { t.Error("late clone start ran") })
+	game.OnStart(func() { t.Error("late game start ran") })
+	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketStart)); got != 0 {
+		t.Fatalf("late start handlers registered = %d, want 0", got)
+	}
+	game.Stop(StopKind(-999))
+}
+
+func TestTargetDispatchMutation(t *testing.T) {
+	previous := scheduler
+	scheduler = nil
+	defer func() { scheduler = previous }()
+
+	var registry scriptEventRegistry
+	owner, other := &SpriteImpl{}, &SpriteImpl{}
+	var calls []string
+	enabled, nested := true, false
+	var event scriptEventDispatch
+	event.run = func(_ coroutine.Thread, sink *eventSink) {
+		name := sink.Handler.(string)
+		calls = append(calls, name)
+		if name == "first" && !nested {
+			nested = true
+			registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "second"})
+			registry.dispatchTarget(coreevent.BucketClick, owner, event)
+		}
+		if name == "delete" {
+			registry.manager.DeleteOwner(owner)
+		}
+	}
+	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: other, Handler: "other"})
+	registry.manager.Add(coreevent.BucketClick, eventSink{
+		Owner: owner, Handler: "first", Cond: func(any) bool { return enabled },
+	})
+
+	registry.dispatchTarget(coreevent.BucketClick, owner, event)
+	if want := []string{"first", "first", "second"}; !slices.Equal(calls, want) {
+		t.Fatalf("nested dispatch = %v, want %v", calls, want)
+	}
+	enabled = false
+	registry.dispatchTarget(coreevent.BucketClick, owner, event)
+	if want := []string{"first", "first", "second", "second"}; !slices.Equal(calls, want) {
+		t.Fatalf("condition change = %v, want %v", calls, want)
+	}
+	registry.manager.DeleteOwner(owner)
+	registry.dispatchTarget(coreevent.BucketClick, owner, event)
+	if len(calls) != 4 {
+		t.Fatalf("deleted owner received event: %v", calls)
+	}
+	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "delete"})
+	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "after"})
+	registry.dispatchTarget(coreevent.BucketClick, owner, event)
+	if want := []string{"first", "first", "second", "second", "delete", "after"}; !slices.Equal(calls, want) {
+		t.Fatalf("deleted during dispatch = %v, want %v", calls, want)
+	}
+	registry.dispatchTarget(coreevent.BucketClick, owner, event)
+	if len(calls) != 6 {
+		t.Fatalf("deleted handlers received another event: %v", calls)
+	}
+}
+
+func TestTargetDispatchCompletesMatchingBeforeHandlers(t *testing.T) {
+	setupRuntimeScheduler(t)
+
+	var registry scriptEventRegistry
+	owner, other := &SpriteImpl{}, &SpriteImpl{}
+	enabled := true
+	var steps []string
+	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "first"})
+	registry.manager.Add(coreevent.BucketClick, eventSink{
+		Owner: other,
+		Cond: func(any) bool {
+			steps = append(steps, "check-other")
+			return false
+		},
+	})
+	registry.manager.Add(coreevent.BucketClick, eventSink{
+		Owner: owner,
+		Cond: func(any) bool {
+			steps = append(steps, "check-second")
+			return enabled
+		},
+		Handler: "second",
+	})
+
+	registry.dispatchTarget(coreevent.BucketClick, owner, scriptEventDispatch{
+		mode: coroutine.BatchWaitDone,
+		run: func(_ coroutine.Thread, sink *eventSink) {
+			name := sink.Handler.(string)
+			steps = append(steps, "run-"+name)
+			if name == "first" {
+				enabled = false
+			}
+		},
+	})
+
+	if want := []string{"check-second", "run-first", "run-second"}; !slices.Equal(steps, want) {
+		t.Fatalf("dispatch steps = %v, want %v", steps, want)
+	}
+}
+
+func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
+	game := &Game{}
+	game.scene.init()
+	back, front := &SpriteImpl{g: game}, &SpriteImpl{g: game}
+	removed := &SpriteImpl{g: game}
+	game.scene.add(back)
+	game.scene.add(front)
+	sinks := []eventSink{
+		{Owner: game, Handler: "stage-1"},
+		{Owner: back, Handler: "back-1"},
+		{Owner: removed, Handler: "removed"},
+		{Owner: front, Handler: "front-1"},
+		{Owner: []int{1}, Handler: "external"},
+		{Owner: back, Handler: "back-2"},
+		{Owner: game, Handler: "stage-2"},
+		{Owner: front, Handler: "front-2"},
+		{Owner: &Game{}, Handler: "other-game"},
+	}
+	snapshot := slices.Clone(sinks)
+	ordered := sinksInTargetOrder(game, sinks)
+	names := make([]string, len(ordered))
+	for i, sink := range ordered {
+		names[i] = sink.Handler.(string)
+	}
+	want := []string{"front-1", "front-2", "back-1", "back-2", "removed", "external", "other-game", "stage-1", "stage-2"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("order = %v, want %v", names, want)
+	}
+	if !reflect.DeepEqual(sinks, snapshot) {
+		t.Fatal("sorting modified the shared event snapshot")
+	}
+	ordered[0].Handler = "changed"
+	if !reflect.DeepEqual(sinks, snapshot) {
+		t.Fatal("ordered result aliases the shared event snapshot")
+	}
+	// A later broadcast must observe the new layer order, not a cached grouping.
+	game.scene.items[0], game.scene.items[1] = front, back
+	if got := sinksInTargetOrder(game, sinks)[0].Handler; got != "back-1" {
+		t.Fatalf("first handler after layer change = %v", got)
+	}
+}
+
+func TestEventHandlerNonMatchingTriggerPreservesInvocation(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		register func(*Game, func())
+		fire     func(*Game, bool)
+	}{
+		{"key", func(g *Game, run func()) { g.OnKey__0(KeySpace, run) }, func(g *Game, match bool) {
+			key := KeyA
+			if match {
+				key = KeySpace
+			}
+			g.doWhenKeyPressed(key)
+		}},
+		{"click", func(g *Game, run func()) { g.OnClick(run) }, func(g *Game, match bool) {
+			if match {
+				g.doWhenClick()
+			} else {
+				sprite := &SpriteImpl{g: g}
+				sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
+				sprite.doWhenClick()
+			}
+		}},
+		{"backdrop", func(g *Game, run func()) { g.OnBackdrop__1("scene", run) }, func(g *Game, match bool) {
+			name := "other"
+			if match {
+				name = "scene"
+			}
+			g.doWhenBackdropChanged(name, false)
+		}},
+		{"message", func(g *Game, run func()) { g.OnMsg__1("msg", run) }, func(g *Game, match bool) {
+			msg := "other"
+			if match {
+				msg = "msg"
+			}
+			g.Broadcast__0(msg)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			currentScheduler, game := setupRuntimeEventGame(t)
+			gate := currentScheduler.NewLatch()
+			started, finished := 0, 0
+			tc.register(game, func() { started++; gate.Wait(); finished++ })
+			tc.fire(game, true)
+			currentScheduler.Update()
+			tc.fire(game, false)
+			currentScheduler.Update()
+			gate.Open()
+			currentScheduler.Update()
+			if started != 1 || finished != 1 {
+				t.Fatalf("non-matching trigger affected invocation: started=%d finished=%d", started, finished)
+			}
+		})
+	}
+}
+
+func TestTargetEventHandlersStayWithTheirOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		register func(*SpriteImpl, func())
+		fire     func(*SpriteImpl, *SpriteImpl)
+	}{
+		{"click", func(s *SpriteImpl, run func()) { s.OnClick(run) }, func(s, _ *SpriteImpl) {
+			s.doWhenClick()
+		}},
+		{"swipe", func(s *SpriteImpl, run func()) { s.OnSwipe__0(90, run) }, func(s, _ *SpriteImpl) {
+			s.doWhenSwipe(90)
+		}},
+		{"cloned", func(s *SpriteImpl, run func()) { s.OnCloned__0(run) }, func(s, _ *SpriteImpl) {
+			s.doWhenCloned(nil)
+		}},
+		{"touch", func(s *SpriteImpl, run func()) { s.addTouchStartHandler(func(Sprite) { run() }) }, func(s, other *SpriteImpl) {
+			s.doWhenTouchStart(other)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			currentScheduler, game := setupRuntimeEventGame(t)
+			first := &newTouchEventSprite(game, "first").SpriteImpl
+			second := &newTouchEventSprite(game, "second").SpriteImpl
+			var calls [2]int
+			tc.register(first, func() { calls[0]++ })
+			tc.register(second, func() { calls[1]++ })
+			tc.fire(first, second)
+			currentScheduler.Update()
+			if calls != [2]int{1, 0} {
+				t.Fatalf("first target: calls=%v, want [1 0]", calls)
+			}
+			tc.fire(second, first)
+			currentScheduler.Update()
+			if calls != [2]int{1, 1} {
+				t.Fatalf("second target: calls=%v, want [1 1]", calls)
+			}
+		})
+	}
+}
+
+func TestEventHandlerRetriggerPolicies(t *testing.T) {
+	for _, tc := range []struct {
+		kind         string
+		wantStarted  int
+		wantFinished int
+	}{
+		{"key", 1, 1},
+		{"any key", 1, 1},
+		{"click", 2, 1},
+		{"backdrop", 2, 1},
+		{"any backdrop", 2, 1},
+		{"message", 2, 1},
+		{"any message", 2, 1},
+		{"timer", 2, 2},
+		{"swipe", 2, 2},
+		{"cloned", 2, 2},
+		{"touch", 2, 2},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			currentScheduler, game := setupRuntimeEventGame(t)
+			gate := currentScheduler.NewLatch()
+			started, finished := 0, 0
+			run := func() { started++; gate.Wait(); finished++ }
+			var fire func()
+			switch tc.kind {
+			case "key":
+				game.OnKey__0(KeySpace, run)
+				fire = func() { game.doWhenKeyPressed(KeySpace) }
+			case "any key":
+				game.OnAnyKey(func(Key) { run() })
+				fire = func() { game.doWhenKeyPressed(KeySpace) }
+			case "click":
+				game.OnClick(run)
+				fire = func() { game.doWhenClick() }
+			case "backdrop":
+				game.OnBackdrop__1("scene", run)
+				fire = func() { game.doWhenBackdropChanged("scene", false) }
+			case "any backdrop":
+				game.OnBackdrop__0(func(BackdropName) { run() })
+				fire = func() { game.doWhenBackdropChanged("scene", false) }
+			case "message":
+				game.OnMsg__1("msg", run)
+				fire = func() { game.Broadcast__0("msg") }
+			case "any message":
+				game.OnMsg__0(func(MsgName, any) { run() })
+				fire = func() { game.Broadcast__0("msg") }
+			case "timer":
+				clock.ClearTimers()
+				t.Cleanup(clock.ClearTimers)
+				game.OnTimer(0, run)
+				fire = func() { game.doWhenTimer(0) }
+			case "swipe":
+				game.OnSwipe__0(90, run)
+				fire = func() { game.doWhenSwipe(90) }
+			case "cloned":
+				sprite := newTouchEventSprite(game, "clone")
+				sprite.OnCloned__0(run)
+				fire = func() { sprite.doWhenCloned(nil) }
+			case "touch":
+				sprite := newTouchEventSprite(game, "source")
+				other := newTouchEventSprite(game, "target")
+				sprite.addTouchStartHandler(func(Sprite) { run() })
+				fire = func() { sprite.doWhenTouchStart(&other.SpriteImpl) }
+			}
+			fire()
+			currentScheduler.Update()
+			if started != 1 || finished != 0 {
+				t.Fatalf("first trigger: started=%d finished=%d, want 1/0", started, finished)
+			}
+			fire()
+			currentScheduler.Update()
+			if started != tc.wantStarted || finished != 0 {
+				t.Fatalf("retrigger: started=%d finished=%d, want %d/0", started, finished, tc.wantStarted)
+			}
+			gate.Open()
+			currentScheduler.Update()
+			if finished != tc.wantFinished {
+				t.Fatalf("finished %d scripts, want %d", finished, tc.wantFinished)
+			}
+			fire()
+			currentScheduler.Update()
+			if started != tc.wantStarted+1 || finished != tc.wantFinished+1 {
+				t.Fatalf("after completion: started=%d finished=%d, want %d/%d", started, finished, tc.wantStarted+1, tc.wantFinished+1)
+			}
+		})
+	}
+}
+
+// Retriggers may arrive before a handler gets its first slice. Replacing a
+// canceled registration must not let its delayed cleanup clear the new one.
+func TestEventHandlerQueuedRetriggers(t *testing.T) {
+	for _, key := range []bool{false, true} {
+		t.Run(map[bool]string{false: "restart", true: "ignore"}[key], func(t *testing.T) {
+			currentScheduler, game := setupRuntimeEventGame(t)
+			gate := currentScheduler.NewLatch()
+			started, finished := 0, 0
+			run := func() { started++; gate.Wait(); finished++ }
+			fire := func() { game.doWhenClick() }
+			if key {
+				game.OnKey__0(KeySpace, run)
+				fire = func() { game.doWhenKeyPressed(KeySpace) }
+			} else {
+				game.OnClick(run)
+			}
+			parent := currentScheduler.Create(game, func(coroutine.Thread) {
+				fire()
+				fire()
+				fire()
+			})
+			currentScheduler.Join(parent)
+			currentScheduler.Update()
+			if started != 1 {
+				t.Fatalf("queued retriggers started %d handlers", started)
+			}
+			fire()
+			currentScheduler.Update()
+			want := 2
+			if key {
+				want = 1
+			}
+			if started != want {
+				t.Fatalf("retrigger started %d, want %d", started, want)
+			}
+			gate.Open()
+			currentScheduler.Update()
+			if finished != 1 {
+				t.Fatalf("finished %d handlers", finished)
+			}
+		})
+	}
+}
+
+func TestMatchingEventSinks(t *testing.T) {
+	for _, matches := range [][]int{nil, {2}, {0, 2}, {0, 1, 2}} {
+		var calls []int
+		sinks := make([]eventSink, 3)
+		for i := range sinks {
+			sinks[i] = eventSink{Owner: i, Cond: func(data any) bool {
+				if data != "message" {
+					t.Fatalf("predicate data = %v", data)
+				}
+				calls = append(calls, i)
+				return slices.Contains(matches, i)
+			}}
+		}
+		got := matchingEventSinks(sinks, "message")
+		if !slices.Equal(calls, []int{0, 1, 2}) {
+			t.Fatalf("predicate calls = %v", calls)
+		}
+		if len(got) != len(matches) {
+			t.Fatalf("matches = %d, want %d", len(got), len(matches))
+		}
+		for i, owner := range matches {
+			if got[i].Owner != owner {
+				t.Fatalf("match %d owner = %v, want %d", i, got[i].Owner, owner)
+			}
+			got[i].Owner = "changed"
+			if sinks[owner].Owner != owner {
+				t.Fatal("result aliases the source snapshot")
+			}
+		}
+	}
+	unconditional := []eventSink{{Owner: "unconditional"}}
+	if got := matchingEventSinks(unconditional, nil); len(got) != 1 || got[0].Owner != "unconditional" {
+		t.Fatalf("unconditional match = %v", got)
+	}
+	if got := matchingEventSinks(nil, nil); len(got) != 0 {
+		t.Fatalf("empty snapshot matched %d sinks", len(got))
+	}
+}
+
+func TestMatchingEventSinksNoMatchAllocations(t *testing.T) {
+	sinks := make([]eventSink, 64)
+	for i := range sinks {
+		sinks[i].Cond = coreevent.MatchValue("other")
+	}
+	if allocs := testing.AllocsPerRun(100, func() {
+		if got := matchingEventSinks(sinks, "tick"); len(got) != 0 {
+			t.Fatalf("unexpected matches: %d", len(got))
+		}
+	}); allocs != 0 {
+		t.Fatalf("no-match filtering allocated %g times", allocs)
+	}
+}
+
+// Stamp-driven games broadcast to many clones each frame.
+func BenchmarkTargetOrder(b *testing.B) {
+	game := &Game{}
+	game.scene.init()
+	sinks := make([]eventSink, 0, 202)
+	for range 100 {
+		sprite := &SpriteImpl{g: game}
+		game.scene.add(sprite)
+		sinks = append(sinks, eventSink{Owner: sprite}, eventSink{Owner: sprite})
+	}
+	sinks = append(sinks, eventSink{Owner: game}, eventSink{Owner: "external"})
+	b.ReportAllocs()
+	for b.Loop() {
+		if got := sinksInTargetOrder(game, sinks); len(got) != len(sinks) {
+			b.Fatal(len(got))
+		}
+	}
+}
+
+func BenchmarkTargetDispatch(b *testing.B) {
+	previous := scheduler
+	scheduler = nil
+	defer func() { scheduler = previous }()
+	for _, scenario := range []struct {
+		name           string
+		count, matches int
+	}{
+		{"1/missing", 1, 0},
+		{"1/present", 1, 1},
+		{"100/missing", 100, 0},
+		{"100/present", 100, 1},
+		{"300/missing", 300, 0},
+		{"300/present", 300, 1},
+		{"300/mixed-64", 300, 64},
+	} {
+		b.Run(scenario.name, func(b *testing.B) {
+			var registry scriptEventRegistry
+			owner := &SpriteImpl{}
+			for i := range scenario.count {
+				sink := eventSink{Owner: &SpriteImpl{}}
+				if i >= scenario.count-scenario.matches {
+					sink.Owner = owner
+					if scenario.matches > 1 && i%2 == 0 {
+						sink.Cond = func(any) bool { return false }
+					}
+				}
+				registry.manager.Add(coreevent.BucketTouchStart, sink)
+			}
+			event := scriptEventDispatch{run: func(coroutine.Thread, *eventSink) {}}
+			b.ReportAllocs()
+			for b.Loop() {
+				registry.dispatchTarget(coreevent.BucketTouchStart, owner, event)
+			}
+		})
+	}
+}
+
+func BenchmarkTargetDispatchMissingManaged(b *testing.B) {
+	var registry scriptEventRegistry
+	for range 300 {
+		registry.manager.Add(coreevent.BucketTouchStart, eventSink{Owner: &SpriteImpl{}})
+	}
+	owner := &SpriteImpl{}
+	event := scriptEventDispatch{mode: coroutine.BatchAsync}
+	b.ReportAllocs()
+	for b.Loop() {
+		registry.dispatchTarget(coreevent.BucketTouchStart, owner, event)
+	}
+}
+
+// Key handler identity and input phases.
+
+func TestKeyHandlerSharesAdmissionAcrossRegisteredKeys(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	gate := currentScheduler.NewLatch()
+	var received []Key
+	keys := []Key{KeySpace, KeyA}
+	game.OnKey__1(keys, func(key Key) {
+		received = append(received, key)
+		gate.Wait()
+	})
+	keys[1] = KeyB
+	game.doWhenKeyPressed(KeySpace)
+	currentScheduler.Update()
+	game.doWhenKeyPressed(KeyA)
+	currentScheduler.Update()
+	if len(received) != 1 || received[0] != KeySpace {
+		t.Fatalf("keys did not share one registration: %v", received)
+	}
+	gate.Open()
+	currentScheduler.Update()
+	game.doWhenKeyPressed(KeyB)
+	currentScheduler.Update()
+	game.doWhenKeyPressed(KeyA)
+	currentScheduler.Update()
+	if len(received) != 2 || received[1] != KeyA {
+		t.Fatalf("registration did not retain its original keys: %v", received)
+	}
+}
+
+func TestKeyHandlerIdentityIncludesRegistrationAndOwner(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	gate := currentScheduler.NewLatch()
+	started := 0
+	run := func() { started++; gate.Wait() }
+	game.OnKey__0(KeySpace, run)
+	game.OnKey__0(KeySpace, run)
+	clone := &SpriteImpl{g: game}
+	clone.spriteState.cloned = true
+	clone.scriptEventBindings.bind(&game.scriptEvents, clone)
+	clone.OnKey__0(KeySpace, run)
+	game.doWhenKeyPressed(KeySpace)
+	currentScheduler.Update()
+	game.doWhenKeyPressed(KeySpace)
+	currentScheduler.Update()
+	if started != 3 {
+		t.Fatalf("started %d scripts, want one per registration and owner", started)
+	}
+	currentScheduler.StopIf(func(th coroutine.Thread) bool { return th.Owner == clone })
+	game.doWhenKeyPressed(KeySpace)
+	currentScheduler.Update()
+	if started != 4 {
+		t.Fatalf("canceled clone handler did not restart independently: %d", started)
+	}
+	gate.Open()
+	currentScheduler.Update()
+}
+
+func TestKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
+	currentScheduler, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
+
+	register := func(events *scriptEventBindings, name string) {
+		// Register KeyAny first to ensure dispatch uses Scratch's two event
+		// phases rather than the flat sink registration order.
+		events.OnKey__0(KeyAny, func() { log.add(name + "-any") })
+		events.OnKey__0(KeySpace, func() { log.add(name + "-specific") })
+	}
+	register(&game.scriptEventBindings, "stage")
+	register(&back.scriptEventBindings, "back")
+	register(&front.scriptEventBindings, "front")
+
+	game.handleEvent(&eventKeyDown{Key: KeySpace})
+	waitForEventOrderEntries(t, currentScheduler, &log, 6)
+	requireEventOrder(t, &log, []string{
+		"front-specific",
+		"back-specific",
+		"stage-specific",
+		"front-any",
+		"back-any",
+		"stage-any",
+	})
+
+	log.reset()
+	game.handleEvent(&eventKeyDown{Key: KeyA})
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
+	requireEventOrder(t, &log, []string{"front-any", "back-any", "stage-any"})
+}
+
+func TestKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	var log eventOrderLog
+
+	game.OnKey__1([]Key{KeyAny, KeySpace, KeyAny}, func(key Key) {
+		switch key {
+		case KeySpace:
+			log.add("with-key-space")
+		case KeyA:
+			log.add("with-key-a")
+		default:
+			log.add("with-key-unexpected")
+		}
+	})
+	game.OnKey__2([]Key{KeySpace, KeyAny}, func() { log.add("without-key") })
+	game.OnKey__1([]Key{KeySpace, KeySpace}, func(Key) { log.add("specific") })
+	game.OnKey__1(nil, func(Key) { log.add("nil") })
+	game.OnKey__2([]Key{}, func() { log.add("empty") })
+
+	game.handleEvent(&eventKeyDown{Key: KeySpace})
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
+	requireEventOrder(t, &log, []string{"specific", "with-key-space", "without-key"})
+
+	log.reset()
+	game.handleEvent(&eventKeyDown{Key: KeyA})
+	waitForEventOrderEntries(t, currentScheduler, &log, 2)
+	requireEventOrder(t, &log, []string{"with-key-a", "without-key"})
+}
+
+func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		keys  []Key
+		edges []Key
+	}{
+		{"any key", nil, []Key{KeyA, KeyB}},
+		{"multiple keys", []Key{KeyA, KeyB}, []Key{KeyA, KeyB}},
+		{"repeated key", []Key{KeyA}, []Key{KeyA, KeyA}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			currentScheduler, game := setupInputFrameGame(t)
+			var got []Key
+			handler := func(key Key) { got = append(got, key) }
+			if tt.keys == nil {
+				game.OnAnyKey(handler)
+			} else {
+				game.OnKey__1(tt.keys, handler)
+			}
+			var want []Key
+			// Once the first invocation finishes, the registration accepts a new frame.
+			for _, edges := range [][]Key{tt.edges, {tt.edges[len(tt.edges)-1]}} {
+				clock.Update(1.0/30, 30)
+				batch := &inputFrame{}
+				for _, key := range edges {
+					batch.events = append(batch.events, &eventKeyDown{Key: key})
+				}
+				game.inputMgr.frame.pending = batch
+				game.dispatchFrameEvents()
+				currentScheduler.Update()
+				want = append(want, edges[0])
+				if !slices.Equal(got, want) {
+					t.Fatalf("handler keys = %v, want %v", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t *testing.T) {
+	currentScheduler, game := setupInputFrameGame(t)
+	var got []Key
+	finished := false
+	game.OnAnyKey(func(key Key) {
+		got = append(got, key)
+		if key == KeyA {
+			engine.WaitNextFrame()
+			finished = true
+		}
+	})
+	want := [][]Key{{KeyA}, {KeyA}, {KeyA, KeyB}}
+	for frame, key := range []Key{KeyA, KeyB, KeyB} {
+		clock.Update(1.0/30, 30)
+		game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: key}}}
+		game.dispatchFrameEvents()
+		currentScheduler.Update()
+		if !slices.Equal(got, want[frame]) || finished != (frame > 0) {
+			t.Fatalf("frame %d: handler keys = %v, first finished = %v, want %v and %v",
+				frame, got, finished, want[frame], frame > 0)
+		}
+	}
+}
+
+// Asynchronous broadcast rounds and recursion.
 
 func TestDistinctNestedAsyncBroadcastRunsReceiverBatchInCurrentFrame(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
@@ -816,839 +2083,6 @@ func TestSelfBroadcastAfterFrameWaitWithRedrawDoesNotRunInSameFrame(t *testing.T
 	}
 }
 
-func TestNestedBroadcastAndWaitCompletesInCurrentFrame(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-
-	var calls []string
-	game.OnMsg__1("outer", func() {
-		calls = append(calls, "outer-before")
-		game.BroadcastAndWait__0("inner")
-		calls = append(calls, "outer-after")
-	})
-	game.OnMsg__1("inner", func() {
-		calls = append(calls, "inner")
-	})
-
-	game.Broadcast__0("outer")
-	currentScheduler.Update()
-	want := []string{"outer-before", "inner", "outer-after"}
-	if !reflect.DeepEqual(calls, want) {
-		t.Fatalf("synchronous nested broadcast calls = %v, want %v", calls, want)
-	}
-
-	clock.Update(0, 0)
-	currentScheduler.Update()
-	if !reflect.DeepEqual(calls, want) {
-		t.Fatalf("synchronous broadcast left deferred handlers: calls = %v, want %v", calls, want)
-	}
-}
-
-func TestRecursiveBroadcastAndWaitYieldsAtRoundBoundary(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-
-	calls := 0
-	game.OnMsg__1("self", func() {
-		calls++
-		engine.RequestRedraw()
-		if calls < 3 {
-			game.BroadcastAndWait__0("self")
-		}
-	})
-
-	game.Broadcast__0("self")
-	for frame := 1; frame <= 3; frame++ {
-		if frame > 1 {
-			clock.Update(0, 0)
-		}
-		currentScheduler.Update()
-		if calls != frame {
-			t.Fatalf("calls after frame %d = %d, want %d", frame, calls, frame)
-		}
-	}
-}
-
-func TestGameRunBootstrapTasksExecutesQueuedHooksOnce(t *testing.T) {
-	var g Game
-	generation := g.lifecycle.generation()
-
-	var got []string
-	g.lifecycle.queue(generation, func() {
-		got = append(got, "first")
-	})
-	g.lifecycle.queue(generation, func() {
-		got = append(got, "second")
-	})
-
-	g.lifecycle.runTasks(generation)
-	g.lifecycle.runTasks(generation)
-
-	want := []string{"first", "second"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("runBootstrapTasks got %v, want %v", got, want)
-	}
-}
-
-func TestFindClickTargetRespectsLayerOrderAndVisibility(t *testing.T) {
-	for _, test := range []struct {
-		name       string
-		handler    bool
-		moveBack   bool
-		ghost      bool
-		wantBottom bool
-	}{
-		{name: "topmost without handler"},
-		{name: "topmost with handler", handler: true},
-		{name: "changed layer order", handler: true, moveBack: true, wantBottom: true},
-		{name: "fully ghosted with handler", handler: true, ghost: true, wantBottom: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{1: true, 2: true})
-			var game Game
-			game.scene.init()
-			bottom := newClickTestSprite(&game, "bottom", 1, true)
-			top := newClickTestSprite(&game, "top", 2, test.handler)
-			if test.ghost {
-				top.graphicEffects = map[EffectKind]float64{GhostEffect: 100}
-			}
-			game.scene.add(bottom)
-			game.scene.add(top)
-			if test.moveBack {
-				top.SetLayerTo(Back)
-			}
-			want := top
-			if test.wantBottom {
-				want = bottom
-			}
-			if target := game.findClickTarget(mathf.NewVec2(0, 0)); target != want {
-				t.Fatalf("target = %p, want %p", target, want)
-			}
-		})
-	}
-}
-
-func TestTouchPointUsesSensingQuery(t *testing.T) {
-	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
-		1: true,
-	})
-
-	var g Game
-	sprite := newClickTestSprite(&g, "probe", 1, false)
-	sprite.spriteState.isVisible = false
-
-	if !sprite.touchPoint(12, 34) {
-		t.Fatal("expected touchPoint hit")
-	}
-	if got := mgr.lastIsTrigger[1]; got {
-		t.Fatalf("touchPoint used click query, want sensing query")
-	}
-}
-
-func TestPointHitsClickTargetUsesClickQuery(t *testing.T) {
-	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
-		1: true,
-	})
-
-	var g Game
-	sprite := newClickTestSprite(&g, "button", 1, true)
-
-	if !g.pointHitsClickTarget(sprite, mathf.NewVec2(0, 0)) {
-		t.Fatal("expected click hit")
-	}
-	if got := mgr.lastIsTrigger[1]; !got {
-		t.Fatalf("pointHitsClickTarget used sensing query, want click query")
-	}
-}
-
-func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
-	previous := scheduler
-	scheduler = nil
-	t.Cleanup(func() { scheduler = previous })
-
-	for _, tt := range []struct {
-		name       string
-		hit        bool
-		noHandler  bool
-		blocked    []pkgengine.Object
-		wantClicks []string
-		wantGates  int
-	}{
-		{name: "target", hit: true, wantClicks: []string{"target"}, wantGates: 2},
-		{name: "target without handler", hit: true, noHandler: true, wantGates: 2},
-		{name: "stage", wantClicks: []string{"stage"}, wantGates: 2},
-		{name: "global blocks target", hit: true, blocked: []pkgengine.Object{clickTimerGlobal}, wantGates: 1},
-		{name: "target blocked", hit: true, blocked: []pkgengine.Object{7}, wantGates: 2},
-		{name: "global blocks stage", blocked: []pkgengine.Object{clickTimerGlobal}, wantGates: 1},
-		{name: "stage blocked", blocked: []pkgengine.Object{clickTimerStage}, wantGates: 2},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: tt.hit})
-			var game Game
-			game.scene.init()
-			game.bindScriptEvents()
-			game.inputMgr.g = &game
-			now := time.Unix(100, 0)
-			var steps, clicks, swipes []string
-			game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
-				steps = append(steps, "gate")
-				return now
-			})
-			game.inputMgr.swipe.InitWithClock(func() time.Time {
-				steps = append(steps, "swipe")
-				return now
-			})
-			sprite := newClickTestSprite(&game, "target", 7, false)
-			if !tt.noHandler {
-				sprite.OnClick(func() { clicks = append(clicks, "target") })
-			}
-			sprite.OnSwipe__0(90, func() { swipes = append(swipes, "target") })
-			game.scene.add(sprite)
-			game.OnClick(func() { clicks = append(clicks, "stage") })
-			game.OnSwipe__0(90, func() { swipes = append(swipes, "stage") })
-			for _, id := range tt.blocked {
-				game.inputMgr.clickGate.Allow(id)
-			}
-			steps = nil
-
-			game.handleEvent(&eventLeftButtonDown{Pos: mathf.Vec2{X: 10, Y: 20}})
-			wantSteps := []string{"swipe"}
-			for range tt.wantGates {
-				wantSteps = append(wantSteps, "gate")
-			}
-			if !reflect.DeepEqual(steps, wantSteps) {
-				t.Fatalf("dispatch steps = %v, want %v", steps, wantSteps)
-			}
-			if !reflect.DeepEqual(clicks, tt.wantClicks) {
-				t.Fatalf("clicks = %v, want %v", clicks, tt.wantClicks)
-			}
-			// A blocked global gate must not consume the target/stage gate.
-			routedID := pkgengine.Object(clickTimerStage)
-			if tt.hit {
-				routedID = 7
-			}
-			if allowed := game.inputMgr.clickGate.Allow(routedID); allowed != (tt.wantGates == 1) {
-				t.Fatalf("routed gate remains available = %v, want %v", allowed, tt.wantGates == 1)
-			}
-			// The global gate is always consumed, including when the routed gate blocks.
-			if game.inputMgr.clickGate.Allow(clickTimerGlobal) {
-				t.Fatal("global gate was not consumed before routing")
-			}
-			now = now.Add(100 * time.Millisecond)
-			game.handleEvent(&eventLeftButtonUp{Pos: mathf.Vec2{X: 110, Y: 20}})
-			wantSwipe := "stage"
-			if tt.hit {
-				wantSwipe = "target"
-			}
-			if !reflect.DeepEqual(swipes, []string{wantSwipe}) {
-				t.Fatalf("swipes = %v, want [%s]", swipes, wantSwipe)
-			}
-		})
-	}
-}
-
-func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T) {
-	previous := scheduler
-	scheduler = nil
-	t.Cleanup(func() { scheduler = previous })
-	setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: true})
-
-	for _, blocked := range []bool{false, true} {
-		var game Game
-		game.scene.init()
-		game.bindScriptEvents()
-		game.inputMgr.init(&game)
-		game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
-			return time.Unix(100, 0)
-		})
-		if blocked {
-			game.inputMgr.clickGate.Allow(clickTimerGlobal)
-		}
-		target := &disappearingClickTarget{}
-		target.proxy.SetId(7)
-		game.scene.add(target)
-		stageClicks := 0
-		game.OnClick(func() { stageClicks++ })
-
-		game.handleEvent(&eventLeftButtonDown{})
-		wantReads := 2
-		if blocked {
-			wantReads = 1
-		}
-		if target.proxyReads != wantReads || target.clicks != 0 || stageClicks != 0 {
-			t.Fatalf("global blocked %v: proxy reads / target clicks / stage clicks = %d / %d / %d, want %d / 0 / 0", blocked, target.proxyReads, target.clicks, stageClicks, wantReads)
-		}
-		if !game.inputMgr.clickGate.Allow(clickTimerStage) {
-			t.Fatalf("global blocked %v: missing target proxy consumed the stage gate", blocked)
-		}
-	}
-}
-
-func TestTouchStartGate(t *testing.T) {
-	previous := scheduler
-	scheduler = nil
-	defer func() { scheduler = previous }()
-
-	game := new(Game)
-	game.bindScriptEvents()
-	source := newTouchEventSprite(game, "source")
-	target := newTouchEventSprite(game, "target")
-	source.doWhenTouchStart(&target.SpriteImpl)
-	if source.spriteState.hasOnTouchStart {
-		t.Fatal("touch without a handler enabled dispatch")
-	}
-
-	calls := 0
-	source.addTouchStartHandler(func(Sprite) { calls++ })
-	if !source.spriteState.hasOnTouchStart {
-		t.Fatal("registered touch handler did not enable dispatch")
-	}
-	source.doWhenTouchStart(&target.SpriteImpl)
-	if calls != 1 {
-		t.Fatalf("registered touch calls = %d, want 1", calls)
-	}
-
-	clone := newTouchEventSprite(game, "source")
-	clone.SpriteImpl.InitFrom(&source.SpriteImpl)
-	clone.doWhenTouchStart(&target.SpriteImpl)
-	if clone.spriteState.hasOnTouchStart || calls != 1 {
-		t.Fatal("clone inherited the source handler gate")
-	}
-	clone.addTouchStartHandler(func(Sprite) { calls++ })
-	if !clone.spriteState.hasOnTouchStart {
-		t.Fatal("clone touch handler did not enable dispatch")
-	}
-	clone.doWhenTouchStart(&target.SpriteImpl)
-	if calls != 2 {
-		t.Fatalf("clone touch calls = %d, want 2", calls)
-	}
-	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketTouchStart)); got != 2 {
-		t.Fatalf("touch handlers = %d, want 2", got)
-	}
-}
-
-func TestDebugEventBindingsAndBroadcastOverloads(t *testing.T) {
-	_, game := setupRuntimeEventGame(t)
-	previous := scheduler
-	scheduler = nil
-	t.Cleanup(func() { scheduler = previous })
-	game.debugState.DebugEvent = true
-	game.debugState.DebugInstr = true
-	sprite := &SpriteImpl{g: game, name: "actor"}
-	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
-	game.scene.add(sprite)
-	var got []string
-	game.OnTimer(0, func() { got = append(got, "timer") })
-	game.OnKey__0(KeyA, func() { got = append(got, "key") })
-	game.OnKey__1([]Key{KeyA}, func(Key) { got = append(got, "keys") })
-	game.OnKey__1(nil, func(Key) { t.Error("empty key set invoked") })
-	game.OnSwipe__0(90, func() { got = append(got, "swipe") })
-	game.OnMsg__1("message", func() { got = append(got, "message") })
-	game.OnBackdrop__1("scene", func() { got = append(got, "backdrop") })
-	game.OnClick(func() { got = append(got, "click") })
-	sprite.OnCloned__1(func(any) { got = append(got, "clone") })
-	sprite.addTouchStartHandler(func(Sprite) { got = append(got, "touch") })
-	game.doWhenTimer(0)
-	game.doWhenKeyPressed(KeyA)
-	game.doWhenSwipe(90)
-	game.Broadcast__1("message", 123)
-	game.BroadcastAndWait__1("message", 456)
-	game.doWhenBackdropChanged("scene", true)
-	game.doWhenClick()
-	sprite.doWhenCloned(nil)
-	sprite.doWhenTouchStart(&SpriteImpl{name: "peer"})
-	want := []string{"timer", "key", "keys", "swipe", "message", "message", "backdrop", "click", "clone", "touch"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("debug handlers = %v, want %v", got, want)
-	}
-	game.scriptEvents.manager.SnapshotStartOnce()
-	sprite.spriteState.cloned = true
-	sprite.OnStart(func() { t.Error("late clone start ran") })
-	game.OnStart(func() { t.Error("late game start ran") })
-	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketStart)); got != 0 {
-		t.Fatalf("late start handlers registered = %d, want 0", got)
-	}
-	game.Stop(StopKind(-999))
-}
-
-func TestPointHitsClickTargetRejectsInvalidTarget(t *testing.T) {
-	game := &Game{}
-	for _, state := range []string{"missing proxy", "hidden", "destroyed"} {
-		t.Run(state, func(t *testing.T) {
-			sprite := newClickTestSprite(game, state, 1, false)
-			switch state {
-			case "missing proxy":
-				sprite.runtimeState.proxy = nil
-			case "hidden":
-				sprite.spriteState.isVisible = false
-			case "destroyed":
-				sprite.markDestroyed()
-			}
-			// No backend: rejection must precede the hit query.
-			if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
-				t.Fatal("invalid target accepted a click")
-			}
-		})
-	}
-}
-
-func TestTargetDispatchMutation(t *testing.T) {
-	previous := scheduler
-	scheduler = nil
-	defer func() { scheduler = previous }()
-
-	var registry scriptEventRegistry
-	owner, other := &SpriteImpl{}, &SpriteImpl{}
-	var calls []string
-	enabled, nested := true, false
-	var event scriptEventDispatch
-	event.run = func(_ coroutine.Thread, sink *eventSink) {
-		name := sink.Handler.(string)
-		calls = append(calls, name)
-		if name == "first" && !nested {
-			nested = true
-			registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "second"})
-			registry.dispatchTarget(coreevent.BucketClick, owner, event)
-		}
-		if name == "delete" {
-			registry.manager.DeleteOwner(owner)
-		}
-	}
-	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: other, Handler: "other"})
-	registry.manager.Add(coreevent.BucketClick, eventSink{
-		Owner: owner, Handler: "first", Cond: func(any) bool { return enabled },
-	})
-
-	registry.dispatchTarget(coreevent.BucketClick, owner, event)
-	if want := []string{"first", "first", "second"}; !slices.Equal(calls, want) {
-		t.Fatalf("nested dispatch = %v, want %v", calls, want)
-	}
-	enabled = false
-	registry.dispatchTarget(coreevent.BucketClick, owner, event)
-	if want := []string{"first", "first", "second", "second"}; !slices.Equal(calls, want) {
-		t.Fatalf("condition change = %v, want %v", calls, want)
-	}
-	registry.manager.DeleteOwner(owner)
-	registry.dispatchTarget(coreevent.BucketClick, owner, event)
-	if len(calls) != 4 {
-		t.Fatalf("deleted owner received event: %v", calls)
-	}
-	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "delete"})
-	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "after"})
-	registry.dispatchTarget(coreevent.BucketClick, owner, event)
-	if want := []string{"first", "first", "second", "second", "delete", "after"}; !slices.Equal(calls, want) {
-		t.Fatalf("deleted during dispatch = %v, want %v", calls, want)
-	}
-	registry.dispatchTarget(coreevent.BucketClick, owner, event)
-	if len(calls) != 6 {
-		t.Fatalf("deleted handlers received another event: %v", calls)
-	}
-}
-
-func TestTargetDispatchCompletesMatchingBeforeHandlers(t *testing.T) {
-	setupRuntimeScheduler(t)
-
-	var registry scriptEventRegistry
-	owner, other := &SpriteImpl{}, &SpriteImpl{}
-	enabled := true
-	var steps []string
-	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "first"})
-	registry.manager.Add(coreevent.BucketClick, eventSink{
-		Owner: other,
-		Cond: func(any) bool {
-			steps = append(steps, "check-other")
-			return false
-		},
-	})
-	registry.manager.Add(coreevent.BucketClick, eventSink{
-		Owner: owner,
-		Cond: func(any) bool {
-			steps = append(steps, "check-second")
-			return enabled
-		},
-		Handler: "second",
-	})
-
-	registry.dispatchTarget(coreevent.BucketClick, owner, scriptEventDispatch{
-		mode: coroutine.BatchWaitDone,
-		run: func(_ coroutine.Thread, sink *eventSink) {
-			name := sink.Handler.(string)
-			steps = append(steps, "run-"+name)
-			if name == "first" {
-				enabled = false
-			}
-		},
-	})
-
-	if want := []string{"check-second", "run-first", "run-second"}; !slices.Equal(steps, want) {
-		t.Fatalf("dispatch steps = %v, want %v", steps, want)
-	}
-}
-
-func TestStartBatchCleansPendingThreadCanceledBeforeRun(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
-	var registry scriptEventRegistry
-	var canceled coroutine.Thread
-	var pendingBeforeCancel, runningMarkedPending, canceledRan bool
-	dispatcher := currentScheduler.Create("dispatcher", func(coroutine.Thread) {
-		registry.dispatchStartEventBatch([]eventSink{{Owner: "first"}, {Owner: "canceled"}}, scriptEventDispatch{
-			mode: coroutine.BatchWaitFirstSlice,
-			run: func(thread coroutine.Thread, sink *eventSink) {
-				if sink.Owner == "canceled" {
-					canceledRan = true
-					return
-				}
-				runningMarkedPending = registry.isPendingStartThread(thread)
-				currentScheduler.StopIf(func(thread coroutine.Thread) bool {
-					if thread.Owner != "canceled" {
-						return false
-					}
-					canceled = thread
-					pendingBeforeCancel = registry.isPendingStartThread(thread)
-					return true
-				})
-			},
-		})
-	})
-	currentScheduler.Join(dispatcher)
-	if canceled == nil || !pendingBeforeCancel {
-		t.Fatal("later start thread was not registered as pending before cancellation")
-	}
-	currentScheduler.Join(canceled)
-	if canceledRan {
-		t.Fatal("canceled start handler ran")
-	}
-	if registry.isPendingStartThread(canceled) {
-		t.Fatal("canceled start thread retained its pending marker after cleanup")
-	}
-	if runningMarkedPending {
-		t.Fatal("running start handler retained its pending marker")
-	}
-}
-
-func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
-	game := &Game{}
-	game.scene.init()
-	back, front := &SpriteImpl{g: game}, &SpriteImpl{g: game}
-	removed := &SpriteImpl{g: game}
-	game.scene.add(back)
-	game.scene.add(front)
-	sinks := []eventSink{
-		{Owner: game, Handler: "stage-1"},
-		{Owner: back, Handler: "back-1"},
-		{Owner: removed, Handler: "removed"},
-		{Owner: front, Handler: "front-1"},
-		{Owner: []int{1}, Handler: "external"},
-		{Owner: back, Handler: "back-2"},
-		{Owner: game, Handler: "stage-2"},
-		{Owner: front, Handler: "front-2"},
-		{Owner: &Game{}, Handler: "other-game"},
-	}
-	snapshot := slices.Clone(sinks)
-	ordered := sinksInTargetOrder(game, sinks)
-	names := make([]string, len(ordered))
-	for i, sink := range ordered {
-		names[i] = sink.Handler.(string)
-	}
-	want := []string{"front-1", "front-2", "back-1", "back-2", "removed", "external", "other-game", "stage-1", "stage-2"}
-	if !slices.Equal(names, want) {
-		t.Fatalf("order = %v, want %v", names, want)
-	}
-	if !reflect.DeepEqual(sinks, snapshot) {
-		t.Fatal("sorting modified the shared event snapshot")
-	}
-	ordered[0].Handler = "changed"
-	if !reflect.DeepEqual(sinks, snapshot) {
-		t.Fatal("ordered result aliases the shared event snapshot")
-	}
-	// A later broadcast must observe the new layer order, not a cached grouping.
-	game.scene.items[0], game.scene.items[1] = front, back
-	if got := sinksInTargetOrder(game, sinks)[0].Handler; got != "back-1" {
-		t.Fatalf("first handler after layer change = %v", got)
-	}
-}
-
-func TestEventHandlerNonMatchingTriggerPreservesInvocation(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		register func(*Game, func())
-		fire     func(*Game, bool)
-	}{
-		{"key", func(g *Game, run func()) { g.OnKey__0(KeySpace, run) }, func(g *Game, match bool) {
-			key := KeyA
-			if match {
-				key = KeySpace
-			}
-			g.doWhenKeyPressed(key)
-		}},
-		{"click", func(g *Game, run func()) { g.OnClick(run) }, func(g *Game, match bool) {
-			if match {
-				g.doWhenClick()
-			} else {
-				sprite := &SpriteImpl{g: g}
-				sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
-				sprite.doWhenClick()
-			}
-		}},
-		{"backdrop", func(g *Game, run func()) { g.OnBackdrop__1("scene", run) }, func(g *Game, match bool) {
-			name := "other"
-			if match {
-				name = "scene"
-			}
-			g.doWhenBackdropChanged(name, false)
-		}},
-		{"message", func(g *Game, run func()) { g.OnMsg__1("msg", run) }, func(g *Game, match bool) {
-			msg := "other"
-			if match {
-				msg = "msg"
-			}
-			g.Broadcast__0(msg)
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			gate := currentScheduler.NewLatch()
-			started, finished := 0, 0
-			tc.register(game, func() { started++; gate.Wait(); finished++ })
-			tc.fire(game, true)
-			currentScheduler.Update()
-			tc.fire(game, false)
-			currentScheduler.Update()
-			gate.Open()
-			currentScheduler.Update()
-			if started != 1 || finished != 1 {
-				t.Fatalf("non-matching trigger affected invocation: started=%d finished=%d", started, finished)
-			}
-		})
-	}
-}
-
-func TestKeyHandlerSharesAdmissionAcrossRegisteredKeys(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-	gate := currentScheduler.NewLatch()
-	var received []Key
-	keys := []Key{KeySpace, KeyA}
-	game.OnKey__1(keys, func(key Key) {
-		received = append(received, key)
-		gate.Wait()
-	})
-	keys[1] = KeyB
-	game.doWhenKeyPressed(KeySpace)
-	currentScheduler.Update()
-	game.doWhenKeyPressed(KeyA)
-	currentScheduler.Update()
-	if len(received) != 1 || received[0] != KeySpace {
-		t.Fatalf("keys did not share one registration: %v", received)
-	}
-	gate.Open()
-	currentScheduler.Update()
-	game.doWhenKeyPressed(KeyB)
-	currentScheduler.Update()
-	game.doWhenKeyPressed(KeyA)
-	currentScheduler.Update()
-	if len(received) != 2 || received[1] != KeyA {
-		t.Fatalf("registration did not retain its original keys: %v", received)
-	}
-}
-
-func TestTargetEventHandlersStayWithTheirOwner(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		register func(*SpriteImpl, func())
-		fire     func(*SpriteImpl, *SpriteImpl)
-	}{
-		{"click", func(s *SpriteImpl, run func()) { s.OnClick(run) }, func(s, _ *SpriteImpl) {
-			s.doWhenClick()
-		}},
-		{"swipe", func(s *SpriteImpl, run func()) { s.OnSwipe__0(90, run) }, func(s, _ *SpriteImpl) {
-			s.doWhenSwipe(90)
-		}},
-		{"cloned", func(s *SpriteImpl, run func()) { s.OnCloned__0(run) }, func(s, _ *SpriteImpl) {
-			s.doWhenCloned(nil)
-		}},
-		{"touch", func(s *SpriteImpl, run func()) { s.addTouchStartHandler(func(Sprite) { run() }) }, func(s, other *SpriteImpl) {
-			s.doWhenTouchStart(other)
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			first := &newTouchEventSprite(game, "first").SpriteImpl
-			second := &newTouchEventSprite(game, "second").SpriteImpl
-			var calls [2]int
-			tc.register(first, func() { calls[0]++ })
-			tc.register(second, func() { calls[1]++ })
-			tc.fire(first, second)
-			currentScheduler.Update()
-			if calls != [2]int{1, 0} {
-				t.Fatalf("first target: calls=%v, want [1 0]", calls)
-			}
-			tc.fire(second, first)
-			currentScheduler.Update()
-			if calls != [2]int{1, 1} {
-				t.Fatalf("second target: calls=%v, want [1 1]", calls)
-			}
-		})
-	}
-}
-
-func TestEventHandlerRetriggerPolicies(t *testing.T) {
-	for _, tc := range []struct {
-		kind         string
-		wantStarted  int
-		wantFinished int
-	}{
-		{"key", 1, 1},
-		{"any key", 1, 1},
-		{"click", 2, 1},
-		{"backdrop", 2, 1},
-		{"any backdrop", 2, 1},
-		{"message", 2, 1},
-		{"any message", 2, 1},
-		{"timer", 2, 2},
-		{"swipe", 2, 2},
-		{"cloned", 2, 2},
-		{"touch", 2, 2},
-	} {
-		t.Run(tc.kind, func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			gate := currentScheduler.NewLatch()
-			started, finished := 0, 0
-			run := func() { started++; gate.Wait(); finished++ }
-			var fire func()
-			switch tc.kind {
-			case "key":
-				game.OnKey__0(KeySpace, run)
-				fire = func() { game.doWhenKeyPressed(KeySpace) }
-			case "any key":
-				game.OnAnyKey(func(Key) { run() })
-				fire = func() { game.doWhenKeyPressed(KeySpace) }
-			case "click":
-				game.OnClick(run)
-				fire = func() { game.doWhenClick() }
-			case "backdrop":
-				game.OnBackdrop__1("scene", run)
-				fire = func() { game.doWhenBackdropChanged("scene", false) }
-			case "any backdrop":
-				game.OnBackdrop__0(func(BackdropName) { run() })
-				fire = func() { game.doWhenBackdropChanged("scene", false) }
-			case "message":
-				game.OnMsg__1("msg", run)
-				fire = func() { game.Broadcast__0("msg") }
-			case "any message":
-				game.OnMsg__0(func(MsgName, any) { run() })
-				fire = func() { game.Broadcast__0("msg") }
-			case "timer":
-				clock.ClearTimers()
-				t.Cleanup(clock.ClearTimers)
-				game.OnTimer(0, run)
-				fire = func() { game.doWhenTimer(0) }
-			case "swipe":
-				game.OnSwipe__0(90, run)
-				fire = func() { game.doWhenSwipe(90) }
-			case "cloned":
-				sprite := newTouchEventSprite(game, "clone")
-				sprite.OnCloned__0(run)
-				fire = func() { sprite.doWhenCloned(nil) }
-			case "touch":
-				sprite := newTouchEventSprite(game, "source")
-				other := newTouchEventSprite(game, "target")
-				sprite.addTouchStartHandler(func(Sprite) { run() })
-				fire = func() { sprite.doWhenTouchStart(&other.SpriteImpl) }
-			}
-			fire()
-			currentScheduler.Update()
-			if started != 1 || finished != 0 {
-				t.Fatalf("first trigger: started=%d finished=%d, want 1/0", started, finished)
-			}
-			fire()
-			currentScheduler.Update()
-			if started != tc.wantStarted || finished != 0 {
-				t.Fatalf("retrigger: started=%d finished=%d, want %d/0", started, finished, tc.wantStarted)
-			}
-			gate.Open()
-			currentScheduler.Update()
-			if finished != tc.wantFinished {
-				t.Fatalf("finished %d scripts, want %d", finished, tc.wantFinished)
-			}
-			fire()
-			currentScheduler.Update()
-			if started != tc.wantStarted+1 || finished != tc.wantFinished+1 {
-				t.Fatalf("after completion: started=%d finished=%d, want %d/%d", started, finished, tc.wantStarted+1, tc.wantFinished+1)
-			}
-		})
-	}
-}
-
-func TestKeyHandlerIdentityIncludesRegistrationAndOwner(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-	gate := currentScheduler.NewLatch()
-	started := 0
-	run := func() { started++; gate.Wait() }
-	game.OnKey__0(KeySpace, run)
-	game.OnKey__0(KeySpace, run)
-	clone := &SpriteImpl{g: game}
-	clone.spriteState.cloned = true
-	clone.scriptEventBindings.bind(&game.scriptEvents, clone)
-	clone.OnKey__0(KeySpace, run)
-	game.doWhenKeyPressed(KeySpace)
-	currentScheduler.Update()
-	game.doWhenKeyPressed(KeySpace)
-	currentScheduler.Update()
-	if started != 3 {
-		t.Fatalf("started %d scripts, want one per registration and owner", started)
-	}
-	currentScheduler.StopIf(func(th coroutine.Thread) bool { return th.Owner == clone })
-	game.doWhenKeyPressed(KeySpace)
-	currentScheduler.Update()
-	if started != 4 {
-		t.Fatalf("canceled clone handler did not restart independently: %d", started)
-	}
-	gate.Open()
-	currentScheduler.Update()
-}
-
-// Retriggers may arrive before a handler gets its first slice. Replacing a
-// canceled registration must not let its delayed cleanup clear the new one.
-func TestEventHandlerQueuedRetriggers(t *testing.T) {
-	for _, key := range []bool{false, true} {
-		t.Run(map[bool]string{false: "restart", true: "ignore"}[key], func(t *testing.T) {
-			currentScheduler, game := setupRuntimeEventGame(t)
-			gate := currentScheduler.NewLatch()
-			started, finished := 0, 0
-			run := func() { started++; gate.Wait(); finished++ }
-			fire := func() { game.doWhenClick() }
-			if key {
-				game.OnKey__0(KeySpace, run)
-				fire = func() { game.doWhenKeyPressed(KeySpace) }
-			} else {
-				game.OnClick(run)
-			}
-			parent := currentScheduler.Create(game, func(coroutine.Thread) {
-				fire()
-				fire()
-				fire()
-			})
-			currentScheduler.Join(parent)
-			currentScheduler.Update()
-			if started != 1 {
-				t.Fatalf("queued retriggers started %d handlers", started)
-			}
-			fire()
-			currentScheduler.Update()
-			want := 2
-			if key {
-				want = 1
-			}
-			if started != want {
-				t.Fatalf("retrigger started %d, want %d", started, want)
-			}
-			gate.Open()
-			currentScheduler.Update()
-			if finished != 1 {
-				t.Fatalf("finished %d handlers", finished)
-			}
-		})
-	}
-}
-
 func TestIndependentBroadcastTreeDoesNotInheritReceiverTurn(t *testing.T) {
 	for _, fromScript := range []bool{false, true} {
 		name := "external"
@@ -1690,160 +2124,6 @@ func TestIndependentBroadcastTreeDoesNotInheritReceiverTurn(t *testing.T) {
 	}
 }
 
-func TestMessageExecutionContextReleasedOnCancelAndReset(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-	gate := currentScheduler.NewLatch()
-	started, cleaned := 0, 0
-	for range 3 {
-		game.OnMsg__1("held", func() {
-			started++
-			defer func() { cleaned++ }()
-			gate.Wait()
-		})
-	}
-
-	game.Broadcast__0("held")
-	currentScheduler.Update()
-	if started != 3 {
-		t.Fatalf("started receivers = %d, want 3", started)
-	}
-	currentScheduler.RunAfterStop(nil)
-	if cleaned != 3 || len(game.scriptEvents.messageExecutions) != 0 {
-		t.Fatalf("after cancellation: cleaned = %d, retained contexts = %d", cleaned, len(game.scriptEvents.messageExecutions))
-	}
-
-	game.scriptEvents.manager.Reset()
-	calls := 0
-	game.OnMsg__1("held", func() { calls++ })
-	game.BroadcastAndWait__0("held")
-	if calls != 1 || len(game.scriptEvents.messageExecutions) != 0 {
-		t.Fatalf("after reset and completion: calls = %d, retained contexts = %d", calls, len(game.scriptEvents.messageExecutions))
-	}
-}
-
-func TestMatchingEventSinks(t *testing.T) {
-	for _, matches := range [][]int{nil, {2}, {0, 2}, {0, 1, 2}} {
-		var calls []int
-		sinks := make([]eventSink, 3)
-		for i := range sinks {
-			sinks[i] = eventSink{Owner: i, Cond: func(data any) bool {
-				if data != "message" {
-					t.Fatalf("predicate data = %v", data)
-				}
-				calls = append(calls, i)
-				return slices.Contains(matches, i)
-			}}
-		}
-		got := matchingEventSinks(sinks, "message")
-		if !slices.Equal(calls, []int{0, 1, 2}) {
-			t.Fatalf("predicate calls = %v", calls)
-		}
-		if len(got) != len(matches) {
-			t.Fatalf("matches = %d, want %d", len(got), len(matches))
-		}
-		for i, owner := range matches {
-			if got[i].Owner != owner {
-				t.Fatalf("match %d owner = %v, want %d", i, got[i].Owner, owner)
-			}
-			got[i].Owner = "changed"
-			if sinks[owner].Owner != owner {
-				t.Fatal("result aliases the source snapshot")
-			}
-		}
-	}
-	unconditional := []eventSink{{Owner: "unconditional"}}
-	if got := matchingEventSinks(unconditional, nil); len(got) != 1 || got[0].Owner != "unconditional" {
-		t.Fatalf("unconditional match = %v", got)
-	}
-	if got := matchingEventSinks(nil, nil); len(got) != 0 {
-		t.Fatalf("empty snapshot matched %d sinks", len(got))
-	}
-}
-
-func TestMatchingEventSinksNoMatchAllocations(t *testing.T) {
-	sinks := make([]eventSink, 64)
-	for i := range sinks {
-		sinks[i].Cond = coreevent.MatchValue("other")
-	}
-	if allocs := testing.AllocsPerRun(100, func() {
-		if got := matchingEventSinks(sinks, "tick"); len(got) != 0 {
-			t.Fatalf("unexpected matches: %d", len(got))
-		}
-	}); allocs != 0 {
-		t.Fatalf("no-match filtering allocated %g times", allocs)
-	}
-}
-
-// Stamp-driven games broadcast to many clones each frame.
-func BenchmarkTargetOrder(b *testing.B) {
-	game := &Game{}
-	game.scene.init()
-	sinks := make([]eventSink, 0, 202)
-	for range 100 {
-		sprite := &SpriteImpl{g: game}
-		game.scene.add(sprite)
-		sinks = append(sinks, eventSink{Owner: sprite}, eventSink{Owner: sprite})
-	}
-	sinks = append(sinks, eventSink{Owner: game}, eventSink{Owner: "external"})
-	b.ReportAllocs()
-	for b.Loop() {
-		if got := sinksInTargetOrder(game, sinks); len(got) != len(sinks) {
-			b.Fatal(len(got))
-		}
-	}
-}
-
-func BenchmarkTargetDispatch(b *testing.B) {
-	previous := scheduler
-	scheduler = nil
-	defer func() { scheduler = previous }()
-	for _, scenario := range []struct {
-		name           string
-		count, matches int
-	}{
-		{"1/missing", 1, 0},
-		{"1/present", 1, 1},
-		{"100/missing", 100, 0},
-		{"100/present", 100, 1},
-		{"300/missing", 300, 0},
-		{"300/present", 300, 1},
-		{"300/mixed-64", 300, 64},
-	} {
-		b.Run(scenario.name, func(b *testing.B) {
-			var registry scriptEventRegistry
-			owner := &SpriteImpl{}
-			for i := range scenario.count {
-				sink := eventSink{Owner: &SpriteImpl{}}
-				if i >= scenario.count-scenario.matches {
-					sink.Owner = owner
-					if scenario.matches > 1 && i%2 == 0 {
-						sink.Cond = func(any) bool { return false }
-					}
-				}
-				registry.manager.Add(coreevent.BucketTouchStart, sink)
-			}
-			event := scriptEventDispatch{run: func(coroutine.Thread, *eventSink) {}}
-			b.ReportAllocs()
-			for b.Loop() {
-				registry.dispatchTarget(coreevent.BucketTouchStart, owner, event)
-			}
-		})
-	}
-}
-
-func BenchmarkTargetDispatchMissingManaged(b *testing.B) {
-	var registry scriptEventRegistry
-	for range 300 {
-		registry.manager.Add(coreevent.BucketTouchStart, eventSink{Owner: &SpriteImpl{}})
-	}
-	owner := &SpriteImpl{}
-	event := scriptEventDispatch{mode: coroutine.BatchAsync}
-	b.ReportAllocs()
-	for b.Loop() {
-		registry.dispatchTarget(coreevent.BucketTouchStart, owner, event)
-	}
-}
-
 // Australia broadcasts "Front Waypoints" every frame without a matching hat.
 // Include successful dispatches to guard against shifting cost to normal broadcasts.
 func BenchmarkBroadcastMatching(b *testing.B) {
@@ -1872,131 +2152,6 @@ func BenchmarkBroadcastMatching(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				game.Broadcast__0("tick")
-			}
-		})
-	}
-}
-
-func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, point mathf.Vec2, isTrigger bool) bool {
-	if s.lastIsTrigger != nil {
-		s.lastIsTrigger[obj] = isTrigger
-	}
-	return s.hits[obj]
-}
-
-func (s *clickThroughSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {}
-
-func (c *disappearingClickTarget) Visible() bool { return true }
-
-func (c *disappearingClickTarget) getProxy() *engine.Sprite {
-	c.proxyReads++
-	if c.proxyReads > 1 {
-		return nil
-	}
-	return &c.proxy
-}
-
-func (c *disappearingClickTarget) doWhenClick() { c.clicks++ }
-
-func (*touchEventSprite) Main() {}
-
-func setupRuntimeEventGame(t *testing.T) (*coroutine.Scheduler, *Game) {
-	t.Helper()
-
-	currentScheduler := setupRuntimeScheduler(t)
-	game := new(Game)
-	game.bindScriptEvents()
-	game.inputMgr.init(game)
-	engine.SetGame(game)
-	t.Cleanup(func() { engine.SetGame(nil) })
-	return currentScheduler, game
-}
-
-func updateRuntimeEventSchedulerUntil(t *testing.T, currentScheduler *coroutine.Scheduler, done func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for !done() {
-		if time.Now().After(deadline) {
-			t.Fatal("coroutine scheduler did not reach the expected state")
-		}
-		currentScheduler.Update()
-		runtime.Gosched()
-	}
-}
-
-func pollRuntimeConditions(registry *scriptEventRegistry) {
-	scheduler.RunBetweenScripts(registry.sampleConditions)
-	withEventRegistrationBarrier(registry.game, registry.dispatchConditions)
-}
-
-func pollRuntimeEventConditions(game *Game) {
-	game.OnEngineBeforeUpdate(1.0 / 30)
-	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
-}
-
-func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
-	t.Helper()
-
-	setupImmediateEngineCalls(t)
-
-	original := pkgengine.SpriteMgr
-	mgr := &clickThroughSpriteMgr{
-		hits:          hits,
-		lastIsTrigger: make(map[pkgengine.Object]bool),
-	}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() {
-		pkgengine.SpriteMgr = original
-	})
-	return mgr
-}
-
-func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick bool) *SpriteImpl {
-	sprite := &SpriteImpl{}
-	sprite.g = g
-	sprite.name = name
-	sprite.spriteState.isVisible = true
-	sprite.runtimeState.proxy = &engine.Sprite{}
-	sprite.runtimeState.proxy.SetId(id)
-	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
-	if registerClick {
-		sprite.OnClick(func() {})
-	}
-	return sprite
-}
-
-func newTouchEventSprite(game *Game, name string) *touchEventSprite {
-	sprite := &touchEventSprite{}
-	sprite.g, sprite.name, sprite.sprite = game, name, sprite
-	sprite.scriptEventBindings.bind(&game.scriptEvents, &sprite.SpriteImpl)
-	return sprite
-}
-
-type eventOrderLog struct {
-	mu      sync.Mutex
-	entries []string
-}
-
-func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
-	for _, handlers := range []int{1, 3, 10} {
-		b.Run(fmt.Sprintf("300-targets/%d-handlers", handlers), func(b *testing.B) {
-			currentScheduler := coroutine.New(nil)
-			installRuntimeScheduler(b, currentScheduler, nil)
-			game := new(Game)
-			game.bindScriptEvents()
-			game.scene.init()
-			for i := range 300 {
-				sprite := newEventOrderSprite(game, fmt.Sprintf("target-%d", i))
-				game.scene.add(sprite)
-				for range handlers {
-					sprite.OnMsg__1("fan-out", func() {})
-				}
-			}
-			b.ReportAllocs()
-			for b.Loop() {
-				// Include dispatch and completion; no receiver overlaps the
-				// next broadcast. B.Loop excludes fixture setup and cleanup.
-				game.BroadcastAndWait__0("fan-out")
 			}
 		})
 	}
@@ -2039,57 +2194,6 @@ func TestGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
 		"back",
 		"stage",
 		"front-1-after-yield",
-	})
-}
-
-func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
-	currentScheduler, game, back, front := setupEventOrderGame(t)
-	var log eventOrderLog
-
-	front.OnStart(func() {
-		log.add("front-before-yield")
-		engine.WaitNextFrame()
-		log.add("front-after-yield")
-	})
-	front.OnStart(func() {
-		log.add("front-stop")
-		front.Stop(AllStop)
-		log.add("front-after-stop")
-	})
-	back.OnStart(func() {
-		log.add("back-before-yield")
-		engine.WaitNextFrame()
-		log.add("back-after-yield")
-	})
-	game.OnStart(func() {
-		log.add("stage-start")
-		game.Broadcast__0("after-stop")
-	})
-	game.OnMsg__1("after-stop", func() {
-		log.add("message-before-yield")
-		engine.WaitNextFrame()
-		log.add("message-after-yield")
-	})
-
-	game.handleEvent(&eventStart{generation: game.lifecycle.generation()})
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, game.lifecycle.startDispatched.Load)
-	waitForEventOrderEntries(t, currentScheduler, &log, 5)
-	requireEventOrder(t, &log, []string{
-		"front-before-yield",
-		"front-stop",
-		"back-before-yield",
-		"stage-start",
-		"message-before-yield",
-	})
-
-	advanceEventFrame(t, currentScheduler, &log, 6)
-	requireEventOrder(t, &log, []string{
-		"front-before-yield",
-		"front-stop",
-		"back-before-yield",
-		"stage-start",
-		"message-before-yield",
-		"message-after-yield",
 	})
 }
 
@@ -2139,129 +2243,6 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	game.Broadcast__0("clone-order")
 	waitForEventOrderEntries(t, currentScheduler, &log, 5)
 	requireEventOrder(t, &log, []string{"front", "source", "clone", "back", "stage"})
-}
-
-func TestKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
-	currentScheduler, game, back, front := setupEventOrderGame(t)
-	var log eventOrderLog
-
-	register := func(events *scriptEventBindings, name string) {
-		// Register KeyAny first to ensure dispatch uses Scratch's two event
-		// phases rather than the flat sink registration order.
-		events.OnKey__0(KeyAny, func() { log.add(name + "-any") })
-		events.OnKey__0(KeySpace, func() { log.add(name + "-specific") })
-	}
-	register(&game.scriptEventBindings, "stage")
-	register(&back.scriptEventBindings, "back")
-	register(&front.scriptEventBindings, "front")
-
-	game.handleEvent(&eventKeyDown{Key: KeySpace})
-	waitForEventOrderEntries(t, currentScheduler, &log, 6)
-	requireEventOrder(t, &log, []string{
-		"front-specific",
-		"back-specific",
-		"stage-specific",
-		"front-any",
-		"back-any",
-		"stage-any",
-	})
-
-	log.reset()
-	game.handleEvent(&eventKeyDown{Key: KeyA})
-	waitForEventOrderEntries(t, currentScheduler, &log, 3)
-	requireEventOrder(t, &log, []string{"front-any", "back-any", "stage-any"})
-}
-
-func TestKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-	var log eventOrderLog
-
-	game.OnKey__1([]Key{KeyAny, KeySpace, KeyAny}, func(key Key) {
-		switch key {
-		case KeySpace:
-			log.add("with-key-space")
-		case KeyA:
-			log.add("with-key-a")
-		default:
-			log.add("with-key-unexpected")
-		}
-	})
-	game.OnKey__2([]Key{KeySpace, KeyAny}, func() { log.add("without-key") })
-	game.OnKey__1([]Key{KeySpace, KeySpace}, func(Key) { log.add("specific") })
-	game.OnKey__1(nil, func(Key) { log.add("nil") })
-	game.OnKey__2([]Key{}, func() { log.add("empty") })
-
-	game.handleEvent(&eventKeyDown{Key: KeySpace})
-	waitForEventOrderEntries(t, currentScheduler, &log, 3)
-	requireEventOrder(t, &log, []string{"specific", "with-key-space", "without-key"})
-
-	log.reset()
-	game.handleEvent(&eventKeyDown{Key: KeyA})
-	waitForEventOrderEntries(t, currentScheduler, &log, 2)
-	requireEventOrder(t, &log, []string{"with-key-a", "without-key"})
-}
-
-func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
-	for _, tt := range []struct {
-		name  string
-		keys  []Key
-		edges []Key
-	}{
-		{"any key", nil, []Key{KeyA, KeyB}},
-		{"multiple keys", []Key{KeyA, KeyB}, []Key{KeyA, KeyB}},
-		{"repeated key", []Key{KeyA}, []Key{KeyA, KeyA}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			currentScheduler, game := setupInputFrameGame(t)
-			var got []Key
-			handler := func(key Key) { got = append(got, key) }
-			if tt.keys == nil {
-				game.OnAnyKey(handler)
-			} else {
-				game.OnKey__1(tt.keys, handler)
-			}
-			var want []Key
-			// Once the first invocation finishes, the registration accepts a new frame.
-			for _, edges := range [][]Key{tt.edges, {tt.edges[len(tt.edges)-1]}} {
-				clock.Update(1.0/30, 30)
-				batch := &inputFrame{}
-				for _, key := range edges {
-					batch.events = append(batch.events, &eventKeyDown{Key: key})
-				}
-				game.inputMgr.frame.pending = batch
-				game.dispatchFrameEvents()
-				currentScheduler.Update()
-				want = append(want, edges[0])
-				if !slices.Equal(got, want) {
-					t.Fatalf("handler keys = %v, want %v", got, want)
-				}
-			}
-		})
-	}
-}
-
-func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t *testing.T) {
-	currentScheduler, game := setupInputFrameGame(t)
-	var got []Key
-	finished := false
-	game.OnAnyKey(func(key Key) {
-		got = append(got, key)
-		if key == KeyA {
-			engine.WaitNextFrame()
-			finished = true
-		}
-	})
-	want := [][]Key{{KeyA}, {KeyA}, {KeyA, KeyB}}
-	for frame, key := range []Key{KeyA, KeyB, KeyB} {
-		clock.Update(1.0/30, 30)
-		game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: key}}}
-		game.dispatchFrameEvents()
-		currentScheduler.Update()
-		if !slices.Equal(got, want[frame]) || finished != (frame > 0) {
-			t.Fatalf("frame %d: handler keys = %v, first finished = %v, want %v and %v",
-				frame, got, finished, want[frame], frame > 0)
-		}
-	}
 }
 
 func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
@@ -2389,6 +2370,134 @@ func TestAsyncBroadcastDoesNotWaitForUnexpiredEarlierScript(t *testing.T) {
 	requireEventOrder(t, &log, []string{"A-before", "A-after", "C", "B"})
 }
 
+func TestSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	var log eventOrderLog
+
+	game.OnMsg__1("restart-pending", func() {
+		log.add("receiver")
+	})
+	currentScheduler.Create(game, func(coroutine.Thread) {
+		log.add("caller-before")
+		game.Broadcast__0("restart-pending")
+		game.Broadcast__0("restart-pending")
+		log.add("caller-after")
+	})
+
+	waitForEventOrderEntries(t, currentScheduler, &log, 3)
+	requireEventOrder(t, &log, []string{
+		"caller-before",
+		"caller-after",
+		"receiver",
+	})
+}
+
+func TestDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
+	previousProcs := runtime.GOMAXPROCS(1)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
+
+	currentScheduler, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
+
+	game.OnMsg__1("inner-order", func() { log.add("inner-stage") })
+	back.OnMsg__1("inner-order", func() { log.add("inner-back") })
+	front.OnMsg__1("inner-order", func() { log.add("inner-front") })
+	game.OnMsg__1("outer-order", func() {
+		log.add("outer-before")
+		engine.RequestRedraw()
+		game.Broadcast__0("inner-order")
+		log.add("outer-after")
+	})
+
+	game.Broadcast__0("outer-order")
+	waitForEventOrderEntries(t, currentScheduler, &log, 5)
+	requireEventOrder(t, &log, []string{
+		"outer-before",
+		"outer-after",
+		"inner-front",
+		"inner-back",
+		"inner-stage",
+	})
+}
+
+// Broadcast waits, restarts and sender atomicity.
+
+func TestNestedBroadcastAndWaitCompletesInCurrentFrame(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+
+	var calls []string
+	game.OnMsg__1("outer", func() {
+		calls = append(calls, "outer-before")
+		game.BroadcastAndWait__0("inner")
+		calls = append(calls, "outer-after")
+	})
+	game.OnMsg__1("inner", func() {
+		calls = append(calls, "inner")
+	})
+
+	game.Broadcast__0("outer")
+	currentScheduler.Update()
+	want := []string{"outer-before", "inner", "outer-after"}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("synchronous nested broadcast calls = %v, want %v", calls, want)
+	}
+
+	clock.Update(0, 0)
+	currentScheduler.Update()
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("synchronous broadcast left deferred handlers: calls = %v, want %v", calls, want)
+	}
+}
+
+func TestRecursiveBroadcastAndWaitYieldsAtRoundBoundary(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+
+	calls := 0
+	game.OnMsg__1("self", func() {
+		calls++
+		engine.RequestRedraw()
+		if calls < 3 {
+			game.BroadcastAndWait__0("self")
+		}
+	})
+
+	game.Broadcast__0("self")
+	for frame := 1; frame <= 3; frame++ {
+		if frame > 1 {
+			clock.Update(0, 0)
+		}
+		currentScheduler.Update()
+		if calls != frame {
+			t.Fatalf("calls after frame %d = %d, want %d", frame, calls, frame)
+		}
+	}
+}
+
+func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
+	for _, handlers := range []int{1, 3, 10} {
+		b.Run(fmt.Sprintf("300-targets/%d-handlers", handlers), func(b *testing.B) {
+			currentScheduler := coroutine.New(nil)
+			installRuntimeScheduler(b, currentScheduler, nil)
+			game := new(Game)
+			game.bindScriptEvents()
+			game.scene.init()
+			for i := range 300 {
+				sprite := newEventOrderSprite(game, fmt.Sprintf("target-%d", i))
+				game.scene.add(sprite)
+				for range handlers {
+					sprite.OnMsg__1("fan-out", func() {})
+				}
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				// Include dispatch and completion; no receiver overlaps the
+				// next broadcast. B.Loop excludes fixture setup and cleanup.
+				game.BroadcastAndWait__0("fan-out")
+			}
+		})
+	}
+}
+
 func TestBroadcastAndWaitResumesOlderScriptBeforeNewReceiver(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
 	clock.Start()
@@ -2468,28 +2577,6 @@ func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	if wantFinishes := []string{"first-finish", "second-finish"}; !reflect.DeepEqual(finishes, wantFinishes) {
 		t.Fatalf("event finishes = %v, want %v", finishes, wantFinishes)
 	}
-}
-
-func TestSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
-	currentScheduler, game := setupRuntimeEventGame(t)
-	var log eventOrderLog
-
-	game.OnMsg__1("restart-pending", func() {
-		log.add("receiver")
-	})
-	currentScheduler.Create(game, func(coroutine.Thread) {
-		log.add("caller-before")
-		game.Broadcast__0("restart-pending")
-		game.Broadcast__0("restart-pending")
-		log.add("caller-after")
-	})
-
-	waitForEventOrderEntries(t, currentScheduler, &log, 3)
-	requireEventOrder(t, &log, []string{
-		"caller-before",
-		"caller-after",
-		"receiver",
-	})
 }
 
 func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
@@ -2728,6 +2815,61 @@ func TestBroadcastAndWaitRunsQueuedDescendantsWithoutJoiningThem(t *testing.T) {
 	})
 }
 
+// External callers, cancellation and cleanup.
+
+func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	thread := currentScheduler.Create(game, func(coroutine.Thread) {
+		close(started)
+		<-release
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("active coroutine did not start")
+	}
+
+	game.Stop(AllOtherScripts)
+	if !thread.Stopped() {
+		t.Fatal("external Stop(AllOtherScripts) did not stop active coroutine")
+	}
+	close(release)
+	currentScheduler.Join(thread)
+}
+
+func TestMessageExecutionContextReleasedOnCancelAndReset(t *testing.T) {
+	currentScheduler, game := setupRuntimeEventGame(t)
+	gate := currentScheduler.NewLatch()
+	started, cleaned := 0, 0
+	for range 3 {
+		game.OnMsg__1("held", func() {
+			started++
+			defer func() { cleaned++ }()
+			gate.Wait()
+		})
+	}
+
+	game.Broadcast__0("held")
+	currentScheduler.Update()
+	if started != 3 {
+		t.Fatalf("started receivers = %d, want 3", started)
+	}
+	currentScheduler.RunAfterStop(nil)
+	if cleaned != 3 || len(game.scriptEvents.messageExecutions) != 0 {
+		t.Fatalf("after cancellation: cleaned = %d, retained contexts = %d", cleaned, len(game.scriptEvents.messageExecutions))
+	}
+
+	game.scriptEvents.manager.Reset()
+	calls := 0
+	game.OnMsg__1("held", func() { calls++ })
+	game.BroadcastAndWait__0("held")
+	if calls != 1 || len(game.scriptEvents.messageExecutions) != 0 {
+		t.Fatalf("after reset and completion: calls = %d, retained contexts = %d", calls, len(game.scriptEvents.messageExecutions))
+	}
+}
+
 func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
 	currentScheduler, game := setupRuntimeEventGame(t)
 	release := currentScheduler.NewLatch()
@@ -2877,128 +3019,4 @@ func TestCanceledReceiverDoesNotBreakOrderedBatch(t *testing.T) {
 	game.Broadcast__0("cancel-middle")
 	waitForEventOrderEntries(t, currentScheduler, &log, 3)
 	requireEventOrder(t, &log, []string{"front-first", "back", "stage"})
-}
-
-func TestConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
-	currentScheduler, game, back, front := setupEventOrderGame(t)
-	var log eventOrderLog
-
-	register := func(events *scriptEventBindings, name string) {
-		events.OnCond(func() bool {
-			log.add("check-" + name)
-			return true
-		}, func() {
-			log.add("run-" + name)
-		})
-	}
-	register(&game.scriptEventBindings, "stage")
-	register(&back.scriptEventBindings, "back")
-	register(&front.scriptEventBindings, "front")
-
-	pollRuntimeConditions(&game.scriptEvents)
-	waitForEventOrderEntries(t, currentScheduler, &log, 6)
-	requireEventOrder(t, &log, []string{
-		"check-front",
-		"check-back",
-		"check-stage",
-		"run-front",
-		"run-back",
-		"run-stage",
-	})
-}
-
-func TestDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
-	previousProcs := runtime.GOMAXPROCS(1)
-	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
-
-	currentScheduler, game, back, front := setupEventOrderGame(t)
-	var log eventOrderLog
-
-	game.OnMsg__1("inner-order", func() { log.add("inner-stage") })
-	back.OnMsg__1("inner-order", func() { log.add("inner-back") })
-	front.OnMsg__1("inner-order", func() { log.add("inner-front") })
-	game.OnMsg__1("outer-order", func() {
-		log.add("outer-before")
-		engine.RequestRedraw()
-		game.Broadcast__0("inner-order")
-		log.add("outer-after")
-	})
-
-	game.Broadcast__0("outer-order")
-	waitForEventOrderEntries(t, currentScheduler, &log, 5)
-	requireEventOrder(t, &log, []string{
-		"outer-before",
-		"outer-after",
-		"inner-front",
-		"inner-back",
-		"inner-stage",
-	})
-}
-
-func (l *eventOrderLog) add(entry string) {
-	l.mu.Lock()
-	l.entries = append(l.entries, entry)
-	l.mu.Unlock()
-}
-
-func (l *eventOrderLog) len() int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return len(l.entries)
-}
-
-func (l *eventOrderLog) reset() {
-	l.mu.Lock()
-	l.entries = l.entries[:0]
-	l.mu.Unlock()
-}
-
-func (l *eventOrderLog) snapshot() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return append([]string(nil), l.entries...)
-}
-
-func newEventOrderSprite(game *Game, name string) *SpriteImpl {
-	sprite := &SpriteImpl{name: name, g: game}
-	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
-	return sprite
-}
-
-func setupEventOrderGame(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl, *SpriteImpl) {
-	t.Helper()
-
-	currentScheduler, game := setupRuntimeEventGame(t)
-	game.scene.init()
-	setupCaptureTest(t)
-
-	back := newEventOrderSprite(game, "back")
-	front := newEventOrderSprite(game, "front")
-	game.scene.add(back)
-	game.scene.add(front)
-	game.scene.updateRenderLayers()
-	return currentScheduler, game, back, front
-}
-
-func waitForEventOrderEntries(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
-	t.Helper()
-	// Drain once before observing the log; a handler may write its final entry
-	// while its coroutine is still tearing down.
-	currentScheduler.Update()
-	updateRuntimeEventSchedulerUntil(t, currentScheduler, func() bool {
-		return log.len() >= count
-	})
-}
-
-func advanceEventFrame(t *testing.T, currentScheduler *coroutine.Scheduler, log *eventOrderLog, count int) {
-	t.Helper()
-	clock.Update(0, 0)
-	waitForEventOrderEntries(t, currentScheduler, log, count)
-}
-
-func requireEventOrder(t *testing.T, log *eventOrderLog, want []string) {
-	t.Helper()
-	if got := log.snapshot(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("event order = %v, want %v", got, want)
-	}
 }

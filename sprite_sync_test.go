@@ -33,54 +33,7 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type pullPositionSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	calls     int
-	ids       []int64
-	positions []float32
-}
-
-type reentrantPullPositionMgr struct {
-	wrap.SpriteMgrImpl
-	game   *Game
-	nested *SpriteImpl
-	calls  int
-}
-
-type concurrentPullPositionMgr struct {
-	wrap.SpriteMgrImpl
-	started chan struct{}
-	release chan struct{}
-	calls   atomic.Int32
-}
-
-type positionSyncSpriteMgr struct {
-	captureFlushSpriteMgr
-	fail        bool
-	onSubmit    func()
-	position    mathf.Vec2
-	submissions int
-}
-
-type framesChangedSprite struct {
-	pkgengine.ISpriter
-	changed func()
-}
-
-type textureFramesSpriteMgr struct {
-	*positionSyncSpriteMgr
-	callbacks int
-}
-
-type preparedResourceSpriteMgr struct {
-	*touchingSyncSpriteMgr
-	renderScales map[pkgengine.Object]mathf.Vec2
-	visuals      map[pkgengine.Object]proxyVisual
-	uvRemaps     map[pkgengine.Object]mathf.Vec4
-	failAt       string
-}
-
-type shapeLayerSortManager struct{ pkgengine.IExtMgr }
+// Batch submission and transform validation.
 
 func TestFlushSyncBufferOnlySubmitsChanges(t *testing.T) {
 	game, mgr := setupSyncBufferCapture(t)
@@ -197,6 +150,71 @@ func TestProxyRebuildAndDestroySubmitOnlyPendingTransforms(t *testing.T) {
 		t.Fatalf("destroyed sprite made %d proxy calls", got-operations)
 	}
 }
+
+func TestNonFiniteHeadingDoesNotExitFrame(t *testing.T) {
+	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		t.Run(fmt.Sprint(value), func(t *testing.T) {
+			currentScheduler, game, _ := setupFrameSyncGame(t)
+			sprite := addFrameSyncSprite(game, 1, "heading")
+			sprite.SetHeading(45)
+			previous := pkgengine.ExtMgr
+			ext := &inputFrameFailureExtMgr{}
+			pkgengine.ExtMgr = ext
+			t.Cleanup(func() { pkgengine.ExtMgr = previous })
+			sprite.SetHeading(value)
+			func() {
+				defer engine.CheckPanic()
+				runFrameSyncGame(currentScheduler, game)
+			}()
+			if sprite.Heading() != 45 || len(ext.exits) != 0 || len(ext.messages) != 0 {
+				t.Fatalf("invalid heading changed frame: heading=%v exits=%v errors=%v", sprite.Heading(), ext.exits, ext.messages)
+			}
+		})
+	}
+}
+
+func TestProxyQueryAndBatchRejectInvalidTransformsWithoutAcknowledging(t *testing.T) {
+	for _, mode := range []string{"query", "batch"} {
+		for _, field := range []string{"x", "rotation"} {
+			t.Run(mode+"/"+field, func(t *testing.T) {
+				sprite, mgr := setupPositionSyncSprite(t)
+				sprite.SetXpos(42)
+				if field == "x" {
+					sprite.SetXpos(math.MaxFloat64)
+				} else {
+					// Bypass the public setter to exercise the internal-state guard.
+					sprite.transform().direction = math.NaN()
+				}
+				pending := sprite.transform().pendingPosition
+				requireSyncPanic(t, func() {
+					if mode == "query" {
+						sprite.syncProxyForQuery()
+					} else {
+						sprite.g.flushSpriteProxyChanges(sprite.g.scene.items)
+					}
+				}, "sprite 1", field+"=")
+				if mgr.submissions != 0 || sprite.transform().pendingPosition != pending ||
+					sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
+					t.Fatal("invalid transform was submitted or acknowledged")
+				}
+				sprite.SetHeading(45)
+				sprite.SetXpos(80)
+				sprite.g.flushSpriteProxyChanges(sprite.g.scene.items)
+				if mgr.submissions != 1 || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
+					t.Fatal("corrected transform did not commit")
+				}
+			})
+		}
+	}
+}
+
+func setupSyncBufferCapture(t *testing.T) (*Game, *captureFlushSpriteMgr) {
+	t.Helper()
+	mgr := setupCaptureFlushSpriteMgr(t)
+	return &Game{syncBuffer: engine.NewSpriteSyncBuffer(1)}, mgr
+}
+
+// Physics position pulls and explicit axis writes.
 
 func TestPullPhysicsPositionsFiltersAndKeepsIDOrder(t *testing.T) {
 	mgr := setupPullPositionSpriteMgr(t)
@@ -369,6 +387,188 @@ func TestMergeEnginePositionInvalidatesVisualsOnlyWhenChanged(t *testing.T) {
 		t.Fatalf("repeated position visual version = %d, want 1", sprite.spriteState.visualVersion)
 	}
 }
+
+func TestProxyCallbacksIgnoreMissingAndDestroyedSprites(t *testing.T) {
+	destroyed := &SpriteImpl{}
+	destroyed.markDestroyed()
+	for _, sprite := range []*SpriteImpl{{}, destroyed} {
+		sprite.handleAnimationFinished()
+		sprite.handleAnimationLooped()
+		if sprite.runtimeState.proxy != nil {
+			t.Fatal("stale callback created a proxy")
+		}
+	}
+	sprite := &SpriteImpl{}
+	sprite.runtimeState.proxy = &engine.Sprite{}
+	sprite.ensureProxyInitialized()
+
+	for _, state := range []string{"missing", "replaced", "destroyed"} {
+		t.Run(state, func(t *testing.T) {
+			sprite := newPhysicsPositionTestSprite(10, 20)
+			proxy := &engine.Sprite{}
+			sprite.runtimeState.proxy = proxy
+			switch state {
+			case "missing":
+				sprite.runtimeState.proxy = nil
+			case "replaced":
+				sprite.runtimeState.proxy = &engine.Sprite{}
+			case "destroyed":
+				sprite.markDestroyed()
+			}
+			pending := positionVersions{x: 1, y: 2}
+			sprite.transform().pendingPosition = pending
+			sprite.mirrorPosition(proxy, mathf.NewVec2(30, 40), engine.PositionXY)
+			requirePosition(t, sprite, 10, 20)
+			if sprite.transform().pendingPosition != pending {
+				t.Fatal("stale position callback acknowledged pending writes")
+			}
+		})
+	}
+}
+
+func TestPhysicsPullPreservesExplicitPositionAxes(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		write func(*SpriteImpl)
+		x, y  float64
+	}{
+		{"set x", func(s *SpriteImpl) { s.SetXpos(42) }, 42, 200},
+		{"set same x", func(s *SpriteImpl) { s.SetXpos(10) }, 10, 200},
+		{"set y", func(s *SpriteImpl) { s.SetYpos(42) }, 100, 42},
+		{"set same y", func(s *SpriteImpl) { s.SetYpos(20) }, 100, 20},
+		{"change x", func(s *SpriteImpl) { s.ChangeXpos(3) }, 13, 200},
+		{"change y", func(s *SpriteImpl) { s.ChangeYpos(3) }, 100, 23},
+		{"set xy", func(s *SpriteImpl) { s.SetXYpos(42, 43) }, 42, 43},
+		{"set same xy", func(s *SpriteImpl) { s.SetXYpos(10, 20) }, 10, 20},
+		{"change xy", func(s *SpriteImpl) { s.ChangeXYpos(3, 4) }, 13, 24},
+		{"move", func(s *SpriteImpl) { s.transform().direction = 0; s.Move__0(5) }, 10, 25},
+		{"hide", func(s *SpriteImpl) { s.Hide() }, 100, 200},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite, _ := setupPositionSyncSprite(t)
+			tt.write(sprite)
+			sprite.mergeEnginePosition(100, 200)
+			requirePosition(t, sprite, tt.x, tt.y)
+		})
+	}
+}
+
+func TestDirectProxyAxisWritesPreserveOtherPendingAxis(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		write func(*engine.Sprite)
+		axis  engine.PositionAxes
+		want  mathf.Vec2
+	}{
+		{"set x", func(p *engine.Sprite) { p.SetPosX(42) }, engine.PositionX, mathf.NewVec2(42, 99)},
+		{"add x", func(p *engine.Sprite) { p.AddPosX(3) }, engine.PositionX, mathf.NewVec2(13, 99)},
+		{"set same x", func(p *engine.Sprite) { p.SetPosX(10) }, engine.PositionX, mathf.NewVec2(10, 99)},
+		{"add zero x", func(p *engine.Sprite) { p.AddPosX(0) }, engine.PositionX, mathf.NewVec2(10, 99)},
+		{"set y", func(p *engine.Sprite) { p.SetPosY(42) }, engine.PositionY, mathf.NewVec2(99, 42)},
+		{"add y", func(p *engine.Sprite) { p.AddPosY(3) }, engine.PositionY, mathf.NewVec2(99, 23)},
+		{"set same y", func(p *engine.Sprite) { p.SetPosY(20) }, engine.PositionY, mathf.NewVec2(99, 20)},
+		{"add zero y", func(p *engine.Sprite) { p.AddPosY(0) }, engine.PositionY, mathf.NewVec2(99, 20)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite, mgr := setupPositionSyncSprite(t)
+			if tt.axis == engine.PositionX {
+				sprite.SetYpos(99)
+			} else {
+				sprite.SetXpos(99)
+			}
+			tt.write(sprite.runtimeState.proxy)
+			requirePosition(t, sprite, tt.want.X, tt.want.Y)
+
+			sprite.g.flushSpriteProxyChanges(sprite.g.scene.items)
+			if mgr.position != tt.want {
+				t.Fatalf("submitted position = %v, want %v", mgr.position, tt.want)
+			}
+			sprite.mergeEnginePosition(200, 300)
+			requirePosition(t, sprite, 200, 300)
+		})
+	}
+}
+
+type pullPositionSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	calls     int
+	ids       []int64
+	positions []float32
+}
+
+func (m *pullPositionSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	m.calls++
+	m.ids = append(m.ids[:0], ids...)
+	copy(out, m.positions)
+	return true
+}
+
+type reentrantPullPositionMgr struct {
+	wrap.SpriteMgrImpl
+	game   *Game
+	nested *SpriteImpl
+	calls  int
+}
+
+func (m *reentrantPullPositionMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	m.calls++
+	if m.calls == 1 {
+		items := m.game.scene.items
+		m.game.scene.items = []Shape{m.nested}
+		m.game.pullPhysicsPositions()
+		m.game.scene.items = items
+	}
+	for i, id := range ids {
+		out[i*2], out[i*2+1] = float32(id*10), float32(id*10+1)
+	}
+	return true
+}
+
+type concurrentPullPositionMgr struct {
+	wrap.SpriteMgrImpl
+	started chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+}
+
+func (m *concurrentPullPositionMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	if m.calls.Add(1) == 1 {
+		close(m.started)
+		<-m.release
+	}
+	out[0], out[1] = float32(ids[0]*10), float32(ids[0]*10+1)
+	return true
+}
+
+func setupPullPositionSpriteMgr(t *testing.T) *pullPositionSpriteMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	original := pkgengine.SpriteMgr
+	mgr := &pullPositionSpriteMgr{}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = original })
+	return mgr
+}
+
+func newPullPhysicsSprite(id int64, mode PhysicsMode, x, y float64) *SpriteImpl {
+	sprite := newPhysicsPositionTestSprite(x, y)
+	sprite.runtimeState.proxy = &engine.Sprite{}
+	sprite.runtimeState.proxy.Id = id
+	sprite.components.physics = &physicsComponent{sprite: sprite, physicsMode: mode}
+	return sprite
+}
+
+func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
+	sprite := &SpriteImpl{}
+	sprite.components.transform = &transformComponent{
+		sprite: sprite,
+		x:      x,
+		y:      y,
+	}
+	return sprite
+}
+
+// Touch dispatch ordering, filtering, and retry.
 
 func TestDispatchTouchEventsFiltersPairs(t *testing.T) {
 	game := newTouchDispatchGame(t)
@@ -610,163 +810,24 @@ func TestDispatchTouchEventsPanicRetainsBatch(t *testing.T) {
 	}
 }
 
-func TestProxyCallbacksIgnoreMissingAndDestroyedSprites(t *testing.T) {
-	destroyed := &SpriteImpl{}
-	destroyed.markDestroyed()
-	for _, sprite := range []*SpriteImpl{{}, destroyed} {
-		sprite.handleAnimationFinished()
-		sprite.handleAnimationLooped()
-		if sprite.runtimeState.proxy != nil {
-			t.Fatal("stale callback created a proxy")
-		}
-	}
-	sprite := &SpriteImpl{}
-	sprite.runtimeState.proxy = &engine.Sprite{}
-	sprite.ensureProxyInitialized()
-
-	for _, state := range []string{"missing", "replaced", "destroyed"} {
-		t.Run(state, func(t *testing.T) {
-			sprite := newPhysicsPositionTestSprite(10, 20)
-			proxy := &engine.Sprite{}
-			sprite.runtimeState.proxy = proxy
-			switch state {
-			case "missing":
-				sprite.runtimeState.proxy = nil
-			case "replaced":
-				sprite.runtimeState.proxy = &engine.Sprite{}
-			case "destroyed":
-				sprite.markDestroyed()
-			}
-			pending := positionVersions{x: 1, y: 2}
-			sprite.transform().pendingPosition = pending
-			sprite.mirrorPosition(proxy, mathf.NewVec2(30, 40), engine.PositionXY)
-			requirePosition(t, sprite, 10, 20)
-			if sprite.transform().pendingPosition != pending {
-				t.Fatal("stale position callback acknowledged pending writes")
-			}
-		})
-	}
+func newTouchDispatchGame(t *testing.T) *Game {
+	t.Helper()
+	previous := scheduler
+	scheduler = nil
+	t.Cleanup(func() { scheduler = previous })
+	game := new(Game)
+	game.bindScriptEvents()
+	return game
 }
 
-func TestPhysicsPullPreservesExplicitPositionAxes(t *testing.T) {
-	for _, tt := range []struct {
-		name  string
-		write func(*SpriteImpl)
-		x, y  float64
-	}{
-		{"set x", func(s *SpriteImpl) { s.SetXpos(42) }, 42, 200},
-		{"set same x", func(s *SpriteImpl) { s.SetXpos(10) }, 10, 200},
-		{"set y", func(s *SpriteImpl) { s.SetYpos(42) }, 100, 42},
-		{"set same y", func(s *SpriteImpl) { s.SetYpos(20) }, 100, 20},
-		{"change x", func(s *SpriteImpl) { s.ChangeXpos(3) }, 13, 200},
-		{"change y", func(s *SpriteImpl) { s.ChangeYpos(3) }, 100, 23},
-		{"set xy", func(s *SpriteImpl) { s.SetXYpos(42, 43) }, 42, 43},
-		{"set same xy", func(s *SpriteImpl) { s.SetXYpos(10, 20) }, 10, 20},
-		{"change xy", func(s *SpriteImpl) { s.ChangeXYpos(3, 4) }, 13, 24},
-		{"move", func(s *SpriteImpl) { s.transform().direction = 0; s.Move__0(5) }, 10, 25},
-		{"hide", func(s *SpriteImpl) { s.Hide() }, 100, 200},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			sprite, _ := setupPositionSyncSprite(t)
-			tt.write(sprite)
-			sprite.mergeEnginePosition(100, 200)
-			requirePosition(t, sprite, tt.x, tt.y)
-		})
-	}
+func newTouchDispatchSprite(game *Game, name string) *touchEventSprite {
+	sprite := newTouchEventSprite(game, name)
+	sprite.spriteState.isVisible = true
+	sprite.runtimeState.proxy = &engine.Sprite{Target: &sprite.SpriteImpl, MirrorPosition: sprite.mirrorPosition}
+	return sprite
 }
 
-func TestDirectProxyAxisWritesPreserveOtherPendingAxis(t *testing.T) {
-	for _, tt := range []struct {
-		name  string
-		write func(*engine.Sprite)
-		axis  engine.PositionAxes
-		want  mathf.Vec2
-	}{
-		{"set x", func(p *engine.Sprite) { p.SetPosX(42) }, engine.PositionX, mathf.NewVec2(42, 99)},
-		{"add x", func(p *engine.Sprite) { p.AddPosX(3) }, engine.PositionX, mathf.NewVec2(13, 99)},
-		{"set same x", func(p *engine.Sprite) { p.SetPosX(10) }, engine.PositionX, mathf.NewVec2(10, 99)},
-		{"add zero x", func(p *engine.Sprite) { p.AddPosX(0) }, engine.PositionX, mathf.NewVec2(10, 99)},
-		{"set y", func(p *engine.Sprite) { p.SetPosY(42) }, engine.PositionY, mathf.NewVec2(99, 42)},
-		{"add y", func(p *engine.Sprite) { p.AddPosY(3) }, engine.PositionY, mathf.NewVec2(99, 23)},
-		{"set same y", func(p *engine.Sprite) { p.SetPosY(20) }, engine.PositionY, mathf.NewVec2(99, 20)},
-		{"add zero y", func(p *engine.Sprite) { p.AddPosY(0) }, engine.PositionY, mathf.NewVec2(99, 20)},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			sprite, mgr := setupPositionSyncSprite(t)
-			if tt.axis == engine.PositionX {
-				sprite.SetYpos(99)
-			} else {
-				sprite.SetXpos(99)
-			}
-			tt.write(sprite.runtimeState.proxy)
-			requirePosition(t, sprite, tt.want.X, tt.want.Y)
-
-			sprite.g.flushSpriteProxyChanges(sprite.g.scene.items)
-			if mgr.position != tt.want {
-				t.Fatalf("submitted position = %v, want %v", mgr.position, tt.want)
-			}
-			sprite.mergeEnginePosition(200, 300)
-			requirePosition(t, sprite, 200, 300)
-		})
-	}
-}
-
-func TestNonFiniteHeadingDoesNotExitFrame(t *testing.T) {
-	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		t.Run(fmt.Sprint(value), func(t *testing.T) {
-			currentScheduler, game, _ := setupFrameSyncGame(t)
-			sprite := addFrameSyncSprite(game, 1, "heading")
-			sprite.SetHeading(45)
-			previous := pkgengine.ExtMgr
-			ext := &inputFrameFailureExtMgr{}
-			pkgengine.ExtMgr = ext
-			t.Cleanup(func() { pkgengine.ExtMgr = previous })
-			sprite.SetHeading(value)
-			func() {
-				defer engine.CheckPanic()
-				runFrameSyncGame(currentScheduler, game)
-			}()
-			if sprite.Heading() != 45 || len(ext.exits) != 0 || len(ext.messages) != 0 {
-				t.Fatalf("invalid heading changed frame: heading=%v exits=%v errors=%v", sprite.Heading(), ext.exits, ext.messages)
-			}
-		})
-	}
-}
-
-func TestProxyQueryAndBatchRejectInvalidTransformsWithoutAcknowledging(t *testing.T) {
-	for _, mode := range []string{"query", "batch"} {
-		for _, field := range []string{"x", "rotation"} {
-			t.Run(mode+"/"+field, func(t *testing.T) {
-				sprite, mgr := setupPositionSyncSprite(t)
-				sprite.SetXpos(42)
-				if field == "x" {
-					sprite.SetXpos(math.MaxFloat64)
-				} else {
-					// Bypass the public setter to exercise the internal-state guard.
-					sprite.transform().direction = math.NaN()
-				}
-				pending := sprite.transform().pendingPosition
-				requireSyncPanic(t, func() {
-					if mode == "query" {
-						sprite.syncProxyForQuery()
-					} else {
-						sprite.g.flushSpriteProxyChanges(sprite.g.scene.items)
-					}
-				}, "sprite 1", field+"=")
-				if mgr.submissions != 0 || sprite.transform().pendingPosition != pending ||
-					sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
-					t.Fatal("invalid transform was submitted or acknowledged")
-				}
-				sprite.SetHeading(45)
-				sprite.SetXpos(80)
-				sprite.g.flushSpriteProxyChanges(sprite.g.scene.items)
-				if mgr.submissions != 1 || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
-					t.Fatal("corrected transform did not commit")
-				}
-			})
-		}
-	}
-}
+// Proxy commit, reentrant writes, and deletion retry.
 
 func TestPositionSyncRequiresSuccessfulSubmission(t *testing.T) {
 	for _, mode := range []string{"query", "batch", "serialization"} {
@@ -942,7 +1003,7 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			if mgr.submissions != 0 {
 				t.Fatal("failed batch committed positions to the engine")
 			}
-			if len(mgr.batches) != 0 || destroyed.runtimeState.proxy != proxy || len(game.scene.destroyItems) != 1 {
+			if len(mgr.batches) != 0 || destroyed.runtimeState.proxy != proxy || len(game.scene.proxies.destroyItems) != 1 {
 				t.Fatal("failed batch consumed a native proxy or its pending deletion")
 			}
 			for _, pending := range []*SpriteImpl{sprite, invalid} {
@@ -961,7 +1022,7 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			if len(mgr.batches) != 1 || !slices.Equal(batchDeleteIDs(mgr.batches[0]), []float32{3}) {
 				t.Fatalf("retry did not submit exactly one deletion: %v", mgr.batches)
 			}
-			if destroyed.runtimeState.proxy != nil || len(game.scene.destroyItems) != 0 {
+			if destroyed.runtimeState.proxy != nil || len(game.scene.proxies.destroyItems) != 0 {
 				t.Fatal("successful retry retained the deleted proxy or request")
 			}
 			for _, synced := range []*SpriteImpl{sprite, invalid} {
@@ -996,7 +1057,7 @@ func TestProxyCommitKeepsDeletionsQueuedDuringSubmission(t *testing.T) {
 	}
 	game.flushSpriteProxyChanges(game.scene.items)
 	if first.runtimeState.proxy != nil || later.runtimeState.proxy == nil ||
-		len(game.scene.destroyItems) != 1 || game.scene.destroyItems[0] != later {
+		len(game.scene.proxies.destroyItems) != 1 || game.scene.proxies.destroyItems[0] != later {
 		t.Fatal("commit consumed a deletion that was not in the submitted batch")
 	}
 	game.flushSpriteProxyChanges(game.scene.items)
@@ -1004,7 +1065,7 @@ func TestProxyCommitKeepsDeletionsQueuedDuringSubmission(t *testing.T) {
 		!slices.Equal(batchDeleteIDs(mgr.batches[1]), []float32{3}) {
 		t.Fatalf("deletions did not preserve submission boundaries: %v", mgr.batches)
 	}
-	if later.runtimeState.proxy != nil || len(game.scene.destroyItems) != 0 {
+	if later.runtimeState.proxy != nil || len(game.scene.proxies.destroyItems) != 0 {
 		t.Fatal("later deletion was not committed")
 	}
 	game.flushSpriteProxyChanges(game.scene.items)
@@ -1012,6 +1073,35 @@ func TestProxyCommitKeepsDeletionsQueuedDuringSubmission(t *testing.T) {
 		t.Fatal("committed deletions were submitted again")
 	}
 }
+
+type framesChangedSprite struct {
+	pkgengine.ISpriter
+	changed func()
+}
+
+func (s *framesChangedSprite) OnFramesSetChanged() { s.changed() }
+
+type textureFramesSpriteMgr struct {
+	*positionSyncSpriteMgr
+	callbacks int
+}
+
+func (m *textureFramesSpriteMgr) SetTexture(id pkgengine.Object, _ string) {
+	// Godot SetTexture synchronously emits sprite_frames_changed. Dispatch it
+	// through the public registry in the same order as gdengine's callback.
+	m.callbacks++
+	sprite := pkgengine.GetSprite(id)
+	sprite.V_OnFramesSetChanged()
+	sprite.OnFramesSetChanged()
+}
+
+func (*textureFramesSpriteMgr) SetRenderScale(pkgengine.Object, mathf.Vec2) {}
+
+func batchDeleteIDs(batch []float32) []float32 {
+	return batch[2+int(batch[0])*engine.SyncFieldsPerSprite:]
+}
+
+// Prepared resources and deferred hidden visuals.
 
 func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 	type expectedFrame struct {
@@ -1336,15 +1426,147 @@ func TestProxyPreparedResourcesRetryAfterFailure(t *testing.T) {
 	}
 }
 
+type preparedResourceSpriteMgr struct {
+	*touchingSyncSpriteMgr
+	renderScales map[pkgengine.Object]mathf.Vec2
+	visuals      map[pkgengine.Object]proxyVisual
+	uvRemaps     map[pkgengine.Object]mathf.Vec4
+	failAt       string
+}
+
+func (m *preparedResourceSpriteMgr) SetTexture(id pkgengine.Object, path string) {
+	m.touchingSyncSpriteMgr.SetTexture(id, path)
+	m.framesChanged(id)
+}
+
+func (m *preparedResourceSpriteMgr) SetTextureAtlas(id pkgengine.Object, path string, rect mathf.Rect2) {
+	m.touchingSyncSpriteMgr.SetTextureAtlas(id, path, rect)
+	m.framesChanged(id)
+}
+
+func (m *preparedResourceSpriteMgr) SetRenderScale(id pkgengine.Object, scale mathf.Vec2) {
+	if m.failAt == "resource" {
+		panic("resource preparation failed")
+	}
+	m.renderScales[id] = scale
+}
+
+func (m *preparedResourceSpriteMgr) SetZIndex(pkgengine.Object, int64) {
+	if m.failAt == "layer" {
+		panic("resource layer failed")
+	}
+}
+
+func (m *preparedResourceSpriteMgr) SetMaterialParamsVec(id pkgengine.Object, name string, x, y, z, w float64) {
+	if name == "atlas_uv_rect2" {
+		m.uvRemaps[id] = mathf.NewVec4(x, y, z, w)
+	}
+}
+
+func (m *preparedResourceSpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, rotation float64, scale mathf.Vec2, visible bool, offset mathf.Vec2) {
+	m.touchingSyncSpriteMgr.SetTransform(id, pos, rotation, scale, visible, offset)
+	m.visuals[id] = proxyVisual{rotation: rotation, scale: scale, renderOffset: offset}
+}
+
+func (m *preparedResourceSpriteMgr) BatchUpdateTransforms(data []float32) {
+	if m.failAt == "batch" {
+		panic("resource batch failed")
+	}
+	for i := 0; i < int(data[0]); i++ {
+		entry := data[2+i*engine.SyncFieldsPerSprite:]
+		m.SetTransform(pkgengine.Object(entry[0]), mathf.NewVec2(float64(entry[1]), float64(entry[2])),
+			float64(entry[3]), mathf.NewVec2(float64(entry[4]), float64(entry[5])), entry[8] != 0,
+			mathf.NewVec2(float64(entry[6]), float64(entry[7])))
+	}
+}
+
+func (*preparedResourceSpriteMgr) framesChanged(id pkgengine.Object) {
+	sprite := pkgengine.GetSprite(id)
+	sprite.V_OnFramesSetChanged()
+	sprite.OnFramesSetChanged()
+}
+
+func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *preparedResourceSpriteMgr) {
+	t.Helper()
+	sprite, _ := setupPositionSyncSprite(t)
+	mgr := &preparedResourceSpriteMgr{
+		touchingSyncSpriteMgr: newTouchingSyncSpriteMgr(),
+		renderScales:          make(map[pkgengine.Object]mathf.Vec2),
+		visuals:               make(map[pkgengine.Object]proxyVisual),
+		uvRemaps:              make(map[pkgengine.Object]mathf.Vec4),
+	}
+	pkgengine.SpriteMgr = mgr
+	sprite.costumes = nil
+	for i, center := range []mathf.Vec2{mathf.NewVec2(10, 10), mathf.NewVec2(14, 6), mathf.NewVec2(6, 16)} {
+		c := newCostumeWithSize(20, 20)
+		c.name, c.path = fmt.Sprintf("costume%d", i), fmt.Sprintf("costume%d.png", i)
+		c.frame.Center, c.faceRight, c.frame.BitmapResolution = center, float64(i-1)*90, 1<<i
+		sprite.costumes = append(sprite.costumes, c)
+	}
+	sprite.costumeIndex = 0
+	sprite.runtimeState.scale = 1.5
+	sprite.runtimeState.isCostumeDirty = true
+	sprite.transform().direction = 90
+	sprite.transform().rotationStyle = Normal
+	// A configured pivot must stay paired with the costume anchor and size.
+	sprite.transform().pivot = mathf.NewVec2(1, -2)
+	sprite.markProxyDirty()
+	later := &newCloneAwakeOrderSprite(sprite.g, "later").SpriteImpl
+	later.currentCostume().path = "later.png"
+	later.runtimeState.isCostumeDirty = false
+	later.runtimeState.proxy = &engine.Sprite{Target: later, MirrorPosition: later.mirrorPosition}
+	sprite.g.scene.add(later)
+	for i, s := range []*SpriteImpl{sprite, later} {
+		id := pkgengine.Object(i + 1)
+		registry := pkgengine.Sprites()
+		previous, existed := registry[id]
+		t.Cleanup(func() {
+			if existed {
+				registry[id] = previous
+			} else {
+				delete(registry, id)
+			}
+		})
+		pkgengine.InitSpriteInstance(id, s.runtimeState.proxy, func(id pkgengine.Object, proxy pkgengine.ISpriter) {
+			registry[id] = proxy
+		})
+	}
+	return sprite, later, mgr
+}
+
+func requirePreparedResource(t *testing.T, sprite *SpriteImpl, mgr *preparedResourceSpriteMgr, index int, size float64) {
+	t.Helper()
+	id := sprite.runtimeState.proxy.Id
+	c := sprite.costumes[index]
+	if got, want := mgr.texturePaths[id], engine.ToAssetPath(c.path); got != want {
+		t.Fatalf("texture = %q, want %q", got, want)
+	}
+	if got, want := mgr.renderScales[id], engine.UniformVec2(size/float64(c.frame.BitmapResolution)); got != want {
+		t.Fatalf("resource scale = %v, want %v", got, want)
+	}
+	offsets := []mathf.Vec2{mathf.NewVec2(-1, 2), mathf.NewVec2(-3, 0), mathf.NewVec2(0, 3.5)}
+	wantOffset := offsets[index].Mulf(size)
+	visual := mgr.visuals[id]
+	if math.Abs(visual.rotation-float64(index-1)*math.Pi/2) > 1e-6 ||
+		visual.renderOffset != wantOffset || visual.scale != mathf.NewVec2(1, 1) {
+		t.Fatalf("geometry = %+v, want costume %d with offset %v", visual, index, wantOffset)
+	}
+	if c.isAtlas() && mgr.uvRemaps[id] != c.frame.AtlasUVRect {
+		t.Fatalf("atlas UV = %v, want %v", mgr.uvRemaps[id], c.frame.AtlasUVRect)
+	}
+}
+
+// Scene queues, references, and names.
+
 func TestSceneObjectsInitClearsReferences(t *testing.T) {
 	marker := &struct{}{}
 	s := sceneObjects{
 		layersDirty: true,
 		items:       []Shape{marker},
 		tempItems:   []Shape{marker},
-		proxyQueue:  proxyQueue{destroyItems: []*SpriteImpl{{}}},
+		proxies:     proxyQueue{destroyItems: []*SpriteImpl{{}}},
 	}
-	itemCap, tempCap, destroyCap := cap(s.items), cap(s.tempItems), cap(s.destroyItems)
+	itemCap, tempCap, destroyCap := cap(s.items), cap(s.tempItems), cap(s.proxies.destroyItems)
 	s.init()
 	if s.layersDirty {
 		t.Fatal("reset retained pending layer renumbering")
@@ -1356,10 +1578,10 @@ func TestSceneObjectsInitClearsReferences(t *testing.T) {
 			t.Fatalf("%s retained a shape reference", name)
 		}
 	}
-	if len(s.destroyItems) != 0 || s.destroyItems[:1][0] != nil {
+	if len(s.proxies.destroyItems) != 0 || s.proxies.destroyItems[:1][0] != nil {
 		t.Fatal("destroyItems retained a sprite reference")
 	}
-	if cap(s.items) != itemCap || cap(s.tempItems) != tempCap || cap(s.destroyItems) != destroyCap {
+	if cap(s.items) != itemCap || cap(s.tempItems) != tempCap || cap(s.proxies.destroyItems) != destroyCap {
 		t.Fatal("init changed reusable shape capacities")
 	}
 }
@@ -1370,7 +1592,7 @@ func TestSceneObjectsOnlyQueuesSpritesWithProxies(t *testing.T) {
 		s.add(shape)
 		s.removeShape(shape)
 	}
-	if len(s.items) != 0 || len(s.destroyItems) != 0 {
+	if len(s.items) != 0 || len(s.proxies.destroyItems) != 0 {
 		t.Fatal("removing shapes without proxies retained a shape or queued a deletion")
 	}
 	sprite := &SpriteImpl{}
@@ -1378,7 +1600,7 @@ func TestSceneObjectsOnlyQueuesSpritesWithProxies(t *testing.T) {
 	s.add(sprite)
 	s.removeShape(sprite)
 	s.removeShape(sprite)
-	if len(s.items) != 0 || len(s.destroyItems) != 1 || s.destroyItems[0] != sprite {
+	if len(s.items) != 0 || len(s.proxies.destroyItems) != 1 || s.proxies.destroyItems[0] != sprite {
 		t.Fatal("removing a sprite did not queue exactly one deletion")
 	}
 }
@@ -1391,10 +1613,10 @@ func TestSceneObjectsTracksSpriteDirtyBeforeAdd(t *testing.T) {
 
 	s.add(sprite)
 
-	if len(s.dirtySprites) != 1 || s.dirtySprites[0] != sprite {
+	if len(s.proxies.dirtySprites) != 1 || s.proxies.dirtySprites[0] != sprite {
 		t.Fatal("adding a dirty sprite did not queue it for proxy synchronization")
 	}
-	if got := s.dirtySpriteIndex[sprite]; got != 0 {
+	if got := s.proxies.dirtySpriteIndex[sprite]; got != 0 {
 		t.Fatalf("dirty sprite index = %d, want 0", got)
 	}
 }
@@ -1408,15 +1630,41 @@ func TestSceneObjectsCommitsClearedProxyDeletion(t *testing.T) {
 	sprite.runtimeState.proxy = nil
 
 	var batch proxyBatch
-	s.collectProxyChanges(nil, nil, &batch)
-	if batch.destroyCount != 1 || len(batch.changes) != 0 || len(s.destroyItems) != 1 {
+	s.proxies.collectProxyChanges(nil, nil, &batch)
+	if batch.destroyCount != 1 || len(batch.changes) != 0 || len(s.proxies.destroyItems) != 1 {
 		t.Fatal("collection consumed a queued deletion or submitted a cleared proxy")
 	}
-	s.commitProxyChanges(batch)
-	if len(s.destroyItems) != 0 || s.destroyItems[:1][0] != nil {
+	s.proxies.commitProxyChanges(batch)
+	if len(s.proxies.destroyItems) != 0 || s.proxies.destroyItems[:1][0] != nil {
 		t.Fatal("commit retained a deletion with a cleared proxy")
 	}
 }
+
+func TestSceneObjectsCachesBoundedNames(t *testing.T) {
+	var manager sceneObjects
+	manager.add(&struct{}{})
+	for _, name := range []string{"missing1", "missing2", "missing3"} {
+		if len(manager.spritesNamed(name)) != 0 {
+			t.Fatal("missing name found sprites")
+		}
+	}
+	if len(manager.named) != 1 || manager.named["missing3"] != nil {
+		t.Fatalf("name miss cache grew without bound: %v", manager.named)
+	}
+}
+
+func TestSceneObjectsCloningDeletedSourceStopsScript(t *testing.T) {
+	currentScheduler := setupRuntimeScheduler(t)
+	manager := sceneObjects{}
+	reached := false
+	thread := currentScheduler.Create(nil, func(coroutine.Thread) { manager.addClonedShape(&SpriteImpl{}, &SpriteImpl{}); reached = true })
+	currentScheduler.Join(thread)
+	if reached || len(manager.items) != 0 {
+		t.Fatal("cloning removed source continued or inserted a clone")
+	}
+}
+
+// Layer ordering and automatic sort transitions.
 
 func TestSpriteLayerActionsMatchTargetOrdering(t *testing.T) {
 	tests := []struct {
@@ -1504,19 +1752,6 @@ func TestRemovingSpriteReindexesRemainingLayersAbovePen(t *testing.T) {
 	}
 }
 
-func TestSceneObjectsCachesBoundedNames(t *testing.T) {
-	var manager sceneObjects
-	manager.add(&struct{}{})
-	for _, name := range []string{"missing1", "missing2", "missing3"} {
-		if len(manager.spritesNamed(name)) != 0 {
-			t.Fatal("missing name found sprites")
-		}
-	}
-	if len(manager.named) != 1 || manager.named["missing3"] != nil {
-		t.Fatalf("name miss cache grew without bound: %v", manager.named)
-	}
-}
-
 func TestSceneObjectsLayerSortPreservesAutomaticOrder(t *testing.T) {
 	setupImmediateEngineCalls(t)
 	previous := pkgengine.ExtMgr
@@ -1536,17 +1771,6 @@ func TestSceneObjectsLayerSortPreservesAutomaticOrder(t *testing.T) {
 	game.scene.updateRenderLayers()
 	if got := spriteOrderNames(game.scene.items); !reflect.DeepEqual(got, []string{"a", "b"}) || sprites["a"].runtimeState.layer != 17 {
 		t.Fatalf("manual layering overrode automatic order: %v", got)
-	}
-}
-
-func TestSceneObjectsCloningDeletedSourceStopsScript(t *testing.T) {
-	currentScheduler := setupRuntimeScheduler(t)
-	manager := sceneObjects{}
-	reached := false
-	thread := currentScheduler.Create(nil, func(coroutine.Thread) { manager.addClonedShape(&SpriteImpl{}, &SpriteImpl{}); reached = true })
-	currentScheduler.Join(thread)
-	if reached || len(manager.items) != 0 {
-		t.Fatal("cloning removed source continued or inserted a clone")
 	}
 }
 
@@ -1665,34 +1889,59 @@ func TestLayerMovesRenumberNewlyAddedSprites(t *testing.T) {
 	assertLayerOrder(t, game, []string{"B", "A", "C", "added"})
 }
 
-func (m *pullPositionSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
-	m.calls++
-	m.ids = append(m.ids[:0], ids...)
-	copy(out, m.positions)
-	return true
+type shapeLayerSortManager struct{ pkgengine.IExtMgr }
+
+func (*shapeLayerSortManager) SetLayerSorterMode(int64) {}
+
+func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
+	game := &Game{}
+	game.scene.init()
+	sprites := make(map[string]*SpriteImpl, len(names))
+	for _, name := range names {
+		spr := &SpriteImpl{g: game, name: name}
+		sprites[name] = spr
+		game.scene.add(spr)
+	}
+	game.scene.updateRenderLayers()
+	return game, sprites
 }
 
-func (m *reentrantPullPositionMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
-	m.calls++
-	if m.calls == 1 {
-		items := m.game.scene.items
-		m.game.scene.items = []Shape{m.nested}
-		m.game.pullPhysicsPositions()
-		m.game.scene.items = items
+func spriteOrderNames(shapes []Shape) []string {
+	names := make([]string, 0, len(shapes))
+	for _, shape := range shapes {
+		if spr, ok := shape.(*SpriteImpl); ok {
+			names = append(names, spr.name)
+		}
 	}
-	for i, id := range ids {
-		out[i*2], out[i*2+1] = float32(id*10), float32(id*10+1)
-	}
-	return true
+	return names
 }
 
-func (m *concurrentPullPositionMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
-	if m.calls.Add(1) == 1 {
-		close(m.started)
-		<-m.release
+func assertLayerOrder(t *testing.T, game *Game, want []string) {
+	t.Helper()
+	if got := spriteOrderNames(game.getAllShapes()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("sprite order = %v, want %v", got, want)
 	}
-	out[0], out[1] = float32(ids[0]*10), float32(ids[0]*10+1)
-	return true
+	wantLayer := firstSpriteLayer
+	for _, shape := range game.getAllShapes() {
+		spr, ok := shape.(*SpriteImpl)
+		if !ok {
+			continue
+		}
+		if got := spr.runtimeState.layer; got != wantLayer {
+			t.Fatalf("sprite %q layer = %d, want %d", spr.name, got, wantLayer)
+		}
+		wantLayer++
+	}
+}
+
+// Shared fixtures.
+
+type positionSyncSpriteMgr struct {
+	captureFlushSpriteMgr
+	fail        bool
+	onSubmit    func()
+	position    mathf.Vec2
+	submissions int
 }
 
 func (m *positionSyncSpriteMgr) GetPosition(pkgengine.Object) mathf.Vec2 { return m.position }
@@ -1725,124 +1974,6 @@ func (m *positionSyncSpriteMgr) submit(pos mathf.Vec2) {
 	if m.onSubmit != nil {
 		m.onSubmit()
 	}
-}
-
-func (s *framesChangedSprite) OnFramesSetChanged() { s.changed() }
-
-func (m *textureFramesSpriteMgr) SetTexture(id pkgengine.Object, _ string) {
-	// Godot SetTexture synchronously emits sprite_frames_changed. Dispatch it
-	// through the public registry in the same order as gdengine's callback.
-	m.callbacks++
-	sprite := pkgengine.GetSprite(id)
-	sprite.V_OnFramesSetChanged()
-	sprite.OnFramesSetChanged()
-}
-
-func (*textureFramesSpriteMgr) SetRenderScale(pkgengine.Object, mathf.Vec2) {}
-
-func (m *preparedResourceSpriteMgr) SetTexture(id pkgengine.Object, path string) {
-	m.touchingSyncSpriteMgr.SetTexture(id, path)
-	m.framesChanged(id)
-}
-
-func (m *preparedResourceSpriteMgr) SetTextureAtlas(id pkgengine.Object, path string, rect mathf.Rect2) {
-	m.touchingSyncSpriteMgr.SetTextureAtlas(id, path, rect)
-	m.framesChanged(id)
-}
-
-func (m *preparedResourceSpriteMgr) SetRenderScale(id pkgengine.Object, scale mathf.Vec2) {
-	if m.failAt == "resource" {
-		panic("resource preparation failed")
-	}
-	m.renderScales[id] = scale
-}
-
-func (m *preparedResourceSpriteMgr) SetZIndex(pkgengine.Object, int64) {
-	if m.failAt == "layer" {
-		panic("resource layer failed")
-	}
-}
-
-func (m *preparedResourceSpriteMgr) SetMaterialParamsVec(id pkgengine.Object, name string, x, y, z, w float64) {
-	if name == "atlas_uv_rect2" {
-		m.uvRemaps[id] = mathf.NewVec4(x, y, z, w)
-	}
-}
-
-func (m *preparedResourceSpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, rotation float64, scale mathf.Vec2, visible bool, offset mathf.Vec2) {
-	m.touchingSyncSpriteMgr.SetTransform(id, pos, rotation, scale, visible, offset)
-	m.visuals[id] = proxyVisual{rotation: rotation, scale: scale, renderOffset: offset}
-}
-
-func (m *preparedResourceSpriteMgr) BatchUpdateTransforms(data []float32) {
-	if m.failAt == "batch" {
-		panic("resource batch failed")
-	}
-	for i := 0; i < int(data[0]); i++ {
-		entry := data[2+i*engine.SyncFieldsPerSprite:]
-		m.SetTransform(pkgengine.Object(entry[0]), mathf.NewVec2(float64(entry[1]), float64(entry[2])),
-			float64(entry[3]), mathf.NewVec2(float64(entry[4]), float64(entry[5])), entry[8] != 0,
-			mathf.NewVec2(float64(entry[6]), float64(entry[7])))
-	}
-}
-
-func (*preparedResourceSpriteMgr) framesChanged(id pkgengine.Object) {
-	sprite := pkgengine.GetSprite(id)
-	sprite.V_OnFramesSetChanged()
-	sprite.OnFramesSetChanged()
-}
-
-func (*shapeLayerSortManager) SetLayerSorterMode(int64) {}
-
-func setupPullPositionSpriteMgr(t *testing.T) *pullPositionSpriteMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	original := pkgengine.SpriteMgr
-	mgr := &pullPositionSpriteMgr{}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = original })
-	return mgr
-}
-
-func newPullPhysicsSprite(id int64, mode PhysicsMode, x, y float64) *SpriteImpl {
-	sprite := newPhysicsPositionTestSprite(x, y)
-	sprite.runtimeState.proxy = &engine.Sprite{}
-	sprite.runtimeState.proxy.Id = id
-	sprite.components.physics = &physicsComponent{sprite: sprite, physicsMode: mode}
-	return sprite
-}
-
-func setupSyncBufferCapture(t *testing.T) (*Game, *captureFlushSpriteMgr) {
-	t.Helper()
-	mgr := setupCaptureFlushSpriteMgr(t)
-	return &Game{syncBuffer: engine.NewSpriteSyncBuffer(1)}, mgr
-}
-
-func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
-	sprite := &SpriteImpl{}
-	sprite.components.transform = &transformComponent{
-		sprite: sprite,
-		x:      x,
-		y:      y,
-	}
-	return sprite
-}
-
-func newTouchDispatchGame(t *testing.T) *Game {
-	t.Helper()
-	previous := scheduler
-	scheduler = nil
-	t.Cleanup(func() { scheduler = previous })
-	game := new(Game)
-	game.bindScriptEvents()
-	return game
-}
-
-func newTouchDispatchSprite(game *Game, name string) *touchEventSprite {
-	sprite := newTouchEventSprite(game, name)
-	sprite.spriteState.isVisible = true
-	sprite.runtimeState.proxy = &engine.Sprite{Target: &sprite.SpriteImpl, MirrorPosition: sprite.mirrorPosition}
-	return sprite
 }
 
 func setupPositionSyncSprite(t *testing.T) (*SpriteImpl, *positionSyncSpriteMgr) {
@@ -1885,120 +2016,5 @@ func requirePosition(t *testing.T, sprite *SpriteImpl, x, y float64) {
 	t.Helper()
 	if gotX, gotY := sprite.getXY(); gotX != x || gotY != y {
 		t.Fatalf("position = (%v, %v), want (%v, %v)", gotX, gotY, x, y)
-	}
-}
-
-func batchDeleteIDs(batch []float32) []float32 {
-	return batch[2+int(batch[0])*engine.SyncFieldsPerSprite:]
-}
-
-func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *preparedResourceSpriteMgr) {
-	t.Helper()
-	sprite, _ := setupPositionSyncSprite(t)
-	mgr := &preparedResourceSpriteMgr{
-		touchingSyncSpriteMgr: newTouchingSyncSpriteMgr(),
-		renderScales:          make(map[pkgengine.Object]mathf.Vec2),
-		visuals:               make(map[pkgengine.Object]proxyVisual),
-		uvRemaps:              make(map[pkgengine.Object]mathf.Vec4),
-	}
-	pkgengine.SpriteMgr = mgr
-	sprite.costumes = nil
-	for i, center := range []mathf.Vec2{mathf.NewVec2(10, 10), mathf.NewVec2(14, 6), mathf.NewVec2(6, 16)} {
-		c := newCostumeWithSize(20, 20)
-		c.name, c.path = fmt.Sprintf("costume%d", i), fmt.Sprintf("costume%d.png", i)
-		c.frame.Center, c.faceRight, c.frame.BitmapResolution = center, float64(i-1)*90, 1<<i
-		sprite.costumes = append(sprite.costumes, c)
-	}
-	sprite.costumeIndex = 0
-	sprite.runtimeState.scale = 1.5
-	sprite.runtimeState.isCostumeDirty = true
-	sprite.transform().direction = 90
-	sprite.transform().rotationStyle = Normal
-	// A configured pivot must stay paired with the costume anchor and size.
-	sprite.transform().pivot = mathf.NewVec2(1, -2)
-	sprite.markProxyDirty()
-	later := &newCloneAwakeOrderSprite(sprite.g, "later").SpriteImpl
-	later.currentCostume().path = "later.png"
-	later.runtimeState.isCostumeDirty = false
-	later.runtimeState.proxy = &engine.Sprite{Target: later, MirrorPosition: later.mirrorPosition}
-	sprite.g.scene.add(later)
-	for i, s := range []*SpriteImpl{sprite, later} {
-		id := pkgengine.Object(i + 1)
-		registry := pkgengine.Sprites()
-		previous, existed := registry[id]
-		t.Cleanup(func() {
-			if existed {
-				registry[id] = previous
-			} else {
-				delete(registry, id)
-			}
-		})
-		pkgengine.InitSpriteInstance(id, s.runtimeState.proxy, func(id pkgengine.Object, proxy pkgengine.ISpriter) {
-			registry[id] = proxy
-		})
-	}
-	return sprite, later, mgr
-}
-
-func requirePreparedResource(t *testing.T, sprite *SpriteImpl, mgr *preparedResourceSpriteMgr, index int, size float64) {
-	t.Helper()
-	id := sprite.runtimeState.proxy.Id
-	c := sprite.costumes[index]
-	if got, want := mgr.texturePaths[id], engine.ToAssetPath(c.path); got != want {
-		t.Fatalf("texture = %q, want %q", got, want)
-	}
-	if got, want := mgr.renderScales[id], engine.UniformVec2(size/float64(c.frame.BitmapResolution)); got != want {
-		t.Fatalf("resource scale = %v, want %v", got, want)
-	}
-	offsets := []mathf.Vec2{mathf.NewVec2(-1, 2), mathf.NewVec2(-3, 0), mathf.NewVec2(0, 3.5)}
-	wantOffset := offsets[index].Mulf(size)
-	visual := mgr.visuals[id]
-	if math.Abs(visual.rotation-float64(index-1)*math.Pi/2) > 1e-6 ||
-		visual.renderOffset != wantOffset || visual.scale != mathf.NewVec2(1, 1) {
-		t.Fatalf("geometry = %+v, want costume %d with offset %v", visual, index, wantOffset)
-	}
-	if c.isAtlas() && mgr.uvRemaps[id] != c.frame.AtlasUVRect {
-		t.Fatalf("atlas UV = %v, want %v", mgr.uvRemaps[id], c.frame.AtlasUVRect)
-	}
-}
-
-func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
-	game := &Game{}
-	game.scene.init()
-	sprites := make(map[string]*SpriteImpl, len(names))
-	for _, name := range names {
-		spr := &SpriteImpl{g: game, name: name}
-		sprites[name] = spr
-		game.scene.add(spr)
-	}
-	game.scene.updateRenderLayers()
-	return game, sprites
-}
-
-func spriteOrderNames(shapes []Shape) []string {
-	names := make([]string, 0, len(shapes))
-	for _, shape := range shapes {
-		if spr, ok := shape.(*SpriteImpl); ok {
-			names = append(names, spr.name)
-		}
-	}
-	return names
-}
-
-func assertLayerOrder(t *testing.T, game *Game, want []string) {
-	t.Helper()
-	if got := spriteOrderNames(game.getAllShapes()); !reflect.DeepEqual(got, want) {
-		t.Fatalf("sprite order = %v, want %v", got, want)
-	}
-	wantLayer := firstSpriteLayer
-	for _, shape := range game.getAllShapes() {
-		spr, ok := shape.(*SpriteImpl)
-		if !ok {
-			continue
-		}
-		if got := spr.runtimeState.layer; got != wantLayer {
-			t.Fatalf("sprite %q layer = %d, want %d", spr.name, got, wantLayer)
-		}
-		wantLayer++
 	}
 }
