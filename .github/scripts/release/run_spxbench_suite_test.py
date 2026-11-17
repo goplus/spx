@@ -146,12 +146,110 @@ class SuiteRunConflictTest(unittest.TestCase):
 
 
 class CandidateInstallTest(unittest.TestCase):
-    def test_install_response_must_include_candidate(self):
+    def test_already_completed_install_response_must_include_candidate(self):
         with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {"versions": []})):
-            gate = SpxbenchSuiteGate()
             with self.assertRaisesRegex(SpxbenchSuiteError, "did not include candidate"):
-                gate.install_candidate()
+                SpxbenchSuiteGate().install_candidate()
+
+    def test_already_completed_install_is_accepted(self):
+        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {"versions": [artifact]})) as requested:
+            SpxbenchSuiteGate().install_candidate()
+        requested.assert_called_once_with(
+            "/api/runtime-versions/install", method="POST", timeout=30,
+            payload={"kind": "spx", "version": "0.0.1-rc.1.1",
+                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"})
+
+    def test_async_install_polls_until_candidate_is_registered(self):
+        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
+        operation_id = "spx:0.0.1-rc.1.1"
+        responses = [
+            (202, {"operationId": operation_id, "status": "running"}),
+            (200, {"operationId": operation_id, "kind": "spx", "version": "0.0.1-rc.1.1",
+                   "status": "running", "stage": "下载 SPX archive"}),
+            (200, {"operationId": operation_id, "kind": "spx", "version": "0.0.1-rc.1.1",
+                   "status": "success", "stage": "安装完成"}),
+            (200, {"versions": [artifact], "operations": []})]
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=responses) as requested, \
+             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
+            SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(requested.call_args_list[0], mock.call(
+            "/api/runtime-versions/install", method="POST", timeout=30,
+            payload={"kind": "spx", "version": "0.0.1-rc.1.1",
+                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"}))
+        self.assertEqual(requested.call_args_list[1:], [
+            mock.call("/api/runtime-versions/operations/spx%3A0.0.1-rc.1.1", timeout=30),
+            mock.call("/api/runtime-versions/operations/spx%3A0.0.1-rc.1.1", timeout=30),
+            mock.call("/api/runtime-versions", timeout=30),
+        ])
+        sleep.assert_called_once_with(5)
+
+    def test_lost_accept_response_recovers_deterministic_operation(self):
+        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
+                 SpxbenchConnectionError("connection lost"),
+                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
+                 (200, {"versions": [artifact]})]) as requested, \
+             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
+            SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(requested.call_args_list, [
+            mock.call("/api/runtime-versions/install", method="POST", timeout=30,
+                      payload={"kind": "spx", "version": "0.0.1-rc.1.1",
+                               "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"}),
+            mock.call("/api/runtime-versions/operations/spx%3A0.0.1-rc.1.1", timeout=30),
+            mock.call("/api/runtime-versions", timeout=30),
+        ])
+        sleep.assert_not_called()
+
+    def test_gateway_error_recovers_existing_operation(self):
+        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
+                 (504, "gateway timeout"),
+                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
+                 (200, {"versions": [artifact]})]) as requested:
+            SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(requested.call_count, 3)
+
+    def test_final_candidate_lookup_retries_transient_failure(self):
+        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
+                 (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
+                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
+                 (503, "temporarily unavailable"), (200, {"versions": [artifact]})]) as requested, \
+             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
+            SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(requested.call_count, 4)
+        sleep.assert_called_once_with(5)
+
+    def test_async_install_requires_operation_id(self):
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(202, {"status": "running"})):
+            with self.assertRaisesRegex(SpxbenchSuiteError, "missing operationId"):
+                SpxbenchSuiteGate().install_candidate()
+
+    def test_async_install_rejects_mismatched_operation_id(self):
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request",
+                               return_value=(202, {"operationId": "spx:another-version"})):
+            with self.assertRaisesRegex(SpxbenchSuiteError, "returned operationId"):
+                SpxbenchSuiteGate().install_candidate()
+
+    def test_async_install_failure_is_reported_without_retrying_post(self):
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
+             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
+                 (202, {"operationId": "spx:0.0.1-rc.1.1"}),
+                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "failed",
+                        "error": "download failed"})]) as requested, \
+             mock.patch.object(run_spxbench_suite.time, "sleep"):
+            with self.assertRaisesRegex(SpxbenchSuiteError, "download failed"):
+                SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(requested.call_count, 2)
 
 
 class CandidateRemovalTest(unittest.TestCase):
@@ -597,6 +695,8 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
 
     def test_candidate_is_pinned_across_release_install_and_run(self):
         responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
+                     (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
+                     (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
                      (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "abc"}]}),
                      (200, {"jobId": 11}),
                      (200, job_response({"running": False, "summary": "passed", "total": 1,
@@ -633,14 +733,17 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         removed.assert_called_once_with("http://127.0.0.1/api/runtime-versions", "t", method="POST",
                                         payload={"action": "remove", "kind": "spx", "version": "0.0.1-rc.1.1"},
                                         timeout=mock.ANY)
-        self.assertEqual(requested.call_args_list[1], mock.call("/api/runtime-versions", method="POST",
-            payload={"action": "install", "kind": "spx", "version": "0.0.1-rc.1.1",
-                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"}))
-        self.assertEqual(requested.call_args_list[2],
+        self.assertEqual(requested.call_args_list[1], mock.call("/api/runtime-versions/install", method="POST",
+            payload={"kind": "spx", "version": "0.0.1-rc.1.1",
+                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"},
+            timeout=30))
+        self.assertEqual(requested.call_args_list[4],
                          mock.call("/__e2e/api/run?suite=7&spxVersion=0.0.1-rc.1.1", method="POST"))
 
     def test_failed_suite_retains_runtime_and_prerelease(self):
         responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
+                     (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
+                     (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
                      (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]}),
                      (200, {"jobId": 11}),
                      (200, job_response({"running": False, "summary": "failed", "total": 1,
@@ -672,6 +775,8 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
 
     def test_remove_failure_retains_prerelease(self):
         responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
+                     (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
+                     (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
                      (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]}),
                      (200, {"jobId": 11}),
                      (200, job_response({"running": False, "summary": "passed", "total": 1,

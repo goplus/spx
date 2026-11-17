@@ -31,6 +31,8 @@ EVENT_RECONNECT_INITIAL_SECONDS = 2
 EVENT_RECONNECT_MAX_SECONDS = 10
 EVENT_RECOVERY_TIMEOUT_SECONDS = 120
 EVENT_STATE_REQUEST_TIMEOUT_SECONDS = 15
+INSTALL_POLL_SECONDS = 5
+INSTALL_REQUEST_TIMEOUT_SECONDS = 30
 REMOVE_TIMEOUT_SECONDS = 120
 REMOVE_RETRY_SECONDS = 10
 
@@ -259,16 +261,118 @@ class SpxbenchSuiteGate:
         log(f"installing version {self.candidate_version}")
         write_step_output("candidate_install_started")
         self.install_started = True
-        status, body = self.request("/api/runtime-versions", method="POST",
-                                payload={"action": "install", "kind": "spx",
-                                         "version": self.candidate_version, "sourceUrl": asset_url})
-        if status != 200:
-            raise SpxbenchSuiteError(f"install failed: HTTP {status}: {body}")
-        artifact = next((item for item in body.get("versions", [])
-                         if item.get("kind") == "spx" and item.get("version") == self.candidate_version), None)
-        if artifact is None:
-            raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
-        log(f"   installed, digest={artifact.get('digest')}")
+        payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": asset_url}
+        operation_id = self.candidate_operation_id()
+        try:
+            status, body = self.request("/api/runtime-versions/install", method="POST", payload=payload,
+                                        timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
+        except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
+            log(f"   install accept response unavailable; recovering operation {operation_id}: {error}")
+            self.wait_for_candidate_install(operation_id, fallback_error=str(error))
+            return
+
+        # The async endpoint returns the current version list when an
+        # idempotent request finds an already completed local installation.
+        if status == 200:
+            artifact = self.candidate_artifact(body)
+            if artifact is None:
+                raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
+            log(f"   installed, digest={artifact.get('digest')}")
+            return
+
+        if status >= 500:
+            error = f"install request failed: HTTP {status}: {body}"
+            log(f"   {error}; recovering operation {operation_id}")
+            self.wait_for_candidate_install(operation_id, fallback_error=error)
+            return
+
+        if status != 202:
+            raise SpxbenchSuiteError(f"install request failed: HTTP {status}: {body}")
+        response_operation_id = self.operation_id(body)
+        if not response_operation_id:
+            raise SpxbenchSuiteError(f"install response is missing operationId: {body}")
+        if response_operation_id != operation_id:
+            raise SpxbenchSuiteError(
+                f"install response returned operationId {response_operation_id!r}, want {operation_id!r}")
+        log(f"   install accepted; operation={operation_id}")
+        self.wait_for_candidate_install(operation_id)
+
+    def candidate_artifact(self, body):
+        if not isinstance(body, dict):
+            return None
+        return next((item for item in body.get("versions") or []
+                     if isinstance(item, dict) and item.get("kind") == "spx"
+                     and item.get("version") == self.candidate_version), None)
+
+    @staticmethod
+    def operation_id(body):
+        if not isinstance(body, dict):
+            return None
+        return body.get("operationId")
+
+    def candidate_operation_id(self):
+        return f"spx:{self.candidate_version}"
+
+    def read_candidate_versions(self):
+        while True:
+            try:
+                status, body = self.request("/api/runtime-versions", timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
+            except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
+                log(f"   installed candidate lookup temporarily unavailable: {error}")
+                status, body = None, None
+            if status == 200:
+                return body
+            if status is None or 500 <= status < 600:
+                if status is not None:
+                    log(f"   installed candidate lookup temporarily unavailable: HTTP {status}: {body}")
+                delay = retry_delay(self.deadline, INSTALL_POLL_SECONDS,
+                                    f"timed out confirming installed candidate {self.candidate_version}")
+                time.sleep(delay)
+                continue
+            raise SpxbenchSuiteError(f"read installed candidate failed: HTTP {status}: {body}")
+
+    def wait_for_candidate_install(self, operation_id, fallback_error=None):
+        """Wait for the operation created by the async install endpoint."""
+        operation_path = f"/api/runtime-versions/operations/{urllib.parse.quote(str(operation_id), safe='')}"
+        while True:
+            try:
+                status, body = self.request(operation_path, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
+            except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
+                log(f"   install status temporarily unavailable: {error}")
+                status, body = None, None
+            if status == 200:
+                operation = body if isinstance(body, dict) else {}
+                operation_status = str(operation.get("status") or "").lower()
+                if operation_status == "success":
+                    versions = self.read_candidate_versions()
+                    artifact = self.candidate_artifact(versions)
+                    if artifact is None:
+                        raise SpxbenchSuiteError(
+                            f"install operation succeeded but candidate {self.candidate_version} is not registered")
+                    log(f"   installed, digest={artifact.get('digest')}")
+                    return
+                if operation_status == "failed":
+                    detail = operation.get("error") or "unknown error"
+                    raise SpxbenchSuiteError(f"install failed: {detail}")
+                if operation_status != "running":
+                    raise SpxbenchSuiteError(
+                        f"install operation has unexpected status {operation_status!r}: {operation}")
+                log(f"   install still running; stage={operation.get('stage') or '(unknown)'}")
+            elif status is None:
+                pass
+            elif 500 <= status < 600:
+                log(f"   install status temporarily unavailable: HTTP {status}: {body}")
+            elif status == 404:
+                detail = f"install operation {operation_id} was not found"
+                if fallback_error:
+                    detail = f"{fallback_error}; {detail}"
+                raise SpxbenchSuiteError(detail)
+            else:
+                raise SpxbenchSuiteError(f"install status failed: HTTP {status}: {body}")
+
+            delay = retry_delay(self.deadline, INSTALL_POLL_SECONDS,
+                                f"timed out installing candidate {self.candidate_version}")
+            time.sleep(delay)
 
     def start_suite_run(self, suite_id):
         log(f"starting suite run (suite={suite_id}, spxVersion={self.candidate_version})")
