@@ -21,6 +21,26 @@ def patch_candidate_env(**updates):
     return mock.patch.dict(os.environ, {**CANDIDATE_ENV, **updates}, clear=True)
 
 
+def job_response(state, *, status=None, job_id=11):
+    """Build the durable /api/jobs response returned by spxbench."""
+    snapshot = dict(state)
+    snapshot["jobId"] = job_id
+    if status is None:
+        status = "running" if state.get("running") else "success"
+    return {
+        "id": job_id,
+        "status": status,
+        "total": state.get("total", 0),
+        "completed": state.get("completed", 0),
+        "passed": state.get("passed", 0),
+        "failed": state.get("failed", 0),
+        "skipped": state.get("skipped", 0),
+        "summary": state.get("summary", ""),
+        "error": state.get("lastError", ""),
+        "snapshot": snapshot,
+    }
+
+
 class FindSuiteIdTest(unittest.TestCase):
     def test_matches_by_exact_name(self):
         suites = [{"id": 7, "name": "spx"}, {"id": 9, "name": "smoke"}]
@@ -176,6 +196,39 @@ class SuiteJobEventsTest(unittest.TestCase):
         response.__iter__.return_value = iter(body.splitlines(keepends=True))
         return response
 
+    def test_job_response_uses_persisted_metadata_and_snapshot_cases(self):
+        job = {
+            "id": 11,
+            "status": "failed",
+            "total": 2,
+            "completed": 2,
+            "passed": 1,
+            "failed": 1,
+            "skipped": 0,
+            "summary": "failed",
+            "error": "runner crashed",
+            "snapshot": {
+                "jobId": 11,
+                "running": True,
+                "total": 1,
+                "summary": "stale",
+                "cases": [{"name": "broken", "status": "fail"}],
+            },
+        }
+        state = SpxbenchSuiteGate.state_from_job_response(11, job)
+        self.assertFalse(state["running"])
+        self.assertEqual(state["total"], 2)
+        self.assertEqual(state["completed"], 2)
+        self.assertEqual(state["passed"], 1)
+        self.assertEqual(state["summary"], "failed")
+        self.assertEqual(state["lastError"], "runner crashed")
+        self.assertEqual(state["cases"][0]["name"], "broken")
+
+    def test_job_response_rejects_mismatched_id_or_missing_snapshot(self):
+        for job in ({"id": 12, "snapshot": {}}, {"id": 11}):
+            with self.subTest(job=job), self.assertRaisesRegex(SpxbenchSuiteError, "state read"):
+                SpxbenchSuiteGate.state_from_job_response(11, job)
+
     def test_comments_and_multiline_event_data(self):
         stream = io.BytesIO(b": connected\n\n: heartbeat\n\nevent: finished\ndata: {\"jobId\":\ndata: 11}\n\n")
         self.assertEqual(list(sse_events(stream)), [("finished", '{"jobId":\n11}')])
@@ -187,16 +240,16 @@ class SuiteJobEventsTest(unittest.TestCase):
                 list(sse_events(stream, deadline=100))
 
     def test_finished_event_reads_final_state_once(self):
-        state = {"jobId": 11, "running": False, "summary": "passed"}
+        state = job_response({"running": False, "summary": "passed"})
         response = self.stream(b": connected\n\nevent: finished\ndata: {\"jobId\":11}\n\n")
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
-            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
         self.assertEqual(opened.call_args.args[0].full_url,
                          "http://127.0.0.1/__e2e/api/job-events?job=11")
         self.assertEqual(opened.call_args.args[0].get_header("Authorization"), "Bearer t")
-        requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
+        requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_heartbeats_log_waiting_without_querying_state(self):
         body = (b": connected\n\n" + b": heartbeat\n\n" * 5
@@ -213,16 +266,16 @@ class SuiteJobEventsTest(unittest.TestCase):
                 yield line
 
         response.__iter__.return_value = timed_lines()
-        state = {"jobId": 11, "running": False, "summary": "passed"}
+        state = job_response({"running": False, "summary": "passed"})
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested, \
              mock.patch.object(run_spxbench_suite, "log") as logged:
-            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
         self.assertEqual([call.args[0] for call in logged.call_args_list if "still running" in call.args[0]],
                          ["   job #11 still running; waiting for completion event (60s)"])
-        requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
+        requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_missing_event_endpoint_fails_with_deployment_error(self):
         error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 404,
@@ -235,19 +288,20 @@ class SuiteJobEventsTest(unittest.TestCase):
         requested.assert_not_called()
 
     def test_disconnect_recovers_from_durable_final_state(self):
-        state = {"jobId": 11, "running": False, "summary": "failed"}
+        state = job_response({"running": False, "summary": "failed"}, status="failed")
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=urllib.error.URLError("connection lost")) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
-            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "failed")
         opened.assert_called_once()
-        requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
+        requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_disconnect_while_running_reconnects(self):
         response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        states = [(200, {"jobId": 11, "running": True}),
-                  (200, {"jobId": 11, "running": False, "summary": "passed"})]
+        states = [job_response({"running": True}, status="running"),
+                  job_response({"running": False, "summary": "passed"})]
+        states = [(200, state) for state in states]
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[urllib.error.URLError("lost"), response]) as opened, \
@@ -268,8 +322,9 @@ class SuiteJobEventsTest(unittest.TestCase):
         truncated = self.stream(b"")
         truncated.__iter__.return_value = truncated_lines()
         finished = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        states = [(200, {"jobId": 11, "running": True}),
-                  (200, {"jobId": 11, "running": False, "summary": "passed"})]
+        states = [job_response({"running": True}, status="running"),
+                  job_response({"running": False, "summary": "passed"})]
+        states = [(200, state) for state in states]
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[truncated, finished]) as opened, \
@@ -288,7 +343,8 @@ class SuiteJobEventsTest(unittest.TestCase):
         state_response = mock.MagicMock()
         state_response.__enter__.return_value = state_response
         state_response.status = 200
-        state_response.read.return_value = b'{"jobId":11,"running":false,"summary":"passed"}'
+        state_response.read.return_value = (b'{"id":11,"status":"success","summary":"passed",'
+                                             b'"snapshot":{"jobId":11,"running":false,"summary":"passed","cases":[]}}')
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[self.stream(finished_event), truncated,
@@ -302,8 +358,9 @@ class SuiteJobEventsTest(unittest.TestCase):
         error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
                                       "unavailable", {}, io.BytesIO(b"deploying"))
         response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        states = [(200, {"jobId": 11, "running": True}),
-                  (200, {"jobId": 11, "running": False, "summary": "passed"})]
+        states = [job_response({"running": True}, status="running"),
+                  job_response({"running": False, "summary": "passed"})]
+        states = [(200, state) for state in states]
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[error, response]) as opened, \
@@ -318,13 +375,13 @@ class SuiteJobEventsTest(unittest.TestCase):
         error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
                                       "unavailable", {}, io.BytesIO())
         error.read = mock.Mock(side_effect=http.client.IncompleteRead(b"down", 10))
-        state = {"jobId": 11, "running": False, "summary": "passed"}
+        state = job_response({"running": False, "summary": "passed"})
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
-            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
         error.read.assert_called_once_with()
-        requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
+        requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_interrupted_503_body_still_checks_durable_state(self):
         for failure in (TimeoutError("response body timed out"),
@@ -333,26 +390,26 @@ class SuiteJobEventsTest(unittest.TestCase):
                 error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
                                               "unavailable", {}, io.BytesIO())
                 error.read = mock.Mock(side_effect=failure)
-                state = {"jobId": 11, "running": False, "summary": "passed"}
+                state = job_response({"running": False, "summary": "passed"})
                 with patch_candidate_env(), \
                      mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
                      mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
-                    self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+                    self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
                 error.read.assert_called_once_with()
-                requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
+                requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_transient_state_failures_reconnect(self):
         for state_failure in ((503, "deploying"), SpxbenchConnectionError("offline")):
             with self.subTest(state_failure=state_failure):
                 response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-                state = {"jobId": 11, "running": False, "summary": "passed"}
+                state = job_response({"running": False, "summary": "passed"})
                 with patch_candidate_env(), \
                      mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                        side_effect=[urllib.error.URLError("lost"), response]), \
                      mock.patch.object(SpxbenchSuiteGate, "request",
                                        side_effect=[state_failure, (200, state)]) as requested, \
                      mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-                    self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+                    self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
                 self.assertEqual(requested.call_count, 2)
                 sleep.assert_called_once_with(2)
 
@@ -372,14 +429,14 @@ class SuiteJobEventsTest(unittest.TestCase):
                                           "unavailable", {}, io.BytesIO(b"deploying"))
 
         response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        state = {"jobId": 11, "running": False, "summary": "passed"}
+        state = job_response({"running": False, "summary": "passed"})
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[unavailable() for _ in range(4)] + [response]), \
              mock.patch.object(SpxbenchSuiteGate, "request",
                                side_effect=[(503, "deploying")] * 4 + [(200, state)]), \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 8, 10])
 
     def test_heartbeat_resets_reconnect_backoff(self):
@@ -389,8 +446,8 @@ class SuiteJobEventsTest(unittest.TestCase):
 
         heartbeat = self.stream(b": heartbeat\n\n")
         finished = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        running = (200, {"jobId": 11, "running": True})
-        passed = (200, {"jobId": 11, "running": False, "summary": "passed"})
+        running = (200, job_response({"running": True}, status="running"))
+        passed = (200, job_response({"running": False, "summary": "passed"}))
         with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[unavailable(), unavailable(), heartbeat, unavailable(), finished]), \
@@ -542,8 +599,9 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
                      (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "abc"}]}),
                      (200, {"jobId": 11}),
-                     (200, {"jobId": 11, "running": False, "summary": "passed", "total": 1,
-                            "completed": 1, "passed": 1, "cases": [{"name": "smoke", "status": "pass"}]})]
+                     (200, job_response({"running": False, "summary": "passed", "total": 1,
+                                        "completed": 1, "passed": 1,
+                                        "cases": [{"name": "smoke", "status": "pass"}]}))]
         with tempfile.TemporaryDirectory() as directory:
             output_path = os.path.join(directory, "outputs")
             summary_path = os.path.join(directory, "summary")
@@ -585,8 +643,10 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
                      (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]}),
                      (200, {"jobId": 11}),
-                     (200, {"jobId": 11, "running": False, "summary": "failed", "total": 1,
-                            "completed": 1, "passed": 0, "cases": [{"name": "smoke", "status": "fail"}]})]
+                     (200, job_response({"running": False, "summary": "failed", "total": 1,
+                                        "completed": 1, "passed": 0,
+                                        "cases": [{"name": "smoke", "status": "fail"}]},
+                                        status="failed"))]
         with tempfile.TemporaryDirectory() as directory:
             output_path = os.path.join(directory, "outputs")
             summary_path = os.path.join(directory, "summary")
@@ -614,8 +674,9 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
                      (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]}),
                      (200, {"jobId": 11}),
-                     (200, {"jobId": 11, "running": False, "summary": "passed", "total": 1,
-                            "completed": 1, "passed": 1, "cases": [{"name": "smoke", "status": "pass"}]})]
+                     (200, job_response({"running": False, "summary": "passed", "total": 1,
+                                        "completed": 1, "passed": 1,
+                                        "cases": [{"name": "smoke", "status": "pass"}]}))]
         with tempfile.TemporaryDirectory() as directory:
             summary_path = os.path.join(directory, "summary")
             with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_STEP_SUMMARY=summary_path), \
