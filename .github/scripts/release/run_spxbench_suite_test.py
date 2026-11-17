@@ -17,6 +17,10 @@ CANDIDATE_ENV = {"SPXBENCH_URL": "http://127.0.0.1", "SPXBENCH_API_TOKEN": "t",
                  "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": "0.0.1-rc.1.1", "GITHUB_SHA": "abc123"}
 
 
+def patch_candidate_env(**updates):
+    return mock.patch.dict(os.environ, {**CANDIDATE_ENV, **updates}, clear=True)
+
+
 class FindSuiteIdTest(unittest.TestCase):
     def test_matches_by_exact_name(self):
         suites = [{"id": 7, "name": "spx"}, {"id": 9, "name": "smoke"}]
@@ -99,7 +103,7 @@ class SuiteRunConflictTest(unittest.TestCase):
         self.assertFalse(is_run_slot_busy({"error": "boom"}))
 
     def test_success_without_job_id_fails_immediately(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {})):
             gate = SpxbenchSuiteGate()
             with self.assertRaisesRegex(SpxbenchSuiteError, "missing jobId"):
@@ -111,7 +115,7 @@ class SuiteRunConflictTest(unittest.TestCase):
                  (500, "unavailable", "run failed: HTTP 500: unavailable"))
         for status, body, message in cases:
             with self.subTest(status=status, body=body), \
-                 mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+                 patch_candidate_env(), \
                  mock.patch.object(SpxbenchSuiteGate, "request", return_value=(status, body)) as requested, \
                  mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
                 with self.assertRaises(SpxbenchSuiteError) as caught:
@@ -123,7 +127,7 @@ class SuiteRunConflictTest(unittest.TestCase):
 
 class CandidateInstallTest(unittest.TestCase):
     def test_install_response_must_include_candidate(self):
-        with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx"}, clear=True), \
+        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {"versions": []})):
             gate = SpxbenchSuiteGate()
             with self.assertRaisesRegex(SpxbenchSuiteError, "did not include candidate"):
@@ -133,7 +137,7 @@ class CandidateInstallTest(unittest.TestCase):
 class CandidateRemovalTest(unittest.TestCase):
     def test_conflict_retries_then_removes_candidate(self):
         responses = [(409, {"error": "runtime version is in use"}), (200, {"versions": []})]
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite, "request_spxbench", side_effect=responses) as requested, \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
             gate = SpxbenchSuiteGate()
@@ -145,7 +149,7 @@ class CandidateRemovalTest(unittest.TestCase):
         sleep.assert_called_once()
 
     def test_missing_candidate_is_already_removed(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite, "request_spxbench", return_value=(404, "not found")):
             gate = SpxbenchSuiteGate()
             gate.remove_candidate()
@@ -155,7 +159,7 @@ class CandidateRemovalTest(unittest.TestCase):
         responses = ({}, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]})
         for body in responses:
             with self.subTest(body=body), \
-                 mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+                 patch_candidate_env(), \
                  mock.patch.object(run_spxbench_suite, "request_spxbench", return_value=(200, body)):
                 gate = SpxbenchSuiteGate()
                 with self.assertRaises(SpxbenchSuiteError):
@@ -185,7 +189,7 @@ class SuiteJobEventsTest(unittest.TestCase):
     def test_finished_event_reads_final_state_once(self):
         state = {"jobId": 11, "running": False, "summary": "passed"}
         response = self.stream(b": connected\n\nevent: finished\ndata: {\"jobId\":11}\n\n")
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
             self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
@@ -210,7 +214,7 @@ class SuiteJobEventsTest(unittest.TestCase):
 
         response.__iter__.return_value = timed_lines()
         state = {"jobId": 11, "running": False, "summary": "passed"}
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested, \
@@ -223,7 +227,7 @@ class SuiteJobEventsTest(unittest.TestCase):
     def test_missing_event_endpoint_fails_with_deployment_error(self):
         error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 404,
                                       "not found", {}, io.BytesIO(b"404 page not found"))
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
              mock.patch.object(SpxbenchSuiteGate, "request") as requested:
             with self.assertRaisesRegex(SpxbenchSuiteError, "job event stream failed: HTTP 404"):
@@ -232,7 +236,7 @@ class SuiteJobEventsTest(unittest.TestCase):
 
     def test_disconnect_recovers_from_durable_final_state(self):
         state = {"jobId": 11, "running": False, "summary": "failed"}
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=urllib.error.URLError("connection lost")) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
@@ -244,7 +248,7 @@ class SuiteJobEventsTest(unittest.TestCase):
         response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
         states = [(200, {"jobId": 11, "running": True}),
                   (200, {"jobId": 11, "running": False, "summary": "passed"})]
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[urllib.error.URLError("lost"), response]) as opened, \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep, \
@@ -266,7 +270,7 @@ class SuiteJobEventsTest(unittest.TestCase):
         finished = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
         states = [(200, {"jobId": 11, "running": True}),
                   (200, {"jobId": 11, "running": False, "summary": "passed"})]
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[truncated, finished]) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", side_effect=states) as requested, \
@@ -285,7 +289,7 @@ class SuiteJobEventsTest(unittest.TestCase):
         state_response.__enter__.return_value = state_response
         state_response.status = 200
         state_response.read.return_value = b'{"jobId":11,"running":false,"summary":"passed"}'
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[self.stream(finished_event), truncated,
                                             self.stream(finished_event), state_response]) as opened, \
@@ -300,7 +304,7 @@ class SuiteJobEventsTest(unittest.TestCase):
         response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
         states = [(200, {"jobId": 11, "running": True}),
                   (200, {"jobId": 11, "running": False, "summary": "passed"})]
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[error, response]) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", side_effect=states) as requested, \
@@ -315,7 +319,7 @@ class SuiteJobEventsTest(unittest.TestCase):
                                       "unavailable", {}, io.BytesIO())
         error.read = mock.Mock(side_effect=http.client.IncompleteRead(b"down", 10))
         state = {"jobId": 11, "running": False, "summary": "passed"}
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
             self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
@@ -327,7 +331,7 @@ class SuiteJobEventsTest(unittest.TestCase):
                                       "unavailable", {}, io.BytesIO())
         error.read = mock.Mock(side_effect=TimeoutError("response body timed out"))
         state = {"jobId": 11, "running": False, "summary": "passed"}
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
             self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
@@ -339,7 +343,7 @@ class SuiteJobEventsTest(unittest.TestCase):
             with self.subTest(state_failure=state_failure):
                 response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
                 state = {"jobId": 11, "running": False, "summary": "passed"}
-                with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+                with patch_candidate_env(), \
                      mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                        side_effect=[urllib.error.URLError("lost"), response]), \
                      mock.patch.object(SpxbenchSuiteGate, "request",
@@ -350,7 +354,7 @@ class SuiteJobEventsTest(unittest.TestCase):
                 sleep.assert_called_once_with(2)
 
     def test_permanent_state_error_does_not_retry(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=urllib.error.URLError("lost")), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(401, "unauthorized")), \
@@ -366,7 +370,7 @@ class SuiteJobEventsTest(unittest.TestCase):
 
         response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
         state = {"jobId": 11, "running": False, "summary": "passed"}
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[unavailable() for _ in range(4)] + [response]), \
              mock.patch.object(SpxbenchSuiteGate, "request",
@@ -384,7 +388,7 @@ class SuiteJobEventsTest(unittest.TestCase):
         finished = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
         running = (200, {"jobId": 11, "running": True})
         passed = (200, {"jobId": 11, "running": False, "summary": "passed"})
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=[unavailable(), unavailable(), heartbeat, unavailable(), finished]), \
              mock.patch.object(SpxbenchSuiteGate, "request",
@@ -407,7 +411,7 @@ class SuiteJobEventsTest(unittest.TestCase):
             state_attempts.append((clock[0], kwargs["timeout"]))
             return 503, "deploying"
 
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
              mock.patch.object(run_spxbench_suite.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=unavailable), \
@@ -459,12 +463,12 @@ class DeleteCandidateReleaseTest(unittest.TestCase):
 
 class TimeoutTest(unittest.TestCase):
     def test_invalid_timeout_is_reported_as_configuration_error(self):
-        with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "SPXBENCH_TIMEOUT_MINUTES": "zero"}, clear=True):
+        with patch_candidate_env(SPXBENCH_TIMEOUT_MINUTES="zero"):
             with self.assertRaisesRegex(SpxbenchSuiteError, "positive integer"):
                 SpxbenchSuiteGate()
 
     def test_busy_retry_stops_at_deadline(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(SpxbenchSuiteGate, "request",
                                return_value=(409, "a test run is already in progress")):
             gate = SpxbenchSuiteGate()
@@ -476,7 +480,7 @@ class TimeoutTest(unittest.TestCase):
             sleep.assert_called_once_with(1)
 
     def test_api_request_uses_remaining_budget(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True):
+        with patch_candidate_env():
             gate = SpxbenchSuiteGate()
             gate.deadline = 105
             with mock.patch.object(run_spxbench_suite.time, "monotonic", return_value=100), \
@@ -491,7 +495,7 @@ class TimeoutTest(unittest.TestCase):
 
 class CandidateReleaseCleanupTest(unittest.TestCase):
     def test_creation_failure_still_cleans_up(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite, "create_candidate_release",
                                side_effect=SpxbenchSuiteError("boom")), \
              mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value=None) as deleted:
@@ -500,7 +504,7 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
             deleted.assert_called_once_with("v0.0.1-rc.1.1")
 
     def test_cleanup_failure_does_not_hide_creation_failure(self):
-        with mock.patch.dict(os.environ, CANDIDATE_ENV, clear=True), \
+        with patch_candidate_env(), \
              mock.patch.object(run_spxbench_suite, "create_candidate_release",
                                side_effect=SpxbenchSuiteError("release creation failed")), \
              mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value="release not found"):
@@ -511,8 +515,7 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output_path = os.path.join(directory, "outputs")
             summary_path = os.path.join(directory, "summary")
-            with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_OUTPUT": output_path,
-                                           "GITHUB_STEP_SUMMARY": summary_path}, clear=True), \
+            with patch_candidate_env(GITHUB_OUTPUT=output_path, GITHUB_STEP_SUMMARY=summary_path), \
                  mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
                  mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value="permission denied"), \
                  mock.patch.object(run_spxbench_suite, "request_spxbench", return_value=(200, {"versions": []})), \
@@ -542,9 +545,8 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
             output_path = os.path.join(directory, "outputs")
             summary_path = os.path.join(directory, "summary")
             events = []
-            with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx",
-                                           "GITHUB_SHA": "abc123", "GITHUB_OUTPUT": output_path,
-                                           "GITHUB_STEP_SUMMARY": summary_path}, clear=True), \
+            with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_SHA="abc123",
+                                     GITHUB_OUTPUT=output_path, GITHUB_STEP_SUMMARY=summary_path), \
                  mock.patch.object(run_spxbench_suite, "create_candidate_release") as created, \
                  mock.patch.object(run_spxbench_suite, "delete_candidate_release",
                                    side_effect=lambda tag: events.append("release") or None) as deleted, \
@@ -585,9 +587,8 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output_path = os.path.join(directory, "outputs")
             summary_path = os.path.join(directory, "summary")
-            with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx",
-                                           "GITHUB_OUTPUT": output_path,
-                                           "GITHUB_STEP_SUMMARY": summary_path}, clear=True), \
+            with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_OUTPUT=output_path,
+                                     GITHUB_STEP_SUMMARY=summary_path), \
                  mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
                  mock.patch.object(run_spxbench_suite, "delete_candidate_release") as deleted, \
                  mock.patch.object(run_spxbench_suite, "request_spxbench") as removed, \
@@ -614,8 +615,7 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
                             "completed": 1, "passed": 1, "cases": [{"name": "smoke", "status": "pass"}]})]
         with tempfile.TemporaryDirectory() as directory:
             summary_path = os.path.join(directory, "summary")
-            with mock.patch.dict(os.environ, {**CANDIDATE_ENV, "GITHUB_REPOSITORY": "goplus/spx",
-                                           "GITHUB_STEP_SUMMARY": summary_path}, clear=True), \
+            with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_STEP_SUMMARY=summary_path), \
                  mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
                  mock.patch.object(run_spxbench_suite, "delete_candidate_release") as deleted, \
                  mock.patch.object(run_spxbench_suite, "request_spxbench", return_value=(500, "unavailable")), \
