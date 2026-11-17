@@ -79,9 +79,9 @@ type Scheduler struct {
 	waitBatch      waitBatch         // Unpublished batch; guarded by schedulerMu.
 	selectedThread Thread            // Scheduler permit owner; may still be waiting for runMu.
 	mainCalls      []*mainThreadCall // Engine calls, served in reverse arrival order.
-	currentJobs    *queue[*waitJob]
-	deferredJobs   *queue[*waitJob]
-	roundJobs      *queue[*waitJob]
+	currentJobs    waitQueue
+	deferredJobs   waitQueue
+	roundJobs      waitQueue
 	redrawFrame    atomic.Int64
 	scriptRound    atomic.Uint64
 
@@ -115,21 +115,12 @@ type runnableState struct {
 // New creates a coroutine scheduler. onPanic is called when a coroutine exits
 // with an unhandled panic other than ErrAbortThread or ErrStopThisScript.
 func New(onPanic func(PanicReport)) *Scheduler {
-	// Nodes move between these queues, so they share a recycling pool.
-	jobs := newQueue[*waitJob]()
 	p := &Scheduler{
-		onPanic:       onPanic,
-		shutdownGate:  make(chan struct{}, 1),
-		allThreads:    make(map[Thread]struct{}),
-		runnableState: newRunnableState(),
-		waitBatch: waitBatch{
-			runnable:     newRunnableState(),
-			deferredJobs: &queue[*waitJob]{pool: jobs.pool},
-			roundJobs:    &queue[*waitJob]{pool: jobs.pool},
-		},
-		currentJobs:       jobs,
-		deferredJobs:      &queue[*waitJob]{pool: jobs.pool},
-		roundJobs:         &queue[*waitJob]{pool: jobs.pool},
+		onPanic:           onPanic,
+		shutdownGate:      make(chan struct{}, 1),
+		allThreads:        make(map[Thread]struct{}),
+		runnableState:     newRunnableState(),
+		waitBatch:         waitBatch{runnable: newRunnableState()},
 		readGCStats:       sdebug.ReadGCStats,
 		updateWatchdogNow: stime.Now,
 	}
@@ -208,9 +199,7 @@ func (p *Scheduler) yield(me Thread) {
 // Cancellation also wakes a thread so its defers can unwind under runMu.
 func (p *Scheduler) acquire(me Thread) {
 	me.suspendMu.Lock()
-	if me.suspendState == suspendSignaled {
-		me.suspendState = suspendRunning
-	} else {
+	if me.suspendState != suspendSignaled {
 		me.suspendState = suspendWaiting
 	}
 	for me.suspendState == suspendWaiting && !me.canceled() {

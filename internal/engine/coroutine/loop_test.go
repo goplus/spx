@@ -19,6 +19,7 @@ package coroutine
 import (
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/goplus/spx/v4/internal/core/clock"
 )
@@ -110,6 +111,30 @@ func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	if !passiveResumed || !loopResumed {
 		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)
 	}
+}
+
+func TestCanceledLoopDoesNotAdmitPassiveRoundWait(t *testing.T) {
+	scheduler := New(nil)
+	clock.Start()
+	loop := scheduler.newThread("loop")
+	jobs := []*waitJob{
+		{thread: scheduler.newThread("passive"), kind: waitNextRound},
+		{thread: loop, kind: waitLoop},
+	}
+	for _, job := range jobs {
+		scheduler.roundJobs.pushBack(job)
+	}
+	// Cancellation can happen after the wait scan has staged the loop.
+	loop.Cancel()
+	state := updateState{frame: clock.Frame(), workDeadline: time.Now().Add(time.Hour)}
+	if scheduler.queueNextRound(&state) {
+		t.Fatal("canceled loop admitted a same-frame round")
+	}
+	if scheduler.ScriptRound() != 0 || jobs[0].kind != waitNextRound || jobs[1].kind != waitLoop {
+		t.Fatal("rejected round changed script round or wait kinds")
+	}
+	assertWaitQueue(t, &scheduler.currentJobs, nil)
+	assertWaitQueue(t, &scheduler.roundJobs, jobs)
 }
 
 func TestRunBetweenScriptsSkipsCanceledMainThreadCall(t *testing.T) {

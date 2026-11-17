@@ -23,31 +23,6 @@ import (
 	"github.com/goplus/spx/v4/internal/core/clock"
 )
 
-type waitKind int
-
-const (
-	waitFrame waitKind = iota
-	waitTime
-	waitYield
-	waitLoop
-	waitNextRound
-)
-
-// waitJob holds a script wait.
-type waitJob struct {
-	thread   Thread // Waiting coroutine.
-	kind     waitKind
-	deadline float64 // Level-time deadline for a time job.
-	frame    int64   // Issuing frame for frame-gated jobs.
-}
-
-type updateState struct {
-	frame            int64
-	levelTime        float64
-	watchdogDeadline time.Time
-	workDeadline     time.Time
-}
-
 // waitBatch retains a wait scan's clock, boundary, and unpublished results.
 // Keeping it separate from executable work lets engine dispatchers run between Updates.
 type waitBatch struct {
@@ -56,8 +31,16 @@ type waitBatch struct {
 	frame        int64
 	levelTime    float64
 	runnable     *runnableState
-	deferredJobs *queue[*waitJob]
-	roundJobs    *queue[*waitJob]
+	deferredJobs waitQueue
+	roundJobs    waitQueue
+}
+
+// updateState holds the clock snapshot and deadlines for one Update call.
+type updateState struct {
+	frame            int64
+	levelTime        float64
+	watchdogDeadline time.Time
+	workDeadline     time.Time
 }
 
 type updateAction uint8
@@ -179,16 +162,15 @@ func (p *Scheduler) scanWaitBatchLocked(state *updateState, stats *UpdateStats) 
 		batch.frame, batch.levelTime = state.frame, state.levelTime
 		batch.runnable.readyQueue.cursor = 0
 	}
-	for range waitScanChunkSize {
-		job := p.currentJobs.popFront()
-		batch.remaining--
-		stats.JobCount++
-		p.stageWaitJobLocked(stats, job)
-		if batch.remaining == 0 {
-			p.deferredJobs.appendFrom(batch.deferredJobs)
-			p.roundJobs.appendFrom(batch.roundJobs)
-			break
-		}
+	count := min(waitScanChunkSize, batch.remaining)
+	for range count {
+		p.stageWaitJobLocked(stats, p.currentJobs.popFront())
+	}
+	batch.remaining -= count
+	stats.JobCount += count
+	if batch.remaining == 0 {
+		p.deferredJobs.appendFrom(&batch.deferredJobs)
+		p.roundJobs.appendFrom(&batch.roundJobs)
 	}
 	stats.JobTime += elapsedMillis(start)
 }
@@ -226,11 +208,11 @@ func (p *Scheduler) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 
 func (p *Scheduler) promoteDeferredJobs(stats *UpdateStats) {
 	start := time.Now()
-	p.deferredJobs.appendFrom(p.roundJobs)
+	p.deferredJobs.appendFrom(&p.roundJobs)
 	// The ready queue orders scripts after the whole wait batch is scanned.
 	p.schedulerMu.Lock()
 	stats.DeferredCount = p.deferredJobs.len() + p.waitBatch.deferredJobs.len() + p.waitBatch.roundJobs.len()
-	p.currentJobs.appendFrom(p.deferredJobs)
+	p.currentJobs.appendFrom(&p.deferredJobs)
 	p.schedulerMu.Unlock()
 	stats.MoveTime = elapsedMillis(start)
 }
