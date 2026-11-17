@@ -326,17 +326,20 @@ class SuiteJobEventsTest(unittest.TestCase):
         error.read.assert_called_once_with()
         requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
 
-    def test_timed_out_503_body_still_checks_durable_state(self):
-        error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                      "unavailable", {}, io.BytesIO())
-        error.read = mock.Mock(side_effect=TimeoutError("response body timed out"))
-        state = {"jobId": 11, "running": False, "summary": "passed"}
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
-             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
-            self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
-        error.read.assert_called_once_with()
-        requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
+    def test_interrupted_503_body_still_checks_durable_state(self):
+        for failure in (TimeoutError("response body timed out"),
+                        ConnectionResetError("connection reset by peer")):
+            with self.subTest(failure=type(failure).__name__):
+                error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
+                                              "unavailable", {}, io.BytesIO())
+                error.read = mock.Mock(side_effect=failure)
+                state = {"jobId": 11, "running": False, "summary": "passed"}
+                with patch_candidate_env(), \
+                     mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
+                     mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
+                    self.assertIs(SpxbenchSuiteGate().wait_for_suite_job(11), state)
+                error.read.assert_called_once_with()
+                requested.assert_called_once_with("/__e2e/api/state?job=11", timeout=15)
 
     def test_transient_state_failures_reconnect(self):
         for state_failure in ((503, "deploying"), SpxbenchConnectionError("offline")):

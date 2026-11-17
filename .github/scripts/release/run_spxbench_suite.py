@@ -338,7 +338,7 @@ class SpxbenchSuiteGate:
                 try:
                     try:
                         detail = error.read().decode()
-                    except (http.client.IncompleteRead, TimeoutError):
+                    except (http.client.IncompleteRead, OSError):
                         detail = "<unreadable response body>"
                 finally:
                     error.close()
