@@ -36,6 +36,7 @@ var (
 	workerHandshakeComplete  bool
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
+	contactEventsHandle      js.Func
 )
 
 func Link() *LinkSession {
@@ -72,18 +73,15 @@ func resolveJSFunc(funcName string) js.Value {
 }
 
 func registerWebGlobals() {
-	if goWasmInitCallbackHandle.Type() == js.TypeUndefined {
-		goWasmInitCallbackHandle = js.FuncOf(goWasmInit)
-		js.Global().Set("go_wasm_init", goWasmInitCallbackHandle)
-	}
-	registerCallbackDispatcher()
-	registerContactEventDispatcher()
+	registerWebCallback("go_wasm_init", &goWasmInitCallbackHandle, goWasmInit)
+	registerWebCallback("gdspx_dispatch", &callbackDispatcherHandle, gdspxDispatch)
+	registerWebCallback("gdspx_on_contact_events", &contactEventsHandle, gdspxContactEvents)
 }
 
-func registerCallbackDispatcher() {
-	if callbackDispatcherHandle.Type() == js.TypeUndefined {
-		callbackDispatcherHandle = js.FuncOf(gdspxDispatch)
-		js.Global().Set("gdspx_dispatch", callbackDispatcherHandle)
+func registerWebCallback(name string, handle *js.Func, callback func(js.Value, []js.Value) any) {
+	if handle.Type() == js.TypeUndefined {
+		*handle = js.FuncOf(callback)
+		js.Global().Set(name, *handle)
 	}
 }
 

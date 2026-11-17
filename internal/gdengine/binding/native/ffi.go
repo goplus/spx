@@ -59,13 +59,9 @@ func gdspx_init(resolver uintptr, _ unsafe.Pointer, configuration unsafe.Pointer
 	api.resolveAPIFunctions()
 	init := (*initialization)(configuration)
 	*init = initialization{minimum_initialization_level: initializationLevelScene}
-	setupInitialization(init)
+	C.cgo_setup_initialization(init)
 	registerEngineCallbacks()
 	return 1
-}
-
-func setupInitialization(init *initialization) {
-	C.cgo_setup_initialization(init)
 }
 
 func getProcAddress(resolver uintptr, name string) unsafe.Pointer {
