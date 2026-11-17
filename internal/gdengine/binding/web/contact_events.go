@@ -33,16 +33,7 @@ const (
 	contactEventBytes     = 4 + 8 + 8 // kind, self ID, other ID
 )
 
-var contactEventsHandle js.Func
 var contactEventGeneration uint64
-
-func registerContactEventDispatcher() {
-	if contactEventsHandle.Type() != js.TypeUndefined {
-		return
-	}
-	contactEventsHandle = js.FuncOf(gdspxContactEvents)
-	js.Global().Set("gdspx_on_contact_events", contactEventsHandle)
-}
 
 func gdspxContactEvents(this js.Value, args []js.Value) any {
 	generation := contactEventGeneration

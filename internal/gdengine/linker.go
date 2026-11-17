@@ -16,15 +16,13 @@
 
 package gdengine
 
-//lint:file-ignore ST1001 Godot linker glue intentionally dot-imports engine API types.
-
 import (
 	"sync"
 
 	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	engineimpl "github.com/goplus/spx/v4/internal/gdengine/impl"
-	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/gdspx"
 )
 
@@ -37,37 +35,30 @@ type LinkSession struct {
 type linkerBridge struct{}
 
 var (
-	coreCallbacks        CoreCallbackInfo
-	isWebInterpreterMode bool
-	activeLink           *LinkSession
-	linkMu               sync.Mutex
+	coreCallbacks engine.CoreCallbackInfo
+	activeLink    *LinkSession
+	linkMu        sync.Mutex
 )
 
 func init() {
 	gdspx.SetLinkerBridge(linkerBridge{})
 }
 
-func IsWebIntepreterMode() bool {
-	return isWebInterpreterMode
-}
-
-func Link(coreCallbackInfo CoreCallbackInfo) {
+func Link(coreCallbackInfo engine.CoreCallbackInfo) {
 	PrepareLink(standaloneCallbacks(coreCallbackInfo)).Run(nil)
 }
 
 // PrepareLink installs callbacks and managers before Run enters the backend.
 // Its OnEngineUpdate callback owns runtime advancement for each frame.
-func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
+func PrepareLink(coreCallbackInfo engine.CoreCallbackInfo) *LinkSession {
 	linkMu.Lock()
 	defer linkMu.Unlock()
 	if activeLink != nil {
 		panic("gdengine: a link is already active")
 	}
 
-	backend, interpreter := facade.LinkFFI()
-	session := &LinkSession{backend: backend}
+	session := &LinkSession{backend: facade.LinkFFI()}
 
-	isWebInterpreterMode = interpreter
 	coreCallbacks = coreCallbackInfo
 	facade.BindCallbacks(makeCallbacks())
 	// These Go adapters have no lifecycle behavior; the backend owns its managers.
@@ -102,15 +93,10 @@ func (s *LinkSession) Unlink() {
 		return
 	}
 	activeLink = nil
-	coreCallbacks = CoreCallbackInfo{}
-	isWebInterpreterMode = false
+	coreCallbacks = engine.CoreCallbackInfo{}
 }
 
-func (linkerBridge) IsWebIntepreterMode() bool {
-	return IsWebIntepreterMode()
-}
-
-func (linkerBridge) Link(coreCallbackInfo CoreCallbackInfo) {
+func (linkerBridge) Link(coreCallbackInfo engine.CoreCallbackInfo) {
 	Link(coreCallbackInfo)
 }
 

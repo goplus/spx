@@ -115,19 +115,19 @@ type ArrayInfo struct {
 func ToGdArrayInfo(slice any) *ArrayInfo {
 	switch v := slice.(type) {
 	case []int64:
-		return createGdArrayFromInt64s(v)
+		return createNumericArray[C.int64_t](ArrayTypeInt64, v)
 	case []float32:
-		return createGdArrayFromFloats(v)
+		return createNumericArray[C.float](ArrayTypeFloat, v)
 	case []float64:
-		return createGdArrayFromFloats(v)
+		return createNumericArray[C.float](ArrayTypeFloat, v)
 	case []bool:
 		return createGdArrayFromBools(v)
 	case []string:
 		return createGdArrayFromStrings(v)
 	case []GdObj:
-		return createGdArrayFromObjectIDs(v)
+		return createNumericArray[C.GdObj](ArrayTypeGdObj, v)
 	case []byte:
-		return createGdArrayFromBytes(v)
+		return createNumericArray[C.uchar](ArrayTypeByte, v)
 	default:
 		panic(fmt.Sprintf("unsupported array type: %T", slice))
 	}
@@ -188,29 +188,11 @@ func (a *ArrayInfo) Free() {
 }
 
 func (a *ArrayInfo) ToInt64s() []int64 {
-	if a.gdArray == nil || a.Type() != ArrayTypeInt64 {
-		return nil
-	}
-	size := a.Size()
-	slice := unsafe.Slice((*C.int64_t)(a.gdArray.data), size)
-	result := make([]int64, size)
-	for i, v := range slice {
-		result[i] = int64(v)
-	}
-	return result
+	return readNumericArray[C.int64_t, int64](a, ArrayTypeInt64)
 }
 
 func (a *ArrayInfo) ToFloat32s() []float32 {
-	if a.gdArray == nil || a.Type() != ArrayTypeFloat {
-		return nil
-	}
-	size := a.Size()
-	slice := unsafe.Slice((*C.float)(a.gdArray.data), size)
-	result := make([]float32, size)
-	for i, v := range slice {
-		result[i] = float32(v)
-	}
-	return result
+	return readNumericArray[C.float, float32](a, ArrayTypeFloat)
 }
 
 func (a *ArrayInfo) ToBools() []bool {
@@ -227,29 +209,11 @@ func (a *ArrayInfo) ToBools() []bool {
 }
 
 func (a *ArrayInfo) ToBytes() []byte {
-	if a.gdArray == nil || a.Type() != ArrayTypeByte {
-		return nil
-	}
-	size := a.Size()
-	slice := unsafe.Slice((*C.uchar)(a.gdArray.data), size)
-	result := make([]byte, size)
-	for i, v := range slice {
-		result[i] = byte(v)
-	}
-	return result
+	return readNumericArray[C.uchar, byte](a, ArrayTypeByte)
 }
 
 func (a *ArrayInfo) ToObjectIDs() []int64 {
-	if a.gdArray == nil || a.Type() != ArrayTypeGdObj {
-		return nil
-	}
-	size := a.Size()
-	slice := unsafe.Slice((*C.GdObj)(a.gdArray.data), size)
-	result := make([]int64, size)
-	for i, v := range slice {
-		result[i] = int64(v)
-	}
-	return result
+	return readNumericArray[C.GdObj, int64](a, ArrayTypeGdObj)
 }
 
 func (a *ArrayInfo) ToStrings() []string {
@@ -291,30 +255,33 @@ func allocateGdArrayInfo(arrayType int64, size int, isNil bool) *ArrayInfo {
 	return &ArrayInfo{gdArray: arrayInfo}
 }
 
-func createGdArrayFromInt64s(ints []int64) *ArrayInfo {
-	info := allocateGdArrayInfo(ArrayTypeInt64, len(ints), ints == nil)
+type arrayNumber interface {
+	~int64 | ~float32 | ~float64 | ~uint8
+}
+
+// Keep the ABI element type explicit while copying between native and Go storage.
+func createNumericArray[Native, Go arrayNumber](arrayType int64, values []Go) *ArrayInfo {
+	info := allocateGdArrayInfo(arrayType, len(values), values == nil)
 	if info == nil || info.gdArray == nil {
 		return info
 	}
-	arrayInfo := info.gdArray
-	cIntSlice := unsafe.Slice((*C.int64_t)(arrayInfo.data), len(ints))
-	for i, v := range ints {
-		cIntSlice[i] = C.int64_t(v)
+	data := unsafe.Slice((*Native)(info.gdArray.data), len(values))
+	for i, value := range values {
+		data[i] = Native(value)
 	}
 	return info
 }
 
-func createGdArrayFromFloats[T ~float32 | ~float64](floats []T) *ArrayInfo {
-	info := allocateGdArrayInfo(ArrayTypeFloat, len(floats), floats == nil)
-	if info == nil || info.gdArray == nil {
-		return info
+func readNumericArray[Native, Go arrayNumber](info *ArrayInfo, arrayType int64) []Go {
+	if info.gdArray == nil || info.Type() != arrayType {
+		return nil
 	}
-	arrayInfo := info.gdArray
-	cFloatSlice := unsafe.Slice((*C.float)(arrayInfo.data), len(floats))
-	for i, v := range floats {
-		cFloatSlice[i] = C.float(v)
+	data := unsafe.Slice((*Native)(info.gdArray.data), info.Size())
+	result := make([]Go, len(data))
+	for i, value := range data {
+		result[i] = Go(value)
 	}
-	return info
+	return result
 }
 
 func createGdArrayFromBools(bools []bool) *ArrayInfo {
@@ -330,32 +297,6 @@ func createGdArrayFromBools(bools []bool) *ArrayInfo {
 		} else {
 			cBoolSlice[i] = 0
 		}
-	}
-	return info
-}
-
-func createGdArrayFromBytes(bytes []byte) *ArrayInfo {
-	info := allocateGdArrayInfo(ArrayTypeByte, len(bytes), bytes == nil)
-	if info == nil || info.gdArray == nil {
-		return info
-	}
-	arrayInfo := info.gdArray
-	cByteSlice := unsafe.Slice((*C.uchar)(arrayInfo.data), len(bytes))
-	for i, v := range bytes {
-		cByteSlice[i] = C.uchar(v)
-	}
-	return info
-}
-
-func createGdArrayFromObjectIDs(objects []GdObj) *ArrayInfo {
-	info := allocateGdArrayInfo(ArrayTypeGdObj, len(objects), objects == nil)
-	if info == nil || info.gdArray == nil {
-		return info
-	}
-	arrayInfo := info.gdArray
-	cObjSlice := unsafe.Slice((*C.GdObj)(arrayInfo.data), len(objects))
-	for i, v := range objects {
-		cObjSlice[i] = C.GdObj(v)
 	}
 	return info
 }

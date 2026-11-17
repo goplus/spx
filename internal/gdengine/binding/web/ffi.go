@@ -26,28 +26,28 @@ import (
 )
 
 type LinkSession struct {
-	exit        chan struct{}
-	interpreter bool
+	exit chan struct{}
 }
 
 var (
 	callbacks engine.CallbackInfo
 
-	// wasmInitialized records the worker initialization handshake.
-	wasmInitialized          bool
+	// Set by the worker's go_wasm_init handshake.
+	workerHandshakeComplete  bool
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
+	contactEventsHandle      js.Func
 )
 
-func Link() (*LinkSession, bool) {
+func Link() *LinkSession {
 	registerWebGlobals()
 	API.resolveAPIFunctions()
-	interpreter := !wasmInitialized
-	return &LinkSession{exit: make(chan struct{}), interpreter: interpreter}, interpreter
+	return &LinkSession{exit: make(chan struct{})}
 }
 
 func (s *LinkSession) Run(ready func()) {
-	if s.interpreter { // adapt for ixgo
+	if !workerHandshakeComplete {
+		// Non-worker startup needs an explicit start event.
 		gdspxDispatch(js.Value{}, []js.Value{jsEventOnEngineStart})
 	}
 	ready()
@@ -56,7 +56,7 @@ func (s *LinkSession) Run(ready func()) {
 
 func (s *LinkSession) Unlink() {
 	close(s.exit)
-	wasmInitialized = false
+	workerHandshakeComplete = false
 }
 
 func BindCallbacks(info engine.CallbackInfo) {
@@ -73,24 +73,21 @@ func resolveJSFunc(funcName string) js.Value {
 }
 
 func registerWebGlobals() {
-	if goWasmInitCallbackHandle.Type() == js.TypeUndefined {
-		goWasmInitCallbackHandle = js.FuncOf(goWasmInit)
-		js.Global().Set("go_wasm_init", goWasmInitCallbackHandle)
-	}
-	registerCallbackDispatcher()
-	registerContactEventDispatcher()
+	registerWebCallback("go_wasm_init", &goWasmInitCallbackHandle, goWasmInit)
+	registerWebCallback("gdspx_dispatch", &callbackDispatcherHandle, gdspxDispatch)
+	registerWebCallback("gdspx_on_contact_events", &contactEventsHandle, gdspxContactEvents)
 }
 
-func registerCallbackDispatcher() {
-	if callbackDispatcherHandle.Type() == js.TypeUndefined {
-		callbackDispatcherHandle = js.FuncOf(gdspxDispatch)
-		js.Global().Set("gdspx_dispatch", callbackDispatcherHandle)
+func registerWebCallback(name string, handle *js.Func, callback func(js.Value, []js.Value) any) {
+	if handle.Type() == js.TypeUndefined {
+		*handle = js.FuncOf(callback)
+		js.Global().Set(name, *handle)
 	}
 }
 
 // goWasmInit is only called in worker mode.
 func goWasmInit(this js.Value, args []js.Value) any {
 	spxlog.Info("WASM initialized")
-	wasmInitialized = true
+	workerHandshakeComplete = true
 	return js.ValueOf(nil)
 }
