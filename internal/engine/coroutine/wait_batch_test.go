@@ -36,7 +36,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 		{"frame", (*Scheduler).WaitNextFrameFor, true},
 		{"loop", (*Scheduler).YieldLoopFor, false},
 	} {
-		for _, count := range []int{2, 256} {
+		for _, count := range []int{2, waitScanChunkSize - 1, waitScanChunkSize, waitScanChunkSize + 1, 4 * waitScanChunkSize} {
 			t.Run(fmt.Sprintf("%s/%d", wait.name, count), func(t *testing.T) {
 				scheduler := New(nil)
 				clock.Start()
@@ -71,8 +71,8 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 				// entire small batch has been scanned but not yet published.
 				expireUpdateAtFirstCheckpoint(scheduler)
 				scheduler.Update()
-				if got := scheduler.UpdateStats().JobCount; got == 0 || count == 256 && got >= count {
-					t.Fatalf("scanned %d of %d waits before watchdog, want bounded progress", got, count)
+				if got, want := scheduler.UpdateStats().JobCount, min(count, waitScanChunkSize); got != want {
+					t.Fatalf("scanned %d of %d waits before watchdog, want %d", got, count, want)
 				}
 
 				// The engine synchronously runs dispatchers before its next Update.

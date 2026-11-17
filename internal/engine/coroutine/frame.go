@@ -68,17 +68,20 @@ func (p *Scheduler) queueNextRound(state *updateState) bool {
 	}
 	// A script round does not advance the frame clock.
 	p.scriptRound.Add(1)
-	for n := p.roundJobs.head; n != nil; n = n.next {
-		n.value.kind = waitYield
+	for job := p.roundJobs.head; job != nil; job = job.next {
+		job.kind = waitYield
 	}
 	p.schedulerMu.Lock()
-	p.currentJobs.appendFrom(p.roundJobs)
+	p.currentJobs.appendFrom(&p.roundJobs)
 	p.schedulerMu.Unlock()
 	return true
 }
 
 func (p *Scheduler) hasLoopContinuation() bool {
-	return p.roundJobs.any(func(job *waitJob) bool {
-		return job.kind == waitLoop && !job.thread.canceled()
-	})
+	for job := p.roundJobs.head; job != nil; job = job.next {
+		if job.kind == waitLoop && !job.thread.canceled() {
+			return true
+		}
+	}
+	return false
 }
