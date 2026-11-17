@@ -67,6 +67,22 @@ func TestAnimationInitializeBuildsSingleAnimationEntryMap(t *testing.T) {
 	}
 }
 
+func TestAnimationEntryRegistrationRejectsInvalidFrames(t *testing.T) {
+	entry := &animationEntry{
+		config:   &coreproject.AniConfig{IFrameFrom: 0, IFrameTo: 1},
+		costumes: []*costume{{}},
+	}
+	defer func() {
+		recovered := recover()
+		err, ok := recovered.(error)
+		const want = "createAnimation: frame index out of bounds (from=0, to=1, costumes=1)"
+		if !ok || err.Error() != want {
+			t.Fatalf("ensureRegistered() panic = %v, want %q", recovered, want)
+		}
+	}()
+	entry.ensureRegistered()
+}
+
 func TestStopCurrentAnimStateDoesNotClearReplacement(t *testing.T) {
 	anim := newTestAnimationComponent()
 	oldState := &animationPlayback{Name: "walk"}
