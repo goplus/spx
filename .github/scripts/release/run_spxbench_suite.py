@@ -63,6 +63,17 @@ def run_command(*args, check=True):
     return result
 
 
+def response_detail(body):
+    return body if isinstance(body, str) else json.dumps(body)
+
+
+def retry_delay(deadline, limit, timeout_message):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise SpxbenchSuiteError(timeout_message)
+    return min(limit, remaining)
+
+
 def request_spxbench(url, token, method="GET", payload=None, timeout=180):
     """Return (http_status, parsed_body) for one spxbench API call."""
     request = urllib.request.Request(url, method=method)
@@ -172,8 +183,7 @@ def job_failure_reasons(state):
 
 def is_run_slot_busy(body):
     """True only for the recoverable occupied-slot 409; other 409s are permanent."""
-    detail = body if isinstance(body, str) else json.dumps(body)
-    return "already in progress" in detail
+    return "already in progress" in response_detail(body)
 
 
 def create_candidate_release(candidate_tag, web_archive_path, target_sha):
@@ -219,11 +229,14 @@ class SpxbenchSuiteGate:
         self.install_started = False
         self.candidate_removed = False
 
+    def api_url(self, path):
+        return f"{self.spxbench_url}{path}"
+
     def request(self, path, method="GET", payload=None, timeout=180):
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             raise SpxbenchSuiteError(f"spxbench suite exceeded {self.timeout_minutes} minutes")
-        return request_spxbench(f"{self.spxbench_url}{path}", self.token, method=method,
+        return request_spxbench(self.api_url(path), self.token, method=method,
                                 payload=payload, timeout=min(timeout, remaining))
 
     def resolve_suite(self):
@@ -272,12 +285,9 @@ class SpxbenchSuiteGate:
                 return job_id
             elif status == 409:
                 if not is_run_slot_busy(body):
-                    detail = body if isinstance(body, str) else json.dumps(body)
-                    raise SpxbenchSuiteError(f"run rejected: {detail.strip()}")
-                remaining = self.deadline - time.monotonic()
-                if remaining <= 0:
-                    raise SpxbenchSuiteError("timed out waiting for a free run slot")
-                delay = min(BUSY_RETRY_SECONDS, remaining)
+                    raise SpxbenchSuiteError(f"run rejected: {response_detail(body).strip()}")
+                delay = retry_delay(self.deadline, BUSY_RETRY_SECONDS,
+                                    "timed out waiting for a free run slot")
                 log(f"   run slot busy (409), retrying in {delay:.0f}s")
                 time.sleep(delay)
             else:
@@ -285,7 +295,7 @@ class SpxbenchSuiteGate:
 
     def wait_for_suite_job(self, job_id):
         log(f"waiting for job #{job_id} completion event")
-        url = f"{self.spxbench_url}/__e2e/api/job-events?job={job_id}"
+        url = self.api_url(f"/__e2e/api/job-events?job={job_id}")
         wait_started = time.monotonic()
         last_wait_log = wait_started
         recovery_deadline = None
@@ -387,7 +397,7 @@ class SpxbenchSuiteGate:
         total, passed, failed = state.get("total"), state.get("passed"), state.get("failed")
         log(f"result: summary={state.get('summary') or '(none)'} total={total} "
             f"passed={passed} failed={failed}")
-        log(f"   details: {self.spxbench_url}/__e2e?job={job_id}")
+        log(f"   details: {self.api_url(f'/__e2e?job={job_id}')}")
         failures = failing_cases(state)
         if failures:
             log("   failing cases:")
@@ -407,7 +417,7 @@ class SpxbenchSuiteGate:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise SpxbenchSuiteError(f"timed out removing candidate {self.candidate_version} from spxbench")
-            status, body = request_spxbench(f"{self.spxbench_url}/api/runtime-versions", self.token,
+            status, body = request_spxbench(self.api_url("/api/runtime-versions"), self.token,
                                             method="POST", payload=payload, timeout=min(30, remaining))
             if status == 200:
                 versions = body.get("versions") if isinstance(body, dict) else None
@@ -421,20 +431,15 @@ class SpxbenchSuiteGate:
                 break
             if status != 409:
                 raise SpxbenchSuiteError(f"remove candidate failed: HTTP {status}: {body}")
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise SpxbenchSuiteError(f"timed out removing candidate {self.candidate_version}: {body}")
-            delay = min(REMOVE_RETRY_SECONDS, remaining)
+            delay = retry_delay(deadline, REMOVE_RETRY_SECONDS,
+                                f"timed out removing candidate {self.candidate_version}: {body}")
             log(f"   candidate removal blocked (409), retrying in {delay:.0f}s")
             time.sleep(delay)
         self.candidate_removed = True
         write_step_output("candidate_removed")
         log(f"   removed candidate {self.candidate_version} from spxbench")
 
-    def write_summary(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
-        path = os.environ.get("GITHUB_STEP_SUMMARY")
-        if not path:
-            return
+    def summary_lines(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
         lines = ["### spxbench regression suite", "",
                  f"- Suite: `{self.suite_name}`",
                  f"- Candidate: `{self.candidate_version}`",
@@ -442,12 +447,19 @@ class SpxbenchSuiteGate:
                  f"- spxbench candidate: **{runtime_cleanup}**",
                  f"- GitHub prerelease: **{release_cleanup}**"]
         if job_id is not None:
-            lines.append(f"- [Test run details]({self.spxbench_url}/__e2e?job={job_id})")
-        for note in cleanup_notes:
-            lines.append(f"- Cleanup warning: {' '.join(str(note).splitlines())}")
+            lines.append(f"- [Test run details]({self.api_url(f'/__e2e?job={job_id}')})")
+        lines.extend(f"- Cleanup warning: {' '.join(str(note).splitlines())}"
+                     for note in cleanup_notes)
+        return lines
+
+    def write_summary(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
+        path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not path:
+            return
         try:
             with open(path, "a", encoding="utf-8") as summary:
-                summary.write("\n".join(lines) + "\n\n")
+                summary.write("\n".join(self.summary_lines(
+                    suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes)) + "\n\n")
         except OSError as error:
             warn_cleanup(f"writing GitHub Step Summary failed: {error}")
 
