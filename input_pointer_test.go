@@ -30,15 +30,77 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+// Shared drag fixtures.
+
 type dragSpriteMgr struct {
 	*clickThroughSpriteMgr
 	hit func(pkgengine.Object, mathf.Vec2) bool
+}
+
+func (m *dragSpriteMgr) CheckCollisionWithPoint(id pkgengine.Object, point mathf.Vec2, trigger bool) bool {
+	if m.hit != nil {
+		return m.hit(id, point)
+	}
+	return m.clickThroughSpriteMgr.CheckCollisionWithPoint(id, point, trigger)
+}
+
+func (*dragSpriteMgr) SetTransform(pkgengine.Object, mathf.Vec2, float64, mathf.Vec2, bool, mathf.Vec2) {
 }
 
 type dragCameraMgr struct {
 	pkgengine.ICameraMgr
 	viewport, world mathf.Rect2
 }
+
+func (m *dragCameraMgr) GetViewportRect() mathf.Rect2 { return m.viewport }
+
+func (m *dragCameraMgr) GetGlobalCameraRect() mathf.Rect2 { return m.world }
+
+func setupSpriteDragTest(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl) {
+	t.Helper()
+	currentScheduler, game := setupInputFrameGame(t)
+	game.scene.init()
+	game.camera = &cameraImpl{g: game}
+	previousCamera := pkgengine.CameraMgr
+	pkgengine.CameraMgr = &dragCameraMgr{
+		viewport: mathf.Rect2{Size: mathf.NewVec2(480, 360)},
+		world:    mathf.Rect2{Position: mathf.NewVec2(-240, -180), Size: mathf.NewVec2(480, 360)},
+	}
+	t.Cleanup(func() { pkgengine.CameraMgr = previousCamera })
+	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{1: true, 2: true})
+	pkgengine.SpriteMgr = &dragSpriteMgr{clickThroughSpriteMgr: mgr}
+	sprite := newDragTestSprite(game, "dragged", 1)
+	sprite.SetDragMode(Draggable)
+	game.scene.add(sprite)
+	return currentScheduler, game, sprite
+}
+
+func newDragTestSprite(game *Game, name string, id pkgengine.Object) *SpriteImpl {
+	sprite := newClickTestSprite(game, name, id, false)
+	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{X: 10, Y: 20, RotationStyle: "normal"})
+	sprite.costumes = []*costume{newCostumeWithSize(10, 10)}
+	sprite.runtimeState.scale = 1
+	sprite.runtimeState.proxy.OnAnimationLoopedEvent = &pkgengine.Event0{}
+	sprite.runtimeState.proxy.OnAnimationFinishedEvent = &pkgengine.Event0{}
+	return sprite
+}
+
+func dispatchSpriteDragFrame(currentScheduler *coroutine.Scheduler, game *Game, point mathf.Vec2, events ...event) {
+	game.inputMgr.frame.dragProjection = game.inputMgr.sampleDragProjection()
+	game.inputMgr.mousePos = point
+	game.inputMgr.frame.pending = &inputFrame{events: events}
+	game.dispatchFrameEvents()
+	currentScheduler.Update()
+}
+
+func assertSpriteDragPosition(t *testing.T, sprite *SpriteImpl, x, y float64) {
+	t.Helper()
+	if gotX, gotY := sprite.getXY(); gotX != x || gotY != y {
+		t.Fatalf("sprite position = (%v, %v), want (%v, %v)", gotX, gotY, x, y)
+	}
+}
+
+// Drag configuration and gesture routing.
 
 func TestSpriteSetDragMode(t *testing.T) {
 	var sprite SpriteImpl
@@ -240,6 +302,8 @@ func TestSpriteDragCandidateCancellationPreservesForegroundClick(t *testing.T) {
 		})
 	}
 }
+
+// Gesture activation, cancellation and pointer ownership.
 
 func TestSpriteDragCancellation(t *testing.T) {
 	for _, test := range []struct {
@@ -578,6 +642,8 @@ func TestSpriteDragEmptyPressNeverCapturesLaterTarget(t *testing.T) {
 	}
 }
 
+// Camera motion and coordinate projection.
+
 func TestSpriteDragCameraMotionDoesNotActivate(t *testing.T) {
 	currentScheduler, game, sprite := setupSpriteDragTest(t)
 	game.inputSlot.session = &inputSession{}
@@ -592,6 +658,98 @@ func TestSpriteDragCameraMotionDoesNotActivate(t *testing.T) {
 	}
 	assertSpriteDragPosition(t, sprite, 10, 20)
 }
+
+func TestSpriteDragCameraLongPressKeepsCandidateWithoutJump(t *testing.T) {
+	for _, moveSprite := range []bool{false, true} {
+		t.Run(fmt.Sprintf("move sprite=%v", moveSprite), func(t *testing.T) {
+			currentScheduler, game, sprite := setupSpriteDragTest(t)
+			clock := &inputSession{}
+			game.inputSlot.session = clock
+			start := mathf.NewVec2(10, 20)
+			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
+			camera := pkgengine.CameraMgr.(*dragCameraMgr)
+			camera.world.Position.X += 100
+			wantX := 10.0
+			if moveSprite {
+				wantX = 110
+				sprite.SetXYpos(wantX, 20)
+			}
+			pkgengine.SpriteMgr.(*dragSpriteMgr).hits[1] = false
+			clock.currentTime = .4
+			dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(110, 20))
+			if !game.inputMgr.drag.active || game.inputMgr.drag.target != sprite {
+				t.Fatal("camera motion lost the pressed candidate")
+			}
+			assertSpriteDragPosition(t, sprite, wantX, 20)
+		})
+	}
+}
+
+func TestSpriteDragFloat32CameraNeverCapturesAfterEmptyPress(t *testing.T) {
+	currentScheduler, g, sprite := setupSpriteDragTest(t)
+	clock := &inputSession{}
+	g.inputSlot.session = clock
+	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
+	mgr.hits[1] = false
+	camera := pkgengine.CameraMgr.(*dragCameraMgr)
+	camera.world.Position = mathf.NewVec2(-237.13, -180.27)
+	camera.world.Size = mathf.NewVec2(480/1.37, 360/1.37)
+	float32Point := func(v mathf.Vec2) mathf.Vec2 {
+		return mathf.NewVec2(float64(float32(v.X)), float64(float32(v.Y)))
+	}
+	pointAtView := func(view mathf.Vec2) mathf.Vec2 {
+		camera.world.Position = float32Point(camera.world.Position)
+		camera.world.Size = float32Point(camera.world.Size)
+		g.inputMgr.frame.dragProjection = g.inputMgr.sampleDragProjection()
+		return float32Point(g.inputMgr.frame.dragProjection.worldPoint(view))
+	}
+	stationary := mathf.NewVec2(250.3, 160.7)
+	start := pointAtView(stationary)
+	dispatchSpriteDragFrame(currentScheduler, g, start, &eventLeftButtonDown{Pos: start})
+	mgr.hits[1] = true
+	for i := 1; i <= 20; i++ {
+		camera.world.Position = camera.world.Position.Add(mathf.NewVec2(.13, -.27))
+		camera.world.Size = camera.world.Size.Mulf(1.001)
+		clock.currentTime = float64(i) / 10
+		dispatchSpriteDragFrame(currentScheduler, g, pointAtView(stationary))
+		if g.inputMgr.drag.target != nil || g.inputMgr.drag.active {
+			t.Fatalf("float32 camera captured a late sprite at frame %d", i)
+		}
+	}
+	dispatchSpriteDragFrame(currentScheduler, g, pointAtView(stationary.Add(mathf.NewVec2(4, 0))))
+	if g.inputMgr.drag.target != nil || g.inputMgr.drag.active {
+		t.Fatal("later pointer movement captured a sprite after an empty press")
+	}
+	assertSpriteDragPosition(t, sprite, 10, 20)
+}
+
+func TestSpriteDragProjectionFallback(t *testing.T) {
+	for _, dimension := range []string{"no camera", "world width", "world height", "viewport width", "viewport height"} {
+		t.Run(dimension, func(t *testing.T) {
+			_, game, _ := setupSpriteDragTest(t)
+			camera := pkgengine.CameraMgr.(*dragCameraMgr)
+			switch dimension {
+			case "no camera":
+				game.camera = nil
+			case "world width":
+				camera.world.Size.X = 0
+			case "world height":
+				camera.world.Size.Y = 0
+			case "viewport width":
+				camera.viewport.Size.X = 0
+			case "viewport height":
+				camera.viewport.Size.Y = 0
+			}
+			projection := game.inputMgr.sampleDragProjection()
+			point := mathf.NewVec2(10, 20)
+			if projection != nil || projection.viewportPoint(point) != point || projection.worldPoint(point) != point {
+				t.Fatal("unavailable projection must preserve world input")
+			}
+		})
+	}
+}
+
+// Recording and replaying drag gestures.
 
 func TestSpriteDragRecordingJSONRoundTrip(t *testing.T) {
 	for _, fps := range []int{10, 30, 60} {
@@ -890,6 +1048,8 @@ func TestSpriteDragResetsAcrossReplayTransitions(t *testing.T) {
 	assertSpriteDragPosition(t, sprite, 50, 60)
 }
 
+// Dragging with sensing and pen state.
+
 func TestSpriteDragTouchingIsDirectionalUntilRelease(t *testing.T) {
 	for _, named := range []bool{false, true} {
 		name := "sprite"
@@ -1072,69 +1232,7 @@ func TestSpriteDragPenUpBeforeResumeKeepsDrawingStopped(t *testing.T) {
 	}
 }
 
-func TestSpriteDragCameraLongPressKeepsCandidateWithoutJump(t *testing.T) {
-	for _, moveSprite := range []bool{false, true} {
-		t.Run(fmt.Sprintf("move sprite=%v", moveSprite), func(t *testing.T) {
-			currentScheduler, game, sprite := setupSpriteDragTest(t)
-			clock := &inputSession{}
-			game.inputSlot.session = clock
-			start := mathf.NewVec2(10, 20)
-			dispatchSpriteDragFrame(currentScheduler, game, start, &eventLeftButtonDown{Pos: start})
-			camera := pkgengine.CameraMgr.(*dragCameraMgr)
-			camera.world.Position.X += 100
-			wantX := 10.0
-			if moveSprite {
-				wantX = 110
-				sprite.SetXYpos(wantX, 20)
-			}
-			pkgengine.SpriteMgr.(*dragSpriteMgr).hits[1] = false
-			clock.currentTime = .4
-			dispatchSpriteDragFrame(currentScheduler, game, mathf.NewVec2(110, 20))
-			if !game.inputMgr.drag.active || game.inputMgr.drag.target != sprite {
-				t.Fatal("camera motion lost the pressed candidate")
-			}
-			assertSpriteDragPosition(t, sprite, wantX, 20)
-		})
-	}
-}
-
-func TestSpriteDragFloat32CameraNeverCapturesAfterEmptyPress(t *testing.T) {
-	currentScheduler, g, sprite := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSlot.session = clock
-	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
-	mgr.hits[1] = false
-	camera := pkgengine.CameraMgr.(*dragCameraMgr)
-	camera.world.Position = mathf.NewVec2(-237.13, -180.27)
-	camera.world.Size = mathf.NewVec2(480/1.37, 360/1.37)
-	float32Point := func(v mathf.Vec2) mathf.Vec2 {
-		return mathf.NewVec2(float64(float32(v.X)), float64(float32(v.Y)))
-	}
-	pointAtView := func(view mathf.Vec2) mathf.Vec2 {
-		camera.world.Position = float32Point(camera.world.Position)
-		camera.world.Size = float32Point(camera.world.Size)
-		g.inputMgr.frame.dragProjection = g.inputMgr.sampleDragProjection()
-		return float32Point(g.inputMgr.frame.dragProjection.worldPoint(view))
-	}
-	stationary := mathf.NewVec2(250.3, 160.7)
-	start := pointAtView(stationary)
-	dispatchSpriteDragFrame(currentScheduler, g, start, &eventLeftButtonDown{Pos: start})
-	mgr.hits[1] = true
-	for i := 1; i <= 20; i++ {
-		camera.world.Position = camera.world.Position.Add(mathf.NewVec2(.13, -.27))
-		camera.world.Size = camera.world.Size.Mulf(1.001)
-		clock.currentTime = float64(i) / 10
-		dispatchSpriteDragFrame(currentScheduler, g, pointAtView(stationary))
-		if g.inputMgr.drag.target != nil || g.inputMgr.drag.active {
-			t.Fatalf("float32 camera captured a late sprite at frame %d", i)
-		}
-	}
-	dispatchSpriteDragFrame(currentScheduler, g, pointAtView(stationary.Add(mathf.NewVec2(4, 0))))
-	if g.inputMgr.drag.target != nil || g.inputMgr.drag.active {
-		t.Fatal("later pointer movement captured a sprite after an empty press")
-	}
-	assertSpriteDragPosition(t, sprite, 10, 20)
-}
+// Sampling, dispatch and stale targets.
 
 // Replay exercises sampling and dispatch, not the platform event queue.
 func TestSpriteDragSamplingAndDispatch(t *testing.T) {
@@ -1278,32 +1376,6 @@ func TestSpriteDragActiveSamplingAndDispatch(t *testing.T) {
 	}
 }
 
-func TestSpriteDragProjectionFallback(t *testing.T) {
-	for _, dimension := range []string{"no camera", "world width", "world height", "viewport width", "viewport height"} {
-		t.Run(dimension, func(t *testing.T) {
-			_, game, _ := setupSpriteDragTest(t)
-			camera := pkgengine.CameraMgr.(*dragCameraMgr)
-			switch dimension {
-			case "no camera":
-				game.camera = nil
-			case "world width":
-				camera.world.Size.X = 0
-			case "world height":
-				camera.world.Size.Y = 0
-			case "viewport width":
-				camera.viewport.Size.X = 0
-			case "viewport height":
-				camera.viewport.Size.Y = 0
-			}
-			projection := game.inputMgr.sampleDragProjection()
-			point := mathf.NewVec2(10, 20)
-			if projection != nil || projection.viewportPoint(point) != point || projection.worldPoint(point) != point {
-				t.Fatal("unavailable projection must preserve world input")
-			}
-		})
-	}
-}
-
 func TestSpriteDragRejectsStaleTarget(t *testing.T) {
 	// Bypass public cancellation to exercise the stale-target guard.
 	for _, invalid := range []string{"disabled", "hidden", "destroyed"} {
@@ -1325,63 +1397,5 @@ func TestSpriteDragRejectsStaleTarget(t *testing.T) {
 			}
 			assertSpriteDragPosition(t, sprite, 10, 20)
 		})
-	}
-}
-
-func (m *dragSpriteMgr) CheckCollisionWithPoint(id pkgengine.Object, point mathf.Vec2, trigger bool) bool {
-	if m.hit != nil {
-		return m.hit(id, point)
-	}
-	return m.clickThroughSpriteMgr.CheckCollisionWithPoint(id, point, trigger)
-}
-
-func (*dragSpriteMgr) SetTransform(pkgengine.Object, mathf.Vec2, float64, mathf.Vec2, bool, mathf.Vec2) {
-}
-
-func (m *dragCameraMgr) GetViewportRect() mathf.Rect2 { return m.viewport }
-
-func (m *dragCameraMgr) GetGlobalCameraRect() mathf.Rect2 { return m.world }
-
-func setupSpriteDragTest(t *testing.T) (*coroutine.Scheduler, *Game, *SpriteImpl) {
-	t.Helper()
-	currentScheduler, game := setupInputFrameGame(t)
-	game.scene.init()
-	game.camera = &cameraImpl{g: game}
-	previousCamera := pkgengine.CameraMgr
-	pkgengine.CameraMgr = &dragCameraMgr{
-		viewport: mathf.Rect2{Size: mathf.NewVec2(480, 360)},
-		world:    mathf.Rect2{Position: mathf.NewVec2(-240, -180), Size: mathf.NewVec2(480, 360)},
-	}
-	t.Cleanup(func() { pkgengine.CameraMgr = previousCamera })
-	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{1: true, 2: true})
-	pkgengine.SpriteMgr = &dragSpriteMgr{clickThroughSpriteMgr: mgr}
-	sprite := newDragTestSprite(game, "dragged", 1)
-	sprite.SetDragMode(Draggable)
-	game.scene.add(sprite)
-	return currentScheduler, game, sprite
-}
-
-func newDragTestSprite(game *Game, name string, id pkgengine.Object) *SpriteImpl {
-	sprite := newClickTestSprite(game, name, id, false)
-	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{X: 10, Y: 20, RotationStyle: "normal"})
-	sprite.costumes = []*costume{newCostumeWithSize(10, 10)}
-	sprite.runtimeState.scale = 1
-	sprite.runtimeState.proxy.OnAnimationLoopedEvent = &pkgengine.Event0{}
-	sprite.runtimeState.proxy.OnAnimationFinishedEvent = &pkgengine.Event0{}
-	return sprite
-}
-
-func dispatchSpriteDragFrame(currentScheduler *coroutine.Scheduler, game *Game, point mathf.Vec2, events ...event) {
-	game.inputMgr.frame.dragProjection = game.inputMgr.sampleDragProjection()
-	game.inputMgr.mousePos = point
-	game.inputMgr.frame.pending = &inputFrame{events: events}
-	game.dispatchFrameEvents()
-	currentScheduler.Update()
-}
-
-func assertSpriteDragPosition(t *testing.T, sprite *SpriteImpl, x, y float64) {
-	t.Helper()
-	if gotX, gotY := sprite.getXY(); gotX != x || gotY != y {
-		t.Fatalf("sprite position = (%v, %v), want (%v, %v)", gotX, gotY, x, y)
 	}
 }

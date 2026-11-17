@@ -33,11 +33,7 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type costumeSizeResMgr struct {
-	pkgengine.IResMgr
-	sizes map[string]mathf.Vec2
-	calls int
-}
+// Asset size cache isolation.
 
 func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 	// Isolate the process-wide filesystem roots from other runtime tests.
@@ -94,6 +90,25 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 		t.Fatalf("logical and pixel queries shared a cache entry: calls = %d", resources.calls)
 	}
 }
+
+type costumeSizeResMgr struct {
+	pkgengine.IResMgr
+	sizes map[string]mathf.Vec2
+	calls int
+}
+
+func (m *costumeSizeResMgr) GetImageSize(path string) mathf.Vec2 {
+	m.calls++
+	size := m.sizes[path]
+	return mathf.NewVec2(math.Ceil(size.X), math.Ceil(size.Y))
+}
+
+func (m *costumeSizeResMgr) GetImageLogicalSize(path string) mathf.Vec2 {
+	m.calls++
+	return m.sizes[path]
+}
+
+// Costume geometry and shared metadata.
 
 func TestCostumeFrameGeometryFixtures(t *testing.T) {
 	fixtures := []struct {
@@ -153,15 +168,4 @@ func TestBackdropPreservesConfiguredMetadata(t *testing.T) {
 	if c.name != config.Name || c.path != config.Path || c.faceRight != config.FaceRight || c.pivot != config.Pivot || c.frame.Center != (mathf.Vec2{}) || c.isAtlas() {
 		t.Fatalf("configured backdrop metadata = %+v", c)
 	}
-}
-
-func (m *costumeSizeResMgr) GetImageSize(path string) mathf.Vec2 {
-	m.calls++
-	size := m.sizes[path]
-	return mathf.NewVec2(math.Ceil(size.X), math.Ceil(size.Y))
-}
-
-func (m *costumeSizeResMgr) GetImageLogicalSize(path string) mathf.Vec2 {
-	m.calls++
-	return m.sizes[path]
 }

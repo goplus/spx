@@ -43,6 +43,8 @@ import (
 	"github.com/visualfc/gid"
 )
 
+// Native event dispatch and main-thread queries.
+
 type eventDispatchPlatform struct {
 	pkgengine.IPlatformMgr
 	mainGID    atomic.Uint64
@@ -50,7 +52,25 @@ type eventDispatchPlatform struct {
 	workerOnce sync.Once
 }
 
+func (p *eventDispatchPlatform) IsMainThread() bool {
+	if p.mainGID.Load() == gid.Get() {
+		return true
+	}
+	if p.workerSeen != nil {
+		p.workerOnce.Do(func() { close(p.workerSeen) })
+	}
+	return false
+}
+
+func (p *eventDispatchPlatform) useCurrentAsMainThread() {
+	p.mainGID.Store(gid.Get())
+}
+
 type eventLifecycleFunc func(coroutine.Thread) func()
+
+func (f eventLifecycleFunc) RegisterInvocation(thread coroutine.Thread) func() {
+	return f(thread)
+}
 
 type inputFrameSpriteMgr struct {
 	wrap.SpriteMgrImpl
@@ -59,16 +79,30 @@ type inputFrameSpriteMgr struct {
 	wrongThread atomic.Bool
 }
 
-type failingPauseExtMgr struct{ inputFrameFailureExtMgr }
-
-type resetDuringStartupPlatform struct {
-	loadGamePlatformMgr
-	onTitle func()
+func (p *inputFrameSpriteMgr) CheckCollisionWithPoint(pkgengine.Object, mathf.Vec2, bool) bool {
+	p.queries.Add(1)
+	if !p.platform.IsMainThread() {
+		p.wrongThread.Store(true)
+	}
+	return true
 }
 
 type queuedQuerySpriteMgr struct {
 	*frameSyncSpriteMgr
 	queriedPosition mathf.Vec2
+}
+
+func (m *queuedQuerySpriteMgr) GetPosition(id pkgengine.Object) mathf.Vec2 {
+	return m.positions[int64(id)]
+}
+
+func (m *queuedQuerySpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, _ float64, _ mathf.Vec2, _ bool, _ mathf.Vec2) {
+	m.positions[int64(id)] = pos
+}
+
+func (m *queuedQuerySpriteMgr) CheckCollisionByColor(id pkgengine.Object, _ mathf.Color, _, _ float64) bool {
+	m.queriedPosition = m.positions[int64(id)]
+	return false
 }
 
 func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
@@ -403,30 +437,79 @@ func TestDispatchFrameEventsServicesClickQueriesOnEngineThread(t *testing.T) {
 	}
 }
 
-func TestCaptureReportsBackendFailure(t *testing.T) {
-	setupCaptureInputSessionTest(t)
+func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		writeX bool
+		x      float64
+		want   mathf.Vec2
+	}{
+		{name: "visual only", want: mathf.NewVec2(20, 30)},
+		{name: "set X", writeX: true, x: 42, want: mathf.NewVec2(42, 30)},
+		{name: "set unchanged X", writeX: true, x: 10, want: mathf.NewVec2(10, 30)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			currentScheduler, game, backend := setupFrameSyncGame(t)
+			sprite := addFrameSyncSprite(game, 1, "moving")
+			sprite.SetXYpos(10, 11)
+			game.OnEngineRender(0)
+			mgr := &queuedQuerySpriteMgr{frameSyncSpriteMgr: backend}
+			pkgengine.SpriteMgr = mgr
+			platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
+			platform.useCurrentAsMainThread()
+			previousPlatform := pkgengine.PlatformMgr
+			pkgengine.PlatformMgr = platform
+			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
+			wrap.Init(engine.WaitMainThread)
+
+			release := make(chan struct{})
+			thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
+				engine.WaitForChan(release)
+				if tt.writeX {
+					sprite.SetXpos(tt.x)
+				}
+				sprite.Hide()
+				sprite.TouchingColor__0(Color{})
+			})
+			currentScheduler.JoinFirstSlice(thread)
+			// Physics advances while the script waits for external work.
+			mgr.positions[1] = mathf.NewVec2(20, 30)
+			close(release)
+			select {
+			case <-platform.workerSeen:
+			case <-time.After(time.Second):
+				t.Fatal("resumed script did not request the engine main thread")
+			}
+			// The entry boundary must service the query before it can acquire
+			// the script lock and perform its normal physics snapshot.
+			game.OnEngineBeforeUpdate(1.0 / 60)
+			currentScheduler.Join(thread)
+			if mgr.queriedPosition != tt.want || mgr.positions[1] != tt.want {
+				t.Fatalf("query position=%v backend=%v, want %v", mgr.queriedPosition, mgr.positions[1], tt.want)
+			}
+			requirePosition(t, sprite, tt.want.X, tt.want.Y)
+		})
+	}
+}
+
+// Runtime error reporting and exit.
+
+type failingPauseExtMgr struct{ inputFrameFailureExtMgr }
+
+func (*failingPauseExtMgr) Pause() { panic("pause unavailable") }
+
+func setupRuntimeFailureRecorder(t *testing.T) *inputFrameFailureExtMgr {
+	t.Helper()
+	previousGame := engine.GetGame()
+	engine.SetGame(nil)
+	t.Cleanup(func() { engine.SetGame(previousGame) })
+	setupRuntimeScheduler(t)
 	setupImmediateEngineCalls(t)
-	original := pkgengine.ExtMgr
+	old := pkgengine.ExtMgr
 	recorder := &inputFrameFailureExtMgr{}
 	pkgengine.ExtMgr = recorder
-	t.Cleanup(func() { pkgengine.ExtMgr = original })
-	setupRuntimeScheduler(t)
-	failure := errors.New("capture backend failed")
-	captures := 0
-	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
-		captures++
-		if req.Name != "failed.png" {
-			t.Errorf("capture name = %q, want failed.png", req.Name)
-		}
-		return failure
-	})
-	capture("failed.png")
-	if !slices.Equal(recorder.messages, []string{failure.Error()}) || !slices.Equal(recorder.exits, []int64{1}) {
-		t.Fatalf("runtime errors = %v, exits = %v; want %q and exit 1", recorder.messages, recorder.exits, failure)
-	}
-	if captures != 1 || engine.HasPendingCaptures() {
-		t.Fatalf("captures = %d, pending = %v; want 1, false", captures, engine.HasPendingCaptures())
-	}
+	t.Cleanup(func() { pkgengine.ExtMgr = old })
+	return recorder
 }
 
 func TestRuntimeInvalidConfigurationAndIdentityReportErrors(t *testing.T) {
@@ -499,6 +582,18 @@ func TestFinishingInputSessionReportsPauseFailure(t *testing.T) {
 	}
 }
 
+// Startup failure and reset.
+
+type resetDuringStartupPlatform struct {
+	loadGamePlatformMgr
+	onTitle func()
+}
+
+func (p *resetDuringStartupPlatform) SetWindowTitle(title string) {
+	p.loadGamePlatformMgr.SetWindowTitle(title)
+	p.onTitle()
+}
+
 func TestOnEngineStartReportsResourceLoadFailure(t *testing.T) {
 	if isolatedGameTest(t) {
 		return
@@ -556,119 +651,32 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 	}
 }
 
-func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
-	for _, tt := range []struct {
-		name   string
-		writeX bool
-		x      float64
-		want   mathf.Vec2
-	}{
-		{name: "visual only", want: mathf.NewVec2(20, 30)},
-		{name: "set X", writeX: true, x: 42, want: mathf.NewVec2(42, 30)},
-		{name: "set unchanged X", writeX: true, x: 10, want: mathf.NewVec2(10, 30)},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			currentScheduler, game, backend := setupFrameSyncGame(t)
-			sprite := addFrameSyncSprite(game, 1, "moving")
-			sprite.SetXYpos(10, 11)
-			game.OnEngineRender(0)
-			mgr := &queuedQuerySpriteMgr{frameSyncSpriteMgr: backend}
-			pkgengine.SpriteMgr = mgr
-			platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
-			platform.useCurrentAsMainThread()
-			previousPlatform := pkgengine.PlatformMgr
-			pkgengine.PlatformMgr = platform
-			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
-			wrap.Init(engine.WaitMainThread)
+// Native capture handlers.
 
-			release := make(chan struct{})
-			thread := currentScheduler.Create(sprite, func(coroutine.Thread) {
-				engine.WaitForChan(release)
-				if tt.writeX {
-					sprite.SetXpos(tt.x)
-				}
-				sprite.Hide()
-				sprite.TouchingColor__0(Color{})
-			})
-			currentScheduler.JoinFirstSlice(thread)
-			// Physics advances while the script waits for external work.
-			mgr.positions[1] = mathf.NewVec2(20, 30)
-			close(release)
-			select {
-			case <-platform.workerSeen:
-			case <-time.After(time.Second):
-				t.Fatal("resumed script did not request the engine main thread")
-			}
-			// The entry boundary must service the query before it can acquire
-			// the script lock and perform its normal physics snapshot.
-			game.OnEngineBeforeUpdate(1.0 / 60)
-			currentScheduler.Join(thread)
-			if mgr.queriedPosition != tt.want || mgr.positions[1] != tt.want {
-				t.Fatalf("query position=%v backend=%v, want %v", mgr.queriedPosition, mgr.positions[1], tt.want)
-			}
-			requirePosition(t, sprite, tt.want.X, tt.want.Y)
-		})
-	}
-}
-
-func (p *eventDispatchPlatform) IsMainThread() bool {
-	if p.mainGID.Load() == gid.Get() {
-		return true
-	}
-	if p.workerSeen != nil {
-		p.workerOnce.Do(func() { close(p.workerSeen) })
-	}
-	return false
-}
-
-func (p *eventDispatchPlatform) useCurrentAsMainThread() {
-	p.mainGID.Store(gid.Get())
-}
-
-func (f eventLifecycleFunc) RegisterInvocation(thread coroutine.Thread) func() {
-	return f(thread)
-}
-
-func (p *inputFrameSpriteMgr) CheckCollisionWithPoint(pkgengine.Object, mathf.Vec2, bool) bool {
-	p.queries.Add(1)
-	if !p.platform.IsMainThread() {
-		p.wrongThread.Store(true)
-	}
-	return true
-}
-
-func (*failingPauseExtMgr) Pause() { panic("pause unavailable") }
-
-func (p *resetDuringStartupPlatform) SetWindowTitle(title string) {
-	p.loadGamePlatformMgr.SetWindowTitle(title)
-	p.onTitle()
-}
-
-func (m *queuedQuerySpriteMgr) GetPosition(id pkgengine.Object) mathf.Vec2 {
-	return m.positions[int64(id)]
-}
-
-func (m *queuedQuerySpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, _ float64, _ mathf.Vec2, _ bool, _ mathf.Vec2) {
-	m.positions[int64(id)] = pos
-}
-
-func (m *queuedQuerySpriteMgr) CheckCollisionByColor(id pkgengine.Object, _ mathf.Color, _, _ float64) bool {
-	m.queriedPosition = m.positions[int64(id)]
-	return false
-}
-
-func setupRuntimeFailureRecorder(t *testing.T) *inputFrameFailureExtMgr {
-	t.Helper()
-	previousGame := engine.GetGame()
-	engine.SetGame(nil)
-	t.Cleanup(func() { engine.SetGame(previousGame) })
-	setupRuntimeScheduler(t)
+func TestCaptureReportsBackendFailure(t *testing.T) {
+	setupCaptureInputSessionTest(t)
 	setupImmediateEngineCalls(t)
-	old := pkgengine.ExtMgr
+	original := pkgengine.ExtMgr
 	recorder := &inputFrameFailureExtMgr{}
 	pkgengine.ExtMgr = recorder
-	t.Cleanup(func() { pkgengine.ExtMgr = old })
-	return recorder
+	t.Cleanup(func() { pkgengine.ExtMgr = original })
+	setupRuntimeScheduler(t)
+	failure := errors.New("capture backend failed")
+	captures := 0
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		captures++
+		if req.Name != "failed.png" {
+			t.Errorf("capture name = %q, want failed.png", req.Name)
+		}
+		return failure
+	})
+	capture("failed.png")
+	if !slices.Equal(recorder.messages, []string{failure.Error()}) || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("runtime errors = %v, exits = %v; want %q and exit 1", recorder.messages, recorder.exits, failure)
+	}
+	if captures != 1 || engine.HasPendingCaptures() {
+		t.Fatalf("captures = %d, pending = %v; want 1, false", captures, engine.HasPendingCaptures())
+	}
 }
 
 func TestCaptureDefaultsToNoopHandlerOnNative(t *testing.T) {

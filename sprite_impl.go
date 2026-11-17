@@ -147,7 +147,7 @@ func (p *SpriteImpl) markProxyDirty() {
 	p.markVisualDirty()
 	p.spriteState.dirtyVersion++
 	if p.g != nil {
-		p.g.scene.noteProxyDirty(p)
+		p.g.scene.proxies.noteProxyDirty(p)
 	}
 }
 
@@ -161,7 +161,7 @@ func (p *SpriteImpl) setLayer(layer int) {
 	p.visualObject.setLayer(layer)
 	if previous != layer && p.g != nil {
 		// Layer changes bypass transform versions but affect scene color compositing.
-		p.g.scene.noteProxyDirty(p)
+		p.g.scene.proxies.noteProxyDirty(p)
 	}
 }
 

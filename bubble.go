@@ -361,6 +361,17 @@ func (p *quoteBubble) refresh() {
 	p.panel.SetText(center, size.Divf(2).Addf(extSize), p.message, p.description)
 }
 
+func (s *bubbleLayout) ensureLayoutID(bubble *textBubble) {
+	if bubble.layoutID != 0 {
+		return
+	}
+	s.nextTextBubbleLayoutID++
+	if s.nextTextBubbleLayoutID == 0 {
+		s.nextTextBubbleLayoutID++
+	}
+	bubble.layoutID = s.nextTextBubbleLayoutID
+}
+
 func (s *bubbleLayout) reset() {
 	s.bubbles = base.Reset(s.bubbles, 0)
 	s.textBubbles = base.Reset(s.textBubbles, 0)

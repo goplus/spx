@@ -29,62 +29,75 @@ import (
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type spyPenMgr struct {
-	canvasWidth       int64
-	canvasHeight      int64
-	canvasCalls       int
-	createCalls       int
-	moveCalls         int
-	restoreCalls      int
-	penDownCalls      int
-	penDownModes      []bool
-	penUpCalls        int
-	setColorCalls     int
-	setSizeCalls      int
-	stampSpriteCalls  int
-	lastMove          mathf.Vec2
-	lastMoveObject    engine.Object
-	lastRestore       mathf.Vec2
-	lastRestoreObject engine.Object
-	lastRestoreDown   bool
-	lastStampSprite   engine.Object
-	spriteMgr         *spyStampSpriteMgr
-	onStamp           func()
-	batchCalls        int
-	batches           [][]float32
-	events            []string
+// Color construction and parameter semantics.
+
+func TestNewColor(t *testing.T) {
+	want := Color{0x12 / 255.0, 0x34 / 255.0, 0x56 / 255.0, 1}
+	assertColor(t, NewColor(0x123456), want)
+	assertColor(t, NewColor(float64(0x123456)), want)
+	assertColor(t, NewColor("#123456"), want)
 }
 
-type spyStampSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	position     mathf.Vec2
-	rotation     float64
-	scale        mathf.Vec2
-	renderOffset mathf.Vec2
-	renderScale  mathf.Vec2
-	visible      bool
-	texturePath  string
-	atlasRegion  mathf.Rect2
-	effects      map[string]float64
+func TestNewColorUsesMathfPackedNumberBehavior(t *testing.T) {
+	assertColor(t, NewColor(-1), Color{1, 1, 1, 1})
+	assertColor(t, NewColor(float64(0x1000000)), Color{0, 0, 0, 1.0 / 255})
 }
 
-type penTestSprite struct {
-	SpriteImpl
+func TestNewColorRejectsInvalidValues(t *testing.T) {
+	for _, value := range []any{"not a color", struct{}{}, nil} {
+		assertColor(t, NewColor(value), Color{})
+	}
 }
 
-type penCanvasTilemapMgr struct {
-	engine.ITilemapMgr
-	events *[]string
+func assertColor(t *testing.T, got, want Color) {
+	t.Helper()
+	const epsilon = 1e-12
+	if !(math.Abs(got.X_0-want.X_0) <= epsilon &&
+		math.Abs(got.X_1-want.X_1) <= epsilon &&
+		math.Abs(got.X_2-want.X_2) <= epsilon &&
+		math.Abs(got.X_3-want.X_3) <= epsilon) {
+		t.Fatalf("Color = %#v, want %#v", got, want)
+	}
 }
 
-type penCanvasCameraMgr struct {
-	engine.ICameraMgr
-	limits [4]int64
-	calls  int
-}
+func TestPenColorParamFromString(t *testing.T) {
+	for want, got := range []PenColorParam{PenHue, PenSaturation, PenBrightness, PenTransparency, PenNone} {
+		if got != PenColorParam(want) {
+			t.Fatalf("pen color parameter value = %d, want %d", got, want)
+		}
+	}
 
-type penCanvasAudioBackend struct {
-	soundBackend
+	tests := []struct {
+		name     string
+		input    string
+		expected PenColorParam
+	}{
+		{name: "color lowercase", input: "color", expected: PenHue},
+		{name: "color uppercase", input: "COLOR", expected: PenHue},
+		{name: "color mixed case", input: "Color", expected: PenHue},
+		{name: "saturation", input: "saturation", expected: PenSaturation},
+		{name: "saturation uppercase", input: "SATURATION", expected: PenSaturation},
+		{name: "brightness", input: "brightness", expected: PenBrightness},
+		{name: "brightness uppercase", input: "BRIGHTNESS", expected: PenBrightness},
+		{name: "transparency", input: "transparency", expected: PenTransparency},
+		{name: "transparency uppercase", input: "TRANSPARENCY", expected: PenTransparency},
+		{name: "unknown string falls back to PenNone", input: "unknown", expected: PenNone},
+		{name: "empty string falls back to PenNone", input: "", expected: PenNone},
+		{name: "numeric string falls back to PenNone", input: "123", expected: PenNone},
+		{name: "leading whitespace is not trimmed", input: " color", expected: PenNone},
+		{name: "trailing whitespace is not trimmed", input: "color ", expected: PenNone},
+		{name: "whitespace only falls back to PenNone", input: " \t\n", expected: PenNone},
+		{name: "hue is not a color alias", input: "hue", expected: PenNone},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PenColorParamFromString(tt.input)
+			if got != tt.expected {
+				t.Errorf("PenColorParamFromString(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
 }
 
 func TestPenComponentInitializesDefaultColorComponents(t *testing.T) {
@@ -152,6 +165,161 @@ func TestPenComponentSetPenColorSyncsTransparency(t *testing.T) {
 	assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, 75)
 	assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, 0.25)
 }
+
+func TestPenColorParametersPreserveNonFiniteValues(t *testing.T) {
+	for _, parameter := range []struct {
+		name               string
+		kind               PenColorParam
+		value              func(*penComponent) float64
+		positive, negative float64
+	}{
+		{"hue", PenHue, func(p *penComponent) float64 { return p.penHue }, math.NaN(), math.NaN()},
+		{"saturation", PenSaturation, func(p *penComponent) float64 { return p.penSaturation }, 100, 0},
+		{"brightness", PenBrightness, func(p *penComponent) float64 { return p.penBrightness }, 100, 0},
+		{"transparency", PenTransparency, func(p *penComponent) float64 { return p.penTransparency }, 100, 0},
+	} {
+		for _, input := range []struct {
+			name        string
+			value, want float64
+		}{
+			{"nan", math.NaN(), math.NaN()},
+			{"positive infinity", math.Inf(1), parameter.positive},
+			{"negative infinity", math.Inf(-1), parameter.negative},
+		} {
+			t.Run(parameter.name+"/"+input.name, func(t *testing.T) {
+				spy := setupSpyPenMgr(t)
+				sprite := newPenTestSprite()
+				sprite.SetPenColor__1(parameter.kind, input.value)
+				got := parameter.value(sprite.pen())
+				if got != input.want && !(math.IsNaN(got) && math.IsNaN(input.want)) {
+					t.Fatalf("parameter = %v, want %v", got, input.want)
+				}
+				sprite.SetPenColor__1(parameter.kind, input.value)
+				wantCalls := 1
+				if math.IsNaN(input.want) {
+					wantCalls = 2
+				}
+				if spy.setColorCalls != wantCalls {
+					t.Fatalf("color updates = %d, want %d", spy.setColorCalls, wantCalls)
+				}
+			})
+		}
+	}
+}
+
+func TestPenComponentSetPenShadeUsesLegacyDefaults(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().setPenShade(50)
+
+	if spy.createCalls != 1 {
+		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	}
+	if spy.setColorCalls != 1 {
+		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
+	}
+
+	want := toMathfColor(HSB(66.66, 100, 100))
+	if !samePenColor(sprite.pen().penColor, want) {
+		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	}
+	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 50)
+}
+
+func TestPenComponentChangePenShadeUsesStoredLegacyShade(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().setPenColor(HSB(20, 80, 80))
+	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 40)
+
+	sprite.pen().changePenShade(10)
+
+	want := toMathfColor(HSB(20, 100, 100))
+	if !samePenColor(sprite.pen().penColor, want) {
+		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	}
+	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 50)
+	if spy.setColorCalls != 2 {
+		t.Fatalf("SetPenColorTo calls = %d, want 2", spy.setColorCalls)
+	}
+}
+
+func TestPenComponentSetPenShadeUsesCurrentHueParam(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().setPenColor(HSB(25, 60, 70))
+	sprite.pen().setPenColorParam(PenHue, 10)
+	sprite.pen().setPenShade(50)
+
+	want := toMathfColor(HSB(10, 100, 100))
+	if !samePenColor(sprite.pen().penColor, want) {
+		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	}
+	if spy.setColorCalls != 3 {
+		t.Fatalf("SetPenColorTo calls = %d, want 3", spy.setColorCalls)
+	}
+}
+
+func TestPenComponentPenHueParamWraps(t *testing.T) {
+	setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().setPenColorParam(PenHue, 110)
+
+	assertNearlyEqualPenValue(t, "penHue", sprite.pen().penHue, 10)
+	want := toMathfColor(HSB(10, sprite.pen().penSaturation, sprite.pen().penBrightness))
+	if !samePenColor(sprite.pen().penColor, want) {
+		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	}
+}
+
+func TestPenComponentLegacyChangePenHueMatchesSemantics(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+
+	sprite.pen().setPenShade(50)
+	sprite.pen().changePenHue(2)
+
+	want := toMathfColor(HSB(legacyDefaultPenHue+1, 100, 100))
+	if !samePenColor(sprite.pen().penColor, want) {
+		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	}
+	if spy.setColorCalls != 2 {
+		t.Fatalf("SetPenColorTo calls = %d, want 2", spy.setColorCalls)
+	}
+}
+
+func TestLegacyPenHueResetsTransparencyAndSkipsUnchangedProperties(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	pen := sprite.pen()
+	pen.setPenColorParam(PenTransparency, 60)
+	pen.setPenHue(-20)
+	sprite.g.flushPenCommands()
+	if pen.legacyPenColor.hue != 90 || pen.penTransparency != 0 || pen.penColor.A != 1 {
+		t.Fatalf("legacy hue/transparency/color = %v/%v/%v", pen.legacyPenColor.hue, pen.penTransparency, pen.penColor)
+	}
+	batches := spy.batchCalls
+	pen.setPenHue(-20)
+	pen.changePenHue(0)
+	pen.setPenShade(pen.legacyPenColor.shade)
+	sprite.g.flushPenCommands()
+	if spy.batchCalls != batches {
+		t.Fatal("unchanged legacy appearance submitted another pen batch")
+	}
+}
+
+func assertNearlyEqualPenValue(t *testing.T, name string, got, want float64) {
+	t.Helper()
+	if !nearlyEqualPenValue(got, want) {
+		t.Fatalf("%s = %v, want %v", name, got, want)
+	}
+}
+
+// Drawing commands and lazy pen allocation.
 
 func TestPenComponentRepeatedPenDownDrawsAtCurrentPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
@@ -278,47 +446,6 @@ func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
 	}
 }
 
-func TestPenColorParametersPreserveNonFiniteValues(t *testing.T) {
-	for _, parameter := range []struct {
-		name               string
-		kind               PenColorParam
-		value              func(*penComponent) float64
-		positive, negative float64
-	}{
-		{"hue", PenHue, func(p *penComponent) float64 { return p.penHue }, math.NaN(), math.NaN()},
-		{"saturation", PenSaturation, func(p *penComponent) float64 { return p.penSaturation }, 100, 0},
-		{"brightness", PenBrightness, func(p *penComponent) float64 { return p.penBrightness }, 100, 0},
-		{"transparency", PenTransparency, func(p *penComponent) float64 { return p.penTransparency }, 100, 0},
-	} {
-		for _, input := range []struct {
-			name        string
-			value, want float64
-		}{
-			{"nan", math.NaN(), math.NaN()},
-			{"positive infinity", math.Inf(1), parameter.positive},
-			{"negative infinity", math.Inf(-1), parameter.negative},
-		} {
-			t.Run(parameter.name+"/"+input.name, func(t *testing.T) {
-				spy := setupSpyPenMgr(t)
-				sprite := newPenTestSprite()
-				sprite.SetPenColor__1(parameter.kind, input.value)
-				got := parameter.value(sprite.pen())
-				if got != input.want && !(math.IsNaN(got) && math.IsNaN(input.want)) {
-					t.Fatalf("parameter = %v, want %v", got, input.want)
-				}
-				sprite.SetPenColor__1(parameter.kind, input.value)
-				wantCalls := 1
-				if math.IsNaN(input.want) {
-					wantCalls = 2
-				}
-				if spy.setColorCalls != wantCalls {
-					t.Fatalf("color updates = %d, want %d", spy.setColorCalls, wantCalls)
-				}
-			})
-		}
-	}
-}
-
 func TestPenComponentPenNoneDoesNothing(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
@@ -334,88 +461,118 @@ func TestPenComponentPenNoneDoesNothing(t *testing.T) {
 	}
 }
 
-func TestPenComponentSetPenShadeUsesLegacyDefaults(t *testing.T) {
+func TestPenStateWithoutAllocatedResourceDoesNotSubmitCommands(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
-
-	sprite.pen().setPenShade(50)
-
-	if spy.createCalls != 1 {
-		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
-	}
-	if spy.setColorCalls != 1 {
-		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
-	}
-
-	want := toMathfColor(HSB(66.66, 100, 100))
-	if !samePenColor(sprite.pen().penColor, want) {
-		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
-	}
-	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 50)
-}
-
-func TestPenComponentChangePenShadeUsesStoredLegacyShade(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-
-	sprite.pen().setPenColor(HSB(20, 80, 80))
-	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 40)
-
-	sprite.pen().changePenShade(10)
-
-	want := toMathfColor(HSB(20, 100, 100))
-	if !samePenColor(sprite.pen().penColor, want) {
-		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
-	}
-	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 50)
-	if spy.setColorCalls != 2 {
-		t.Fatalf("SetPenColorTo calls = %d, want 2", spy.setColorCalls)
+	pen := sprite.pen()
+	pen.isPenDown = true
+	pen.penUp()
+	pen.syncPenPosition(10, 20)
+	sprite.g.flushPenCommands()
+	if pen.isPenDown || pen.penObj != nil || spy.createCalls != 0 || spy.batchCalls != 0 {
+		t.Fatal("unallocated pen operation created or submitted a resource")
 	}
 }
 
-func TestPenComponentSetPenShadeUsesCurrentHueParam(t *testing.T) {
+func TestPenComponentDirectCommandsUseLogicalPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
 
-	sprite.pen().setPenColor(HSB(25, 60, 70))
-	sprite.pen().setPenColorParam(PenHue, 10)
-	sprite.pen().setPenShade(50)
+	sprite.pen().penDown()
+	sprite.pen().penUp()
+	sprite.g.flushPenCommands()
 
-	want := toMathfColor(HSB(10, 100, 100))
-	if !samePenColor(sprite.pen().penColor, want) {
-		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	if want := []string{"size", "color", "move", "down", "up"}; !slices.Equal(spy.events, want) {
+		t.Fatalf("events = %v, want %v", spy.events, want)
 	}
-	if spy.setColorCalls != 3 {
-		t.Fatalf("SetPenColorTo calls = %d, want 3", spy.setColorCalls)
+	if want := []bool{false}; !slices.Equal(spy.penDownModes, want) {
+		t.Fatalf("pen down mouse modes = %v, want %v", spy.penDownModes, want)
+	}
+
+	want := mathf.NewVec2(50, 60)
+	if spy.lastMove != want {
+		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
 	}
 }
 
-func TestPenComponentPenHueParamWraps(t *testing.T) {
-	setupSpyPenMgr(t)
+func TestSpritePenPublicAPIUpdatesDrawingState(t *testing.T) {
+	mgr := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
-
-	sprite.pen().setPenColorParam(PenHue, 110)
-
-	assertNearlyEqualPenValue(t, "penHue", sprite.pen().penHue, 10)
-	want := toMathfColor(HSB(10, sprite.pen().penSaturation, sprite.pen().penBrightness))
-	if !samePenColor(sprite.pen().penColor, want) {
-		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+	configurePenRenderOffsetSprite(sprite)
+	sprite.SetPenHue(20)
+	sprite.ChangePenHue(10)
+	sprite.SetPenShade(40)
+	sprite.ChangePenShade(5)
+	sprite.SetPenSize(3)
+	sprite.ChangePenSize(2)
+	sprite.PenDown()
+	sprite.PenUp()
+	sprite.Stamp()
+	if sprite.pen().legacyPenColor.hue != 15 || sprite.pen().legacyPenColor.shade != 45 || sprite.pen().penWidth != 5 || sprite.pen().isPenDown {
+		t.Fatalf("pen API state=%+v", sprite.pen().penState)
+	}
+	if mgr.stampSpriteCalls != 1 {
+		t.Fatalf("stamp captures=%d,want1", mgr.stampSpriteCalls)
 	}
 }
 
-func TestPenComponentLegacyChangePenHueMatchesSemantics(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
+// Clone state and drawing continuity.
 
-	sprite.pen().setPenShade(50)
-	sprite.pen().changePenHue(2)
-
-	want := toMathfColor(HSB(legacyDefaultPenHue+1, 100, 100))
-	if !samePenColor(sprite.pen().penColor, want) {
-		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
+func TestClonePenStateComesFromOriginal(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	original := newCloneLimitSprite(game, "original")
+	original.pen().penState = penState{
+		penColor:        toMathfColor(HSB(20, 80, 90)),
+		penWidth:        5,
+		penHue:          20,
+		legacyPenColor:  legacyPenState{hue: 20, shade: 40},
+		penSaturation:   80,
+		penBrightness:   90,
+		penTransparency: 30,
+		isPenDown:       true,
 	}
-	if spy.setColorCalls != 2 {
-		t.Fatalf("SetPenColorTo calls = %d, want 2", spy.setColorCalls)
+	penObj := internalengine.Object(42)
+	original.pen().penObj = &penObj
+	parent := createRuntimeClone(&original.SpriteImpl)
+	parent.pen().penWidth = 50
+	parent.pen().penHue = 80
+	parent.pen().isPenDown = false
+	original.pen().penWidth = 7
+	child := createRuntimeClone(parent)
+	if got, want := child.pen().penState, original.pen().penState; got != want {
+		t.Fatalf("descendant pen state = %+v, want current original state %+v", got, want)
+	}
+	if child.pen().penObj != nil {
+		t.Fatal("cloning allocated or shared a drawing resource")
+	}
+	child.pen().penWidth = 9
+	if original.pen().penWidth != 7 || parent.pen().penWidth != 50 {
+		t.Fatal("clone pen state aliases an ancestor")
+	}
+}
+
+func TestClonePenStateFromStageInstance(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	template := newCloneLimitSprite(game, "template")
+	template.pen().penWidth = 5
+	var instance cloneLimitSprite
+	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteOverrides{})
+	game.scene.add(&instance.SpriteImpl)
+	instance.pen().penWidth = 10
+	child := createRuntimeClone(&instance.SpriteImpl)
+	if child.pen().penWidth != 10 {
+		t.Fatal("clone used template state instead of its original instance")
+	}
+}
+
+func TestClonePenComponentWithoutGame(t *testing.T) {
+	sourceSprite, target := &SpriteImpl{}, &SpriteImpl{}
+	pen := &penComponent{sprite: sourceSprite}
+	pen.penWidth = 7
+	clonedPen := pen.cloneFor(target)
+	if clonedPen.sprite != target || clonedPen.penWidth != 7 {
+		t.Fatal("standalone pen clone lost state")
 	}
 }
 
@@ -462,27 +619,46 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	}
 }
 
-func TestPenComponentDirectCommandsUseLogicalPosition(t *testing.T) {
+func TestClonePenColorChangeFollowsInitialDrawingState(t *testing.T) {
 	spy := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-	configurePenRenderOffsetSprite(sprite)
+	original := newPenTestSprite()
+	original.SetPenColor__0(HSBA(20, 80, 90, 25))
+	original.PenDown()
 
-	sprite.pen().penDown()
-	sprite.pen().penUp()
-	sprite.g.flushPenCommands()
+	clone := newPenTestSprite()
+	clone.components.pen = original.pen().cloneFor(&clone.SpriteImpl)
+	clone.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
+	clone.ChangePenColor(PenTransparency, 10)
+	clone.g.flushPenCommands()
 
-	if want := []string{"size", "color", "move", "down", "up"}; !slices.Equal(spy.events, want) {
-		t.Fatalf("events = %v, want %v", spy.events, want)
+	if len(spy.batches) != 1 {
+		t.Fatalf("batches = %d, want 1", len(spy.batches))
 	}
-	if want := []bool{false}; !slices.Equal(spy.penDownModes, want) {
-		t.Fatalf("pen down mouse modes = %v, want %v", spy.penDownModes, want)
+	batch := spy.batches[0]
+	wantOps := []int{
+		internalengine.PenBatchSetSize,
+		internalengine.PenBatchColor,
+		internalengine.PenBatchRestoreState,
+		internalengine.PenBatchColor,
 	}
-
-	want := mathf.NewVec2(50, 60)
-	if spy.lastMove != want {
-		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
+	if got := penBatchOperations(batch); !slices.Equal(got, wantOps) {
+		t.Fatalf("commands = %v, want %v", got, wantOps)
+	}
+	if got := batch[1+2*internalengine.PenBatchFields+5]; got != 1 {
+		t.Fatalf("clone restored pen-down state = %v, want 1", got)
+	}
+	if got := batch[1+internalengine.PenBatchFields+6]; got != 0.25 {
+		t.Fatalf("initial alpha = %v, want 0.25", got)
+	}
+	if got := batch[1+3*internalengine.PenBatchFields+6]; got != float32(0.15) {
+		t.Fatalf("changed alpha = %v, want 0.15", got)
+	}
+	if original.pen().penColor.A != 0.25 {
+		t.Fatal("clone color change modified the original")
 	}
 }
+
+// Sprite stamps and rendered geometry.
 
 func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
@@ -625,85 +801,67 @@ func TestPenComponentStampSkipsUnavailableSprite(t *testing.T) {
 	}
 }
 
-func TestClonePenStateComesFromOriginal(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	original := newCloneLimitSprite(game, "original")
-	original.pen().penState = penState{
-		penColor:        toMathfColor(HSB(20, 80, 90)),
-		penWidth:        5,
-		penHue:          20,
-		legacyPenColor:  legacyPenState{hue: 20, shade: 40},
-		penSaturation:   80,
-		penBrightness:   90,
-		penTransparency: 30,
-		isPenDown:       true,
-	}
-	penObj := internalengine.Object(42)
-	original.pen().penObj = &penObj
-	parent := createRuntimeClone(&original.SpriteImpl)
-	parent.pen().penWidth = 50
-	parent.pen().penHue = 80
-	parent.pen().isPenDown = false
-	original.pen().penWidth = 7
-	child := createRuntimeClone(parent)
-	if got, want := child.pen().penState, original.pen().penState; got != want {
-		t.Fatalf("descendant pen state = %+v, want current original state %+v", got, want)
-	}
-	if child.pen().penObj != nil {
-		t.Fatal("cloning allocated or shared a drawing resource")
-	}
-	child.pen().penWidth = 9
-	if original.pen().penWidth != 7 || parent.pen().penWidth != 50 {
-		t.Fatal("clone pen state aliases an ancestor")
-	}
+type spyStampSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	position     mathf.Vec2
+	rotation     float64
+	scale        mathf.Vec2
+	renderOffset mathf.Vec2
+	renderScale  mathf.Vec2
+	visible      bool
+	texturePath  string
+	atlasRegion  mathf.Rect2
+	effects      map[string]float64
 }
 
-func TestClonePenStateFromStageInstance(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	template := newCloneLimitSprite(game, "template")
-	template.pen().penWidth = 5
-	var instance cloneLimitSprite
-	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteOverrides{})
-	game.scene.add(&instance.SpriteImpl)
-	instance.pen().penWidth = 10
-	child := createRuntimeClone(&instance.SpriteImpl)
-	if child.pen().penWidth != 10 {
-		t.Fatal("clone used template state instead of its original instance")
-	}
+func (s *spyStampSpriteMgr) SetTransform(_ engine.Object, position mathf.Vec2, rotation float64, scale mathf.Vec2, visible bool, offset mathf.Vec2) {
+	s.position, s.rotation, s.scale = position, rotation, scale
+	s.visible, s.renderOffset = visible, offset
 }
 
-func TestPenStateWithoutAllocatedResourceDoesNotSubmitCommands(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-	pen := sprite.pen()
-	pen.isPenDown = true
-	pen.penUp()
-	pen.syncPenPosition(10, 20)
-	sprite.g.flushPenCommands()
-	if pen.isPenDown || pen.penObj != nil || spy.createCalls != 0 || spy.batchCalls != 0 {
-		t.Fatal("unallocated pen operation created or submitted a resource")
-	}
+func (s *spyStampSpriteMgr) SetTexture(_ engine.Object, path string) {
+	s.texturePath = path
 }
 
-func TestLegacyPenHueResetsTransparencyAndSkipsUnchangedProperties(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-	pen := sprite.pen()
-	pen.setPenColorParam(PenTransparency, 60)
-	pen.setPenHue(-20)
-	sprite.g.flushPenCommands()
-	if pen.legacyPenColor.hue != 90 || pen.penTransparency != 0 || pen.penColor.A != 1 {
-		t.Fatalf("legacy hue/transparency/color = %v/%v/%v", pen.legacyPenColor.hue, pen.penTransparency, pen.penColor)
-	}
-	batches := spy.batchCalls
-	pen.setPenHue(-20)
-	pen.changePenHue(0)
-	pen.setPenShade(pen.legacyPenColor.shade)
-	sprite.g.flushPenCommands()
-	if spy.batchCalls != batches {
-		t.Fatal("unchanged legacy appearance submitted another pen batch")
-	}
+func (s *spyStampSpriteMgr) SetTextureAtlas(_ engine.Object, path string, region mathf.Rect2) {
+	s.texturePath, s.atlasRegion = path, region
 }
+
+func (s *spyStampSpriteMgr) SetRenderScale(_ engine.Object, scale mathf.Vec2) {
+	s.renderScale = scale
+}
+
+func (*spyStampSpriteMgr) SetMaterialShader(engine.Object, string) {}
+
+func (*spyStampSpriteMgr) SetMaterialParamsVec(engine.Object, string, float64, float64, float64, float64) {
+}
+
+func (s *spyStampSpriteMgr) SetMaterialParams(_ engine.Object, effect string, amount float64) {
+	s.effects[effect] = amount
+}
+
+func configurePenRenderOffsetSprite(sprite *penTestSprite) {
+	sprite.runtimeState.scale = 1
+	sprite.transform().x = 50
+	sprite.transform().y = 60
+	sprite.transform().pivot = mathf.NewVec2(3, 4)
+	sprite.costumes = []*costume{{
+		path: "sprites/PenTest/costume1.svg",
+		frame: costumeFrame{
+			Center:           mathf.NewVec2(10, 20),
+			BitmapResolution: 1,
+			Width:            100,
+			Height:           80,
+		},
+	}}
+	sprite.costumeIndex = 0
+	sprite.runtimeState.proxy = &internalengine.Sprite{}
+	sprite.runtimeState.proxy.SetId(101)
+	sprite.runtimeState.isCostumeDirty = true
+	sprite.markProxyDirty()
+}
+
+// Command batching and frame boundaries.
 
 func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 	spy := setupSpyPenMgr(t)
@@ -755,45 +913,6 @@ func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 	}
 	if got, want := move[4], float32(34); got != want {
 		t.Fatalf("move y = %v, want logical SPX y %v", got, want)
-	}
-}
-
-func TestClonePenColorChangeFollowsInitialDrawingState(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	original := newPenTestSprite()
-	original.SetPenColor__0(HSBA(20, 80, 90, 25))
-	original.PenDown()
-
-	clone := newPenTestSprite()
-	clone.components.pen = original.pen().cloneFor(&clone.SpriteImpl)
-	clone.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
-	clone.ChangePenColor(PenTransparency, 10)
-	clone.g.flushPenCommands()
-
-	if len(spy.batches) != 1 {
-		t.Fatalf("batches = %d, want 1", len(spy.batches))
-	}
-	batch := spy.batches[0]
-	wantOps := []int{
-		internalengine.PenBatchSetSize,
-		internalengine.PenBatchColor,
-		internalengine.PenBatchRestoreState,
-		internalengine.PenBatchColor,
-	}
-	if got := penBatchOperations(batch); !slices.Equal(got, wantOps) {
-		t.Fatalf("commands = %v, want %v", got, wantOps)
-	}
-	if got := batch[1+2*internalengine.PenBatchFields+5]; got != 1 {
-		t.Fatalf("clone restored pen-down state = %v, want 1", got)
-	}
-	if got := batch[1+internalengine.PenBatchFields+6]; got != 0.25 {
-		t.Fatalf("initial alpha = %v, want 0.25", got)
-	}
-	if got := batch[1+3*internalengine.PenBatchFields+6]; got != float32(0.15) {
-		t.Fatalf("changed alpha = %v, want 0.15", got)
-	}
-	if original.pen().penColor.A != 0.25 {
-		t.Fatal("clone color change modified the original")
 	}
 }
 
@@ -893,35 +1012,6 @@ func TestPenBatchFlushesAtCommandLimit(t *testing.T) {
 	}
 }
 
-func TestSyncPenCanvasToWorldUsesLogicalStageSize(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	game := &Game{}
-	game.displayState.WorldWidth = 640
-	game.displayState.WorldHeight = 480
-	game.displayState.WindowWidth = 480
-	game.displayState.WindowHeight = 360
-
-	game.syncPenCanvasToWorld()
-
-	if spy.canvasCalls != 1 || spy.canvasWidth != 640 || spy.canvasHeight != 480 {
-		t.Fatalf("pen canvas calls/size = %d/%dx%d, want 1/640x480", spy.canvasCalls, spy.canvasWidth, spy.canvasHeight)
-	}
-}
-
-func TestSyncPenCanvasToWorldFlushesPendingCommandsFirst(t *testing.T) {
-	spy := setupSpyPenMgr(t)
-	game := &Game{penSyncBuffer: internalengine.NewPenSyncBuffer(1)}
-	game.displayState.WorldWidth = 640
-	game.displayState.WorldHeight = 480
-	game.queuePenMove(1, mathf.NewVec2(10, 20))
-
-	game.syncPenCanvasToWorld()
-
-	if want := []string{"batch", "canvas"}; !slices.Equal(spy.events, want) {
-		t.Fatalf("events = %v, want %v", spy.events, want)
-	}
-}
-
 func TestEveryPenCommandFlushesAtBatchLimit(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -1009,67 +1099,6 @@ func TestPenResumeAfterDragBatchesRestoreBeforeDrawing(t *testing.T) {
 	}
 }
 
-func TestSpritePenPublicAPIUpdatesDrawingState(t *testing.T) {
-	mgr := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-	configurePenRenderOffsetSprite(sprite)
-	sprite.SetPenHue(20)
-	sprite.ChangePenHue(10)
-	sprite.SetPenShade(40)
-	sprite.ChangePenShade(5)
-	sprite.SetPenSize(3)
-	sprite.ChangePenSize(2)
-	sprite.PenDown()
-	sprite.PenUp()
-	sprite.Stamp()
-	if sprite.pen().legacyPenColor.hue != 15 || sprite.pen().legacyPenColor.shade != 45 || sprite.pen().penWidth != 5 || sprite.pen().isPenDown {
-		t.Fatalf("pen API state=%+v", sprite.pen().penState)
-	}
-	if mgr.stampSpriteCalls != 1 {
-		t.Fatalf("stamp captures=%d,want1", mgr.stampSpriteCalls)
-	}
-}
-
-func TestPenColorParamFromString(t *testing.T) {
-	for want, got := range []PenColorParam{PenHue, PenSaturation, PenBrightness, PenTransparency, PenNone} {
-		if got != PenColorParam(want) {
-			t.Fatalf("pen color parameter value = %d, want %d", got, want)
-		}
-	}
-
-	tests := []struct {
-		name     string
-		input    string
-		expected PenColorParam
-	}{
-		{name: "color lowercase", input: "color", expected: PenHue},
-		{name: "color uppercase", input: "COLOR", expected: PenHue},
-		{name: "color mixed case", input: "Color", expected: PenHue},
-		{name: "saturation", input: "saturation", expected: PenSaturation},
-		{name: "saturation uppercase", input: "SATURATION", expected: PenSaturation},
-		{name: "brightness", input: "brightness", expected: PenBrightness},
-		{name: "brightness uppercase", input: "BRIGHTNESS", expected: PenBrightness},
-		{name: "transparency", input: "transparency", expected: PenTransparency},
-		{name: "transparency uppercase", input: "TRANSPARENCY", expected: PenTransparency},
-		{name: "unknown string falls back to PenNone", input: "unknown", expected: PenNone},
-		{name: "empty string falls back to PenNone", input: "", expected: PenNone},
-		{name: "numeric string falls back to PenNone", input: "123", expected: PenNone},
-		{name: "leading whitespace is not trimmed", input: " color", expected: PenNone},
-		{name: "trailing whitespace is not trimmed", input: "color ", expected: PenNone},
-		{name: "whitespace only falls back to PenNone", input: " \t\n", expected: PenNone},
-		{name: "hue is not a color alias", input: "hue", expected: PenNone},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := PenColorParamFromString(tt.input)
-			if got != tt.expected {
-				t.Errorf("PenColorParamFromString(%q) = %v, want %v", tt.input, got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestColorSensingFlushesPendingPenBeforeQuery(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
@@ -1110,6 +1139,46 @@ func TestColorSensingFlushesPendingPenBeforeQuery(t *testing.T) {
 	}
 }
 
+func penBatchOperations(batch []float32) []int {
+	count := int(batch[0])
+	operations := make([]int, count)
+	for i := range operations {
+		operations[i] = int(batch[1+i*internalengine.PenBatchFields])
+	}
+	return operations
+}
+
+// Canvas size and tilemap integration.
+
+func TestSyncPenCanvasToWorldUsesLogicalStageSize(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	game := &Game{}
+	game.displayState.WorldWidth = 640
+	game.displayState.WorldHeight = 480
+	game.displayState.WindowWidth = 480
+	game.displayState.WindowHeight = 360
+
+	game.syncPenCanvasToWorld()
+
+	if spy.canvasCalls != 1 || spy.canvasWidth != 640 || spy.canvasHeight != 480 {
+		t.Fatalf("pen canvas calls/size = %d/%dx%d, want 1/640x480", spy.canvasCalls, spy.canvasWidth, spy.canvasHeight)
+	}
+}
+
+func TestSyncPenCanvasToWorldFlushesPendingCommandsFirst(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	game := &Game{penSyncBuffer: internalengine.NewPenSyncBuffer(1)}
+	game.displayState.WorldWidth = 640
+	game.displayState.WorldHeight = 480
+	game.queuePenMove(1, mathf.NewVec2(10, 20))
+
+	game.syncPenCanvasToWorld()
+
+	if want := []string{"batch", "canvas"}; !slices.Equal(spy.events, want) {
+		t.Fatalf("events = %v, want %v", spy.events, want)
+	}
+}
+
 func TestTilemapSyncsPenCanvasAfterWorldSize(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -1146,43 +1215,104 @@ func TestTilemapSyncsPenCanvasAfterWorldSize(t *testing.T) {
 	}
 }
 
-func TestClonePenComponentWithoutGame(t *testing.T) {
-	sourceSprite, target := &SpriteImpl{}, &SpriteImpl{}
-	pen := &penComponent{sprite: sourceSprite}
-	pen.penWidth = 7
-	clonedPen := pen.cloneFor(target)
-	if clonedPen.sprite != target || clonedPen.penWidth != 7 {
-		t.Fatal("standalone pen clone lost state")
+type penCanvasTilemapMgr struct {
+	engine.ITilemapMgr
+	events *[]string
+}
+
+func (*penCanvasTilemapMgr) SetLayerIndex(int64) {}
+
+func (m *penCanvasTilemapMgr) PlaceTilesWithLayer(engine.Array, string, int64) {
+	*m.events = append(*m.events, "tiles")
+}
+
+type penCanvasCameraMgr struct {
+	engine.ICameraMgr
+	limits [4]int64
+	calls  int
+}
+
+func (m *penCanvasCameraMgr) SetCameraLimit(side, limit int64) {
+	m.calls++
+	m.limits[side] = limit
+}
+
+func (*penCanvasCameraMgr) SetCameraSmoothing(bool) {}
+
+type penCanvasAudioBackend struct {
+	soundBackend
+}
+
+func (*penCanvasAudioBackend) CreateAudio() engine.Object { return 1 }
+
+func newPenCanvasTilemapTestGame(t *testing.T) (*Game, *spyPenMgr, *penCanvasCameraMgr, string) {
+	t.Helper()
+
+	spy := setupSpyPenMgr(t)
+	originalTilemapMgr, originalCameraMgr := engine.TilemapMgr, engine.CameraMgr
+	engine.TilemapMgr = &penCanvasTilemapMgr{events: &spy.events}
+	cameraSpy := &penCanvasCameraMgr{}
+	engine.CameraMgr = cameraSpy
+	t.Cleanup(func() {
+		engine.TilemapMgr, engine.CameraMgr = originalTilemapMgr, originalCameraMgr
+	})
+
+	const tilemapPath = "tilemaps/map1.json"
+	fs := gameTestFS{
+		tilemapPath: `{
+			"tilemap": {
+				"tile_size": {"width": 32, "height": 16},
+				"tileset": {"sources": []},
+				"layers": [{"tile_data": [1, 2, 3, 0, 0, 1, 4, 5, 0, 0]}]
+			},
+			"decorators": [],
+			"sprites": []
+		}`,
 	}
+	game := &Game{fs: fs}
+	game.displayState.WorldWidth = 480
+	game.displayState.WorldHeight = 360
+	game.tilemapMgr.g = game
+	game.tilemapMgr.fs = fs
+	game.camera = &cameraImpl{g: game}
+	game.Camera = game.camera
+	game.soundMgr.Init(&penCanvasAudioBackend{})
+	return game, spy, cameraSpy, tilemapPath
 }
 
-func (s *spyStampSpriteMgr) SetTransform(_ engine.Object, position mathf.Vec2, rotation float64, scale mathf.Vec2, visible bool, offset mathf.Vec2) {
-	s.position, s.rotation, s.scale = position, rotation, scale
-	s.visible, s.renderOffset = visible, offset
-}
+// Shared pen fixtures.
 
-func (s *spyStampSpriteMgr) SetTexture(_ engine.Object, path string) {
-	s.texturePath = path
-}
-
-func (s *spyStampSpriteMgr) SetTextureAtlas(_ engine.Object, path string, region mathf.Rect2) {
-	s.texturePath, s.atlasRegion = path, region
-}
-
-func (s *spyStampSpriteMgr) SetRenderScale(_ engine.Object, scale mathf.Vec2) {
-	s.renderScale = scale
-}
-
-func (*spyStampSpriteMgr) SetMaterialShader(engine.Object, string) {}
-
-func (*spyStampSpriteMgr) SetMaterialParamsVec(engine.Object, string, float64, float64, float64, float64) {
-}
-
-func (s *spyStampSpriteMgr) SetMaterialParams(_ engine.Object, effect string, amount float64) {
-	s.effects[effect] = amount
+type penTestSprite struct {
+	SpriteImpl
 }
 
 func (*penTestSprite) Main() {}
+
+type spyPenMgr struct {
+	canvasWidth       int64
+	canvasHeight      int64
+	canvasCalls       int
+	createCalls       int
+	moveCalls         int
+	restoreCalls      int
+	penDownCalls      int
+	penDownModes      []bool
+	penUpCalls        int
+	setColorCalls     int
+	setSizeCalls      int
+	stampSpriteCalls  int
+	lastMove          mathf.Vec2
+	lastMoveObject    engine.Object
+	lastRestore       mathf.Vec2
+	lastRestoreObject engine.Object
+	lastRestoreDown   bool
+	lastStampSprite   engine.Object
+	spriteMgr         *spyStampSpriteMgr
+	onStamp           func()
+	batchCalls        int
+	batches           [][]float32
+	events            []string
+}
 
 func (s *spyPenMgr) DestroyAllPens() {
 	s.events = append(s.events, "erase")
@@ -1269,21 +1399,6 @@ func (s *spyPenMgr) BatchUpdateCommands(buffer []float32) {
 	s.events = append(s.events, "batch")
 }
 
-func (*penCanvasTilemapMgr) SetLayerIndex(int64) {}
-
-func (m *penCanvasTilemapMgr) PlaceTilesWithLayer(engine.Array, string, int64) {
-	*m.events = append(*m.events, "tiles")
-}
-
-func (m *penCanvasCameraMgr) SetCameraLimit(side, limit int64) {
-	m.calls++
-	m.limits[side] = limit
-}
-
-func (*penCanvasCameraMgr) SetCameraSmoothing(bool) {}
-
-func (*penCanvasAudioBackend) CreateAudio() engine.Object { return 1 }
-
 func newPenTestSprite() *penTestSprite {
 	game := &Game{}
 	sprite := &penTestSprite{}
@@ -1293,27 +1408,6 @@ func newPenTestSprite() *penTestSprite {
 	sprite.scriptEventBindings.bind(&game.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
-}
-
-func configurePenRenderOffsetSprite(sprite *penTestSprite) {
-	sprite.runtimeState.scale = 1
-	sprite.transform().x = 50
-	sprite.transform().y = 60
-	sprite.transform().pivot = mathf.NewVec2(3, 4)
-	sprite.costumes = []*costume{{
-		path: "sprites/PenTest/costume1.svg",
-		frame: costumeFrame{
-			Center:           mathf.NewVec2(10, 20),
-			BitmapResolution: 1,
-			Width:            100,
-			Height:           80,
-		},
-	}}
-	sprite.costumeIndex = 0
-	sprite.runtimeState.proxy = &internalengine.Sprite{}
-	sprite.runtimeState.proxy.SetId(101)
-	sprite.runtimeState.isCostumeDirty = true
-	sprite.markProxyDirty()
 }
 
 func setupSpyPenMgr(t *testing.T) *spyPenMgr {
@@ -1331,84 +1425,4 @@ func setupSpyPenMgr(t *testing.T) *spyPenMgr {
 		engine.SpriteMgr = originalSprites
 	})
 	return spy
-}
-
-func assertNearlyEqualPenValue(t *testing.T, name string, got, want float64) {
-	t.Helper()
-	if !nearlyEqualPenValue(got, want) {
-		t.Fatalf("%s = %v, want %v", name, got, want)
-	}
-}
-
-func penBatchOperations(batch []float32) []int {
-	count := int(batch[0])
-	operations := make([]int, count)
-	for i := range operations {
-		operations[i] = int(batch[1+i*internalengine.PenBatchFields])
-	}
-	return operations
-}
-
-func newPenCanvasTilemapTestGame(t *testing.T) (*Game, *spyPenMgr, *penCanvasCameraMgr, string) {
-	t.Helper()
-
-	spy := setupSpyPenMgr(t)
-	originalTilemapMgr, originalCameraMgr := engine.TilemapMgr, engine.CameraMgr
-	engine.TilemapMgr = &penCanvasTilemapMgr{events: &spy.events}
-	cameraSpy := &penCanvasCameraMgr{}
-	engine.CameraMgr = cameraSpy
-	t.Cleanup(func() {
-		engine.TilemapMgr, engine.CameraMgr = originalTilemapMgr, originalCameraMgr
-	})
-
-	const tilemapPath = "tilemaps/map1.json"
-	fs := gameTestFS{
-		tilemapPath: `{
-			"tilemap": {
-				"tile_size": {"width": 32, "height": 16},
-				"tileset": {"sources": []},
-				"layers": [{"tile_data": [1, 2, 3, 0, 0, 1, 4, 5, 0, 0]}]
-			},
-			"decorators": [],
-			"sprites": []
-		}`,
-	}
-	game := &Game{fs: fs}
-	game.displayState.WorldWidth = 480
-	game.displayState.WorldHeight = 360
-	game.tilemapMgr.g = game
-	game.tilemapMgr.fs = fs
-	game.camera = &cameraImpl{g: game}
-	game.Camera = game.camera
-	game.soundMgr.Init(&penCanvasAudioBackend{})
-	return game, spy, cameraSpy, tilemapPath
-}
-
-func TestNewColor(t *testing.T) {
-	want := Color{0x12 / 255.0, 0x34 / 255.0, 0x56 / 255.0, 1}
-	assertColor(t, NewColor(0x123456), want)
-	assertColor(t, NewColor(float64(0x123456)), want)
-	assertColor(t, NewColor("#123456"), want)
-}
-
-func TestNewColorUsesMathfPackedNumberBehavior(t *testing.T) {
-	assertColor(t, NewColor(-1), Color{1, 1, 1, 1})
-	assertColor(t, NewColor(float64(0x1000000)), Color{0, 0, 0, 1.0 / 255})
-}
-
-func TestNewColorRejectsInvalidValues(t *testing.T) {
-	for _, value := range []any{"not a color", struct{}{}, nil} {
-		assertColor(t, NewColor(value), Color{})
-	}
-}
-
-func assertColor(t *testing.T, got, want Color) {
-	t.Helper()
-	const epsilon = 1e-12
-	if !(math.Abs(got.X_0-want.X_0) <= epsilon &&
-		math.Abs(got.X_1-want.X_1) <= epsilon &&
-		math.Abs(got.X_2-want.X_2) <= epsilon &&
-		math.Abs(got.X_3-want.X_3) <= epsilon) {
-		t.Fatalf("Color = %#v, want %#v", got, want)
-	}
 }

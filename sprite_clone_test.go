@@ -34,115 +34,7 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type cloneAwakeOrderSprite struct {
-	SpriteImpl
-	sawAwakeInMain *bool
-	onClonedFired  *bool
-	clonedDone     chan struct{}
-}
-
-type cloneStatePreservingSprite struct {
-	SpriteImpl
-	cloneValue  float64
-	recordValue *float64
-	clonedDone  chan struct{}
-}
-
-type cloneFieldPayload struct {
-	label string
-	count int
-}
-
-type cloneAllFieldKindsObserved struct {
-	boolValue      bool
-	intValue       int
-	stringValue    string
-	floatValue     float64
-	valueString    string
-	listString     string
-	listLen        int
-	sliceValue     []int
-	mapValue       map[string]int
-	structValue    cloneFieldPayload
-	arrayValue     [2]string
-	pointerValue   *cloneFieldPayload
-	interfaceValue any
-}
-
-type cloneAllFieldKindsSprite struct {
-	SpriteImpl
-	boolValue      bool
-	intValue       int
-	stringValue    string
-	floatValue     float64
-	valueValue     Value
-	listValue      List
-	sliceValue     []int
-	mapValue       map[string]int
-	structValue    cloneFieldPayload
-	arrayValue     [2]string
-	pointerValue   *cloneFieldPayload
-	interfaceValue any
-	observed       *cloneAllFieldKindsObserved
-	clonedDone     chan struct{}
-}
-
-type cloneProxyInitSprite struct {
-	SpriteImpl
-	finalCostume     SpriteCostumeName
-	hideOnCloned     bool
-	deleteOnCloned   bool
-	registerCloned   bool
-	stopOthers       bool
-	waitOnCloned     <-chan struct{}
-	onClonedReturned chan<- struct{}
-}
-
-type cloneProxyOperation struct {
-	kind    string
-	object  pkgengine.Object
-	path    string
-	visible bool
-}
-
-type spyCloneSpriteMgr struct {
-	wrap.SpriteMgrImpl
-	mu         sync.Mutex
-	nextID     pkgengine.Object
-	zIndexes   map[pkgengine.Object]int64
-	operations []cloneProxyOperation
-	shaderIDs  []pkgengine.Object
-}
-
-type cloneLimitSprite struct {
-	SpriteImpl
-	onInit  func(*cloneLimitSprite)
-	onClone func(*cloneLimitSprite)
-}
-
-type layoutInvalidInitializer int
-
-type layoutInvalidInitSprite struct {
-	SpriteImpl
-	owner *Game
-	value layoutInvalidInitializer
-}
-
-type layoutCloneValue struct{ value int }
-
-type layoutCloneSprite struct {
-	value layoutCloneValue
-	owner *Game
-	SpriteImpl
-	variadic layoutVariadicValue
-	optional layoutOptionalValue
-	list     List
-	items    []int
-}
-
-type layoutVariadicValue int
-
-type layoutOptionalValue int
+// Clone construction and lifecycle.
 
 func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 	var game Game
@@ -169,16 +61,51 @@ func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 	}
 }
 
-func TestSpriteInitFromCopiesDefaultCostumeIndex(t *testing.T) {
-	source := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 3}}
-	dest := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 1}}
+func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
+	var game Game
+	game.scene.init()
+	setupCloneSpriteMgr(t)
 
-	dest.InitFrom(source)
+	source := newCloneAwakeOrderSprite(&game, "SpriteA")
+	game.scene.add(spriteOf(source))
 
-	if got := dest.spriteState.defaultCostumeIndex; got != source.spriteState.defaultCostumeIndex {
-		t.Fatalf("default costume index = %d, want %d", got, source.spriteState.defaultCostumeIndex)
+	var cloned *cloneAwakeOrderSprite
+	doClone(source, nil, func(sprite *SpriteImpl) {
+		var ok bool
+		cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
+		if !ok {
+			t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
+		}
+	})
+
+	if cloned == nil {
+		t.Fatal("clone callback did not capture cloned sprite")
+	}
+
+	select {
+	case <-cloned.clonedDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for clone onCloned handler")
+	}
+
+	if cloned.sawAwakeInMain == nil || !*cloned.sawAwakeInMain {
+		t.Fatal("clone Main ran before awake")
+	}
+	if cloned.onClonedFired == nil || !*cloned.onClonedFired {
+		t.Fatal("clone onCloned did not fire after Main registration")
 	}
 }
+
+func TestCloneRejectsNilSprite(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("cloning nil did not reject the input")
+		}
+	}()
+	doClone(nil, nil, nil)
+}
+
+// Proxy publication and first-slice visibility.
 
 func TestFinishCloneInitializationPreservesPublicationState(t *testing.T) {
 	for _, tt := range []struct {
@@ -500,40 +427,71 @@ func TestCloneProxyPublicationReadyCanRaceProxyCollection(t *testing.T) {
 	}
 }
 
-func TestCloneSpriteAwakesBeforeMain(t *testing.T) {
-	var game Game
-	game.scene.init()
-	setupCloneSpriteMgr(t)
+type cloneProxyInitSprite struct {
+	SpriteImpl
+	finalCostume     SpriteCostumeName
+	hideOnCloned     bool
+	deleteOnCloned   bool
+	registerCloned   bool
+	stopOthers       bool
+	waitOnCloned     <-chan struct{}
+	onClonedReturned chan<- struct{}
+}
 
-	source := newCloneAwakeOrderSprite(&game, "SpriteA")
-	game.scene.add(spriteOf(source))
-
-	var cloned *cloneAwakeOrderSprite
-	doClone(source, nil, func(sprite *SpriteImpl) {
-		var ok bool
-		cloned, ok = sprite.sprite.(*cloneAwakeOrderSprite)
-		if !ok {
-			t.Fatalf("clone sprite type = %T, want *cloneAwakeOrderSprite", sprite.sprite)
+func (s *cloneProxyInitSprite) Main() {
+	if !s.IsCloned() || !s.registerCloned {
+		return
+	}
+	s.OnCloned__0(func() {
+		// Query synchronization is allowed during initialization, but it must
+		// not bypass the clone's render-visibility gate.
+		s.syncProxyForQuery()
+		s.SetCostume__0(s.finalCostume)
+		if s.hideOnCloned {
+			s.Hide()
+		}
+		if s.deleteOnCloned {
+			s.DeleteThisClone()
+			return
+		}
+		if s.stopOthers {
+			s.Stop(AllOtherScripts)
+			return
+		}
+		if s.waitOnCloned != nil {
+			engine.WaitForChan(s.waitOnCloned)
+			if s.onClonedReturned != nil {
+				close(s.onClonedReturned)
+			}
 		}
 	})
-
-	if cloned == nil {
-		t.Fatal("clone callback did not capture cloned sprite")
-	}
-
-	select {
-	case <-cloned.clonedDone:
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for clone onCloned handler")
-	}
-
-	if cloned.sawAwakeInMain == nil || !*cloned.sawAwakeInMain {
-		t.Fatal("clone Main ran before awake")
-	}
-	if cloned.onClonedFired == nil || !*cloned.onClonedFired {
-		t.Fatal("clone onCloned did not fire after Main registration")
-	}
 }
+
+func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneProxyInitSprite {
+	sprite := &cloneProxyInitSprite{
+		finalCostume:   "final",
+		hideOnCloned:   hideOnCloned,
+		registerCloned: registerCloned,
+	}
+	placeholder := newCostumeWithSize(1, 1)
+	placeholder.name, placeholder.path = "placeholder", "placeholder.png"
+	final := newCostumeWithSize(1, 1)
+	final.name, final.path = "final", "final.png"
+	sprite.costumes = []*costume{placeholder, final}
+	sprite.costumeIndex = 0
+	sprite.runtimeState.scale = 1
+	sprite.spriteState.isVisible = true
+	sprite.g = g
+	sprite.name = "Score"
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
+	return sprite
+}
+
+// Layer insertion and publication ordering.
 
 func TestCloneSpriteInsertsImmediatelyBehindSource(t *testing.T) {
 	var game Game
@@ -726,6 +684,42 @@ func TestCloneInsertionUsesSourceCurrentLayer(t *testing.T) {
 	}
 }
 
+func TestCloneLayerOrderHonorsOnClonedMoves(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		action layerAction
+		want   []string
+	}{
+		{"front", Front, []string{"Back", "Source", "Front", "Clone"}},
+		{"back", Back, []string{"Clone", "Back", "Source", "Front"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := setupCloneLimitGame(t)
+			newCloneLimitSprite(game, "Back")
+			source := newCloneLimitSprite(game, "Source")
+			newCloneLimitSprite(game, "Front")
+			source.onClone = func(clone *cloneLimitSprite) {
+				clone.SetLayerTo(test.action)
+			}
+			doClone(source, nil, func(clone *SpriteImpl) { clone.name = "Clone" })
+			assertLayerOrder(t, game, test.want)
+		})
+	}
+}
+
+// User fields, component state, and clone ownership.
+
+func TestSpriteInitFromCopiesDefaultCostumeIndex(t *testing.T) {
+	source := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 3}}
+	dest := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 1}}
+
+	dest.InitFrom(source)
+
+	if got := dest.spriteState.defaultCostumeIndex; got != source.spriteState.defaultCostumeIndex {
+		t.Fatalf("default costume index = %d, want %d", got, source.spriteState.defaultCostumeIndex)
+	}
+}
+
 func TestCloneSpritePreservesUserStateAfterMainRegistration(t *testing.T) {
 	var game Game
 	game.scene.init()
@@ -863,6 +857,267 @@ func TestCloneTouchTargetsDoNotRefreshFilters(t *testing.T) {
 		t.Fatalf("SpriteB touch mask = %d, want 0", got)
 	}
 }
+
+func TestSpriteSnapshotSkipsUnaddressableUserFields(t *testing.T) {
+	value := struct {
+		value int
+	}{value: 42}
+	if got := snapshotSpriteUserFields(reflect.ValueOf(value)); len(got) != 0 {
+		t.Fatalf("unaddressable snapshot = %v, want no writable fields", got)
+	}
+}
+
+func TestSpriteSnapshotRejectsMissingImplementation(t *testing.T) {
+	value := &struct{ count int }{count: 42}
+	defer func() {
+		err, ok := recover().(error)
+		if !ok || !strings.Contains(err.Error(), "missing SpriteImpl") {
+			t.Fatalf("snapshot panic = %v, want missing SpriteImpl error", err)
+		}
+		if value.count != 42 {
+			t.Fatal("rejected snapshot changed user state")
+		}
+	}()
+	snapshotSpriteUserFields(reflect.ValueOf(value).Elem())
+}
+
+func TestDebugCloneStillPreservesOriginalState(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	game.debugState.DebugInstr = true
+	original := newCloneLimitSprite(game, "original")
+	original.SetXYpos(10, 20)
+	cloned := createRuntimeClone(&original.SpriteImpl)
+	if cloned == nil || !cloned.IsCloned() || cloned.Xpos() != 10 || cloned.Ypos() != 20 {
+		t.Fatal("debug-enabled cloning lost source state")
+	}
+}
+
+func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	game.soundMgr.Init(&cloneSoundBackend{})
+	original := newCloneLimitSprite(game, "original")
+	original.pen().penWidth = 5
+	original.SetSoundEffect(SoundPanEffect, -40)
+	original.SetGraphicEffect(ColorEffect, 10)
+	parent := createRuntimeClone(&original.SpriteImpl)
+	parent.SetXYpos(30, -15)
+	parent.SetHeading(90)
+	parent.SetPhysicsMode(DynamicPhysics)
+	parent.physics().touchTargets["touching"] = true
+	parent.pen().penWidth = 50
+	parent.SetSoundEffect(SoundPanEffect, 80)
+	parent.SetGraphicEffect(ColorEffect, 20)
+	parent.applyMaterialParamsVec4("atlas_uv_rect2", mathf.Vec4{Z: 1, W: 1})
+
+	// Give the parent distinct read-only configuration and per-instance runtime state.
+	parentAnimation := parent.animation()
+	parentAnimations := *parentAnimation.shared
+	parentAnimations.defaultAnimation = "parent"
+	parentAnimation.shared = &parentAnimations
+	parentAnimation.curAnimState = &animationPlayback{Name: "playing"}
+	parentAnimation.activeTweenStates = []*animationPlayback{{Name: "moving"}}
+	parentAnimation.defaultAnimActive = true
+	parentAnimation.doneAnimations = []*animationPlayback{{Name: "completed"}}
+	parentAnimation.pendingAudios = []string{"do not replay"}
+	original.pen().penWidth = 7
+	original.SetSoundEffect(SoundPanEffect, 20)
+
+	child := createRuntimeClone(parent)
+	if child.graphicEffects[ColorEffect] != 20 {
+		t.Fatal("graphic effects did not inherit the parent's current value")
+	}
+	// Scalar and vector parameters share one shader initialization per proxy.
+	// The child's copied state must still initialize its own material.
+	mgr := pkgengine.SpriteMgr.(*spyCloneSpriteMgr)
+	if want := []pkgengine.Object{parent.proxyID(), child.proxyID()}; !slices.Equal(mgr.shaderIDs, want) {
+		t.Fatalf("shader initialization = %v, want one per clone %v", mgr.shaderIDs, want)
+	}
+	if child.pen().penWidth != 7 || child.GetSoundEffect(SoundPanEffect) != 20 {
+		t.Fatal("pen and sound did not inherit the current original state")
+	}
+	if child.Xpos() != 30 || child.Ypos() != -15 || child.Heading() != 90 {
+		t.Fatalf("transform = (%v, %v, %v), want parent transform (30, -15, 90)", child.Xpos(), child.Ypos(), child.Heading())
+	}
+	if child.PhysicsMode() != DynamicPhysics {
+		t.Fatalf("physics mode = %v, want parent mode %v", child.PhysicsMode(), DynamicPhysics)
+	}
+	childAnimation := child.animation()
+	if childAnimation.shared != parentAnimation.shared {
+		t.Fatal("animation configuration did not come from the parent")
+	}
+	if childAnimation.curAnimState != nil || len(childAnimation.activeTweenStates) != 0 ||
+		childAnimation.defaultAnimActive || len(childAnimation.doneAnimations) != 0 ||
+		len(childAnimation.pendingAudios) != 0 ||
+		len(child.physics().touchTargets) != 0 {
+		t.Fatal("clone inherited parent collision or animation runtime state")
+	}
+
+	// The fresh proxy already starts at the copied position; the parent's
+	// unsubmitted movement must not pin the child's later physical movement.
+	child.mergeEnginePosition(40, -20)
+	requirePosition(t, child, 40, -20)
+	child.SetXpos(99)
+	child.SetPhysicsMode(StaticPhysics)
+	child.pen().penWidth = 9
+	child.SetSoundEffect(SoundPanEffect, 90)
+	child.SetGraphicEffect(ColorEffect, 30)
+	child.ClearGraphicEffects()
+	if parent.graphicEffects[ColorEffect] != 20 || original.graphicEffects[ColorEffect] != 10 {
+		t.Fatal("changing or clearing descendant effects changed its parent or original")
+	}
+	if len(mgr.shaderIDs) != 2 {
+		t.Fatal("later effect updates reinitialized a clone's shader")
+	}
+	if parent.Xpos() != 30 || parent.PhysicsMode() != DynamicPhysics || parent.pen().penWidth != 50 || parent.GetSoundEffect(SoundPanEffect) != 80 {
+		t.Fatal("changing descendant state changed the parent")
+	}
+	if original.Xpos() != 0 || original.PhysicsMode() != NoPhysics || original.pen().penWidth != 7 || original.GetSoundEffect(SoundPanEffect) != 20 {
+		t.Fatal("changing descendant state changed the original")
+	}
+}
+
+type cloneStatePreservingSprite struct {
+	SpriteImpl
+	cloneValue  float64
+	recordValue *float64
+	clonedDone  chan struct{}
+}
+
+func (s *cloneStatePreservingSprite) Main() {
+	s.cloneValue = 1
+	if !s.IsCloned() {
+		return
+	}
+	s.OnCloned__0(func() {
+		if s.recordValue != nil {
+			*s.recordValue = s.cloneValue
+		}
+		if s.clonedDone != nil {
+			close(s.clonedDone)
+		}
+	})
+}
+
+type cloneFieldPayload struct {
+	label string
+	count int
+}
+
+type cloneAllFieldKindsObserved struct {
+	boolValue      bool
+	intValue       int
+	stringValue    string
+	floatValue     float64
+	valueString    string
+	listString     string
+	listLen        int
+	sliceValue     []int
+	mapValue       map[string]int
+	structValue    cloneFieldPayload
+	arrayValue     [2]string
+	pointerValue   *cloneFieldPayload
+	interfaceValue any
+}
+
+type cloneAllFieldKindsSprite struct {
+	SpriteImpl
+	boolValue      bool
+	intValue       int
+	stringValue    string
+	floatValue     float64
+	valueValue     Value
+	listValue      List
+	sliceValue     []int
+	mapValue       map[string]int
+	structValue    cloneFieldPayload
+	arrayValue     [2]string
+	pointerValue   *cloneFieldPayload
+	interfaceValue any
+	observed       *cloneAllFieldKindsObserved
+	clonedDone     chan struct{}
+}
+
+func (s *cloneAllFieldKindsSprite) Main() {
+	s.XGo_Init()
+	if !s.IsCloned() {
+		return
+	}
+	s.OnCloned__0(func() {
+		if s.observed != nil {
+			s.observed.boolValue = s.boolValue
+			s.observed.intValue = s.intValue
+			s.observed.stringValue = s.stringValue
+			s.observed.floatValue = s.floatValue
+			s.observed.valueString = s.valueValue.String()
+			s.observed.listString = s.listValue.String()
+			s.observed.listLen = s.listValue.Len()
+			s.observed.sliceValue = append([]int(nil), s.sliceValue...)
+			if s.mapValue != nil {
+				s.observed.mapValue = make(map[string]int, len(s.mapValue))
+				for key, val := range s.mapValue {
+					s.observed.mapValue[key] = val
+				}
+			}
+			s.observed.structValue = s.structValue
+			s.observed.arrayValue = s.arrayValue
+			s.observed.pointerValue = s.pointerValue
+			s.observed.interfaceValue = s.interfaceValue
+		}
+		if s.clonedDone != nil {
+			close(s.clonedDone)
+		}
+	})
+}
+
+func (s *cloneAllFieldKindsSprite) XGo_Init() *cloneAllFieldKindsSprite {
+	s.boolValue = false
+	s.intValue = 1
+	s.stringValue = "init"
+	s.floatValue = 2.5
+	s.valueValue = NewValue("init-value")
+	s.listValue.Init("init")
+	s.sliceValue = []int{9}
+	s.mapValue = map[string]int{"init": 1}
+	s.structValue = cloneFieldPayload{label: "init-struct", count: 1}
+	s.arrayValue = [2]string{"init-left", "init-right"}
+	s.pointerValue = &cloneFieldPayload{label: "init-pointer", count: 2}
+	s.interfaceValue = "init-any"
+	return s
+}
+
+func newCloneStatePreservingSprite(g *Game, name string, recordValue *float64) *cloneStatePreservingSprite {
+	sprite := &cloneStatePreservingSprite{
+		recordValue: recordValue,
+		clonedDone:  make(chan struct{}),
+	}
+	sprite.visualObject.initWithSize(1, 1)
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
+	return sprite
+}
+
+func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKindsObserved) *cloneAllFieldKindsSprite {
+	sprite := &cloneAllFieldKindsSprite{
+		observed:   observed,
+		clonedDone: make(chan struct{}),
+	}
+	sprite.visualObject.initWithSize(1, 1)
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	sprite.physics().bodyCollider.Type = collision.ColliderNone
+	sprite.physics().triggerCollider.Type = collision.ColliderNone
+	return sprite
+}
+
+// Clone limits, reservations, and recycling.
 
 func TestCloneLimitSharedAcrossSprites(t *testing.T) {
 	game := setupCloneLimitGame(t)
@@ -1080,71 +1335,7 @@ func TestCloneLimitPreservesLayerOrderAfterRecycling(t *testing.T) {
 	}
 }
 
-func TestCloneLayerOrderHonorsOnClonedMoves(t *testing.T) {
-	for _, test := range []struct {
-		name   string
-		action layerAction
-		want   []string
-	}{
-		{"front", Front, []string{"Back", "Source", "Front", "Clone"}},
-		{"back", Back, []string{"Clone", "Back", "Source", "Front"}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			game := setupCloneLimitGame(t)
-			newCloneLimitSprite(game, "Back")
-			source := newCloneLimitSprite(game, "Source")
-			newCloneLimitSprite(game, "Front")
-			source.onClone = func(clone *cloneLimitSprite) {
-				clone.SetLayerTo(test.action)
-			}
-			doClone(source, nil, func(clone *SpriteImpl) { clone.name = "Clone" })
-			assertLayerOrder(t, game, test.want)
-		})
-	}
-}
-
-func TestCloneRejectsNilSprite(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("cloning nil did not reject the input")
-		}
-	}()
-	doClone(nil, nil, nil)
-}
-
-func TestSpriteSnapshotSkipsUnaddressableUserFields(t *testing.T) {
-	value := struct {
-		value int
-	}{value: 42}
-	if got := snapshotSpriteUserFields(reflect.ValueOf(value)); len(got) != 0 {
-		t.Fatalf("unaddressable snapshot = %v, want no writable fields", got)
-	}
-}
-
-func TestSpriteSnapshotRejectsMissingImplementation(t *testing.T) {
-	value := &struct{ count int }{count: 42}
-	defer func() {
-		err, ok := recover().(error)
-		if !ok || !strings.Contains(err.Error(), "missing SpriteImpl") {
-			t.Fatalf("snapshot panic = %v, want missing SpriteImpl error", err)
-		}
-		if value.count != 42 {
-			t.Fatal("rejected snapshot changed user state")
-		}
-	}()
-	snapshotSpriteUserFields(reflect.ValueOf(value).Elem())
-}
-
-func TestDebugCloneStillPreservesOriginalState(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	game.debugState.DebugInstr = true
-	original := newCloneLimitSprite(game, "original")
-	original.SetXYpos(10, 20)
-	cloned := createRuntimeClone(&original.SpriteImpl)
-	if cloned == nil || !cloned.IsCloned() || cloned.Xpos() != 10 || cloned.Ypos() != 20 {
-		t.Fatal("debug-enabled cloning lost source state")
-	}
-}
+// Clone initializer contracts.
 
 func TestSpriteTypeChecksInitFromOnlyWhenCloning(t *testing.T) {
 	game := setupStageLoadTestGame(t, gameTestFS{
@@ -1207,88 +1398,52 @@ func TestSpriteTypeKeepsInitFromAndReferenceSemantics(t *testing.T) {
 	}
 }
 
-func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	game.soundMgr.Init(&cloneSoundBackend{})
-	original := newCloneLimitSprite(game, "original")
-	original.pen().penWidth = 5
-	original.SetSoundEffect(SoundPanEffect, -40)
-	original.SetGraphicEffect(ColorEffect, 10)
-	parent := createRuntimeClone(&original.SpriteImpl)
-	parent.SetXYpos(30, -15)
-	parent.SetHeading(90)
-	parent.SetPhysicsMode(DynamicPhysics)
-	parent.physics().touchTargets["touching"] = true
-	parent.pen().penWidth = 50
-	parent.SetSoundEffect(SoundPanEffect, 80)
-	parent.SetGraphicEffect(ColorEffect, 20)
-	parent.applyMaterialParamsVec4("atlas_uv_rect2", mathf.Vec4{Z: 1, W: 1})
+type layoutInvalidInitializer int
 
-	// Give the parent distinct read-only configuration and per-instance runtime state.
-	parentAnimation := parent.animation()
-	parentAnimations := *parentAnimation.shared
-	parentAnimations.defaultAnimation = "parent"
-	parentAnimation.shared = &parentAnimations
-	parentAnimation.curAnimState = &animationPlayback{Name: "playing"}
-	parentAnimation.activeTweenStates = []*animationPlayback{{Name: "moving"}}
-	parentAnimation.defaultAnimActive = true
-	parentAnimation.doneAnimations = []*animationPlayback{{Name: "completed"}}
-	parentAnimation.pendingAudios = []string{"do not replay"}
-	original.pen().penWidth = 7
-	original.SetSoundEffect(SoundPanEffect, 20)
+func (*layoutInvalidInitializer) InitFrom(string) {}
 
-	child := createRuntimeClone(parent)
-	if child.graphicEffects[ColorEffect] != 20 {
-		t.Fatal("graphic effects did not inherit the parent's current value")
-	}
-	// Scalar and vector parameters share one shader initialization per proxy.
-	// The child's copied state must still initialize its own material.
-	mgr := pkgengine.SpriteMgr.(*spyCloneSpriteMgr)
-	if want := []pkgengine.Object{parent.proxyID(), child.proxyID()}; !slices.Equal(mgr.shaderIDs, want) {
-		t.Fatalf("shader initialization = %v, want one per clone %v", mgr.shaderIDs, want)
-	}
-	if child.pen().penWidth != 7 || child.GetSoundEffect(SoundPanEffect) != 20 {
-		t.Fatal("pen and sound did not inherit the current original state")
-	}
-	if child.Xpos() != 30 || child.Ypos() != -15 || child.Heading() != 90 {
-		t.Fatalf("transform = (%v, %v, %v), want parent transform (30, -15, 90)", child.Xpos(), child.Ypos(), child.Heading())
-	}
-	if child.PhysicsMode() != DynamicPhysics {
-		t.Fatalf("physics mode = %v, want parent mode %v", child.PhysicsMode(), DynamicPhysics)
-	}
-	childAnimation := child.animation()
-	if childAnimation.shared != parentAnimation.shared {
-		t.Fatal("animation configuration did not come from the parent")
-	}
-	if childAnimation.curAnimState != nil || len(childAnimation.activeTweenStates) != 0 ||
-		childAnimation.defaultAnimActive || len(childAnimation.doneAnimations) != 0 ||
-		len(childAnimation.pendingAudios) != 0 ||
-		len(child.physics().touchTargets) != 0 {
-		t.Fatal("clone inherited parent collision or animation runtime state")
-	}
+type layoutInvalidInitSprite struct {
+	SpriteImpl
+	owner *Game
+	value layoutInvalidInitializer
+}
 
-	// The fresh proxy already starts at the copied position; the parent's
-	// unsubmitted movement must not pin the child's later physical movement.
-	child.mergeEnginePosition(40, -20)
-	requirePosition(t, child, 40, -20)
-	child.SetXpos(99)
-	child.SetPhysicsMode(StaticPhysics)
-	child.pen().penWidth = 9
-	child.SetSoundEffect(SoundPanEffect, 90)
-	child.SetGraphicEffect(ColorEffect, 30)
-	child.ClearGraphicEffects()
-	if parent.graphicEffects[ColorEffect] != 20 || original.graphicEffects[ColorEffect] != 10 {
-		t.Fatal("changing or clearing descendant effects changed its parent or original")
-	}
-	if len(mgr.shaderIDs) != 2 {
-		t.Fatal("later effect updates reinitialized a clone's shader")
-	}
-	if parent.Xpos() != 30 || parent.PhysicsMode() != DynamicPhysics || parent.pen().penWidth != 50 || parent.GetSoundEffect(SoundPanEffect) != 80 {
-		t.Fatal("changing descendant state changed the parent")
-	}
-	if original.Xpos() != 0 || original.PhysicsMode() != NoPhysics || original.pen().penWidth != 7 || original.GetSoundEffect(SoundPanEffect) != 20 {
-		t.Fatal("changing descendant state changed the original")
-	}
+func (*layoutInvalidInitSprite) Main() {}
+
+type layoutCloneValue struct{ value int }
+
+func (v *layoutCloneValue) InitFrom(src any) int {
+	v.value = src.(*layoutCloneValue).value + 1
+	return v.value
+}
+
+type layoutCloneSprite struct {
+	value layoutCloneValue
+	owner *Game
+	SpriteImpl
+	variadic layoutVariadicValue
+	optional layoutOptionalValue
+	list     List
+	items    []int
+}
+
+func (*layoutCloneSprite) Main() {}
+
+type layoutVariadicValue int
+
+func (v *layoutVariadicValue) InitFrom(src ...*layoutVariadicValue) { *v = *src[0] + 1 }
+
+type layoutOptionalValue int
+
+func (v *layoutOptionalValue) InitFrom(src *layoutOptionalValue, _ ...any) { *v = *src + 1 }
+
+// Shared fixtures.
+
+type cloneAwakeOrderSprite struct {
+	SpriteImpl
+	sawAwakeInMain *bool
+	onClonedFired  *bool
+	clonedDone     chan struct{}
 }
 
 func (s *cloneAwakeOrderSprite) Main() {
@@ -1308,96 +1463,20 @@ func (s *cloneAwakeOrderSprite) Main() {
 	})
 }
 
-func (s *cloneStatePreservingSprite) Main() {
-	s.cloneValue = 1
-	if !s.IsCloned() {
-		return
-	}
-	s.OnCloned__0(func() {
-		if s.recordValue != nil {
-			*s.recordValue = s.cloneValue
-		}
-		if s.clonedDone != nil {
-			close(s.clonedDone)
-		}
-	})
+type cloneProxyOperation struct {
+	kind    string
+	object  pkgengine.Object
+	path    string
+	visible bool
 }
 
-func (s *cloneAllFieldKindsSprite) Main() {
-	s.XGo_Init()
-	if !s.IsCloned() {
-		return
-	}
-	s.OnCloned__0(func() {
-		if s.observed != nil {
-			s.observed.boolValue = s.boolValue
-			s.observed.intValue = s.intValue
-			s.observed.stringValue = s.stringValue
-			s.observed.floatValue = s.floatValue
-			s.observed.valueString = s.valueValue.String()
-			s.observed.listString = s.listValue.String()
-			s.observed.listLen = s.listValue.Len()
-			s.observed.sliceValue = append([]int(nil), s.sliceValue...)
-			if s.mapValue != nil {
-				s.observed.mapValue = make(map[string]int, len(s.mapValue))
-				for key, val := range s.mapValue {
-					s.observed.mapValue[key] = val
-				}
-			}
-			s.observed.structValue = s.structValue
-			s.observed.arrayValue = s.arrayValue
-			s.observed.pointerValue = s.pointerValue
-			s.observed.interfaceValue = s.interfaceValue
-		}
-		if s.clonedDone != nil {
-			close(s.clonedDone)
-		}
-	})
-}
-
-func (s *cloneAllFieldKindsSprite) XGo_Init() *cloneAllFieldKindsSprite {
-	s.boolValue = false
-	s.intValue = 1
-	s.stringValue = "init"
-	s.floatValue = 2.5
-	s.valueValue = NewValue("init-value")
-	s.listValue.Init("init")
-	s.sliceValue = []int{9}
-	s.mapValue = map[string]int{"init": 1}
-	s.structValue = cloneFieldPayload{label: "init-struct", count: 1}
-	s.arrayValue = [2]string{"init-left", "init-right"}
-	s.pointerValue = &cloneFieldPayload{label: "init-pointer", count: 2}
-	s.interfaceValue = "init-any"
-	return s
-}
-
-func (s *cloneProxyInitSprite) Main() {
-	if !s.IsCloned() || !s.registerCloned {
-		return
-	}
-	s.OnCloned__0(func() {
-		// Query synchronization is allowed during initialization, but it must
-		// not bypass the clone's render-visibility gate.
-		s.syncProxyForQuery()
-		s.SetCostume__0(s.finalCostume)
-		if s.hideOnCloned {
-			s.Hide()
-		}
-		if s.deleteOnCloned {
-			s.DeleteThisClone()
-			return
-		}
-		if s.stopOthers {
-			s.Stop(AllOtherScripts)
-			return
-		}
-		if s.waitOnCloned != nil {
-			engine.WaitForChan(s.waitOnCloned)
-			if s.onClonedReturned != nil {
-				close(s.onClonedReturned)
-			}
-		}
-	})
+type spyCloneSpriteMgr struct {
+	wrap.SpriteMgrImpl
+	mu         sync.Mutex
+	nextID     pkgengine.Object
+	zIndexes   map[pkgengine.Object]int64
+	operations []cloneProxyOperation
+	shaderIDs  []pkgengine.Object
 }
 
 func (s *spyCloneSpriteMgr) CreateBareSprite(pos mathf.Vec2) pkgengine.Object {
@@ -1517,6 +1596,12 @@ func (s *spyCloneSpriteMgr) zIndex(obj pkgengine.Object) int64 {
 	return s.zIndexes[obj]
 }
 
+type cloneLimitSprite struct {
+	SpriteImpl
+	onInit  func(*cloneLimitSprite)
+	onClone func(*cloneLimitSprite)
+}
+
 func (s *cloneLimitSprite) Main() {
 	if s.onInit != nil {
 		s.onInit(s)
@@ -1527,21 +1612,6 @@ func (s *cloneLimitSprite) Main() {
 		}
 	})
 }
-
-func (*layoutInvalidInitializer) InitFrom(string) {}
-
-func (*layoutInvalidInitSprite) Main() {}
-
-func (v *layoutCloneValue) InitFrom(src any) int {
-	v.value = src.(*layoutCloneValue).value + 1
-	return v.value
-}
-
-func (*layoutCloneSprite) Main() {}
-
-func (v *layoutVariadicValue) InitFrom(src ...*layoutVariadicValue) { *v = *src[0] + 1 }
-
-func (v *layoutOptionalValue) InitFrom(src *layoutOptionalValue, _ ...any) { *v = *src + 1 }
 
 func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sawAwake := false
@@ -1559,62 +1629,6 @@ func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sprite.physics().bodyCollider.Type = collision.ColliderNone
 	sprite.physics().triggerCollider.Type = collision.ColliderNone
 	prepareAwakeCostumes(&sprite.SpriteImpl)
-	return sprite
-}
-
-func newCloneStatePreservingSprite(g *Game, name string, recordValue *float64) *cloneStatePreservingSprite {
-	sprite := &cloneStatePreservingSprite{
-		recordValue: recordValue,
-		clonedDone:  make(chan struct{}),
-	}
-	sprite.visualObject.initWithSize(1, 1)
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().bodyCollider.Type = collision.ColliderNone
-	sprite.physics().triggerCollider.Type = collision.ColliderNone
-	return sprite
-}
-
-func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKindsObserved) *cloneAllFieldKindsSprite {
-	sprite := &cloneAllFieldKindsSprite{
-		observed:   observed,
-		clonedDone: make(chan struct{}),
-	}
-	sprite.visualObject.initWithSize(1, 1)
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().bodyCollider.Type = collision.ColliderNone
-	sprite.physics().triggerCollider.Type = collision.ColliderNone
-	return sprite
-}
-
-func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneProxyInitSprite {
-	sprite := &cloneProxyInitSprite{
-		finalCostume:   "final",
-		hideOnCloned:   hideOnCloned,
-		registerCloned: registerCloned,
-	}
-	placeholder := newCostumeWithSize(1, 1)
-	placeholder.name, placeholder.path = "placeholder", "placeholder.png"
-	final := newCostumeWithSize(1, 1)
-	final.name, final.path = "final", "final.png"
-	sprite.costumes = []*costume{placeholder, final}
-	sprite.costumeIndex = 0
-	sprite.runtimeState.scale = 1
-	sprite.spriteState.isVisible = true
-	sprite.g = g
-	sprite.name = "Score"
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	sprite.physics().bodyCollider.Type = collision.ColliderNone
-	sprite.physics().triggerCollider.Type = collision.ColliderNone
 	return sprite
 }
 

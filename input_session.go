@@ -93,6 +93,7 @@ type inputRecordingResult struct {
 }
 
 func (p *Game) attachPreparedInputSession() error {
+	// Keep slot admission locked while checking the game's loaded gate.
 	p.inputSlot.mu.Lock()
 	if p.inputSlot.claimed || p.inputSlot.session != nil {
 		p.inputSlot.mu.Unlock()
@@ -113,21 +114,17 @@ func (p *Game) attachPreparedInputSession() error {
 	defer completePreparedInputSessionClaim(plan)
 	session, err := newInputSession(plan)
 	if err != nil {
-		p.setInputSessionTerminal(InputSessionStatus{
+		p.inputSlot.setTerminal(InputSessionStatus{
 			Mode:  plan.mode,
 			Phase: InputSessionPhaseAborted,
 			Error: err.Error(),
 		})
 		return err
 	}
-	p.inputSlot.mu.Lock()
-	if !p.inputSlot.claimed || p.inputSlot.session != nil {
-		p.inputSlot.mu.Unlock()
-		p.setInputSessionTerminal(session.close("another input session is already attached"))
+	if !p.inputSlot.attach(session) {
+		p.inputSlot.setTerminal(session.close("another input session is already attached"))
 		return fmt.Errorf("game lifecycle ended before input session attachment completed")
 	}
-	p.inputSlot.session = session
-	p.inputSlot.mu.Unlock()
 	return nil
 }
 
@@ -145,37 +142,18 @@ func (p *Game) currentInputSession() *inputSession {
 	if p == nil {
 		return nil
 	}
-	p.inputSlot.mu.RLock()
-	session := p.inputSlot.session
-	p.inputSlot.mu.RUnlock()
-	return session
+	return p.inputSlot.current()
 }
 
 func (p *Game) abortInputSession(reason string) {
 	if p == nil {
 		return
 	}
-	p.inputSlot.mu.Lock()
-	if p.inputSlot.session != nil {
-		p.inputSlot.terminal = p.inputSlot.session.close(reason)
-		p.inputSlot.session = nil
-	}
-	p.inputSlot.claimed = false
-	p.inputSlot.mu.Unlock()
-}
-
-func (p *Game) setInputSessionTerminal(status InputSessionStatus) {
-	p.inputSlot.mu.Lock()
-	p.inputSlot.session = nil
-	p.inputSlot.terminal = status
-	p.inputSlot.mu.Unlock()
+	p.inputSlot.abort(reason)
 }
 
 func (p *Game) terminalInputSessionStatus() (InputSessionStatus, bool) {
-	p.inputSlot.mu.RLock()
-	status := p.inputSlot.terminal
-	p.inputSlot.mu.RUnlock()
-	return status, status.Phase != ""
+	return p.inputSlot.terminalStatus()
 }
 
 func (p *Game) finishInputSessionFrame() {
@@ -187,6 +165,47 @@ func (p *Game) finishInputSessionFrame() {
 	if _, err := session.completeReplayFrame(engine.Managers().ExtMgr.Pause); err != nil {
 		engine.Panic(err)
 	}
+}
+
+func (s *inputSessionSlot) attach(session *inputSession) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.claimed || s.session != nil {
+		return false
+	}
+	s.session = session
+	return true
+}
+
+func (s *inputSessionSlot) current() *inputSession {
+	s.mu.RLock()
+	session := s.session
+	s.mu.RUnlock()
+	return session
+}
+
+func (s *inputSessionSlot) abort(reason string) {
+	s.mu.Lock()
+	if s.session != nil {
+		s.terminal = s.session.close(reason)
+		s.session = nil
+	}
+	s.claimed = false
+	s.mu.Unlock()
+}
+
+func (s *inputSessionSlot) setTerminal(status InputSessionStatus) {
+	s.mu.Lock()
+	s.session = nil
+	s.terminal = status
+	s.mu.Unlock()
+}
+
+func (s *inputSessionSlot) terminalStatus() (InputSessionStatus, bool) {
+	s.mu.RLock()
+	status := s.terminal
+	s.mu.RUnlock()
+	return status, status.Phase != ""
 }
 
 func (s *inputSession) close(reason string) InputSessionStatus {

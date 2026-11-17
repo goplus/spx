@@ -208,7 +208,7 @@ func (p *SpriteImpl) prepareSceneColorQuery() bool {
 	if p.g == nil || p.runtimeState.proxy == nil {
 		return false
 	}
-	p.g.syncSpriteProxiesForQuery(p)
+	p.g.scene.proxies.syncForQuery(p)
 	p.g.flushPenCommands()
 	return true
 }

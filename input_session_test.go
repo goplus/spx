@@ -32,7 +32,363 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type replayQueryInputMgr struct{ *inputSourceTestManager }
+// Shared session and input tick fixtures.
+
+// resetInputSessionState isolates tests without adding a production path for
+// resetting input independently of the Game lifecycle.
+func resetInputSessionState() {
+	preparedInputSession.Lock()
+	preparedInputSession.plan = nil
+	preparedInputSession.claimed = false
+	preparedInputSession.Unlock()
+	if game := currentGame(); game != nil {
+		game.abortInputSession("input session reset")
+		game.inputSlot.mu.Lock()
+		game.inputSlot.terminal = InputSessionStatus{}
+		game.inputSlot.mu.Unlock()
+	}
+}
+
+func resetInputSessionTest(t *testing.T) {
+	t.Helper()
+	resetInputSessionState()
+	engine.SetGame(nil)
+	clock.SetFixedDeltaTime(0)
+	t.Cleanup(func() {
+		resetInputSessionState()
+		engine.SetGame(nil)
+		clock.SetFixedDeltaTime(0)
+		ResetRandomSeed()
+	})
+}
+
+func claimPreparedSession(t *testing.T, game *Game) *inputSession {
+	t.Helper()
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	session := game.currentInputSession()
+	if session == nil {
+		t.Fatal("prepared input session was not attached")
+	}
+	return session
+}
+
+func validRuntimeReplay(frames ...InputReplayFrame) InputReplay {
+	return InputReplay{
+		Format:        InputReplayFormat,
+		Version:       InputReplayVersion,
+		FixedTimestep: 1.0 / 30,
+		Frames:        frames,
+	}
+}
+
+// consumeSampledInputTick holds the session boundary while the engine state is
+// sampled and resolved into one effective input tick.
+func (s *inputSession) consumeSampledInputTick(
+	delta float64,
+	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
+) (inputSessionTick, error) {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	return s.consumeSampledInputTickLocked(delta, sample)
+}
+
+func consumeInputTick(live InputReplayState, keyEvents []InputReplayKeyEvent, delta float64) (inputSessionTick, error) {
+	return consumeInputTickWithMouseEvents(live, nil, keyEvents, delta)
+}
+
+func consumeInputTickWithMouseEvents(
+	live InputReplayState,
+	mouseEvents []InputReplayMouseEvent,
+	keyEvents []InputReplayKeyEvent,
+	delta float64,
+) (inputSessionTick, error) {
+	session := activeInputSession()
+	if session == nil {
+		return inputSessionTick{}, errors.New("no active input session")
+	}
+	return session.consumeSampledInputTick(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return live, mouseEvents, keyEvents
+	})
+}
+
+// Session preparation and attachment.
+
+func TestPrepareInputRecordingRejectsInvalidValues(t *testing.T) {
+	resetInputSessionTest(t)
+	for _, fps := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		if _, err := PrepareInputRecording(fps); err == nil {
+			t.Fatalf("PrepareInputRecording(%v) succeeded", fps)
+		}
+	}
+	if _, err := PrepareInputRecording(30, InputSessionOptions{CaptureKey: KeyAny}); err == nil {
+		t.Fatal("PrepareInputRecording accepted a non-concrete capture key")
+	}
+	if _, err := PrepareInputRecording(30, InputSessionOptions{}, InputSessionOptions{}); err == nil {
+		t.Fatal("PrepareInputRecording accepted multiple options values")
+	}
+}
+
+func TestInputSessionPreparationCancelOnlyAffectsItsDescriptor(t *testing.T) {
+	resetInputSessionTest(t)
+	first, err := PrepareInputRecording(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Cancel() {
+		t.Fatal("first preparation was not cancelled")
+	}
+	if first.Cancel() {
+		t.Fatal("preparation cancellation was not idempotent")
+	}
+
+	second, err := PrepareInputReplay(validRuntimeReplay())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Cancel() {
+		t.Fatal("stale preparation cancelled a later descriptor")
+	}
+	if status := GetInputSessionStatus(); status.Mode != InputSessionModeReplaying || status.Phase != InputSessionPhasePrepared {
+		t.Fatalf("later preparation status = %+v", status)
+	}
+	if !second.Cancel() {
+		t.Fatal("second preparation was not cancelled")
+	}
+}
+
+func TestPreparedInputSessionIsConsumedOncePerGameLifecycle(t *testing.T) {
+	resetInputSessionTest(t)
+	if _, err := PrepareInputRecording(30); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	first := claimPreparedSession(t, game)
+	if err := game.attachPreparedInputSession(); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("second attachment error = %v, want %v", err, ErrInputSessionActive)
+	}
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30); err != nil {
+		t.Fatal(err)
+	}
+	game.abortInputSession("lifecycle ended")
+	game.lifecycle.reset()
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	if game.currentInputSession() != nil {
+		t.Fatal("one-shot session descriptor was consumed twice")
+	}
+	if status := GetInputSessionStatus(); status.Mode != InputSessionModeIdle {
+		t.Fatalf("ordinary lifecycle retained terminal input status: %+v", status)
+	}
+	game.abortInputSession("ordinary lifecycle ended")
+	game.lifecycle.reset()
+
+	if _, err := PrepareInputReplay(validRuntimeReplay()); err != nil {
+		t.Fatal(err)
+	}
+	second := claimPreparedSession(t, game)
+	if second == first {
+		t.Fatal("new Game lifecycle reused the previous input session")
+	}
+	if status := second.status(); status.Phase != InputSessionPhaseRunning || status.NextFrame != 0 || status.HasCurrentTick {
+		t.Fatalf("new session inherited previous input state: %+v", status)
+	}
+}
+
+func TestGameInputSessionCannotChangeModeDuringLifecycle(t *testing.T) {
+	resetInputSessionTest(t)
+	if _, err := PrepareInputRecording(30); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	claimPreparedSession(t, game)
+	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("PrepareInputReplay while recording error = %v", err)
+	}
+	if _, err := FinishInputRecording(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("PrepareInputReplay after recording completion error = %v", err)
+	}
+}
+
+func TestInputSessionCannotAttachAfterGameStarted(t *testing.T) {
+	resetInputSessionTest(t)
+	preparation, err := PrepareInputRecording(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	game.lifecycle.loaded.Store(true)
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err == nil {
+		t.Fatal("input session attached after Game started")
+	}
+	if status := GetInputSessionStatus(); status.Mode != InputSessionModeRecording || status.Phase != InputSessionPhasePrepared {
+		t.Fatalf("rejected descriptor changed unexpectedly: %+v", status)
+	}
+	if !preparation.Cancel() {
+		t.Fatal("rejected preparation was not cancellable")
+	}
+}
+
+func TestOrdinaryGameClaimsInputLifecycleBeforeBootstrap(t *testing.T) {
+	resetInputSessionTest(t)
+	game := &Game{}
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PrepareInputRecording(30); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("PrepareInputRecording after lifecycle claim error = %v", err)
+	}
+}
+
+func TestInputSessionRejectsInvalidModesAndLifecycleStates(t *testing.T) {
+	resetInputSessionTest(t)
+	for _, plan := range []*inputSessionPlan{
+		{mode: InputSessionModeIdle},
+		{mode: InputSessionModeRecording, fixedTimestep: -1},
+		{mode: InputSessionModeReplaying, replay: InputReplay{}},
+	} {
+		if session, err := newInputSession(plan); err == nil || session != nil {
+			t.Fatalf("invalid plan %+v: session=%v error=%v", plan, session, err)
+		}
+	}
+	if _, err := PrepareInputReplay(InputReplay{}); err == nil {
+		t.Fatal("invalid replay accepted")
+	}
+	if _, err := PrepareInputReplay(validRuntimeReplay(), InputSessionOptions{}, InputSessionOptions{}); err == nil {
+		t.Fatal("multiple options accepted")
+	}
+	if _, err := FinishInputRecording(); !errors.Is(err, ErrInputSessionNotRecording) {
+		t.Fatalf("recording without game: %v", err)
+	}
+	engine.SetGame(&Game{})
+	if _, err := FinishInputRecording(); !errors.Is(err, ErrInputSessionNotRecording) {
+		t.Fatalf("recording without session: %v", err)
+	}
+	var missing *Game
+	if missing.inputSessionUnavailable() || missing.currentInputSession() != nil {
+		t.Fatal("nil game has an input session")
+	}
+	missing.abortInputSession("absent")
+	for _, tt := range []struct {
+		name    string
+		session *inputSession
+		want    string
+	}{
+		{"replay", &inputSession{mode: InputSessionModeReplaying}, "not recording"},
+		{"aborted", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseAborted, abortReason: "stopped"}, "stopped"},
+		{"prepared", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhasePrepared}, "phase"},
+		{"uninitialized controller", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}, "not recording"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("finish error = %v, want %q", err, tt.want)
+			}
+			if tt.name == "uninitialized controller" && tt.session.phase != InputSessionPhaseRunning {
+				t.Fatal("failed finish did not roll back phase")
+			}
+		})
+	}
+}
+
+func TestInputPreparationTokenWrapAndFailedAttachment(t *testing.T) {
+	resetInputSessionTest(t)
+	old := preparedInputSession.nextToken
+	t.Cleanup(func() { preparedInputSession.nextToken = old })
+	preparedInputSession.nextToken = ^uint64(0)
+	prepared, err := prepareInputSession(inputSessionPlan{mode: InputSessionModeRecording, fixedTimestep: -1})
+	if err != nil || prepared.token != 1 {
+		t.Fatalf("wrapped token = %+v, %v", prepared, err)
+	}
+	game := &Game{}
+	if err := game.attachPreparedInputSession(); err == nil {
+		t.Fatal("invalid prepared plan attached")
+	}
+	status, ok := game.terminalInputSessionStatus()
+	if !ok || status.Mode != InputSessionModeRecording || status.Phase != InputSessionPhaseAborted || status.Error == "" {
+		t.Fatalf("failed attachment status: %+v", status)
+	}
+	if _, exists := preparedInputSessionStatus(); exists {
+		t.Fatal("failed attachment retained the prepared plan")
+	}
+}
+
+func TestInputAttachmentCanceledWhilePreparingEnvironment(t *testing.T) {
+	resetInputSessionTest(t)
+	if _, err := PrepareInputRecording(30); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	scriptRandom.mu.Lock()
+	unlock := sync.OnceFunc(scriptRandom.mu.Unlock)
+	done := make(chan error, 1)
+	workerDone := make(chan struct{})
+	t.Cleanup(func() {
+		unlock()
+		select {
+		case <-workerDone:
+		case <-time.After(time.Second):
+			t.Error("attachment worker did not stop")
+		}
+	})
+	go func() {
+		defer close(workerDone)
+		done <- game.attachPreparedInputSession()
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if delta, enabled := clock.FixedDeltaTime(); enabled && delta == 1.0/30 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("attachment did not reach environment setup")
+		}
+		runtime.Gosched()
+	}
+	game.abortInputSession("closed during preparation")
+	unlock()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "lifecycle ended") {
+			t.Fatalf("attachment error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("attachment did not unwind")
+	}
+	if game.currentInputSession() != nil {
+		t.Fatal("canceled game retained input session")
+	}
+	if _, enabled := clock.FixedDeltaTime(); enabled {
+		t.Fatal("failed attachment did not restore environment")
+	}
+}
+
+func TestInputPreparationRejectsUnrepresentableTimestepAndDuplicates(t *testing.T) {
+	resetInputSessionTest(t)
+	if _, err := PrepareInputRecording(math.SmallestNonzeroFloat64); err == nil {
+		t.Fatal("FPS with infinite timestep accepted")
+	}
+	first, err := PrepareInputRecording(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("duplicate preparation error = %v", err)
+	}
+	if !first.Cancel() {
+		t.Fatal("duplicate preparation replaced the original descriptor")
+	}
+	(&Game{}).OnEngineFrameEnd()
+}
+
+// Recording and replay clocks and input edges.
 
 func TestReplaySwipeExpiryAcrossFrameBoundaries(t *testing.T) {
 	press := InputReplayMouseEvent{Button: 1, Pressed: true}
@@ -420,49 +776,6 @@ func TestRecordingTimestepLifecycle(t *testing.T) {
 	}
 }
 
-func TestPrepareInputRecordingRejectsInvalidValues(t *testing.T) {
-	resetInputSessionTest(t)
-	for _, fps := range []float64{0, -1, math.NaN(), math.Inf(1)} {
-		if _, err := PrepareInputRecording(fps); err == nil {
-			t.Fatalf("PrepareInputRecording(%v) succeeded", fps)
-		}
-	}
-	if _, err := PrepareInputRecording(30, InputSessionOptions{CaptureKey: KeyAny}); err == nil {
-		t.Fatal("PrepareInputRecording accepted a non-concrete capture key")
-	}
-	if _, err := PrepareInputRecording(30, InputSessionOptions{}, InputSessionOptions{}); err == nil {
-		t.Fatal("PrepareInputRecording accepted multiple options values")
-	}
-}
-
-func TestInputSessionPreparationCancelOnlyAffectsItsDescriptor(t *testing.T) {
-	resetInputSessionTest(t)
-	first, err := PrepareInputRecording(30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !first.Cancel() {
-		t.Fatal("first preparation was not cancelled")
-	}
-	if first.Cancel() {
-		t.Fatal("preparation cancellation was not idempotent")
-	}
-
-	second, err := PrepareInputReplay(validRuntimeReplay())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Cancel() {
-		t.Fatal("stale preparation cancelled a later descriptor")
-	}
-	if status := GetInputSessionStatus(); status.Mode != InputSessionModeReplaying || status.Phase != InputSessionPhasePrepared {
-		t.Fatalf("later preparation status = %+v", status)
-	}
-	if !second.Cancel() {
-		t.Fatal("second preparation was not cancelled")
-	}
-}
-
 func TestReplayOverridesAndRestoresTimestep(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
@@ -496,94 +809,29 @@ func TestReplayOverridesAndRestoresTimestep(t *testing.T) {
 	}
 }
 
-func TestPreparedInputSessionIsConsumedOncePerGameLifecycle(t *testing.T) {
+func TestReplayLogicalClockUsesSessionTime(t *testing.T) {
 	resetInputSessionTest(t)
-	if _, err := PrepareInputRecording(30); err != nil {
-		t.Fatal(err)
-	}
-	game := &Game{}
-	first := claimPreparedSession(t, game)
-	if err := game.attachPreparedInputSession(); !errors.Is(err, ErrInputSessionActive) {
-		t.Fatalf("second attachment error = %v, want %v", err, ErrInputSessionActive)
-	}
-	if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30); err != nil {
-		t.Fatal(err)
-	}
-	game.abortInputSession("lifecycle ended")
-	game.lifecycle.reset()
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	if game.currentInputSession() != nil {
-		t.Fatal("one-shot session descriptor was consumed twice")
-	}
-	if status := GetInputSessionStatus(); status.Mode != InputSessionModeIdle {
-		t.Fatalf("ordinary lifecycle retained terminal input status: %+v", status)
-	}
-	game.abortInputSession("ordinary lifecycle ended")
-	game.lifecycle.reset()
-
-	if _, err := PrepareInputReplay(validRuntimeReplay()); err != nil {
-		t.Fatal(err)
-	}
-	second := claimPreparedSession(t, game)
-	if second == first {
-		t.Fatal("new Game lifecycle reused the previous input session")
-	}
-	if status := second.status(); status.Phase != InputSessionPhaseRunning || status.NextFrame != 0 || status.HasCurrentTick {
-		t.Fatalf("new session inherited previous input state: %+v", status)
-	}
-}
-
-func TestGameInputSessionCannotChangeModeDuringLifecycle(t *testing.T) {
-	resetInputSessionTest(t)
-	if _, err := PrepareInputRecording(30); err != nil {
+	replay := validRuntimeReplay(
+		InputReplayFrame{Frame: 0, State: InputReplayState{}},
+		InputReplayFrame{Frame: 1, Time: 0.25, State: InputReplayState{}},
+	)
+	if _, err := PrepareInputReplay(replay); err != nil {
 		t.Fatal(err)
 	}
 	game := &Game{}
 	claimPreparedSession(t, game)
-	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
-		t.Fatalf("PrepareInputReplay while recording error = %v", err)
-	}
-	if _, err := FinishInputRecording(); err != nil {
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
-		t.Fatalf("PrepareInputReplay after recording completion error = %v", err)
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := game.inputClock(); !got.Equal(time.Unix(0, int64(0.25*float64(time.Second)))) {
+		t.Fatalf("replay clock = %v", got)
 	}
 }
 
-func TestInputSessionCannotAttachAfterGameStarted(t *testing.T) {
-	resetInputSessionTest(t)
-	preparation, err := PrepareInputRecording(30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	game := &Game{}
-	game.lifecycle.loaded.Store(true)
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err == nil {
-		t.Fatal("input session attached after Game started")
-	}
-	if status := GetInputSessionStatus(); status.Mode != InputSessionModeRecording || status.Phase != InputSessionPhasePrepared {
-		t.Fatalf("rejected descriptor changed unexpectedly: %+v", status)
-	}
-	if !preparation.Cancel() {
-		t.Fatal("rejected preparation was not cancellable")
-	}
-}
-
-func TestOrdinaryGameClaimsInputLifecycleBeforeBootstrap(t *testing.T) {
-	resetInputSessionTest(t)
-	game := &Game{}
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := PrepareInputRecording(30); !errors.Is(err, ErrInputSessionActive) {
-		t.Fatalf("PrepareInputRecording after lifecycle claim error = %v", err)
-	}
-}
+// Frame completion, failures and teardown.
 
 func TestGameAbortInvalidatesRecordingAndRestoresEnvironment(t *testing.T) {
 	resetInputSessionTest(t)
@@ -738,28 +986,6 @@ func TestReplayCompletesOnlyAtFrameEnd(t *testing.T) {
 	}
 }
 
-func TestReplayLogicalClockUsesSessionTime(t *testing.T) {
-	resetInputSessionTest(t)
-	replay := validRuntimeReplay(
-		InputReplayFrame{Frame: 0, State: InputReplayState{}},
-		InputReplayFrame{Frame: 1, Time: 0.25, State: InputReplayState{}},
-	)
-	if _, err := PrepareInputReplay(replay); err != nil {
-		t.Fatal(err)
-	}
-	game := &Game{}
-	claimPreparedSession(t, game)
-	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
-		t.Fatal(err)
-	}
-	if got := game.inputClock(); !got.Equal(time.Unix(0, int64(0.25*float64(time.Second)))) {
-		t.Fatalf("replay clock = %v", got)
-	}
-}
-
 func TestFinishRecordingWaitsForCurrentInputOperation(t *testing.T) {
 	resetInputSessionTest(t)
 	if _, err := PrepareInputRecording(30); err != nil {
@@ -800,6 +1026,200 @@ func TestFinishRecordingWaitsForCurrentInputOperation(t *testing.T) {
 	if err := <-finishDone; err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestResetBeforeFinalFrameEndAbortsReplay(t *testing.T) {
+	resetInputSessionTest(t)
+	replay := validRuntimeReplay(InputReplayFrame{Frame: 0, State: InputReplayState{}})
+	if _, err := PrepareInputReplay(replay); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	session := claimPreparedSession(t, game)
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	game.abortInputSession("game reset before frame end")
+	if status := session.status(); status.Phase != InputSessionPhaseAborted || status.Completed {
+		t.Fatalf("replay status after reset = %+v", status)
+	}
+	completed, err := session.completeReplayFrame(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed {
+		t.Fatal("aborted replay completed after reset")
+	}
+}
+
+func TestInputSessionFreezeFailures(t *testing.T) {
+	resetInputSessionTest(t)
+	freeze := func() { panic("host pause failed") }
+	if err := freezeInputSession(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := freezeInputSession(freeze); err == nil || !strings.Contains(err.Error(), "host pause failed") {
+		t.Fatalf("freeze error = %v", err)
+	}
+	recording, err := newInputSession(&inputSessionPlan{mode: InputSessionModeRecording, fixedTimestep: 1.0 / 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recording.close("done")
+	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.result.json != "" || len(recording.result.replay.Frames) != 0 {
+		t.Fatalf("failed finish left partial result: %+v, %v", recording.status(), err)
+	}
+	if _, err := recording.finishRecordingResult(nil); err != nil {
+		t.Fatalf("retry finishing: %v", err)
+	}
+	replay, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer replay.close("done")
+	if _, err := replay.consumeSampledInputTick(1.0/30, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return InputReplayState{}, nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if complete, err := replay.completeReplayFrame(freeze); complete || err == nil || replay.phase != InputSessionPhaseAborted {
+		t.Fatalf("failed replay freeze: %v, %v, %+v", complete, err, replay.status())
+	}
+	if _, ok := replay.playbackInput(KeyAny); ok {
+		t.Fatal("aborted replay still overrides input")
+	}
+}
+
+func TestInputSessionPendingReplayAndTickErrors(t *testing.T) {
+	resetInputSessionTest(t)
+	session, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay(InputReplayFrame{Frame: 0})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.close("done")
+	session.phase = InputSessionPhaseFinishing
+	if completed, err := session.completeReplayFrame(func() { t.Fatal("non-exhausted replay paused") }); completed || err != nil {
+		t.Fatalf("premature completion = %v, %v", completed, err)
+	}
+	session.phase = InputSessionPhaseAborted
+	game := &Game{inputSlot: inputSessionSlot{session: session}}
+	engine.SetGame(game)
+	if captureInputTick() != nil {
+		t.Fatal("aborted session retained capture tick")
+	}
+	if _, err := session.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		t.Fatal("inactive session sampled input")
+		return InputReplayState{}, nil, nil
+	}); err == nil {
+		t.Fatal("aborted session accepted a tick")
+	}
+	recording := &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning, initialPending: true}
+	if _, err := recording.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return InputReplayState{}, nil, nil
+	}); err == nil {
+		t.Fatal("uninitialized recorder synchronized initial state")
+	}
+	initial := inputStateBeforeEvents(InputReplayState{Buttons: 1}, []InputReplayMouseEvent{{Button: 0}, {Button: 4}}, nil)
+	if initial.Buttons != 1 {
+		t.Fatal("invalid mouse events changed initial state")
+	}
+}
+
+func TestRecordingTooLargeToEncodeRollsBackFinish(t *testing.T) {
+	// A valid recording may exceed the codec's payload limit even though each
+	// individual input sample passes validation.
+	const keyCount = (16<<20)/20 + 1
+	keys := make([]int64, keyCount)
+	for i := range keys {
+		keys[i] = math.MaxInt64 - int64(keyCount) + int64(i)
+	}
+	session := &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}
+	if err := session.controller.StartRecording(InputReplayState{KeysDown: keys}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
+		t.Fatalf("encoding error = %v", err)
+	}
+	if session.phase != InputSessionPhaseRunning || session.result.json != "" {
+		t.Fatal("failed serialization committed a recording")
+	}
+}
+
+// Exercise public finish calls after the normal input, scheduler, and frame-end
+// lifecycle; engine managers remain the standard test fixtures.
+func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
+	for _, name := range []string{"Replay-first", "JSON-first"} {
+		t.Run(name, func(t *testing.T) {
+			currentScheduler, game, _ := setupInputSourceTest(t)
+			setupCaptureFlushSpriteMgr(t)
+			game.camera = &cameraImpl{g: game}
+			game.scene.init()
+			game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+			oldExt := pkgengine.ExtMgr
+			pkgengine.ExtMgr = &replayPauseTestExtMgr{}
+			t.Cleanup(func() { pkgengine.ExtMgr = oldExt })
+			if _, err := PrepareInputRecording(30); err != nil {
+				t.Fatal(err)
+			}
+			claimPreparedSession(t, game)
+			game.lifecycle.loaded.Store(true)
+			game.lifecycle.startDispatched.Store(true)
+			handled := 0
+			game.OnCond(func() bool { return true }, func() { handled++ })
+			game.OnEngineBeforeUpdate(1.0 / 30)
+			clock.Update(1.0/30, 30)
+			game.OnEngineUpdate(1.0 / 30)
+			currentScheduler.Update()
+			game.OnEngineRender(1.0 / 30)
+			game.OnEngineFrameEnd()
+			if handled != 1 || GetInputSessionStatus().FrameCount != 1 {
+				t.Fatalf("engine frame not exercised: handlers=%d, status=%+v", handled, GetInputSessionStatus())
+			}
+			var first InputReplay
+			var cached string
+			if name == "JSON-first" {
+				var err error
+				cached, err = FinishInputRecordingJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for attempt := range 2 {
+				replay, err := FinishInputRecording()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if attempt == 0 {
+					first = replay
+				} else if !reflect.DeepEqual(replay, first) {
+					t.Error("consecutive public Replay results differ")
+				}
+				encoded, err := EncodeInputReplay(replay)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := FinishInputRecordingJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cached == "" {
+					cached = got
+				}
+				if got != cached || encoded != cached || !GetInputSessionStatus().Completed {
+					t.Fatalf("inconsistent completed result: encoded=%s, cached=%s, returned=%s", encoded, cached, got)
+				}
+			}
+		})
+	}
+}
+
+// Capture timing and session boundaries.
+
+// setupCaptureInputSessionTest extends the session fixture with capture cleanup.
+func setupCaptureInputSessionTest(t *testing.T) {
+	t.Helper()
+	resetInputSessionTest(t)
+	setupCaptureTest(t)
 }
 
 func TestCaptureInputSessionFixtureClearsGameAndPendingCaptures(t *testing.T) {
@@ -1056,29 +1476,11 @@ func TestReplayCompletionWaitsForCaptureDispatch(t *testing.T) {
 	}
 }
 
-func TestResetBeforeFinalFrameEndAbortsReplay(t *testing.T) {
-	resetInputSessionTest(t)
-	replay := validRuntimeReplay(InputReplayFrame{Frame: 0, State: InputReplayState{}})
-	if _, err := PrepareInputReplay(replay); err != nil {
-		t.Fatal(err)
-	}
-	game := &Game{}
-	session := claimPreparedSession(t, game)
-	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
-		t.Fatal(err)
-	}
-	game.abortInputSession("game reset before frame end")
-	if status := session.status(); status.Phase != InputSessionPhaseAborted || status.Completed {
-		t.Fatalf("replay status after reset = %+v", status)
-	}
-	completed, err := session.completeReplayFrame(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if completed {
-		t.Fatal("aborted replay completed after reset")
-	}
-}
+// Frozen input queries during replay.
+
+type replayQueryInputMgr struct{ *inputSourceTestManager }
+
+func (*replayQueryInputMgr) GetKey(key int64) bool { return key == int64(KeyB) }
 
 func TestReplayQueriesDuringTicksAndClose(t *testing.T) {
 	resetInputSessionTest(t)
@@ -1110,151 +1512,6 @@ func TestReplayQueriesDuringTicksAndClose(t *testing.T) {
 	session.close("finished")
 	if _, ok := session.playbackInput(KeyA); ok {
 		t.Fatal("closed replay still overrides keys")
-	}
-}
-
-func TestInputSessionRejectsInvalidModesAndLifecycleStates(t *testing.T) {
-	resetInputSessionTest(t)
-	for _, plan := range []*inputSessionPlan{
-		{mode: InputSessionModeIdle},
-		{mode: InputSessionModeRecording, fixedTimestep: -1},
-		{mode: InputSessionModeReplaying, replay: InputReplay{}},
-	} {
-		if session, err := newInputSession(plan); err == nil || session != nil {
-			t.Fatalf("invalid plan %+v: session=%v error=%v", plan, session, err)
-		}
-	}
-	if _, err := PrepareInputReplay(InputReplay{}); err == nil {
-		t.Fatal("invalid replay accepted")
-	}
-	if _, err := PrepareInputReplay(validRuntimeReplay(), InputSessionOptions{}, InputSessionOptions{}); err == nil {
-		t.Fatal("multiple options accepted")
-	}
-	if _, err := FinishInputRecording(); !errors.Is(err, ErrInputSessionNotRecording) {
-		t.Fatalf("recording without game: %v", err)
-	}
-	engine.SetGame(&Game{})
-	if _, err := FinishInputRecording(); !errors.Is(err, ErrInputSessionNotRecording) {
-		t.Fatalf("recording without session: %v", err)
-	}
-	var missing *Game
-	if missing.inputSessionUnavailable() || missing.currentInputSession() != nil {
-		t.Fatal("nil game has an input session")
-	}
-	missing.abortInputSession("absent")
-	for _, tt := range []struct {
-		name    string
-		session *inputSession
-		want    string
-	}{
-		{"replay", &inputSession{mode: InputSessionModeReplaying}, "not recording"},
-		{"aborted", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseAborted, abortReason: "stopped"}, "stopped"},
-		{"prepared", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhasePrepared}, "phase"},
-		{"uninitialized controller", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}, "not recording"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := tt.session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("finish error = %v, want %q", err, tt.want)
-			}
-			if tt.name == "uninitialized controller" && tt.session.phase != InputSessionPhaseRunning {
-				t.Fatal("failed finish did not roll back phase")
-			}
-		})
-	}
-}
-
-func TestInputPreparationTokenWrapAndFailedAttachment(t *testing.T) {
-	resetInputSessionTest(t)
-	old := preparedInputSession.nextToken
-	t.Cleanup(func() { preparedInputSession.nextToken = old })
-	preparedInputSession.nextToken = ^uint64(0)
-	prepared, err := prepareInputSession(inputSessionPlan{mode: InputSessionModeRecording, fixedTimestep: -1})
-	if err != nil || prepared.token != 1 {
-		t.Fatalf("wrapped token = %+v, %v", prepared, err)
-	}
-	game := &Game{}
-	if err := game.attachPreparedInputSession(); err == nil {
-		t.Fatal("invalid prepared plan attached")
-	}
-	status, ok := game.terminalInputSessionStatus()
-	if !ok || status.Mode != InputSessionModeRecording || status.Phase != InputSessionPhaseAborted || status.Error == "" {
-		t.Fatalf("failed attachment status: %+v", status)
-	}
-	if _, exists := preparedInputSessionStatus(); exists {
-		t.Fatal("failed attachment retained the prepared plan")
-	}
-}
-
-func TestInputSessionFreezeFailures(t *testing.T) {
-	resetInputSessionTest(t)
-	freeze := func() { panic("host pause failed") }
-	if err := freezeInputSession(nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := freezeInputSession(freeze); err == nil || !strings.Contains(err.Error(), "host pause failed") {
-		t.Fatalf("freeze error = %v", err)
-	}
-	recording, err := newInputSession(&inputSessionPlan{mode: InputSessionModeRecording, fixedTimestep: 1.0 / 30})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer recording.close("done")
-	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.result.json != "" || len(recording.result.replay.Frames) != 0 {
-		t.Fatalf("failed finish left partial result: %+v, %v", recording.status(), err)
-	}
-	if _, err := recording.finishRecordingResult(nil); err != nil {
-		t.Fatalf("retry finishing: %v", err)
-	}
-	replay, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer replay.close("done")
-	if _, err := replay.consumeSampledInputTick(1.0/30, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		return InputReplayState{}, nil, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if complete, err := replay.completeReplayFrame(freeze); complete || err == nil || replay.phase != InputSessionPhaseAborted {
-		t.Fatalf("failed replay freeze: %v, %v, %+v", complete, err, replay.status())
-	}
-	if _, ok := replay.playbackInput(KeyAny); ok {
-		t.Fatal("aborted replay still overrides input")
-	}
-}
-
-func TestInputSessionPendingReplayAndTickErrors(t *testing.T) {
-	resetInputSessionTest(t)
-	session, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay(InputReplayFrame{Frame: 0})})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer session.close("done")
-	session.phase = InputSessionPhaseFinishing
-	if completed, err := session.completeReplayFrame(func() { t.Fatal("non-exhausted replay paused") }); completed || err != nil {
-		t.Fatalf("premature completion = %v, %v", completed, err)
-	}
-	session.phase = InputSessionPhaseAborted
-	game := &Game{inputSlot: inputSessionSlot{session: session}}
-	engine.SetGame(game)
-	if captureInputTick() != nil {
-		t.Fatal("aborted session retained capture tick")
-	}
-	if _, err := session.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		t.Fatal("inactive session sampled input")
-		return InputReplayState{}, nil, nil
-	}); err == nil {
-		t.Fatal("aborted session accepted a tick")
-	}
-	recording := &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning, initialPending: true}
-	if _, err := recording.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		return InputReplayState{}, nil, nil
-	}); err == nil {
-		t.Fatal("uninitialized recorder synchronized initial state")
-	}
-	initial := inputStateBeforeEvents(InputReplayState{Buttons: 1}, []InputReplayMouseEvent{{Button: 0}, {Button: 4}}, nil)
-	if initial.Buttons != 1 {
-		t.Fatal("invalid mouse events changed initial state")
 	}
 }
 
@@ -1307,162 +1564,6 @@ func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 	game.inputSlot.session = nil
 }
 
-func TestInputAttachmentCanceledWhilePreparingEnvironment(t *testing.T) {
-	resetInputSessionTest(t)
-	if _, err := PrepareInputRecording(30); err != nil {
-		t.Fatal(err)
-	}
-	game := &Game{}
-	scriptRandom.mu.Lock()
-	unlock := sync.OnceFunc(scriptRandom.mu.Unlock)
-	done := make(chan error, 1)
-	workerDone := make(chan struct{})
-	t.Cleanup(func() {
-		unlock()
-		select {
-		case <-workerDone:
-		case <-time.After(time.Second):
-			t.Error("attachment worker did not stop")
-		}
-	})
-	go func() {
-		defer close(workerDone)
-		done <- game.attachPreparedInputSession()
-	}()
-	deadline := time.Now().Add(time.Second)
-	for {
-		if delta, enabled := clock.FixedDeltaTime(); enabled && delta == 1.0/30 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("attachment did not reach environment setup")
-		}
-		runtime.Gosched()
-	}
-	game.abortInputSession("closed during preparation")
-	unlock()
-	select {
-	case err := <-done:
-		if err == nil || !strings.Contains(err.Error(), "lifecycle ended") {
-			t.Fatalf("attachment error = %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("attachment did not unwind")
-	}
-	if game.currentInputSession() != nil {
-		t.Fatal("canceled game retained input session")
-	}
-	if _, enabled := clock.FixedDeltaTime(); enabled {
-		t.Fatal("failed attachment did not restore environment")
-	}
-}
-
-func TestRecordingTooLargeToEncodeRollsBackFinish(t *testing.T) {
-	// A valid recording may exceed the codec's payload limit even though each
-	// individual input sample passes validation.
-	const keyCount = (16<<20)/20 + 1
-	keys := make([]int64, keyCount)
-	for i := range keys {
-		keys[i] = math.MaxInt64 - int64(keyCount) + int64(i)
-	}
-	session := &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}
-	if err := session.controller.StartRecording(InputReplayState{KeysDown: keys}, 0); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
-		t.Fatalf("encoding error = %v", err)
-	}
-	if session.phase != InputSessionPhaseRunning || session.result.json != "" {
-		t.Fatal("failed serialization committed a recording")
-	}
-}
-
-func TestInputPreparationRejectsUnrepresentableTimestepAndDuplicates(t *testing.T) {
-	resetInputSessionTest(t)
-	if _, err := PrepareInputRecording(math.SmallestNonzeroFloat64); err == nil {
-		t.Fatal("FPS with infinite timestep accepted")
-	}
-	first, err := PrepareInputRecording(30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
-		t.Fatalf("duplicate preparation error = %v", err)
-	}
-	if !first.Cancel() {
-		t.Fatal("duplicate preparation replaced the original descriptor")
-	}
-	(&Game{}).OnEngineFrameEnd()
-}
-
-// Exercise public finish calls after the normal input, scheduler, and frame-end
-// lifecycle; engine managers remain the standard test fixtures.
-func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
-	for _, name := range []string{"Replay-first", "JSON-first"} {
-		t.Run(name, func(t *testing.T) {
-			currentScheduler, game, _ := setupInputSourceTest(t)
-			setupCaptureFlushSpriteMgr(t)
-			game.camera = &cameraImpl{g: game}
-			game.scene.init()
-			game.syncBuffer = engine.NewSpriteSyncBuffer(1)
-			oldExt := pkgengine.ExtMgr
-			pkgengine.ExtMgr = &replayPauseTestExtMgr{}
-			t.Cleanup(func() { pkgengine.ExtMgr = oldExt })
-			if _, err := PrepareInputRecording(30); err != nil {
-				t.Fatal(err)
-			}
-			claimPreparedSession(t, game)
-			game.lifecycle.loaded.Store(true)
-			game.lifecycle.startDispatched.Store(true)
-			handled := 0
-			game.OnCond(func() bool { return true }, func() { handled++ })
-			game.OnEngineBeforeUpdate(1.0 / 30)
-			clock.Update(1.0/30, 30)
-			game.OnEngineUpdate(1.0 / 30)
-			currentScheduler.Update()
-			game.OnEngineRender(1.0 / 30)
-			game.OnEngineFrameEnd()
-			if handled != 1 || GetInputSessionStatus().FrameCount != 1 {
-				t.Fatalf("engine frame not exercised: handlers=%d, status=%+v", handled, GetInputSessionStatus())
-			}
-			var first InputReplay
-			var cached string
-			if name == "JSON-first" {
-				var err error
-				cached, err = FinishInputRecordingJSON()
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-			for attempt := range 2 {
-				replay, err := FinishInputRecording()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if attempt == 0 {
-					first = replay
-				} else if !reflect.DeepEqual(replay, first) {
-					t.Error("consecutive public Replay results differ")
-				}
-				encoded, err := EncodeInputReplay(replay)
-				if err != nil {
-					t.Fatal(err)
-				}
-				got, err := FinishInputRecordingJSON()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if cached == "" {
-					cached = got
-				}
-				if got != cached || encoded != cached || !GetInputSessionStatus().Completed {
-					t.Fatalf("inconsistent completed result: encoded=%s, cached=%s, returned=%s", encoded, cached, got)
-				}
-			}
-		})
-	}
-}
-
 func BenchmarkReplayInputQueries(b *testing.B) {
 	game := &Game{inputSlot: inputSessionSlot{session: &inputSession{
 		mode: InputSessionModeReplaying, phase: InputSessionPhaseRunning,
@@ -1486,94 +1587,5 @@ func BenchmarkReplayInputQueries(b *testing.B) {
 				query.run()
 			}
 		})
-	}
-}
-
-func (*replayQueryInputMgr) GetKey(key int64) bool { return key == int64(KeyB) }
-
-// consumeSampledInputTick holds the session boundary while the engine state is
-// sampled and resolved into one effective input tick.
-func (s *inputSession) consumeSampledInputTick(
-	delta float64,
-	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
-) (inputSessionTick, error) {
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	return s.consumeSampledInputTickLocked(delta, sample)
-}
-
-// resetInputSessionState isolates tests without adding a production path for
-// resetting input independently of the Game lifecycle.
-func resetInputSessionState() {
-	preparedInputSession.Lock()
-	preparedInputSession.plan = nil
-	preparedInputSession.claimed = false
-	preparedInputSession.Unlock()
-	if game := currentGame(); game != nil {
-		game.abortInputSession("input session reset")
-		game.inputSlot.mu.Lock()
-		game.inputSlot.terminal = InputSessionStatus{}
-		game.inputSlot.mu.Unlock()
-	}
-}
-
-func consumeInputTick(live InputReplayState, keyEvents []InputReplayKeyEvent, delta float64) (inputSessionTick, error) {
-	return consumeInputTickWithMouseEvents(live, nil, keyEvents, delta)
-}
-
-func consumeInputTickWithMouseEvents(
-	live InputReplayState,
-	mouseEvents []InputReplayMouseEvent,
-	keyEvents []InputReplayKeyEvent,
-	delta float64,
-) (inputSessionTick, error) {
-	session := activeInputSession()
-	if session == nil {
-		return inputSessionTick{}, errors.New("no active input session")
-	}
-	return session.consumeSampledInputTick(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		return live, mouseEvents, keyEvents
-	})
-}
-
-func resetInputSessionTest(t *testing.T) {
-	t.Helper()
-	resetInputSessionState()
-	engine.SetGame(nil)
-	clock.SetFixedDeltaTime(0)
-	t.Cleanup(func() {
-		resetInputSessionState()
-		engine.SetGame(nil)
-		clock.SetFixedDeltaTime(0)
-		ResetRandomSeed()
-	})
-}
-
-// setupCaptureInputSessionTest extends the session fixture with capture cleanup.
-func setupCaptureInputSessionTest(t *testing.T) {
-	t.Helper()
-	resetInputSessionTest(t)
-	setupCaptureTest(t)
-}
-
-func claimPreparedSession(t *testing.T, game *Game) *inputSession {
-	t.Helper()
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	session := game.currentInputSession()
-	if session == nil {
-		t.Fatal("prepared input session was not attached")
-	}
-	return session
-}
-
-func validRuntimeReplay(frames ...InputReplayFrame) InputReplay {
-	return InputReplay{
-		Format:        InputReplayFormat,
-		Version:       InputReplayVersion,
-		FixedTimestep: 1.0 / 30,
-		Frames:        frames,
 	}
 }

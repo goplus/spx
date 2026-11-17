@@ -107,7 +107,7 @@ func (p *Game) OnEngineRender(float64) {
 		p.camera.onUpdate()
 		activeShapes := p.scene.getTempShapes()
 		p.flushSpriteProxyChanges(activeShapes)
-		p.scene.flushBubbleVisuals(activeShapes)
+		p.scene.bubbles.flushBubbleVisuals(activeShapes)
 	})
 }
 

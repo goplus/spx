@@ -16,20 +16,7 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type animationLifecycleSpriteMgr struct {
-	pkgengine.ISpriteMgr
-	playing  bool
-	velocity mathf.Vec2
-	pauses   int
-	play     func()
-}
-
-type animationRegistrationResMgr struct {
-	pkgengine.IResMgr
-	calls   atomic.Int32
-	entered chan struct{}
-	release chan struct{}
-}
+// Native playback cancellation and resource cleanup.
 
 func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 	for _, blocking := range []bool{false, true} {
@@ -232,6 +219,128 @@ func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	}
 }
 
+func TestStopAnimationOnlyStopsMatchingLivePlayback(t *testing.T) {
+	for _, mode := range []string{"empty", "unknown", "not playing", "other animation", "unbound", "matching"} {
+		t.Run(mode, func(t *testing.T) {
+			_, anim, sprites, _ := setupAnimationLifecycle(t)
+			state := &animationPlayback{Name: "walk"}
+			anim.curAnimState = state
+			name := "walk"
+			switch mode {
+			case "empty":
+				name = ""
+			case "unknown":
+				name = "missing"
+			case "not playing":
+				anim.curAnimState = nil
+			case "other animation":
+				state.Name = "other"
+			case "unbound":
+				anim.sprite.runtimeState.proxy = nil
+			}
+			anim.stopAnimation(name)
+			if mode == "matching" {
+				if !state.IsCanceled || anim.curAnimState != nil || sprites.pauses != 1 {
+					t.Fatal("matching animation was not canceled and paused")
+				}
+			} else if state.IsCanceled || sprites.pauses != 0 {
+				t.Fatal("unrelated or unbound animation was paused")
+			}
+		})
+	}
+}
+
+func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
+	currentScheduler, anim, sprites, _ := setupAnimationLifecycle(t)
+	anim.sprite.spriteState.isVisible = true
+	anim.shared.defaultAnimation = "walk"
+	anim.playDefaultAnim()
+	if !anim.defaultAnimActive || !sprites.playing {
+		t.Fatal("configured default animation did not start")
+	}
+	anim.sprite.spriteState.isVisible = false
+	sprites.play = func() { anim.cancelAnimState(anim.curAnimState) }
+	finished := false
+	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
+		anim.playAnimation("walk", false, true)
+		finished = true
+	})
+	currentScheduler.Update()
+	joinAnimationThread(t, currentScheduler, thread)
+	if !finished || anim.curAnimState == nil || !anim.curAnimState.IsCanceled || anim.sprite.runtimeState.isAnimating {
+		t.Fatal("cancellation during start did not release the blocking animation")
+	}
+}
+
+type animationLifecycleSpriteMgr struct {
+	pkgengine.ISpriteMgr
+	playing  bool
+	velocity mathf.Vec2
+	pauses   int
+	play     func()
+}
+
+func (m *animationLifecycleSpriteMgr) PlayAnim(engine.Object, string, float64, bool, bool) {
+	m.playing = true
+	if m.play != nil {
+		m.play()
+	}
+}
+
+func (m *animationLifecycleSpriteMgr) IsPlayingAnim(engine.Object) bool { return m.playing }
+
+func (m *animationLifecycleSpriteMgr) PauseAnim(engine.Object) { m.playing = false; m.pauses++ }
+
+func (m *animationLifecycleSpriteMgr) SetRenderScale(engine.Object, mathf.Vec2) {}
+
+func (m *animationLifecycleSpriteMgr) SetVelocity(_ engine.Object, velocity mathf.Vec2) {
+	m.velocity = velocity
+}
+
+func setupAnimationLifecycle(t *testing.T) (*coroutine.Scheduler, *animationComponent, *animationLifecycleSpriteMgr, *animationAudioBackend) {
+	t.Helper()
+	platform := &eventDispatchPlatform{}
+	platform.useCurrentAsMainThread()
+	originalPlatform, originalSprites := pkgengine.PlatformMgr, pkgengine.SpriteMgr
+	sprites := &animationLifecycleSpriteMgr{}
+	pkgengine.PlatformMgr, pkgengine.SpriteMgr = platform, sprites
+	t.Cleanup(func() { pkgengine.PlatformMgr, pkgengine.SpriteMgr = originalPlatform, originalSprites })
+	currentScheduler := setupRuntimeScheduler(t)
+	wrap.Init(engine.WaitMainThread)
+	anim := newTestAnimationComponent()
+	anim.sprite.scriptEventBindings.bind(&scriptEventRegistry{}, anim.sprite)
+	anim.sprite.spriteState.isVisible = false
+	anim.sprite.g.physicsEnabled = true
+	anim.sprite.physics().physicsMode = DynamicPhysics
+	initTestMotionComponents(anim.sprite, 0, 0)
+	audio := &animationAudioBackend{}
+	initTestAnimationAudio(anim, audio)
+	entry := &animationEntry{name: "walk", config: &coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "walk"}}}
+	entry.loadOnce.Do(func() {})
+	anim.shared.animations[entry.name] = entry
+	return currentScheduler, anim, sprites, audio
+}
+
+func joinAnimationThread(t *testing.T, currentScheduler *coroutine.Scheduler, thread coroutine.Thread) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { currentScheduler.Join(thread); close(done) }()
+	deadline := time.Now().Add(time.Second)
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("animation thread did not finish")
+		}
+		currentScheduler.Update()
+	}
+}
+
+// Shared animation registration across clones.
+
 func TestClonedAnimationEntryRegistersOnceConcurrently(t *testing.T) {
 	setupImmediateEngineCalls(t)
 	resources := &animationRegistrationResMgr{
@@ -292,74 +401,11 @@ func TestClonedAnimationEntryRegistersOnceConcurrently(t *testing.T) {
 	}
 }
 
-func TestStopAnimationOnlyStopsMatchingLivePlayback(t *testing.T) {
-	for _, mode := range []string{"empty", "unknown", "not playing", "other animation", "unbound", "matching"} {
-		t.Run(mode, func(t *testing.T) {
-			_, anim, sprites, _ := setupAnimationLifecycle(t)
-			state := &animationPlayback{Name: "walk"}
-			anim.curAnimState = state
-			name := "walk"
-			switch mode {
-			case "empty":
-				name = ""
-			case "unknown":
-				name = "missing"
-			case "not playing":
-				anim.curAnimState = nil
-			case "other animation":
-				state.Name = "other"
-			case "unbound":
-				anim.sprite.runtimeState.proxy = nil
-			}
-			anim.stopAnimation(name)
-			if mode == "matching" {
-				if !state.IsCanceled || anim.curAnimState != nil || sprites.pauses != 1 {
-					t.Fatal("matching animation was not canceled and paused")
-				}
-			} else if state.IsCanceled || sprites.pauses != 0 {
-				t.Fatal("unrelated or unbound animation was paused")
-			}
-		})
-	}
-}
-
-func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
-	currentScheduler, anim, sprites, _ := setupAnimationLifecycle(t)
-	anim.sprite.spriteState.isVisible = true
-	anim.shared.defaultAnimation = "walk"
-	anim.playDefaultAnim()
-	if !anim.defaultAnimActive || !sprites.playing {
-		t.Fatal("configured default animation did not start")
-	}
-	anim.sprite.spriteState.isVisible = false
-	sprites.play = func() { anim.cancelAnimState(anim.curAnimState) }
-	finished := false
-	thread := currentScheduler.Create(anim.sprite, func(coroutine.Thread) {
-		anim.playAnimation("walk", false, true)
-		finished = true
-	})
-	currentScheduler.Update()
-	joinAnimationThread(t, currentScheduler, thread)
-	if !finished || anim.curAnimState == nil || !anim.curAnimState.IsCanceled || anim.sprite.runtimeState.isAnimating {
-		t.Fatal("cancellation during start did not release the blocking animation")
-	}
-}
-
-func (m *animationLifecycleSpriteMgr) PlayAnim(engine.Object, string, float64, bool, bool) {
-	m.playing = true
-	if m.play != nil {
-		m.play()
-	}
-}
-
-func (m *animationLifecycleSpriteMgr) IsPlayingAnim(engine.Object) bool { return m.playing }
-
-func (m *animationLifecycleSpriteMgr) PauseAnim(engine.Object) { m.playing = false; m.pauses++ }
-
-func (m *animationLifecycleSpriteMgr) SetRenderScale(engine.Object, mathf.Vec2) {}
-
-func (m *animationLifecycleSpriteMgr) SetVelocity(_ engine.Object, velocity mathf.Vec2) {
-	m.velocity = velocity
+type animationRegistrationResMgr struct {
+	pkgengine.IResMgr
+	calls   atomic.Int32
+	entered chan struct{}
+	release chan struct{}
 }
 
 func (m *animationRegistrationResMgr) CreateAnimation(string, string, string, int64, bool) {
@@ -367,46 +413,4 @@ func (m *animationRegistrationResMgr) CreateAnimation(string, string, string, in
 		close(m.entered)
 	}
 	<-m.release
-}
-
-func setupAnimationLifecycle(t *testing.T) (*coroutine.Scheduler, *animationComponent, *animationLifecycleSpriteMgr, *animationAudioBackend) {
-	t.Helper()
-	platform := &eventDispatchPlatform{}
-	platform.useCurrentAsMainThread()
-	originalPlatform, originalSprites := pkgengine.PlatformMgr, pkgengine.SpriteMgr
-	sprites := &animationLifecycleSpriteMgr{}
-	pkgengine.PlatformMgr, pkgengine.SpriteMgr = platform, sprites
-	t.Cleanup(func() { pkgengine.PlatformMgr, pkgengine.SpriteMgr = originalPlatform, originalSprites })
-	currentScheduler := setupRuntimeScheduler(t)
-	wrap.Init(engine.WaitMainThread)
-	anim := newTestAnimationComponent()
-	anim.sprite.scriptEventBindings.bind(&scriptEventRegistry{}, anim.sprite)
-	anim.sprite.spriteState.isVisible = false
-	anim.sprite.g.physicsEnabled = true
-	anim.sprite.physics().physicsMode = DynamicPhysics
-	initTestMotionComponents(anim.sprite, 0, 0)
-	audio := &animationAudioBackend{}
-	initTestAnimationAudio(anim, audio)
-	entry := &animationEntry{name: "walk", config: &coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "walk"}}}
-	entry.loadOnce.Do(func() {})
-	anim.shared.animations[entry.name] = entry
-	return currentScheduler, anim, sprites, audio
-}
-
-func joinAnimationThread(t *testing.T, currentScheduler *coroutine.Scheduler, thread coroutine.Thread) {
-	t.Helper()
-	done := make(chan struct{})
-	go func() { currentScheduler.Join(thread); close(done) }()
-	deadline := time.Now().Add(time.Second)
-	for {
-		select {
-		case <-done:
-			return
-		default:
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("animation thread did not finish")
-		}
-		currentScheduler.Update()
-	}
 }
