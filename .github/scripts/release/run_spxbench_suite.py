@@ -378,18 +378,36 @@ class SpxbenchSuiteGate:
                 return None
             timeout = min(timeout, recovery_remaining)
         try:
-            status, state = self.request(f"/__e2e/api/state?job={job_id}",
-                                         timeout=timeout)
+            status, job = self.request(f"/api/jobs?id={job_id}", timeout=timeout)
         except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
             log(f"   job state temporarily unavailable: {error}")
             return None
         if 500 <= status < 600:
-            log(f"   job state temporarily unavailable: HTTP {status}: {state}")
+            log(f"   job state temporarily unavailable: HTTP {status}: {job}")
             return None
         if status != 200:
-            raise SpxbenchSuiteError(f"state read failed: HTTP {status}: {state}")
-        if state.get("jobId") != job_id:
-            raise SpxbenchSuiteError(f"state read returned a different job: {state.get('jobId')}")
+            raise SpxbenchSuiteError(f"state read failed: HTTP {status}: {job}")
+        return self.state_from_job_response(job_id, job)
+
+    @staticmethod
+    def state_from_job_response(job_id, job):
+        """Adapt the durable /api/jobs response to the suite gate state shape."""
+        if not isinstance(job, dict):
+            raise SpxbenchSuiteError(f"state read returned an invalid job: {job}")
+        if job.get("id") != job_id:
+            raise SpxbenchSuiteError(f"state read returned a different job: {job.get('id')}")
+        snapshot = job.get("snapshot")
+        if not isinstance(snapshot, dict):
+            raise SpxbenchSuiteError(f"state read returned no snapshot for job {job_id}")
+
+        state = dict(snapshot)
+        state["jobId"] = job_id
+        state["running"] = job.get("status") == "running"
+        for field in ("total", "completed", "passed", "failed", "skipped", "summary"):
+            if field in job:
+                state[field] = job[field]
+        if "error" in job:
+            state["lastError"] = job["error"]
         return state
 
     def check_suite_result(self, job_id, state):
