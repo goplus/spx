@@ -69,7 +69,7 @@ jobs:
     needs: resolve-inputs
     # Pin the canonical workflow implementation independently from the Godot
     # source identity supplied by runtime.lock below.
-    uses: goplus/godot/.github/workflows/spx_module_checks.yml@5b62c786ccbe4c85f0e11ac93d6802a299e35092
+    uses: goplus/godot/.github/workflows/spx_module_checks.yml@28e4566d7dd3f53f942fb55bcba621f3bc25600b
     with:
       runtime_version: ${{ needs.resolve-inputs.outputs.runtime_version }}
       runtime_abi: ${{ needs.resolve-inputs.outputs.runtime_abi }}
