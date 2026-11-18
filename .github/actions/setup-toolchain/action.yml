@@ -1,5 +1,9 @@
 name: Set up toolchain
-description: Install the Go and XGo versions from the runtime lock.
+description: Install locked Go, with XGo enabled by default.
+inputs:
+  xgo:
+    description: Install XGo in addition to Go
+    default: 'true'
 runs:
   using: "composite"
   steps:
@@ -21,7 +25,14 @@ runs:
         "$python_command" .github/scripts/runtime/build_contract.py toolchain \
           --lock internal/release/runtime.lock.json --github-output "$GITHUB_OUTPUT"
 
+    - name: Set up Go only
+      if: inputs.xgo == 'false'
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ steps.toolchain.outputs.go-version }}
+
     - name: Set up Go and XGo
+      if: inputs.xgo != 'false'
       uses: goplus/setup-xgo@v1
       with:
         go-version: ${{ steps.toolchain.outputs.go-version }}

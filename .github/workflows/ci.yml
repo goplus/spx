@@ -39,8 +39,10 @@ jobs:
       - name: Validate current runtime lock snapshot
         run: python3 .github/scripts/runtime/lock_snapshot.py check
 
-      - name: Set up locked Go and XGo
+      - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
+        with:
+          xgo: 'false'
 
       - name: Resolve runtime release
         id: runtime

@@ -96,6 +96,42 @@ else:
         self.assertFalse(self.github_env.exists())
 
 
+class ToolchainSetupTest(unittest.TestCase):
+    def test_go_only_and_default_xgo_paths_use_the_same_locked_go(self):
+        action = load_workflow(ROOT / ".github/actions/setup-toolchain/action.yml")
+        self.assertEqual(action["inputs"]["xgo"]["default"], "true")
+        steps = action["runs"]["steps"]
+        go_only, = [step for step in steps if step.get("uses", "").startswith("actions/setup-go@")]
+        xgo, = [step for step in steps if step.get("uses", "").startswith("goplus/setup-xgo@")]
+        self.assertEqual(go_only["if"], "inputs.xgo == 'false'")
+        self.assertEqual(xgo["if"], "inputs.xgo != 'false'")
+        for step in (go_only, xgo):
+            self.assertEqual(step["with"]["go-version"], "${{ steps.toolchain.outputs.go-version }}")
+        self.assertEqual(xgo["with"]["xgo-version"], "${{ steps.toolchain.outputs.xgo-version }}")
+
+    def test_only_metadata_jobs_opt_out_of_xgo(self):
+        expected = {
+            ("ci.yml", "resolve-runtime"),
+            ("build_release.yml", "plan-release"),
+            ("build_release.yml", "assemble-release"),
+            ("release.yml", "publish-runtime"),
+            ("release.yml", "validate-dev-npm"),
+        }
+        actual = set()
+        for path in (ROOT / ".github/workflows").glob("*.yml"):
+            for name, job in load_workflow(path)["jobs"].items():
+                for step in job.get("steps", []):
+                    if step.get("uses") == "./.github/actions/setup-toolchain":
+                        if step.get("with", {}).get("xgo") == "false":
+                            actual.add((path.name, name))
+        self.assertEqual(actual, expected)
+        for name in ("build-web-bundle", "package-standalone"):
+            steps = load_workflow(ROOT / f".github/actions/{name}/action.yml")["runs"]["steps"]
+            for step in steps:
+                if step.get("uses") == "./.github/actions/setup-toolchain":
+                    self.assertNotEqual(step.get("with", {}).get("xgo"), "false")
+
+
 class LinuxDependenciesTest(ActionScriptTest):
     def setUp(self):
         super().setUp()
