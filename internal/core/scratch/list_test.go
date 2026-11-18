@@ -95,37 +95,29 @@ func TestListDeleteAndReadPositions(t *testing.T) {
 	}
 }
 
-func assertListItems(t *testing.T, list *List, want []any) {
-	t.Helper()
-	if list.Len() != len(want) {
-		t.Fatalf("list length = %d, want %d", list.Len(), len(want))
-	}
-	for i, item := range want {
-		if got := list.At(i).Raw(); got != item {
-			t.Errorf("list item %d = %T(%v), want %T(%v)", i, got, got, item, item)
-		}
-	}
-}
-
 func TestListEquality(t *testing.T) {
-	list := NewList(1, "02", "Apple")
+	list := NewList(1, "02", "Apple", "İ", "ΟΣ", "Σ")
 
 	tests := []struct {
-		name     string
-		value    any
-		contains bool
-		index    int
+		name  string
+		value any
+		index int
 	}{
-		{name: "integer and float", value: 1.0, contains: true, index: 0},
-		{name: "numeric strings", value: 2, contains: true, index: 1},
-		{name: "case insensitive strings", value: "apple", contains: true, index: 2},
-		{name: "missing value", value: "banana", contains: false, index: ListInvalid},
+		{name: "integer and float", value: 1.0, index: 0},
+		{name: "numeric strings", value: 2, index: 1},
+		{name: "case insensitive strings", value: "apple", index: 2},
+		{name: "simple lowercase does not expand", value: "i\u0307", index: ListInvalid},
+		{name: "sigma uses simple lowercase", value: "οσ", index: 4},
+		{name: "wrapped Unicode text", value: NewValue("i"), index: 3},
+		{name: "dotted I uses simple lowercase", value: "i", index: 3},
+		{name: "standalone sigma is not final", value: "ς", index: ListInvalid},
+		{name: "missing value", value: "banana", index: ListInvalid},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := list.Contains(tt.value); got != tt.contains {
-				t.Errorf("List.Contains(%v) = %v, want %v", tt.value, got, tt.contains)
+			if got, want := list.Contains(tt.value), tt.index != ListInvalid; got != want {
+				t.Errorf("List.Contains(%v) = %v, want %v", tt.value, got, want)
 			}
 			if got := list.IndexOf(tt.value); got != tt.index {
 				t.Errorf("List.IndexOf(%v) = %v, want %v", tt.value, got, tt.index)
@@ -168,5 +160,17 @@ func TestListSetLast(t *testing.T) {
 	list.Set(ListLast, 9)
 	if got := list.String(); got != "129" {
 		t.Fatalf("List.Set(ListLast, 9) produced %q, want %q", got, "129")
+	}
+}
+
+func assertListItems(t *testing.T, list *List, want []any) {
+	t.Helper()
+	if list.Len() != len(want) {
+		t.Fatalf("list length = %d, want %d", list.Len(), len(want))
+	}
+	for i, item := range want {
+		if got := list.At(i).Raw(); got != item {
+			t.Errorf("list item %d = %T(%v), want %T(%v)", i, got, got, item, item)
+		}
 	}
 }

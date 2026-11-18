@@ -18,7 +18,6 @@ package scratch
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -42,105 +41,12 @@ func ToString(v any) string {
 	return fmt.Sprint(v)
 }
 
-func normalizeSigns(s string) (string, bool) {
-	s = strings.TrimSpace(s)
-	negative := false
-	i := 0
-	for i < len(s) && (s[i] == '+' || s[i] == '-') {
-		if s[i] == '-' {
-			negative = !negative
-		}
-		i++
-	}
-	if i == len(s) {
-		return "", false
-	}
-	if negative {
-		return "-" + s[i:], true
-	}
-	return s[i:], true
-}
-
-func parseFloatString(s string) (float64, bool) {
-	normalized, ok := normalizeSigns(s)
-	if !ok {
-		return 0, false
-	}
-	f, err := strconv.ParseFloat(normalized, 64)
-	if err != nil {
-		return 0, false
-	}
-	return f, true
-}
-
-func parseIntString(s string) (int, bool) {
-	normalized, ok := normalizeSigns(s)
-	if !ok {
-		return 0, false
-	}
-	if i, err := strconv.Atoi(normalized); err == nil {
-		return i, true
-	}
-
-	f, err := strconv.ParseFloat(normalized, 64)
-	if err != nil {
-		return 0, false
-	}
-	return float64ToInt(f)
-}
-
-func float64ToInt(f float64) (int, bool) {
-	if f > float64(math.MaxInt) || f < float64(math.MinInt) {
-		return 0, false
-	}
-	return int(f), true
-}
-
 // toInt converts values to int, accepting compound signs and preserving integer
 // precision. Nil becomes zero; failed conversions return zero and false.
 func toInt(v any) (int, bool) {
 	switch x := v.(type) {
 	case nil:
 		return 0, true
-	case int:
-		return x, true
-	case int8:
-		return int(x), true
-	case int16:
-		return int(x), true
-	case int32:
-		return int(x), true
-	case int64:
-		if x > int64(math.MaxInt) || x < int64(math.MinInt) {
-			return 0, false
-		}
-		return int(x), true
-	case uint:
-		if x > uint(math.MaxInt) {
-			return 0, false
-		}
-		return int(x), true
-	case uint8:
-		return int(x), true
-	case uint16:
-		return int(x), true
-	case uint32:
-		if uint64(x) > uint64(math.MaxInt) {
-			return 0, false
-		}
-		return int(x), true
-	case uint64:
-		if x > uint64(math.MaxInt) {
-			return 0, false
-		}
-		return int(x), true
-	case float32:
-		if x > float32(math.MaxInt) || x < float32(math.MinInt) {
-			return 0, false
-		}
-		return int(x), true
-	case float64:
-		return float64ToInt(x)
 	case bool:
 		if x {
 			return 1, true
@@ -149,7 +55,7 @@ func toInt(v any) (int, bool) {
 	case string:
 		return parseIntString(x)
 	}
-	return 0, false
+	return numeric.Int(v)
 }
 
 // toFloat64 converts values to float64, accepting compound signs. Nil becomes
@@ -164,7 +70,37 @@ func toFloat64(v any) (float64, bool) {
 		}
 		return 0, true
 	case string:
-		return parseFloatString(x)
+		return numeric.ParseFloat64(normalizeSigns(x))
 	}
 	return numeric.Float64(v)
+}
+
+func parseIntString(s string) (int, bool) {
+	normalized := normalizeSigns(s)
+	if i, err := strconv.Atoi(normalized); err == nil {
+		return i, true
+	}
+
+	f, ok := numeric.ParseFloat64(normalized)
+	if !ok {
+		return 0, false
+	}
+	return numeric.Int(f)
+}
+
+func normalizeSigns(s string) string {
+	s = strings.TrimSpace(s)
+	negative := false
+	i := 0
+	for i < len(s) && (s[i] == '+' || s[i] == '-') {
+		if s[i] == '-' {
+			negative = !negative
+		}
+		i++
+	}
+	rest := s[i:]
+	if negative && rest != "" {
+		return "-" + rest
+	}
+	return rest
 }

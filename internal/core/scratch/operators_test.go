@@ -21,6 +21,8 @@ import (
 	"testing"
 )
 
+type embeddedValue struct{ Value }
+
 func TestLimitPrecision(t *testing.T) {
 	negativeZero := math.Copysign(0, -1)
 	inside := math.Nextafter(1e-9, 0)
@@ -150,6 +152,13 @@ func TestContainsUsesCaseInsensitiveSemantics(t *testing.T) {
 		{name: "mixed case substring", s: "Scratch", substr: "RaTc", contained: true},
 		{name: "missing substring", s: "Scratch", substr: "sprite", contained: false},
 		{name: "empty substring", s: "Scratch", substr: "", contained: true},
+		{name: "dotted I uses simple lowercase", s: "İstanbul", substr: "is", contained: true},
+		{name: "sigma uses simple lowercase", s: "ΟΣ", substr: "οσ", contained: true},
+		{name: "final sigma remains distinct", s: "ΟΣ", substr: "ος", contained: false},
+		{name: "invalid UTF-8 uses replacement rune", s: "\xff", substr: "\ufffd", contained: true},
+		{name: "medial sigma", s: "ΟΣΑ", substr: "οσα", contained: true},
+		{name: "standalone sigma is not final", s: "Σ", substr: "ς", contained: false},
+		{name: "lowercase is not case folding", s: "Straße", substr: "STRASSE", contained: false},
 	}
 
 	for _, tt := range tests {
@@ -191,8 +200,6 @@ func TestCharAt(t *testing.T) {
 	}
 }
 
-type embeddedValue struct{ Value }
-
 func TestCompareAndEqual(t *testing.T) {
 	items := NewList("01", "Apple")
 	// Init can retain wrapped elements; At adds one more Value wrapper.
@@ -211,10 +218,26 @@ func TestCompareAndEqual(t *testing.T) {
 		equal   bool
 	}{
 		{"case insensitive strings", "p", "P", 0, true},
+		{"simple lowercase does not expand", "İ", "i\u0307", -1, false},
+		{"dotted I uses simple lowercase", "İ", "i", 0, true},
+		{"final sigma remains distinct", "ΟΣ", "ος", 1, false},
+		{"sigma uses simple lowercase", "ΟΣ", "οσ", 0, true},
+		{"medial sigma", "ΟΣΑ", "οσα", 0, true},
+		{"standalone sigma is not final", "Σ", "ς", 1, false},
+		{"UTF-16 string order", "😀", "\ue000", -1, false},
+		{"UTF-16 order after shared prefix", "a😀", "a\uffff", -1, false},
+		{"supplementary case mapping", "𐐀", "𐐨", 0, true},
+		{"string prefix", "a", "ab", -1, false},
+		{"uncased text", "中文", "中文", 0, true},
+		{"lowercase does not normalize", "É", "e\u0301", 1, false},
+		{"invalid UTF-8 uses replacement rune", "\xff", "\ufffd", 0, true},
+		{"wrapped Unicode text", NewValue("İ"), "i", 0, true},
 		{"numeric strings", "01", "1", 0, true},
 		{"number and string", 2, "10", -1, false},
 		{"non numeric strings less", "apple", "Banana", -1, false},
 		{"whitespace uses string compare", "", "0", -1, false},
+		{"nil stays textual", nil, 0, -1, false},
+		{"nil equals empty text", nil, "", 0, true},
 		{"bool numeric compare", true, 1, 0, true},
 		{"wrapped numeric string compares numerically", NewValue("01"), 1, 0, true},
 		{"wrapped bool compares numerically", NewValue(true), 1, 0, true},

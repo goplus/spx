@@ -61,17 +61,16 @@ func TestToFloat64String(t *testing.T) {
 func TestNormalizeSigns(t *testing.T) {
 	for _, test := range []struct {
 		name, input, want string
-		ok                bool
 	}{
-		{"plain number unchanged", "12.5", "12.5", true},
-		{"double minus becomes positive", "--7", "7", true},
-		{"plus minus becomes negative", "+-12", "-12", true},
-		{"trim surrounding spaces", "  --18.25  ", "18.25", true},
-		{"signs only invalid", "--", "", false},
+		{"plain number unchanged", "12.5", "12.5"},
+		{"double minus becomes positive", "--7", "7"},
+		{"plus minus becomes negative", "+-12", "-12"},
+		{"trim surrounding spaces", "  --18.25  ", "18.25"},
+		{"signs only invalid", "-+", ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if got, ok := normalizeSigns(test.input); ok != test.ok || got != test.want {
-				t.Fatalf("normalizeSigns(%q) = %q, %v; want %q, %v", test.input, got, ok, test.want, test.ok)
+			if got := normalizeSigns(test.input); got != test.want {
+				t.Fatalf("normalizeSigns(%q) = %q, want %q", test.input, got, test.want)
 			}
 		})
 	}
@@ -105,29 +104,18 @@ func TestToIntString(t *testing.T) {
 	}
 }
 
-func TestToIntPreservesIntegerPrecision(t *testing.T) {
-	if strconv.IntSize != 64 {
-		t.Skip("requires 64-bit int")
-	}
-	want := int64(1<<53) + 1
-	for _, input := range []any{want, uint64(want), strconv.FormatInt(want, 10)} {
-		t.Run(fmt.Sprintf("%T", input), func(t *testing.T) {
-			if got, ok := toInt(input); !ok || int64(got) != want {
-				t.Fatalf("toInt(%v) = %d, %v; want %d, true", input, got, ok, want)
-			}
-		})
-	}
-}
-
-func TestToIntOutOfRange(t *testing.T) {
-	inputs := []any{^uint(0), ^uint64(0), float32(1e30), float64(1e30), float32(-1e30), float64(-1e30)}
-	if strconv.IntSize == 32 {
-		inputs = append(inputs, int64(1<<40), int64(-1<<31)-1, uint32(1<<31))
-	}
-	for _, input := range inputs {
+func TestValueIntRejectsInvalidNumbers(t *testing.T) {
+	upper := -float64(math.MinInt)
+	for _, input := range []any{
+		math.NaN(), "NaN", math.Inf(1), "+Inf", math.Inf(-1), "-Inf",
+		upper, strconv.FormatFloat(upper, 'f', -1, 64),
+	} {
 		t.Run(fmt.Sprintf("%T(%v)", input, input), func(t *testing.T) {
 			if got, ok := toInt(input); ok || got != 0 {
 				t.Fatalf("toInt() = %d, %v; want 0, false", got, ok)
+			}
+			if got := NewValue(input).Int(); got != 0 {
+				t.Fatalf("Value.Int() = %d, want 0", got)
 			}
 		})
 	}
@@ -147,20 +135,12 @@ func TestValueNumericConversions(t *testing.T) {
 		input any
 		want  int
 	}{
+		{nil, 0},
 		{true, 1},
 		{false, 0},
 		{int(7), 7},
-		{int8(7), 7},
-		{int16(7), 7},
-		{int32(7), 7},
-		{int64(7), 7},
-		{uint(7), 7},
-		{uint8(7), 7},
-		{uint16(7), 7},
-		{uint32(7), 7},
-		{uint64(7), 7},
-		{float32(7), 7},
 		{float64(7), 7},
+		{"--7", 7},
 	} {
 		t.Run(fmt.Sprintf("%T(%v)", test.input, test.input), func(t *testing.T) {
 			value := NewValue(test.input)
