@@ -90,6 +90,36 @@ func TestResolveMemberStringEvalField(t *testing.T) {
 	}
 }
 
+func TestResolveMemberTextEvalPreservesSourceValue(t *testing.T) {
+	fixture := memberEvalFixture{Score: 7}
+	target := reflect.ValueOf(&fixture).Elem()
+
+	fieldEval := ResolveMemberTextEval(target, "Score", 0)
+	if fieldEval == nil {
+		t.Fatal("expected field evaluator")
+	}
+	if text, raw := fieldEval(); text != "7" || raw != 7 {
+		t.Fatalf("field evaluation = %q, %#v, want 7, int", text, raw)
+	}
+
+	methodEval := ResolveMemberTextEval(target, "value", 0)
+	if methodEval == nil {
+		t.Fatal("expected method evaluator")
+	}
+	text, raw := methodEval()
+	if text != "1.23" || raw != 1.234 {
+		t.Fatalf("method evaluation = %q, %#v, want 1.23, 1.234", text, raw)
+	}
+
+	explicitEval := ResolveMemberTextEval(target, "Value", 0)
+	if explicitEval == nil {
+		t.Fatal("expected explicit method evaluator")
+	}
+	if text, raw := explicitEval(); raw != nil || !regexp.MustCompile(`^0x[0-9a-f]+$`).MatchString(text) {
+		t.Fatalf("explicit method evaluation = %q, %#v", text, raw)
+	}
+}
+
 func TestResolveMemberStringEvalAliasMethod(t *testing.T) {
 	fixture := memberEvalFixture{}
 	for _, tt := range []struct {

@@ -21,10 +21,10 @@ package ui
 import (
 	"math"
 	"slices"
-	"strconv"
 
 	. "github.com/goplus/spbase/mathf"
 
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
@@ -63,7 +63,9 @@ type MonitorStyle struct {
 // MonitorValue keeps list items separate from scalar text. The appearance,
 // rather than a nil check on Items, determines how an empty list is displayed.
 type MonitorValue struct {
-	Text  string
+	Text string
+	// Raw retains the source value for Scratch-compatible numeric formatting.
+	Raw   any
 	Items []string
 }
 
@@ -221,8 +223,8 @@ func (p *UiMonitor) render(sink monitorRenderSink, value MonitorValue) {
 		return
 	}
 	displayText := value.Text
-	if p.style.Appearance.IsCompatible() {
-		displayText = formatScratchMonitorValue(value.Text)
+	if p.style.Appearance.IsCompatible() && value.Raw != nil {
+		displayText = scratch.FormatMonitorValue(value.Raw)
 	}
 	if p.style.Appearance == MonitorAppearanceSlider {
 		p.renderSlider(sink, value.Text)
@@ -233,24 +235,6 @@ func (p *UiMonitor) render(sink monitorRenderSink, value MonitorValue) {
 	} else {
 		sink.SetText(p.view.value.GetId(), displayText)
 	}
-}
-
-// formatScratchMonitorValue applies Scratch's six-decimal display rounding.
-func formatScratchMonitorValue(text string) string {
-	value, err := strconv.ParseFloat(text, 64)
-	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-		return text
-	}
-	if math.Abs(value) >= 1e21 {
-		return strconv.FormatFloat(value, 'e', -1, 64)
-	}
-
-	roundedText := strconv.FormatFloat(value, 'f', 6, 64)
-	rounded, err := strconv.ParseFloat(roundedText, 64)
-	if err != nil || rounded == 0 {
-		return "0"
-	}
-	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
 // calculateMaxValueLabelLocalWidth converts the remaining Viewport width into

@@ -387,8 +387,11 @@ func buildMonitorEval(target reflect.Value, from int, val string, appearance ui.
 		spxlog.Error("Bind monitor error: name is empty")
 		return nil
 	}
-	if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
-		return func() ui.MonitorValue { return ui.MonitorValue{Text: eval()} }
+	if eval := coreproject.ResolveMemberTextEval(target, name, from); eval != nil {
+		return func() ui.MonitorValue {
+			text, raw := eval()
+			return ui.MonitorValue{Text: text, Raw: raw}
+		}
 	}
 	spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	return nil

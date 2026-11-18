@@ -193,29 +193,12 @@ func TestUiMonitorOtherAppearancesDoNotUseScratchValueOnlyWidth(t *testing.T) {
 	}
 }
 
-func TestScratchMonitorValueFormatting(t *testing.T) {
-	for _, test := range []struct {
-		name, input, want string
-	}{
-		{"floating point noise", "4.5600000000000005", "4.56"},
-		{"rounds to six decimals", "1.23456789", "1.234568"},
-		{"small value rounds to zero", "0.0000004", "0"},
-		{"negative zero is normalized", "-0.0000004", "0"},
-		{"large finite value is preserved", "1e+30", "1e+30"},
-		{"non-numeric text is preserved", "hello", "hello"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := formatScratchMonitorValue(test.input); got != test.want {
-				t.Fatalf("formatScratchMonitorValue(%q) = %q, want %q", test.input, got, test.want)
-			}
-		})
-	}
-
+func TestScratchMonitorValueRendering(t *testing.T) {
 	for _, appearance := range []MonitorAppearance{MonitorAppearanceCompatible, MonitorAppearanceCompatibleLarge, MonitorAppearanceSlider} {
 		t.Run(monitorViewSpecs[appearance].root, func(t *testing.T) {
 			sink := newMonitorRenderSpy()
 			panel, _ := newBoundMonitor(t, sink, MonitorStyle{Appearance: appearance, Slider: MonitorSlider{0, 100, 1}})
-			panel.render(sink, MonitorValue{Text: "4.5600000000000005"})
+			panel.render(sink, MonitorValue{Text: "4.5600000000000005", Raw: 4.5600000000000005})
 			if got := sink.text[panel.view.value.GetId()]; got != "4.56" {
 				t.Fatalf("displayed monitor value = %q, want 4.56", got)
 			}
@@ -224,9 +207,19 @@ func TestScratchMonitorValueFormatting(t *testing.T) {
 
 	sink := newMonitorRenderSpy()
 	panel, _ := newBoundMonitor(t, sink, MonitorStyle{Appearance: MonitorAppearanceDefault})
-	panel.render(sink, MonitorValue{Text: "4.5600000000000005"})
+	panel.render(sink, MonitorValue{Text: "4.5600000000000005", Raw: 4.5600000000000005})
 	if got := sink.text[panel.view.value.GetId()]; got != "4.5600000000000005" {
 		t.Fatalf("default monitor value = %q, want original text", got)
+	}
+
+	panel, _ = newBoundMonitor(t, sink, MonitorStyle{Appearance: MonitorAppearanceCompatible})
+	panel.render(sink, MonitorValue{Text: "00123", Raw: "00123"})
+	if got := sink.text[panel.view.value.GetId()]; got != "00123" {
+		t.Fatalf("numeric-looking string = %q, want 00123", got)
+	}
+	panel.render(sink, MonitorValue{Text: "9007199254740993", Raw: int64(9007199254740993)})
+	if got := sink.text[panel.view.value.GetId()]; got != "9007199254740993" {
+		t.Fatalf("large integer = %q, want 9007199254740993", got)
 	}
 }
 

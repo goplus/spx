@@ -2936,6 +2936,8 @@ func TestSpriteDialogueDebugModeKeepsPresentationAndAnswer(t *testing.T) {
 type monitorEvalFixture struct {
 	Game
 	score float64
+	text  string
+	exact int64
 	unset any
 	calls int
 }
@@ -3072,6 +3074,24 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 			t.Fatal("field binding stopped tracking changes")
 		}
 		g.score = 1.23456789
+	}
+	g.text = "00123"
+	if eval := monitorEvalForTest(root, "", "text", ui.MonitorAppearanceCompatible); eval == nil {
+		t.Fatal("string field binding missing")
+	} else {
+		value := eval()
+		if value.Text != "00123" || value.Raw != "00123" {
+			t.Fatalf("string field value = %#v, want preserved text and source", value)
+		}
+	}
+	g.exact = 9007199254740993
+	if eval := monitorEvalForTest(root, "", "exact", ui.MonitorAppearanceCompatible); eval == nil {
+		t.Fatal("integer field binding missing")
+	} else {
+		value := eval()
+		if value.Text != "9007199254740993" || value.Raw != int64(9007199254740993) {
+			t.Fatalf("integer field value = %#v, want exact source", value)
+		}
 	}
 	for _, name := range []string{"value", "getVar:value"} {
 		eval := monitorEvalForTest(root, "", name, ui.MonitorAppearanceDefault)
