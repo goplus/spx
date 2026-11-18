@@ -36,6 +36,12 @@ func TestFormatMonitorValue(t *testing.T) {
 		{"formatted string stays textual", "1.2300", "1.2300"},
 		{"float32 is rounded", float32(1.2345678), "1.234568"},
 		{"negative zero is normalized", math.Copysign(0, -1), "0"},
+		{"large float uses JavaScript number display", float64(1e18) + 128, "1000000000000000100"},
+		{"larger float uses JavaScript number display", float64(1e20) + 16384, "100000000000000020000"},
+		{"very large float uses exponent display", 1e21, "1e+21"},
+		{"NaN is preserved", math.NaN(), "NaN"},
+		{"positive infinity is preserved", math.Inf(1), "+Inf"},
+		{"negative infinity is preserved", math.Inf(-1), "-Inf"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := FormatMonitorValue(test.value); got != test.want {

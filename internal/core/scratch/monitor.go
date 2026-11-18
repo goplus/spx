@@ -17,18 +17,13 @@
 package scratch
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 	"reflect"
 	"strconv"
-	"strings"
 )
 
-const (
-	monitorDecimalScale = int64(1_000_000)
-	monitorLargeValue   = 1e21
-)
+const monitorLargeValue = 1e21
 
 // FormatMonitorValue formats a scalar using Scratch's monitor display rules.
 // Integer values and strings retain their source representation. Floating-point
@@ -56,49 +51,13 @@ func formatMonitorFloat(value float64) string {
 		return strconv.FormatFloat(value, 'e', -1, 64)
 	}
 
-	units := roundMonitorUnits(value)
-	if units.Sign() == 0 {
+	roundedText := new(big.Rat).SetFloat64(value).FloatString(6)
+	rounded, err := strconv.ParseFloat(roundedText, 64)
+	if err != nil || rounded == 0 {
 		return "0"
 	}
-	return formatMonitorUnits(units)
-}
-
-func roundMonitorUnits(value float64) *big.Int {
-	ratio := new(big.Rat).SetFloat64(value)
-	ratio.Mul(ratio, big.NewRat(monitorDecimalScale, 1))
-
-	quotient := new(big.Int)
-	remainder := new(big.Int)
-	quotient.QuoRem(ratio.Num(), ratio.Denom(), remainder)
-
-	if remainder.Sign() != 0 {
-		twiceRemainder := new(big.Int).Lsh(new(big.Int).Abs(remainder), 1)
-		if twiceRemainder.Cmp(ratio.Denom()) >= 0 {
-			if ratio.Num().Sign() < 0 {
-				quotient.Sub(quotient, big.NewInt(1))
-			} else {
-				quotient.Add(quotient, big.NewInt(1))
-			}
-		}
+	if math.Abs(rounded) >= monitorLargeValue {
+		return strconv.FormatFloat(rounded, 'e', -1, 64)
 	}
-	return quotient
-}
-
-func formatMonitorUnits(units *big.Int) string {
-	negative := units.Sign() < 0
-	absolute := new(big.Int).Abs(units)
-	scale := big.NewInt(monitorDecimalScale)
-	integer := new(big.Int)
-	fraction := new(big.Int)
-	integer.QuoRem(absolute, scale, fraction)
-
-	text := integer.String()
-	if fraction.Sign() != 0 {
-		fractionText := fmt.Sprintf("%06d", fraction.Int64())
-		text += "." + strings.TrimRight(fractionText, "0")
-	}
-	if negative {
-		return "-" + text
-	}
-	return text
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
