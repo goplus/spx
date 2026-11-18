@@ -23,6 +23,7 @@ updates:
     directories:
       - /
       - /cmd/ispx
+      - /cmd/ispx/ai
       - /internal/cmd/codegen
     labels:
       - dependabot
