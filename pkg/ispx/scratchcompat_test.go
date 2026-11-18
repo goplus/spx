@@ -28,6 +28,10 @@ import (
 	"github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
+// A native Stringer lets the test observe the real generated adapter without
+// replacing global registrations or adding production instrumentation.
+type scratchDispatchProbe func() string
+
 // Exercise bindings and type identity here; semantic matrices live in internal/core/scratch.
 const scratchCompatSource = `import (
 	"github.com/goplus/spx/v4"
@@ -87,8 +91,18 @@ func main() {
 	if copied.At(1).Raw() != "03.5" || restored.String() != "APPLE 03.5" {
 		panic("InitFrom pointer arguments across aliases")
 	}
-	if !compat.Equal(number, 3.5) || compat.Compare(items.At(0), "apple") != 0 || !compat.Contains("Scratch", "RAT") {
+	if !compat.Equal(number, 3.5) || compat.Compare(items.At(0), "apple") != 0 {
 		panic("wrapped operator arguments")
+	}
+	if !compat.Equal(spx.NewValue("İ"), "i") || !compat.Contains("ΟΣ", "οσ") || compat.Compare("😀", "\ue000") != -1 {
+		panic("Unicode operator bindings")
+	}
+	unicodeItems := compat.NewList("İ", "ΟΣ")
+	if !unicodeItems.Contains("i") || unicodeItems.IndexOf("οσ") != 1 {
+		panic("Unicode list lookup bindings")
+	}
+	if !spx.Equal("İ", "i") || !spx.Contains("ΟΣ", "οσ") || spx.Compare("😀", "\ue000") != -1 {
+		panic("legacy Unicode operator bindings")
 	}
 	if compat.Div(0, 0) != 0 || compat.FloorMod(-7, 3) != 2 || compat.LimitPrecision(42 + 5e-10) != 42 {
 		panic("numeric operator bindings")
@@ -134,25 +148,7 @@ func (t *volumeTarget) ChangeSoundEffect(kind spx.SoundEffectKind, delta float64
 }
 `
 
-// A native Stringer lets the test observe the real generated adapter without
-// replacing global registrations or adding production instrumentation.
-type scratchDispatchProbe func() string
-
 func (p scratchDispatchProbe) String() string { return p() }
-
-func scratchAdapterOnStack(adapter string) bool {
-	var pcs [32]uintptr
-	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
-	for {
-		frame, more := frames.Next()
-		if strings.HasSuffix(frame.Function, "/internal/core/scratch."+adapter) {
-			return true
-		}
-		if !more {
-			return false
-		}
-	}
-}
 
 func TestInterpreterScratchCompat(t *testing.T) {
 	for _, execution := range []string{"direct", "fallback"} {
@@ -160,7 +156,7 @@ func TestInterpreterScratchCompat(t *testing.T) {
 			t.Run(execution+"/"+optimization, func(t *testing.T) {
 				isolateInterpreter(t)
 				ctx := ixgo.NewContext(ixgo.SupportMultipleInterp | ixgo.EnableCachedReg | xgobuild.StaticLoad)
-				called := make(map[string]bool)
+				uncalled := make(map[string]struct{})
 				probeCalls := 0
 				ctx.RegisterExternal("github.com/goplus/spx/v4.NewValue", func(v any) spx.Value {
 					if value, ok := v.(string); ok && value == "dispatch probe" {
@@ -202,15 +198,17 @@ func TestInterpreterScratchCompat(t *testing.T) {
 						"github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex":     scratchcompat.ResolveCostumeIndex,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.SetSoundEffect":          scratchcompat.SetSoundEffect,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.SetVolume":               scratchcompat.SetVolume,
+						"(*github.com/goplus/spx/v4/internal/core/scratch.List).Contains":    (*scratchcompat.List).Contains,
+						"(*github.com/goplus/spx/v4/internal/core/scratch.List).IndexOf":     (*scratchcompat.List).IndexOf,
 						"(*github.com/goplus/spx/v4/internal/core/scratch.List).Init":        (*scratchcompat.List).Init,
 						"(*github.com/goplus/spx/v4/internal/core/scratch.List).InitFrom":    (*scratchcompat.List).InitFrom,
 						"(*github.com/goplus/spx/v4/internal/core/scratch.List).String":      (*scratchcompat.List).String,
 						"(github.com/goplus/spx/v4/internal/core/scratch.Value).String":      spx.Value.String,
 					} {
-						called[name] = false
+						uncalled[name] = struct{}{}
 						native := reflect.ValueOf(fn)
 						wrapped := reflect.MakeFunc(native.Type(), func(args []reflect.Value) []reflect.Value {
-							called[name] = true
+							delete(uncalled, name)
 							if native.Type().IsVariadic() {
 								return native.CallSlice(args)
 							}
@@ -235,12 +233,24 @@ func TestInterpreterScratchCompat(t *testing.T) {
 				if probeCalls != 4 {
 					t.Errorf("method probe calls = %d, want 4", probeCalls)
 				}
-				for name, seen := range called {
-					if !seen {
-						t.Errorf("%s fallback was not called", name)
-					}
+				for name := range uncalled {
+					t.Errorf("%s fallback was not called", name)
 				}
 			})
+		}
+	}
+}
+
+func scratchAdapterOnStack(adapter string) bool {
+	var pcs [32]uintptr
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, "/internal/core/scratch."+adapter) {
+			return true
+		}
+		if !more {
+			return false
 		}
 	}
 }

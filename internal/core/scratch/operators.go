@@ -19,7 +19,9 @@ package scratch
 
 import (
 	"math"
+	"slices"
 	"strings"
+	"unicode/utf16"
 )
 
 const maxEqualityULPs = 2
@@ -79,16 +81,14 @@ func CharAt(s string, idx int) string {
 // Value operands are unwrapped once.
 func Compare(v1, v2 any) int {
 	v1, v2 = UnwrapValue(v1), UnwrapValue(v2)
-	if n1, ok1 := toCompareNumber(v1); ok1 {
-		if n2, ok2 := toCompareNumber(v2); ok2 {
-			switch {
-			case n1 < n2:
-				return -1
-			case n1 > n2:
-				return 1
-			default:
-				return 0
-			}
+	if n1, n2, ok := comparisonNumbers(v1, v2); ok {
+		switch {
+		case n1 < n2:
+			return -1
+		case n1 > n2:
+			return 1
+		default:
+			return 0
 		}
 	}
 
@@ -100,18 +100,18 @@ func Compare(v1, v2 any) int {
 // Value operands are unwrapped once.
 func Equal(v1, v2 any) bool {
 	v1, v2 = UnwrapValue(v1), UnwrapValue(v2)
-	if n1, ok1 := toCompareNumber(v1); ok1 {
-		if n2, ok2 := toCompareNumber(v2); ok2 {
-			return nearlyEqual(n1, n2)
-		}
+	if n1, n2, ok := comparisonNumbers(v1, v2); ok {
+		return nearlyEqual(n1, n2)
 	}
 	return compareStrings(v1, v2) == 0
 }
 
 func compareStrings(v1, v2 any) int {
-	s1 := strings.ToLower(ToString(v1))
-	s2 := strings.ToLower(ToString(v2))
-	return strings.Compare(s1, s2)
+	// JavaScript orders strings by UTF-16 code units, including surrogate pairs.
+	return slices.Compare(
+		utf16.Encode([]rune(strings.ToLower(ToString(v1)))),
+		utf16.Encode([]rune(strings.ToLower(ToString(v2)))),
+	)
 }
 
 func nearlyEqual(a, b float64) bool {
@@ -130,9 +130,15 @@ func nearlyEqual(a, b float64) bool {
 	return false
 }
 
-func toCompareNumber(v any) (float64, bool) {
-	if v == nil {
-		return 0, false
+func comparisonNumbers(v1, v2 any) (float64, float64, bool) {
+	// Nil compares as empty text, although arithmetic converts it to zero.
+	if v1 == nil || v2 == nil {
+		return 0, 0, false
 	}
-	return toFloat64(v)
+	n1, ok := toFloat64(v1)
+	if !ok {
+		return 0, 0, false
+	}
+	n2, ok := toFloat64(v2)
+	return n1, n2, ok
 }

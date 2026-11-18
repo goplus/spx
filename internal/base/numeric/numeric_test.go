@@ -19,6 +19,7 @@ package numeric
 import (
 	"math"
 	"slices"
+	"strconv"
 	"testing"
 )
 
@@ -41,6 +42,97 @@ func TestFloat64ConvertsBuiltinNumbersOnly(t *testing.T) {
 	for _, value := range []any{nil, true, "12", definedInt(12)} {
 		if got, ok := Float64(value); ok || got != 0 {
 			t.Errorf("Float64(%T) = %v, %v; want 0, false", value, got, ok)
+		}
+	}
+}
+
+func TestIntConvertsBuiltinNumbersOnly(t *testing.T) {
+	for _, value := range []any{
+		int(7), int8(7), int16(7), int32(7), int64(7),
+		uint(7), uint8(7), uint16(7), uint32(7), uint64(7),
+		float32(7), float64(7),
+	} {
+		if got, ok := Int(value); !ok || got != 7 {
+			t.Errorf("Int(%T(%v)) = %d, %v; want 7, true", value, value, got, ok)
+		}
+	}
+	type definedFloat float64
+	for _, value := range []any{nil, true, "7", definedInt(7), definedFloat(7), uintptr(7)} {
+		if got, ok := Int(value); ok || got != 0 {
+			t.Errorf("Int(%T(%v)) = %d, %v; want 0, false", value, value, got, ok)
+		}
+	}
+}
+
+func TestIntBoundsAndPrecision(t *testing.T) {
+	limit := math.Ldexp(1, strconv.IntSize-1)
+	below64, below32 := int64(1<<31-1), int64(1<<31-128)
+	if strconv.IntSize == 64 {
+		below64, below32 = 1<<63-1024, 1<<63-1<<39
+	}
+	for _, test := range []struct {
+		name  string
+		value any
+		want  int
+	}{
+		{"max int", math.MaxInt, math.MaxInt},
+		{"min int", math.MinInt, math.MinInt},
+		{"max signed", int64(math.MaxInt), math.MaxInt},
+		{"min signed", int64(math.MinInt), math.MinInt},
+		{"max unsigned", uint64(math.MaxInt), math.MaxInt},
+		{"float64 below upper bound", math.Nextafter(limit, 0), int(below64)},
+		{"float32 below upper bound", math.Nextafter32(float32(limit), 0), int(below32)},
+		{"float64 lower bound", -limit, math.MinInt},
+		{"float32 lower bound", float32(-limit), math.MinInt},
+		{"positive fraction", 7.9, 7},
+		{"negative fraction", -7.9, -7},
+		{"float32 fraction", float32(-7.9), -7},
+		{"positive zero", 0.0, 0},
+		{"negative zero", math.Copysign(0, -1), 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got, ok := Int(test.value); !ok || got != test.want {
+				t.Errorf("Int(%v) = %d, %v; want %d, true", test.value, got, ok, test.want)
+			}
+		})
+	}
+	invalid := []any{
+		uint(math.MaxInt) + 1, uint64(math.MaxInt) + 1,
+		limit, float32(limit), -limit - 2048, math.Nextafter32(float32(-limit), float32(math.Inf(-1))),
+		math.NaN(), math.Inf(1), math.Inf(-1),
+		float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1)),
+	}
+	if strconv.IntSize == 32 {
+		invalid = append(invalid, int64(1<<31), int64(-1<<31-1), uint32(1<<31))
+	} else {
+		invalid = append(invalid, float64(math.MaxInt), math.Nextafter(-limit, math.Inf(-1)))
+	}
+	for _, value := range invalid {
+		if got, ok := Int(value); ok || got != 0 {
+			t.Errorf("Int(%T(%v)) = %d, %v; want 0, false", value, value, got, ok)
+		}
+	}
+	if strconv.IntSize == 64 {
+		// Integer inputs must never round through float64.
+		want := int64(1<<53 + 1)
+		for _, value := range []any{want, uint64(want)} {
+			if got, ok := Int(value); !ok || int64(got) != want {
+				t.Errorf("Int(%T(%v)) = %d, %v; want %d, true", value, value, got, ok, want)
+			}
+		}
+	} else {
+		// These fractions are representable on 32-bit hosts and truncate in range.
+		for _, test := range []struct {
+			value float64
+			want  int
+		}{
+			{float64(math.MaxInt) + 0.5, math.MaxInt},
+			{float64(math.MinInt) - 0.5, math.MinInt},
+			{math.Nextafter(-limit, math.Inf(-1)), math.MinInt},
+		} {
+			if got, ok := Int(test.value); !ok || got != test.want {
+				t.Errorf("Int(%v) = %d, %v; want %d, true", test.value, got, ok, test.want)
+			}
 		}
 	}
 }

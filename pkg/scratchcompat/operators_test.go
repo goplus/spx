@@ -36,8 +36,8 @@ func TestOperatorDelegation(t *testing.T) {
 	if got := scratchcompat.FloorMod(-7, 5); got != 3 {
 		t.Errorf("FloorMod = %v", got)
 	}
-	if !scratchcompat.Contains("Scratch", "RaTc") {
-		t.Error("Contains lost case-insensitive matching")
+	if !scratchcompat.Contains("ΟΣ", "οσ") {
+		t.Error("Contains lost Unicode lowercase matching")
 	}
 	items := scratchcompat.NewList("01")
 	if got := scratchcompat.Compare(items.At(0), 2); got != -1 {
@@ -45,6 +45,16 @@ func TestOperatorDelegation(t *testing.T) {
 	}
 	if !scratchcompat.Equal(items.At(0), 1) {
 		t.Error("Equal lost SPX value compatibility")
+	}
+	if !scratchcompat.Equal(spx.NewValue("İ"), "i") {
+		t.Error("Equal lost Unicode lowercase matching")
+	}
+	if got := scratchcompat.Compare("😀", "\ue000"); got != -1 {
+		t.Errorf("Unicode Compare = %v, want -1", got)
+	}
+	items = scratchcompat.NewList("İ", "ΟΣ")
+	if !items.Contains("i") || items.IndexOf("οσ") != 1 {
+		t.Error("list lookup lost Unicode lowercase matching")
 	}
 }
 
