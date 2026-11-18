@@ -301,6 +301,16 @@ func TestMobileExportToolWorkflows(t *testing.T) {
 				var mobileBuilds []string
 				for _, line := range strings.Split(strings.TrimSpace(calls), "\n") {
 					fields := strings.Split(line, "|")
+					if fields[0] == "import" {
+						wantArgs := "--headless --path " + cmd.ProjectDir + " --editor --quit"
+						cwd, err := os.Getwd()
+						if err != nil {
+							t.Fatal(err)
+						}
+						if fields[1] != cwd || fields[2] != wantArgs {
+							t.Fatalf("import invocation = %q, want directory %q and arguments %q", line, cwd, wantArgs)
+						}
+					}
 					if strings.HasPrefix(fields[0], "go:android:") || strings.HasPrefix(fields[0], "go:darwin:") {
 						mobileBuilds = append(mobileBuilds, fields[2])
 						if fields[1] != cmd.GoDir || fields[3] != "1" || !strings.Contains(fields[2], "-tags="+platform.name+",packmode") {

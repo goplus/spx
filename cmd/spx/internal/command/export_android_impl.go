@@ -73,20 +73,12 @@ func (cmd *CmdTool) executeExportApk() error {
 		return fmt.Errorf("godot project file not found at %s", projectFilePath)
 	}
 
-	logInfof("Importing project resources")
-	execCmd := exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit")
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-	if err := execCmd.Run(); err != nil {
-		logWarnf("Project import failed: %v", err)
-	}
+	cmd.importMobileProjectResources()
 
 	logInfof("Exporting Godot project to APK")
-	execCmd = exec.Command(cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", "Android", apkPath)
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-
-	if err := execCmd.Run(); err != nil {
+	if err := util.ExecCommand(util.CommandOptions{}, cmd.CmdPath,
+		"--headless", "--path", cmd.ProjectDir, "--export-debug", "Android", apkPath,
+	); err != nil {
 		return fmt.Errorf("failed to export APK: %w", err)
 	}
 

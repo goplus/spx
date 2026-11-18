@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goplus/spx/v4/cmd/spx/internal/util"
 	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
@@ -96,4 +97,14 @@ func pathWithin(name, root string) bool {
 		return false
 	}
 	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func (cmd *CmdTool) importMobileProjectResources() {
+	logInfof("Importing project resources")
+	if err := util.ExecCommand(
+		util.CommandOptions{},
+		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit",
+	); err != nil {
+		logWarnf("Project import failed: %v", err)
+	}
 }

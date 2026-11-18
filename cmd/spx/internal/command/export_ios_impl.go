@@ -100,7 +100,7 @@ func (cmd *CmdTool) executeExportIos() error {
 		return err
 	}
 	cmd.logIosExportTemplates()
-	cmd.importIosProjectResources()
+	cmd.importMobileProjectResources()
 
 	if err := cmd.exportIos(output, exportProjectOnly); err != nil {
 		return err
@@ -214,16 +214,6 @@ func (cmd *CmdTool) logIosExportTemplates() {
 		if len(iosFiles) > 0 {
 			logInfof("Templates for iOS in %s: %v", entry.Name(), iosFiles)
 		}
-	}
-}
-
-func (cmd *CmdTool) importIosProjectResources() {
-	logInfof("Importing project resources")
-	if err := util.ExecCommand(
-		util.CommandOptions{},
-		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--editor", "--quit",
-	); err != nil {
-		logWarnf("Project import had issues: %v", err)
 	}
 }
 
