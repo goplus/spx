@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 
+from download import download_release
+
 LOCK = Path("internal/release/runtime.lock.json")
 MANIFEST_COMMAND = ("go", "run", "./.github/cmd/runtime-manifest")
 PRODUCTS = {
@@ -92,7 +94,7 @@ def assemble(env):
     required_assets = json.loads(LOCK.read_text())["required_assets"]
     manifest = env["RUNTIME_MANIFEST"]
     if state == "ready":
-        run("gh", "release", "download", env["RUNTIME_TAG"], "--repo", env["REPOSITORY"], "--dir", str(runtime))
+        download_release(env["RUNTIME_TAG"], env["REPOSITORY"], runtime)
         run("sha256sum", "-c", "SHA256SUMS", cwd=runtime)
         verify_runtime(runtime, manifest)
     else:

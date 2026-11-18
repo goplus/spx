@@ -14,6 +14,7 @@ import unittest
 from unittest import mock
 
 import assemble
+import download
 
 
 class AssemblyTest(unittest.TestCase):
@@ -35,9 +36,13 @@ class AssemblyTest(unittest.TestCase):
         assemble.LOCK.write_text(json.dumps({"required_assets": self.required}))
         self.calls = []
         self.fail_command = ""
-        patch = mock.patch.object(assemble, "run", side_effect=self.run_external)
-        patch.start()
-        self.addCleanup(patch.stop)
+        for patch in (
+            mock.patch.object(assemble, "run", side_effect=self.run_external),
+            mock.patch.object(download, "run", side_effect=lambda args, **kwargs: self.run_external(*args)),
+            mock.patch.object(download.time, "sleep"),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def write(self, name, content="asset contents"):
         path = Path(name)
@@ -114,7 +119,8 @@ class AssemblyTest(unittest.TestCase):
         self.assertEqual(Path("output").read_text(), "product_count=0\n")
         self.assertEqual(list(Path("dist/product").iterdir()), [])
         self.assertEqual(len(self.calls), 3)
-        self.assertEqual(self.calls[0], ("gh", "release", "download", "runtime-v4.0.0", "--repo", "fixture/spx", "--dir", "dist/runtime"))
+        self.assertEqual(self.calls[0], ("gh", "release", "download", "runtime-v4.0.0", "--repo", "fixture/spx",
+                                        "--dir", "dist/runtime", "--clobber"))
         self.assertEqual(self.calls[1], ("sha256sum", "-c", "SHA256SUMS"))
         self.assertIn("--verify-manifest", self.calls[2])
 
@@ -173,9 +179,16 @@ class AssemblyTest(unittest.TestCase):
                         self.stage_published_runtime()
                     self.env["RUNTIME_STATE"] = state
                     self.fail_command = failure
+                    self.calls.clear()
                     with self.assertRaises(subprocess.CalledProcessError):
                         self.run_assembly()
                     self.assert_no_output()
+                    if state == "ready":
+                        self.assertEqual(sum(args[0] == "gh" for args in self.calls), 3 if failure == "download" else 1)
+                    if failure == "checksums":
+                        self.assertEqual(sum(args[0] == "sha256sum" for args in self.calls), 1)
+                    if failure == "verify":
+                        self.assertEqual(sum("--verify-manifest" in args for args in self.calls), 1)
 
     def test_corrupt_published_bytes_fail_real_checksum_verification(self):
         self.env["RUNTIME_STATE"] = "ready"

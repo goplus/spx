@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from download import download_release
+
 
 def run(*args, cwd=None, capture=False, check=True):
     return subprocess.run(args, cwd=cwd, check=check, text=True,
@@ -52,7 +54,7 @@ def verify_public_release(env, metadata, runtime):
     tag, repository = env["RELEASE_TAG"], env["REPOSITORY"]
     published = Path("published")
     published.mkdir(exist_ok=True)
-    run("gh", "release", "download", tag, "--repo", repository, "--dir", str(published))
+    download_release(tag, repository, published)
     run("sha256sum", "-c", "SHA256SUMS", cwd=published)
     local_assets = sorted(path.name for path in Path("dist").iterdir()
                           if path.is_file() and not path.is_symlink())
