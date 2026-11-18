@@ -32,6 +32,8 @@ updates:
       interval: weekly
       day: tuesday
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: github.com/goplus/builder/tools/ai
     groups:
       go-dependencies:
         patterns:
