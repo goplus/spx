@@ -184,6 +184,78 @@ func TestResolveRuntimeReportsIncompatibleCurrentSourceInputs(t *testing.T) {
 	}
 }
 
+func TestRuntimeReuseFollowsArtifactInputs(t *testing.T) {
+	fixture := newRuntimeResolutionFixture(t)
+	root := t.TempDir()
+	write := func(t *testing.T, name, content string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range map[string]string{
+		fixture.lock.Module.Path + "/module.cpp":            "// engine\n",
+		"cmd/spx/template/project/engine/ui/UiMonitor.tscn": "[gd_scene format=3]\n",
+		".github/scripts/runtime/build_pack.sh":             "#!/bin/sh\n",
+		"monitor.go":                                        "package spx\n",
+	} {
+		write(t, name, content)
+	}
+	gitOutput(t, root, "init", "--quiet")
+	commit := func(t *testing.T, message string) {
+		t.Helper()
+		gitOutput(t, root, "add", ".")
+		gitOutput(t, root, "-c", "user.name=Runtime Test", "-c", "user.email=runtime@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message)
+	}
+	commit(t, "published runtime inputs")
+	manifest := fixture.manifest
+	manifest.Provenance.SPXCommit = gitOutput(t, root, "rev-parse", "HEAD")
+	manifest.Provenance.ModuleTree = gitOutput(t, root, "rev-parse", "HEAD:"+fixture.lock.Module.Path)
+	var err error
+	manifest.Provenance.RuntimePackSourceSHA256, err = release.RuntimePackSourceSHA256(root, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Provenance.BuildRecipeSHA256, err = release.RuntimeBuildRecipeSHA256(root, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := fixture.config
+	config.RepoRoot = root
+	for _, test := range []struct {
+		name, path, content, incompatibility string
+	}{
+		{"monitor behavior", "monitor.go", "package spx\n// updated display behavior\n", ""},
+		{"monitor renderer", "internal/engine/ui/ui_monitor.go", "package ui\n// updated rendering\n", ""},
+		{"member evaluation", "internal/core/project/member_eval.go", "package project\n// preserve source values\n", ""},
+		{"new Go helper", "internal/core/scratch/monitor.go", "package scratch\n// new formatting helper\n", ""},
+		{"Go dependencies", "go.mod", "module example.com/game\n\ngo 1.26.0\n", ""},
+		{"resource", "cmd/spx/template/project/engine/ui/UiMonitor.tscn", "[gd_scene format=3]\n; changed layout\n", "runtime pack source digest"},
+		{"resource import", "cmd/spx/template/project/engine/fonts/default.ttf.import", "[remap]\nuid=\"uid://changed\"\n", "runtime pack source digest"},
+		{"pack exporter", "cmd/spx/internal/command/export.go", "package command\n// changed export behavior\n", "runtime pack source digest"},
+		{"C++ module", fixture.lock.Module.Path + "/module.cpp", "// changed engine\n", "module tree"},
+		{"SCons profile", fixture.lock.Module.Path + "/spx_scons_profile.json", "{\"changed\":true}\n", "module tree"},
+		{"pack build recipe", ".github/scripts/runtime/build_pack.sh", "#!/bin/sh\n# changed pack recipe\n", "runtime build recipe digest"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			gitOutput(t, root, "reset", "--hard", "--quiet", manifest.Provenance.SPXCommit)
+			write(t, test.path, test.content)
+			commit(t, test.name)
+			reason, err := currentRuntimeIncompatibility(config, fixture.lock, manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.incompatibility == "" && reason != "" || test.incompatibility != "" && !strings.Contains(reason, test.incompatibility) {
+				t.Fatalf("runtime incompatibility = %q, want %q", reason, test.incompatibility)
+			}
+		})
+	}
+}
+
 func TestResolveRuntimeFailsClosedWhenCurrentRevisionCannotBeInspected(t *testing.T) {
 	fixture := newRuntimeResolutionFixture(t)
 	fixture.config.Revision = "refs/heads/does-not-exist"
@@ -653,7 +725,7 @@ func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
 				files[filepath.Join(fixture.lock.Module.Path, "module.cpp")] = "// module input\n"
 			}
 			if tt.pack {
-				files["go.mod"] = "module example.com/runtime\n\ngo 1.26.0\n"
+				files["cmd/spx/template/project/main.tscn"] = "[gd_scene format=3]\n"
 			}
 			for name, data := range files {
 				path := filepath.Join(root, name)

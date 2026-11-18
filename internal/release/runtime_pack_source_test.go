@@ -20,11 +20,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -67,7 +65,7 @@ func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	hasher := sha256.New()
-	for _, index := range []int{1, 3, 6, 9, 12, 13, 14, 15} {
+	for _, index := range []int{3, 14} {
 		_, _ = hasher.Write([]byte(entries[index]))
 		_, _ = hasher.Write([]byte{0})
 	}
@@ -85,19 +83,24 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		want bool
 	}{
 		{"godot_modules/spx/register_types.cpp", false},
-		{"go.mod", true},
+		{"go.mod", false},
 		{"go.sum", false},
-		{"gox.mod", true},
+		{"gox.mod", false},
 		{"internal/release/runtime_pack_source.go", false},
 		{"internal/release/runtime_manifest.go", false},
-		// The release tag only renders project scaffolding. export-pack uses the
-		// repository module and is intentionally independent from this selector.
+		// The pack command copies resources without rendering Go scaffolding.
 		{"internal/release/current_spx_version.go", false},
 		{"internal/cmd/buildctl/simple_cmd.go", false},
 		{"internal/cmd/buildctl/runtimecmd/assets.go", false},
 		{"docs/zh/dev/engine/cmd_make.md", false},
 		{"cmd/spx/internal/command/export.go", true},
 		{"cmd/spx/internal/command/dispatch.go", true},
+		{"cmd/spx/internal/command/build.go", false},
+		{"cmd/spx/internal/command/ai_module.go", false},
+		{"cmd/spx/internal/command/builderai/project.go", false},
+		{"cmd/spx/internal/util/io.go", true},
+		{"cmd/spx/internal/util/cmd.go", true},
+		{"cmd/spx/internal/logutil/logutil.go", true},
 		{"cmd/spx/internal/command/buildlauncher.go", false},
 		{"cmd/spx/internal/command/run.go", false},
 		{"cmd/spx/internal/command/export_web.go", false},
@@ -106,6 +109,8 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"cmd/spx/internal/pack/pack.go", false},
 		{"cmd/spx/template/project/project.godot", true},
 		{"cmd/spx/template/project/engine/ui/UiAsk.tscn", true},
+		{"cmd/spx/template/project/engine/fonts/default.ttf.import", true},
+		{"cmd/spx/template/project/engine/textures/monitor/slider_thumb.svg.import", true},
 		{"cmd/spx/template/project/engine/fonts/default.LICENSE.txt", false},
 		{"cmd/spx/template/project/engine/fonts/default.NOTICE.txt", false},
 		{"cmd/spx/template/project/.godot/gdspx_web_server.py", false},
@@ -115,14 +120,14 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"cmd/spx/template/platform/web/index.html", false},
 		{"cmd/spx/install.sh", false},
 		{"fs/fsutil/fsutil.go", false},
-		{"fs/asset/asset.go", true},
-		{"internal/base/defaults.go", true},
-		{"internal/base/slice.go", true},
+		{"fs/asset/asset.go", false},
+		{"internal/base/defaults.go", false},
+		{"internal/base/slice.go", false},
 		{"internal/base/slice_test.go", false},
-		{"internal/base/fileutil/fileutil.go", true},
-		{"internal/base/fileutil/path.go", true},
-		{"internal/base/fileutil/stable_read.go", true},
-		{"internal/base/fileutil/zip_preflight.go", true},
+		{"internal/base/fileutil/fileutil.go", false},
+		{"internal/base/fileutil/path.go", false},
+		{"internal/base/fileutil/stable_read.go", false},
+		{"internal/base/fileutil/zip_preflight.go", false},
 		{"internal/base/fileutil/zip_preflight_test.go", false},
 		{"internal/base/httpclient/http.go", false},
 		{"internal/base/strictjson/decode.go", false},
@@ -130,35 +135,39 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"internal/base/licenseheader/licenseheader.go", false},
 		{"internal/base/log/log.go", true},
 		{"internal/base/log/log_test.go", false},
-		{"internal/log/log.go", true}, // Historical revisions.
+		{"internal/log/log.go", false},
 		{"internal/log/log_test.go", false},
-		{"internal/core/clock/clock.go", true},
+		{"internal/core/clock/clock.go", false},
 		{"internal/core/clock/clock_test.go", false},
-		{"internal/core/collision/collision.go", true},
+		{"internal/core/collision/collision.go", false},
 		{"internal/core/collision/collision_test.go", false},
-		{"internal/core/scratch/list.go", true},
+		{"internal/core/scratch/list.go", false},
 		{"internal/core/scratch/list_test.go", false},
-		{"internal/core/input/replay.go", true},
+		{"internal/core/input/replay.go", false},
 		{"internal/core/input/replay_test.go", false},
-		{"internal/core/input/keycode/keycode.go", true},
-		{"internal/core/input/keycode/parse.go", true},
+		{"internal/core/input/keycode/keycode.go", false},
+		{"internal/core/input/keycode/parse.go", false},
 		{"internal/core/input/keycode/parse_test.go", false},
-		{"internal/core/project/asset_index.go", true},
+		{"internal/core/project/asset_index.go", false},
 		{"internal/core/project/asset_index_test.go", false},
-		{"internal/core/tilemap/load.go", true},
-		{"internal/core/tilemap/tilemap.go", true},
+		{"internal/core/tilemap/load.go", false},
+		{"internal/core/tilemap/tilemap.go", false},
 		{"internal/core/tilemap/load_test.go", false},
-		{"internal/engine/coroutine/scheduler.go", true},
+		{"internal/engine/coroutine/scheduler.go", false},
 		{"internal/engine/coroutine/scheduler_test.go", false},
-		{"internal/engine/ui/ui_ask.go", true},
-		{"internal/engine/ui/text_wrap.go", true},
+		{"internal/engine/ui/ui_ask.go", false},
+		{"internal/engine/ui/text_wrap.go", false},
 		{"internal/engine/ui/ui_lifecycle_test.go", false},
-		{"sound_manager.go", true},
+		{"sound_manager.go", false},
+		{"monitor.go", false},
+		{"internal/core/project/member_eval.go", false},
+		{"internal/core/scratch/monitor.go", false},
+		{"internal/engine/ui/ui_monitor.go", false},
 		{"sound_test.go", false},
 		{"internal/gdengine/binding/web/ffi.go", false},
-		{"internal/scaffold/gdextension.go", true},
+		{"internal/scaffold/gdextension.go", false},
 		{"pkg/ispx/runner.go", false},
-		{"pkg/spx/pkg/engine/engine.go", true},
+		{"pkg/spx/pkg/engine/engine.go", false},
 		{"tools/godot/addons/spx_tilemap_exporter/export_cli.gd", false},
 	}
 	for _, test := range tests {
@@ -171,7 +180,7 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 func TestRuntimePackSourceDigestIgnoresIndependentInputs(t *testing.T) {
 	t.Parallel()
 
-	const selected = "100644 blob 1111111111111111111111111111111111111111\tgame.go"
+	const selected = "100644 blob 1111111111111111111111111111111111111111\tcmd/spx/template/project/main.tscn"
 	for _, path := range []string{
 		"cmd/spx/internal/command/buildlauncher.go",
 		"cmd/spx/internal/command/export_staging.go",
@@ -202,13 +211,12 @@ func TestRuntimePackSourceDigestIgnoresIndependentInputs(t *testing.T) {
 func TestRuntimePackSourceDigestTracksExportDispatch(t *testing.T) {
 	t.Parallel()
 
-	// ExportPack's setup and build phases live in dispatch.go, outside the
-	// runtime library dependencies checked below. A dispatch change must prevent
-	// reuse even when the exported runtime library itself is unchanged.
+	// Dispatch selects the resource-only setup and export phases. Changing it
+	// can change pack contents even when the project resources are unchanged.
 	digest := func(blob string) string {
 		t.Helper()
 		value, err := runtimePackSourcePathTreeSHA256(gitTreeFixture(
-			"100644 blob 1111111111111111111111111111111111111111\tgame.go",
+			"100644 blob 1111111111111111111111111111111111111111\tcmd/spx/template/project/main.tscn",
 			"100644 blob "+blob+"\tcmd/spx/internal/command/dispatch.go",
 		))
 		if err != nil {
@@ -368,77 +376,26 @@ func TestRuntimePackSourceSelectorsExist(t *testing.T) {
 			t.Errorf("runtime pack input %q is not a regular file", name)
 		}
 	}
-	for directory := range runtimePackSourceDirectories {
-		entries, err := os.ReadDir(filepath.Join(repoRoot, filepath.FromSlash(directory)))
+	directory := filepath.Join(repoRoot, filepath.FromSlash(runtimePackResourcesPrefix))
+	selected := false
+	err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(repoRoot, path)
 		if err != nil {
-			t.Errorf("runtime pack directory %q: %v", directory, err)
-			continue
+			return err
 		}
-		selected := false
-		for _, entry := range entries {
-			name := path.Join(directory, entry.Name())
-			if !entry.IsDir() && isRuntimePackSourcePath(name) {
-				selected = true
-				break
-			}
+		if isRuntimePackSourcePath(filepath.ToSlash(rel)) {
+			selected = true
 		}
-		if !selected {
-			t.Errorf("runtime pack directory %q contains no selected files", directory)
-		}
-	}
-	for _, prefix := range runtimePackSourcePrefixes {
-		directory := filepath.Join(repoRoot, filepath.FromSlash(strings.TrimSuffix(prefix, "/")))
-		selected := false
-		err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || entry.IsDir() {
-				return err
-			}
-			rel, err := filepath.Rel(repoRoot, path)
-			if err != nil {
-				return err
-			}
-			if isRuntimePackSourcePath(filepath.ToSlash(rel)) {
-				selected = true
-			}
-			return nil
-		})
-		if err != nil {
-			t.Errorf("runtime pack prefix %q: %v", prefix, err)
-			continue
-		}
-		if !selected {
-			t.Errorf("runtime pack prefix %q contains no selected files", prefix)
-		}
-	}
-}
-
-func TestRuntimePackSourceDirectoriesCoverRuntimeDependencies(t *testing.T) {
-	t.Parallel()
-
-	_, testFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate runtime_pack_source_test.go")
-	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(testFile), "../.."))
-	command := exec.Command("go", "list", "-deps", "-f", `{{if .Module}}{{if eq .Module.Path "github.com/goplus/spx/v4"}}{{.Dir}}{{end}}{{end}}`, ".")
-	command.Dir = repoRoot
-	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=1")
-	output, err := command.Output()
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, directory := range strings.Fields(string(output)) {
-		rel, err := filepath.Rel(repoRoot, directory)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if rel == "." {
-			continue
-		}
-		probe := path.Join(filepath.ToSlash(rel), "runtime_pack_dependency.go")
-		if !isRuntimePackSourcePath(probe) {
-			t.Errorf("runtime dependency %q is outside the source selector", filepath.ToSlash(rel))
-		}
+	if !selected {
+		t.Errorf("runtime pack resources %q contain no selected files", runtimePackResourcesPrefix)
 	}
 }
 
@@ -656,96 +613,44 @@ func TestTrackedRuntimeDigestsRejectInvalidRepositoryResponses(t *testing.T) {
 
 func TestRuntimeSourceSelectionRejectsMalformedBlobs(t *testing.T) {
 	for _, tt := range []struct{ name, header, content, want string }{
-		{"invalid tree entry", "100644 tree abc\tgame.go", "", "invalid git blob entry"},
-		{"invalid Go constraint", "100644 blob abc\tgame.go", "//go:build !\n\npackage spx\n", "match runtime pack source"},
+		{"invalid tree entry", "100644 tree abc\t" + runtimePackExportPresets, "", "invalid git blob entry"},
 		{"missing runtime preset", "100644 blob abc\t" + runtimePackExportPresets, "[preset.0]\nname=\"Other\"\n", "project runtime pack preset"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			installReleaseGitFixture(t, fmt.Sprintf("abc blob %d\n%s\n", len(tt.content), tt.content))
-			if _, _, err := runtimePackSourcePaths(t.TempDir(), gitTreeFixture(tt.header)); err == nil || !strings.Contains(err.Error(), tt.want) {
+			installReleaseGitFixture(t, tt.content)
+			if _, err := runtimePackSourceEntry(t.TempDir(), []byte(tt.header), runtimePackExportPresets); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("source selection = %v, want %q", err, tt.want)
 			}
 		})
 	}
 	t.Run("public source error", func(t *testing.T) {
-		installReleaseGitFixture(t, "100644 tree abc\\tgame.go\\000")
+		installReleaseGitFixture(t, "100644 tree abc\\t"+runtimePackExportPresets+"\\000")
 		if _, err := RuntimePackSourceSHA256(t.TempDir(), "HEAD"); err == nil || !strings.Contains(err.Error(), "invalid git blob entry") {
 			t.Fatalf("public source digest = %v", err)
 		}
 	})
 }
 
-func TestReadGitBlobsRejectsMalformedProtocol(t *testing.T) {
-	for _, tt := range []struct{ name, response, want string }{
-		{"missing header", "abc", "malformed git cat-file"},
-		{"wrong hash", "other blob 0\n\n", "invalid git cat-file"},
-		{"wrong type", "abc tree 0\n\n", "invalid git cat-file"},
-		{"invalid size", "abc blob no\n\n", "invalid git blob size"},
-		{"negative size", "abc blob -1\n\n", "invalid git blob size"},
-		{"short contents", "abc blob 4\nx\n", "invalid git blob size"},
-		{"trailing output", "abc blob 1\nx\nextra", "unexpected trailing"},
-		{"command failure", "", "read runtime pack source blobs"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			installReleaseGitFixture(t, tt.response)
-			if tt.name == "command failure" {
-				t.Setenv("SPX_GIT_STATUS", "9")
-			}
-			if _, err := readGitBlobs(t.TempDir(), []runtimePackBlob{{name: "game.go", hash: "abc"}}); err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("read Git blobs = %v, want %q", err, tt.want)
-			}
-		})
-	}
-}
-
-func TestRuntimeSourceSelectionWithoutGoAndFailedFetch(t *testing.T) {
-	paths, projections, err := runtimePackSourcePaths(t.TempDir(), gitTreeFixture("100644 blob abc\tgo.mod", "100644 blob def\tREADME.md"))
-	if err != nil || len(paths) != 1 || len(projections) != 0 {
-		t.Fatalf("non-Go source selection = %v, %v, %v", paths, projections, err)
-	}
-	if _, ok := paths["go.mod"]; !ok {
-		t.Fatal("module file omitted")
-	}
+func TestRuntimeSourceSelectionReadsOnlyExportPreset(t *testing.T) {
 	installReleaseGitFixture(t, "")
 	t.Setenv("SPX_GIT_STATUS", "4")
-	if _, _, err := runtimePackSourcePaths(t.TempDir(), gitTreeFixture("100644 blob abc\tgame.go")); err == nil || !strings.Contains(err.Error(), "read runtime pack source blobs") {
-		t.Fatalf("source blob failure = %v", err)
+	for _, name := range []string{"cmd/spx/template/project/main.tscn", "README.md"} {
+		entry := []byte("100644 blob abc\t" + name)
+		got, err := runtimePackSourceEntry(t.TempDir(), entry, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name == "README.md" && got != nil || name != "README.md" && !bytes.Equal(got, entry) {
+			t.Fatalf("source entry %s = %q", name, got)
+		}
+	}
+	entry := []byte("100644 blob abc\t" + runtimePackExportPresets)
+	if _, err := runtimePackSourceEntry(t.TempDir(), entry, runtimePackExportPresets); err == nil || !strings.Contains(err.Error(), "read runtime pack preset") {
+		t.Fatalf("preset blob failure = %v", err)
 	}
 }
 
-func TestMatchesRuntimePackTarget(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		content string
-		want    bool
-	}{
-		{"game.go", "package spx\n", true},
-		{"capture_js.go", "package spx\n", false},
-		{"capture_windows.go", "package spx\n", false},
-		{"capture_linux.go", "package spx\n", true},
-		{"open_mobile.go", "//go:build android || ios\n\npackage asset\n", false},
-		{"path_packmode.go", "//go:build packmode\n\npackage engine\n", false},
-		{"facade_web.go", "//go:build js\n\npackage facade\n", false},
-		{"macro_on.go", "//go:build profiler\n\npackage profiler\n", false},
-		{"macro_off.go", "//go:build !profiler\n\npackage profiler\n", true},
-		{"ffi.go", "//go:build cgo && !js\n\npackage native\n", true},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := matchesRuntimePackTarget(test.name, []byte(test.content))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got != test.want {
-				t.Fatalf("matchesRuntimePackTarget() = %t, want %t", got, test.want)
-			}
-		})
-	}
-}
-
-func TestRuntimePackSourceSHA256HonorsBuildConstraints(t *testing.T) {
+func TestRuntimePackSourceSHA256TracksResourcesAndExportCode(t *testing.T) {
 	repo := t.TempDir()
 	runGit := func(args ...string) {
 		t.Helper()
@@ -774,7 +679,8 @@ func TestRuntimePackSourceSHA256HonorsBuildConstraints(t *testing.T) {
 	}
 
 	runGit("init", "-q")
-	write("game.go", "package spx\n")
+	write("monitor.go", "package spx\n")
+	write("cmd/spx/internal/command/export.go", "package command\n")
 	write("capture_js.go", "package spx\n")
 	write(runtimePackExportPresets, `[preset.0]
 name="Android"
@@ -786,19 +692,26 @@ name="Linux"
 binary_format/architecture="x86_64"
 `)
 	commit("initial")
+	runGit("tag", "baseline")
 	baseline, err := RuntimePackSourceSHA256(repo, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	write("capture_js.go", "package spx\n\nconst changed = true\n")
-	commit("change inactive source")
+	write("monitor.go", "package spx\n\nconst changed = true\n")
+	write("internal/core/project/member_eval.go", "package project\n")
+	write("internal/core/scratch/monitor.go", "package scratch\n")
+	write("internal/engine/ui/ui_monitor.go", "package ui\n")
+	write("go.mod", "module example.com/game\n\ngo 1.26.0\n")
+	write("gox.mod", "project spx\n")
+	commit("change Go game logic and its dependencies")
 	inactive, err := RuntimePackSourceSHA256(repo, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if inactive != baseline {
-		t.Fatal("inactive JS source changed Linux runtime pack digest")
+		t.Fatal("Go game logic changed resource-only runtime pack digest")
 	}
 
 	presetsPath := filepath.Join(repo, filepath.FromSlash(runtimePackExportPresets))
@@ -816,14 +729,50 @@ binary_format/architecture="x86_64"
 		t.Fatal("Android preset changed Linux runtime pack digest")
 	}
 
-	write("game.go", "package spx\n\nconst changed = true\n")
-	commit("change active source")
+	write("cmd/spx/internal/command/export.go", "package command\n\nconst changed = true\n")
+	commit("change export command")
 	active, err := RuntimePackSourceSHA256(repo, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if active == baseline {
-		t.Fatal("active Linux source did not change runtime pack digest")
+		t.Fatal("export command did not change runtime pack digest")
+	}
+	previous := active
+	for _, resource := range []string{
+		"cmd/spx/template/project/engine/ui/UiMonitor.tscn",
+		"cmd/spx/template/project/engine/fonts/default.ttf.import",
+		"cmd/spx/template/project/runtime.gdextension.txt",
+	} {
+		write(resource, "updated resource contents\n")
+		commit("change " + resource)
+		updated, err := RuntimePackSourceSHA256(repo, "HEAD")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated == previous {
+			t.Fatalf("resource %s did not change runtime pack digest", resource)
+		}
+		previous = updated
+	}
+	write(runtimePackExportPresets, strings.Replace(string(presets), "x86_64", "arm64", 1))
+	commit("change Linux export preset")
+	linux, err := RuntimePackSourceSHA256(repo, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linux == previous {
+		t.Fatal("Linux preset did not change runtime pack digest")
+	}
+
+	// Both HEAD and the dirty worktree differ from the requested revision.
+	write(runtimePackExportPresets, "invalid uncommitted preset\n")
+	historical, err := RuntimePackSourceSHA256(repo, "baseline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if historical != baseline {
+		t.Fatalf("historical pack digest = %s, want %s", historical, baseline)
 	}
 }
 

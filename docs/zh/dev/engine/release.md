@@ -19,15 +19,17 @@ SPX 发布的 Web 包和 npm 包只包含基础解释器，Builder 自行构建�
 | 产物 | 构建或校验输入 |
 | --- | --- |
 | Godot engine/editor/template | Godot commit、`godot_modules/spx` tree（含 SCons profile）、引擎工具链、平台参数 |
-| `spx-runtime-assets.zip` | SPX runtime pack source、固定的 pack build recipe、生成 pack 所用的锁定 Godot 引擎 |
+| `spx-runtime-assets.zip` | 场景、GDScript、资源与导出配置、实际执行的 pack 导出逻辑、锁定 Godot 引擎 |
 | 完整 runtime release | `runtime-v<runtime_version>`、同版本 manifest、required asset 集合与全部资产 checksum |
-| SPX 产品包 | SPX release commit、选定的原子 runtime、各平台打包流程 |
+| SPX 产品包及 Go 程序/动态库 | SPX release commit、Go 依赖与绑定、选定的原子 runtime、各平台打包流程 |
 
 SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime/build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
 
 manifest 记录的 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256` 共同构成会影响产物字节的源码身份。只有这些值与所选 SPX revision 一致，并且 lock 约束的 ABI、Godot commit、toolchain、repository 和资产契约也一致时，已发布 runtime 才能复用。任一输入发生变化，发布者都必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
 
-module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘要只跟踪专用 pack-only 命令 `spx exportpack` 的输入，并按固定的 Linux/amd64、CGO、无额外 tag 的 pack 构建目标解析 Go build constraints；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件仍完整计算。pack-only 路径直接写出 PCK，不依赖平台导出模板。独立的 `run`、`buildlauncher`、Web/mobile exporter、平台模板和 release 编排不进入摘要。build-recipe 摘要只跟踪专用的本地 Linux 引擎准备与 export-pack 路径；其他平台分发、远程下载、本地 manifest 发布和 CI 运输层也不进入摘要。这些摘要帮助定位构建差异，但不会替代显式版本升级。
+module tree 仍覆盖完整的 `godot_modules/spx` tree，包括 C++、头文件、SCons profile、Web JS 与生成输入。pack-source 摘要只跟踪专用命令 `spx exportpack` 实际使用的项目模板、资源和导出代码；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件完整计算。普通 Go 游戏逻辑、monitor 实现及其运行时依赖不属于资源包输入，它们随 SPX 产品构建更新，不再仅因这些源码变化而要求升级 runtime。
+
+`exportpack` 直接准备资源项目，以 recovery mode 导入和导出 PCK，不生成 XGo 项目、不编译 Go 动态库，也不加载 Go 扩展初始化。它不依赖平台导出模板。资源的 `.import` 文件固定 UID，使独立导出不会因随机 UID 改变场景引用与 PCK 内容。build-recipe 摘要继续检查本地 Linux 引擎准备、pack 导出与 ZIP 写入路径；独立的运行命令、Web/mobile exporter、其他平台分发和 CI 编排不进入资源包摘要。
 
 ## 冻结顺序
 

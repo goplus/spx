@@ -30,6 +30,7 @@ const (
 	projectSetup
 	interpretedSetup
 	webExportSetup
+	packSetup
 )
 
 type commandBuild uint8
@@ -73,7 +74,7 @@ var commandSpecs = []commandSpec{
 	{name: "exporttemplateweb", group: "Web Development", summary: "Export the web template project", setup: projectSetup, build: initialDllBuild, run: (*CmdTool).ExportTemplateWeb},
 	{name: "stopweb", group: "Web Development", summary: "Stop the web server", setup: pathSetup, run: (*CmdTool).StopWeb},
 	{name: "export", group: "Export & Distribution", summary: "Export the PC package", setup: projectSetup, build: dllBuild, run: (*CmdTool).Export},
-	{name: "exportpack", group: "Export & Distribution", summary: "Export project data for the desktop runtime", setup: projectSetup, build: dllBuild, hidden: true, run: (*CmdTool).ExportPack},
+	{name: "exportpack", group: "Export & Distribution", summary: "Export project data for the desktop runtime", setup: packSetup, hidden: true, run: (*CmdTool).ExportPack},
 	{name: "exportapk", group: "Export & Distribution", summary: "Export an Android APK", setup: projectSetup, build: dllBuild, stageAssets: true, run: (*CmdTool).executeExportApk},
 	{name: "exportios", group: "Export & Distribution", summary: "Export an iOS package", setup: projectSetup, build: dllBuild, stageAssets: true, run: (*CmdTool).executeExportIos},
 	{name: "exportminigame", group: "Export & Distribution", summary: "Export a minigame package", setup: webExportSetup, run: (*CmdTool).ExportMinigame},
@@ -93,7 +94,7 @@ func (cmd *CmdTool) dispatch(spec commandSpec, fsRelDir, dstRelDir string) error
 	if err := cmd.prepareCommand(spec, fsRelDir, dstRelDir); err != nil {
 		return err
 	}
-	needsImport := spec.setup == projectSetup && cmd.ShouldReimport()
+	needsImport := (spec.setup == projectSetup || spec.setup == packSetup) && cmd.ShouldReimport()
 	build := spec.build
 	if build == initialDllBuild && !needsImport {
 		build = noBuild
@@ -118,12 +119,15 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 		return nil
 	case interpretedSetup:
 		return cmd.resolveProjectPaths(cmd.Args.Path, dstRelDir)
-	case pathSetup, projectSetup, webExportSetup:
+	case pathSetup, projectSetup, webExportSetup, packSetup:
 		if err := cmd.setupPaths(dstRelDir); err != nil {
 			return err
 		}
 		if spec.setup == pathSetup {
 			return nil
+		}
+		if spec.setup == packSetup {
+			return cmd.setupPackEnv(fsRelDir)
 		}
 	default:
 		return fmt.Errorf("command %q has an invalid setup", spec.name)

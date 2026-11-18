@@ -53,8 +53,19 @@ func (cmd *CmdTool) Export() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
-// ExportPack exports only the project data used by the desktop runtime. It
-// deliberately avoids a full platform export, which requires export templates.
+// setupPackEnv prepares the resource template without generating a Go project.
+func (cmd *CmdTool) setupPackEnv(fsRelDir string) error {
+	if err := cmd.setupEnginePaths(); err != nil {
+		return err
+	}
+	if err := util.CopyDir(cmd.ProjectFS, fsRelDir, cmd.ProjectDir, true); err != nil {
+		return fmt.Errorf("prepare runtime pack files: %w", err)
+	}
+	return cmd.updateProjectName()
+}
+
+// ExportPack exports the desktop runtime resources without loading project
+// GDExtensions or requiring platform export templates.
 func (cmd *CmdTool) ExportPack() error {
 	return cmd.exportPack(runtime.GOOS, util.RunCommandInDir)
 }
@@ -70,5 +81,5 @@ func (cmd *CmdTool) exportPack(goos string, run func(string, string, ...string) 
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create export directory: %w", err)
 	}
-	return run(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-pack", platformName, targetPath)
+	return run(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--recovery-mode", "--path", cmd.ProjectDir, "--export-pack", platformName, targetPath)
 }

@@ -19,15 +19,17 @@ The first atomic external-module release is SPX `v3.2.0`, runtime `2.4.0` (tag `
 | Artifact | Build or verification inputs |
 | --- | --- |
 | Godot engine/editor/templates | Godot commit, `godot_modules/spx` tree (including the SCons profile), engine toolchain, and platform axes |
-| `spx-runtime-assets.zip` | SPX runtime pack sources, the fixed pack build recipe, and the locked Godot engine used to export the pack |
+| `spx-runtime-assets.zip` | Scenes, GDScript, resources, export configuration, the executed pack export logic, and the locked Godot engine |
 | Complete runtime release | `runtime-v<runtime_version>`, a same-version manifest, the required asset set, and every asset checksum |
-| SPX product packages | SPX release commit, selected atomic runtime, and platform packaging flow |
+| SPX product packages and Go programs/shared libraries | SPX release commit, Go dependencies and bindings, selected atomic runtime, and platform packaging flow |
 
 SPX and Godot Actions both invoke `.github/scripts/runtime/build_contract.py` from the selected SPX commit to validate the lock and SCons profile. Engine cache toolchain digests are platform-scoped: native uses SCons, Web adds EMSDK, and Android adds JDK plus the NDK. An unknown NDK installer alias fails only an Android build; it does not block unrelated platforms.
 
 The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_recipe_sha256` as the byte-producing source identity. A published runtime is reusable only when those values match the selected SPX revision and its lock-bound ABI, Godot commit, toolchain, repository, and asset contract also match. If any of those inputs changes, the publisher must bump `runtime_version` first. Godot SCons caches use their own build-input digests, and documentation is outside both runtime and cache digests.
 
-The module tree remains a strict digest of the complete `godot_modules/spx` tree. The pack-source digest is narrower: it follows the dedicated pack-only `spx exportpack` inputs and evaluates Go build constraints for the fixed Linux/amd64 CGO pack builder with no extra tags. It projects `export_presets.cfg` to the Linux preset, while hashing packaged files such as `gdspx.gdextension` in full. The pack-only path writes the PCK directly and does not require a platform export template. Independent commands such as `run`, `buildlauncher`, Web/mobile exporters, platform templates, and release orchestration stay outside it. The build-recipe digest follows the dedicated local Linux engine preparation and export-pack path; other platform dispatch, remote transport, local-manifest publication, and CI transport stay outside it. These digests help diagnose build differences but do not replace an explicit version bump.
+The module tree covers the complete `godot_modules/spx` tree, including C++, headers, the SCons profile, Web JavaScript, and generation inputs. The pack-source digest follows only the project template, resources, and export code used by `spx exportpack`. It projects `export_presets.cfg` to the Linux preset and hashes packaged files such as `gdspx.gdextension` in full. Go game logic, monitor implementations, and their runtime dependencies belong to SPX product builds; changes to those sources alone no longer require a runtime version bump.
+
+`exportpack` prepares the resource project directly and imports/exports its PCK in recovery mode. It does not generate an XGo project, build a Go shared library, load Go extension initialization, or require a platform export template. Tracked `.import` files keep resource UIDs stable across independent exports. The build-recipe digest still covers local Linux engine preparation, pack export, and ZIP writing. Independent run commands, Web/mobile exporters, other platform dispatch, and CI orchestration stay outside the pack identity.
 
 ## Freeze order
 

@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -60,16 +59,16 @@ var runtimeBuildRecipePrefixes = []string{
 
 var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/appname.txt":                                           {},
-	"cmd/spx/internal/command/ai_module.go":                         {},
 	"cmd/spx/internal/command/args.go":                              {},
-	"cmd/spx/internal/command/build.go":                             {},
-	"cmd/spx/internal/command/builderai/project.go":                 {},
 	"cmd/spx/internal/command/cmd.go":                               {},
 	"cmd/spx/internal/command/dispatch.go":                          {},
 	"cmd/spx/internal/command/env.go":                               {},
 	"cmd/spx/internal/command/export.go":                            {},
 	"cmd/spx/internal/command/logging.go":                           {},
 	"cmd/spx/internal/command/platform.go":                          {},
+	"cmd/spx/internal/logutil/logutil.go":                           {},
+	"cmd/spx/internal/util/cmd.go":                                  {},
+	"cmd/spx/internal/util/io.go":                                   {},
 	"cmd/spx/main.go":                                               {},
 	"cmd/spx/template/project/.godot/extension_list.cfg":            {},
 	"cmd/spx/template/project/.godot/global_script_class_cache.cfg": {},
@@ -79,49 +78,18 @@ var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/template/project/main.tscn":                            {},
 	"cmd/spx/template/project/project.godot":                        {},
 	"cmd/spx/template/project/runtime.gdextension.txt":              {},
+	"internal/base/log/log.go":                                      {},
 }
 
-var runtimePackSourceDirectories = map[string]struct{}{
-	"cmd/spx/internal/util":            {},
-	"fs":                               {},
-	"fs/asset":                         {},
-	"fs/zip":                           {},
-	"internal/base":                    {},
-	"internal/base/fileutil":           {},
-	"internal/base/log":                {},
-	"internal/base/numeric":            {},
-	"internal/core/clock":              {},
-	"internal/core/collision":          {},
-	"internal/core/event":              {},
-	"internal/core/input":              {},
-	"internal/core/input/keycode":      {},
-	"internal/core/project":            {},
-	"internal/core/runtime":            {},
-	"internal/core/scratch":            {},
-	"internal/core/tilemap":            {},
-	"internal/engine":                  {},
-	"internal/engine/coroutine":        {},
-	"internal/engine/platform":         {},
-	"internal/engine/profiler":         {},
-	"internal/engine/ui":               {},
-	"internal/engine/wrap":             {},
-	"internal/gdengine":                {},
-	"internal/gdengine/binding/facade": {},
-	"internal/gdengine/binding/native": {},
-	"internal/gdengine/impl":           {},
-	"internal/scaffold":                {},
-	"pkg/spx":                          {},
-	"pkg/spx/pkg/engine":               {},
-	"pkg/spx/pkg/gdspx":                {},
-}
-
-var runtimePackSourcePrefixes = []string{"cmd/spx/template/project/engine/"}
+const runtimePackResourcesPrefix = "cmd/spx/template/project/engine/"
 
 // RuntimePackSourceSHA256 returns a stable digest of the tracked SPX inputs
 // that can affect spx-runtime-assets.zip at revision. It deliberately excludes
 // godot_modules/spx: the module tree is an independent Godot-engine input and
-// is recorded separately in RuntimeProvenance.ModuleTree. Go constraints use
-// the fixed Linux/amd64 CGO pack target.
+// is recorded separately in RuntimeProvenance.ModuleTree. The dedicated pack
+// command copies resources and imports/exports them in recovery mode without
+// generating, compiling, or loading the game's Go code. Only the Linux export
+// preset contributes to the release pack identity.
 //
 // Git tree entries are used instead of worktree contents so untracked build
 // outputs cannot contaminate release provenance.
@@ -130,11 +98,33 @@ func RuntimePackSourceSHA256(repoRoot, revision string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	paths, projections, err := runtimePackSourcePaths(repoRoot, tree)
-	if err != nil {
-		return "", err
+	return transformedTreeSHA256(tree, "runtime pack source", func(entry []byte, name string) ([]byte, error) {
+		return runtimePackSourceEntry(repoRoot, entry, name)
+	})
+}
+
+func runtimePackSourceEntry(repoRoot string, entry []byte, name string) ([]byte, error) {
+	if !isRuntimePackSourcePath(name) {
+		return nil, nil
 	}
-	return selectedRuntimePackSourceSHA256(tree, paths, projections)
+	if name != runtimePackExportPresets {
+		return entry, nil
+	}
+	fields := strings.Fields(string(entry[:bytes.IndexByte(entry, '\t')]))
+	if len(fields) != 3 || fields[1] != "blob" {
+		return nil, fmt.Errorf("release: invalid git blob entry %q", entry)
+	}
+
+	command := exec.Command("git", "-C", filepath.Clean(repoRoot), "cat-file", "blob", fields[2])
+	output, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("release: read runtime pack preset: %w", err)
+	}
+	projection, err := projectGodotPreset(output, runtimePackExportPresetName)
+	if err != nil {
+		return nil, fmt.Errorf("release: project runtime pack preset: %w", err)
+	}
+	return append([]byte("projection\t"+name+"\x00"), projection...), nil
 }
 
 // RuntimeBuildRecipeSHA256 returns a stable digest of the implementation that
@@ -175,27 +165,23 @@ func trackedTree(repoRoot, revision, label string) ([]byte, error) {
 }
 
 func selectedTreeSHA256(tree []byte, label string, include func(string) bool) (string, error) {
-	return transformedTreeSHA256(tree, label, func(entry []byte, name string) ([]byte, bool) {
-		return entry, include(name)
-	})
-}
-
-func selectedRuntimePackSourceSHA256(tree []byte, paths map[string]struct{}, projections map[string][]byte) (string, error) {
-	return transformedTreeSHA256(tree, "runtime pack source", func(entry []byte, name string) ([]byte, bool) {
-		if projection, ok := projections[name]; ok {
-			return append([]byte("projection\t"+name+"\x00"), projection...), true
+	return transformedTreeSHA256(tree, label, func(entry []byte, name string) ([]byte, error) {
+		if !include(name) {
+			return nil, nil
 		}
-		_, ok := paths[name]
-		return entry, ok
+		return entry, nil
 	})
 }
 
-func transformedTreeSHA256(tree []byte, label string, selectEntry func([]byte, string) ([]byte, bool)) (string, error) {
+func transformedTreeSHA256(tree []byte, label string, selectEntry func([]byte, string) ([]byte, error)) (string, error) {
 	hasher := sha256.New()
 	count := 0
 	err := walkGitTree(tree, func(entry []byte, name string) error {
-		selected, ok := selectEntry(entry, name)
-		if !ok {
+		selected, err := selectEntry(entry, name)
+		if err != nil {
+			return err
+		}
+		if selected == nil {
 			return nil
 		}
 		_, _ = hasher.Write(selected)
@@ -258,39 +244,19 @@ func isRuntimeBuildRecipePath(name string) bool {
 }
 
 // isRuntimePackSourcePath is intentionally a positive list. In particular,
-// changes to release orchestration, buildctl commands unrelated to export-pack,
-// documentation, or the external Godot module must not invalidate the runtime
-// pack source identity.
+// changes to Go game logic, release orchestration, documentation, or the external
+// Godot module must not invalidate the runtime pack source identity. The command
+// path uses the standard library and local logging only; its Go compiler is
+// locked independently. Whole-module go.mod/gox.mod changes describe unrelated
+// game/compiler dependencies. If pack generation starts executing a third-party
+// dependency, project that dependency's version into the inputs explicitly.
 func isRuntimePackSourcePath(name string) bool {
 	if strings.HasSuffix(name, "_test.go") {
 		return false
 	}
-	if strings.HasPrefix(name, "cmd/spx/template/project/engine/") &&
-		(strings.HasSuffix(name, ".LICENSE.txt") || strings.HasSuffix(name, ".NOTICE.txt")) {
-		return false
-	}
-	switch name {
-	case "go.mod", "gox.mod":
-		return true
-	}
-	if !strings.ContainsRune(name, '/') && strings.HasSuffix(name, ".go") {
-		return true
-	}
 	if _, ok := runtimePackSourceFiles[name]; ok {
 		return true
 	}
-	if _, ok := runtimePackSourceDirectories[path.Dir(name)]; ok {
-		return true
-	}
-	// Historical revisions predate the move to internal/base/log. Their
-	// original tree entries must still contribute to the source digest.
-	if path.Dir(name) == "internal/log" {
-		return true
-	}
-	for _, prefix := range runtimePackSourcePrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(name, runtimePackResourcesPrefix) &&
+		!strings.HasSuffix(name, ".LICENSE.txt") && !strings.HasSuffix(name, ".NOTICE.txt")
 }

@@ -127,14 +127,14 @@ func TestRevisionManifestMatchesExplicitProvenance(t *testing.T) {
 	}
 	// HEAD and dirty files differ from the requested revision in all three input
 	// groups, so reading a worktree or silently using HEAD changes the result.
-	for _, name := range []string{"game.go", lock.Module.Path + "/register.cpp", "internal/cmd/buildctl/main.go"} {
+	for _, name := range []string{"cmd/spx/template/project/main.tscn", lock.Module.Path + "/register.cpp", "internal/cmd/buildctl/main.go"} {
 		writeManifestFixtureFile(t, name, "// second commit\n")
 	}
 	git("add", ".")
 	git("commit", "--quiet", "-m", "later inputs")
 	git("tag", "historical", commit)
 	git("branch", "historical", "HEAD")
-	writeManifestFixtureFile(t, "game.go", "// dirty working tree\n")
+	writeManifestFixtureFile(t, "cmd/spx/template/project/main.tscn", "// dirty working tree\n")
 	args := manifestFixtureAssetArgs(t, lock)
 	outputs := t.TempDir()
 	var expectedManifest, expectedChecksums []byte
@@ -186,7 +186,7 @@ func TestRevisionManifestFailuresPreserveOutputs(t *testing.T) {
 		{"option-shaped revision", "--help", "modules/fixture", "", "resolve Git object"},
 		{"empty module", "HEAD", "", "", "module path"},
 		{"missing module", "HEAD", "missing/module", "", "resolve Git object"},
-		{"missing pack inputs", "HEAD", "modules/fixture", "game.go", "runtime pack source tree contains no tracked inputs"},
+		{"missing pack inputs", "HEAD", "modules/fixture", "cmd/spx/template/project/main.tscn", "runtime pack source tree contains no tracked inputs"},
 		{"missing recipe inputs", "HEAD", "modules/fixture", "internal/cmd/buildctl/main.go", "runtime build recipe tree contains no tracked inputs"},
 		{"git unavailable", "HEAD", "modules/fixture", "", "resolve Git object"},
 	} {
@@ -251,7 +251,7 @@ func newManifestRepository(t *testing.T) (release.RuntimeLock, func(...string) s
 		t.Fatal(err)
 	}
 	writeManifestFixtureFile(t, "runtime.lock.json", string(data))
-	writeManifestFixtureFile(t, "game.go", "package spx\n")
+	writeManifestFixtureFile(t, "cmd/spx/template/project/main.tscn", "[gd_scene format=3]\n")
 	writeManifestFixtureFile(t, lock.Module.Path+"/register.cpp", "// module\n")
 	writeManifestFixtureFile(t, "internal/cmd/buildctl/main.go", "package main\n")
 	git("init", "--quiet")

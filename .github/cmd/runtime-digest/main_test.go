@@ -13,8 +13,11 @@ import (
 
 func TestRuntimeDigestUsesSelectedRevisionAndInputs(t *testing.T) {
 	git := newDigestRepo(t)
-	const recipe = ".github/scripts/runtime/build_contract.py"
-	writeDigestInput(t, "go.mod", "module example.com/runtime\n")
+	const (
+		pack   = "cmd/spx/template/project/main.tscn"
+		recipe = ".github/scripts/runtime/build_contract.py"
+	)
+	writeDigestInput(t, pack, "[gd_scene format=3]\n")
 	writeDigestInput(t, recipe, "# initial build recipe\n")
 	git("add", ".")
 	git("commit", "--quiet", "-m", "initial inputs")
@@ -25,8 +28,8 @@ func TestRuntimeDigestUsesSelectedRevisionAndInputs(t *testing.T) {
 		t.Fatal("pack source and build recipe selected the same inputs")
 	}
 
-	writeDigestInput(t, "go.mod", "module example.com/updated-runtime\n")
-	git("add", "go.mod")
+	writeDigestInput(t, pack, "[gd_scene format=3]\n; updated resource\n")
+	git("add", pack)
 	git("commit", "--quiet", "-m", "change pack input")
 	updatedPackDigest := readDigest(t, "pack-source", "HEAD")
 	if updatedPackDigest == packDigest {
@@ -37,6 +40,13 @@ func TestRuntimeDigestUsesSelectedRevisionAndInputs(t *testing.T) {
 	}
 	if got := readDigest(t, "pack-source", initial); got != packDigest {
 		t.Fatal("digest used HEAD instead of the requested revision")
+	}
+
+	writeDigestInput(t, "go.mod", "module example.com/game\n")
+	git("add", "go.mod")
+	git("commit", "--quiet", "-m", "change independent Go input")
+	if got := readDigest(t, "pack-source", "HEAD"); got != updatedPackDigest {
+		t.Fatal("changing Go dependencies changed the pack digest")
 	}
 
 	writeDigestInput(t, recipe, "# updated build recipe\n")
