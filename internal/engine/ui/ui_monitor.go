@@ -21,6 +21,7 @@ package ui
 import (
 	"math"
 	"slices"
+	"strconv"
 
 	. "github.com/goplus/spbase/mathf"
 
@@ -219,15 +220,37 @@ func (p *UiMonitor) render(sink monitorRenderSink, value MonitorValue) {
 		}
 		return
 	}
+	displayText := value.Text
+	if p.style.Appearance.IsCompatible() {
+		displayText = formatScratchMonitorValue(value.Text)
+	}
 	if p.style.Appearance == MonitorAppearanceSlider {
 		p.renderSlider(sink, value.Text)
 	}
 	if p.style.Appearance == MonitorAppearanceCompatibleLarge && p.maxValueLabelLocalWidth > 0 {
-		sink.SetTextMaxWidth(p.view.value.GetId(), value.Text, p.maxValueLabelLocalWidth)
+		sink.SetTextMaxWidth(p.view.value.GetId(), displayText, p.maxValueLabelLocalWidth)
 		sink.SetSize(p.view.root.GetId(), Vec2{})
 	} else {
-		sink.SetText(p.view.value.GetId(), value.Text)
+		sink.SetText(p.view.value.GetId(), displayText)
 	}
+}
+
+// formatScratchMonitorValue applies Scratch's six-decimal display rounding.
+func formatScratchMonitorValue(text string) string {
+	value, err := strconv.ParseFloat(text, 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
+		return text
+	}
+	if math.Abs(value) >= 1e21 {
+		return strconv.FormatFloat(value, 'e', -1, 64)
+	}
+
+	roundedText := strconv.FormatFloat(value, 'f', 6, 64)
+	rounded, err := strconv.ParseFloat(roundedText, 64)
+	if err != nil || rounded == 0 {
+		return "0"
+	}
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
 // calculateMaxValueLabelLocalWidth converts the remaining Viewport width into
