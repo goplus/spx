@@ -39,9 +39,11 @@ func TestFormatMonitorValue(t *testing.T) {
 		{"large float uses JavaScript number display", float64(1e18) + 128, "1000000000000000100"},
 		{"larger float uses JavaScript number display", float64(1e20) + 16384, "100000000000000020000"},
 		{"very large float uses exponent display", 1e21, "1e+21"},
+		{"float just below exponent boundary stays fixed", math.Nextafter(1e21, 0), "999999999999999900000"},
 		{"NaN is preserved", math.NaN(), "NaN"},
 		{"positive infinity is preserved", math.Inf(1), "+Inf"},
 		{"negative infinity is preserved", math.Inf(-1), "-Inf"},
+		{"nil is displayed as empty text", nil, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := FormatMonitorValue(test.value); got != test.want {

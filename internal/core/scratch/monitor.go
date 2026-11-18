@@ -56,8 +56,5 @@ func formatMonitorFloat(value float64) string {
 	if err != nil || rounded == 0 {
 		return "0"
 	}
-	if math.Abs(rounded) >= monitorLargeValue {
-		return strconv.FormatFloat(rounded, 'e', -1, 64)
-	}
 	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
