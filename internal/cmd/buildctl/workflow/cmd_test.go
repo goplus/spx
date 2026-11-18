@@ -444,6 +444,10 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			target, webLinkOptimize := tt.target, tt.optimize
 			runner := newWorkflowBuildFixture(t)
+			pureEngine := target == "editor" || target == "android" || target == "ios"
+			if pureEngine {
+				runner.scriptErr = errors.New("pure engine builds must not install tools")
+			}
 			database := filepath.Join(os.Getenv("GODOT_SRC"), "compile_commands.json")
 			previousDatabase := []byte("[{\"command\":\"previous editor\"}]\n")
 			mustWriteFile(t, database, previousDatabase)
@@ -476,7 +480,10 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 			if data, err := os.ReadFile(database); err != nil || string(data) != string(wantDatabase) {
 				t.Fatalf("%s compilation database = %q (%v), want %q", target, data, err, wantDatabase)
 			}
-			wantScripts := []recordedCall{{script: "cmd/spx/install.sh"}}
+			var wantScripts []recordedCall
+			if !pureEngine {
+				wantScripts = []recordedCall{{script: "cmd/spx/install.sh"}}
+			}
 			if target == "dev" {
 				wantScripts[0].args = []string{"--web"}
 			}
@@ -508,7 +515,7 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 
 func TestBuildWorkflowFailureStopsSubsequentSteps(t *testing.T) {
 	failure := errors.New("tool install failed")
-	for _, target := range []string{"editor", "desktop", "web", "android", "ios"} {
+	for _, target := range []string{"desktop", "web"} {
 		runner := &recordingRunner{scriptErr: failure}
 		if err := Build(BuildConfig{Target: target}, runner); !errors.Is(err, failure) || len(runner.calls) != 1 || len(runner.commands) != 0 {
 			t.Fatalf("%s install failure=%v,calls=%v,commands=%v", target, err, runner.calls, runner.commands)

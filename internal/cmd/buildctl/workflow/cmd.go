@@ -109,8 +109,10 @@ func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
 	if cfg.Target == "dev" {
 		return buildDevWorkflow(cfg, runner)
 	}
-	if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-		return err
+	if cfg.Target == "desktop" || cfg.Target == "web" {
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
 	}
 	switch cfg.Target {
 	case "editor":
