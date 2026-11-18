@@ -13,12 +13,15 @@ import unittest
 from unittest import mock
 
 import publish
+import download
 
 
 def run_publish(command, env, external):
     stdout, stderr = io.StringIO(), io.StringIO()
     with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(sys, "argv", ["publish.py", command]), \
             mock.patch.object(publish, "run", side_effect=external), \
+            mock.patch.object(download, "run", side_effect=lambda args, **kwargs: external(*args, **kwargs)), \
+            mock.patch.object(download.time, "sleep"), \
             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         result = publish.main()
     return result, stdout.getvalue(), stderr.getvalue()
@@ -154,6 +157,11 @@ raise SystemExit("Unexpected external command: " + repr(sys.argv))
                     succeeds = scenario in ("absent", "draft", "public") or (scenario == "different-checksums" and runtime)
                     self.assertEqual(result == 0, succeeds, stderr)
                     self.assertEqual(trace.count("view"), 1)
+                    if state == "public":
+                        self.assertEqual(trace.count("download"), 3 if scenario == "download-failure" else 1)
+                    for operation in ("checksum", "manifest"):
+                        if scenario == operation + "-failure":
+                            self.assertEqual(trace.count(operation), 1)
                     writes = [event for event in trace if event in ("create", "delete-asset", "upload", "edit")]
                     expected = []
                     if state in ("absent", "draft"):
