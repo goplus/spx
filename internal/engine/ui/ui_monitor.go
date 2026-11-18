@@ -24,6 +24,7 @@ import (
 
 	. "github.com/goplus/spbase/mathf"
 
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
@@ -62,7 +63,9 @@ type MonitorStyle struct {
 // MonitorValue keeps list items separate from scalar text. The appearance,
 // rather than a nil check on Items, determines how an empty list is displayed.
 type MonitorValue struct {
-	Text  string
+	Text string
+	// Raw retains the source value for Scratch-compatible numeric formatting.
+	Raw   any
 	Items []string
 }
 
@@ -219,14 +222,18 @@ func (p *UiMonitor) render(sink monitorRenderSink, value MonitorValue) {
 		}
 		return
 	}
+	displayText := value.Text
+	if p.style.Appearance.IsCompatible() && value.Raw != nil {
+		displayText = scratch.FormatMonitorValue(value.Raw)
+	}
 	if p.style.Appearance == MonitorAppearanceSlider {
 		p.renderSlider(sink, value.Text)
 	}
 	if p.style.Appearance == MonitorAppearanceCompatibleLarge && p.maxValueLabelLocalWidth > 0 {
-		sink.SetTextMaxWidth(p.view.value.GetId(), value.Text, p.maxValueLabelLocalWidth)
+		sink.SetTextMaxWidth(p.view.value.GetId(), displayText, p.maxValueLabelLocalWidth)
 		sink.SetSize(p.view.root.GetId(), Vec2{})
 	} else {
-		sink.SetText(p.view.value.GetId(), value.Text)
+		sink.SetText(p.view.value.GetId(), displayText)
 	}
 }
 

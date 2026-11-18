@@ -45,14 +45,28 @@ func ResolveMemberValueEval(target reflect.Value, name string, from int) func() 
 }
 
 func ResolveMemberStringEval(target reflect.Value, name string, from int) func() string {
+	eval := ResolveMemberTextEval(target, name, from)
+	if eval == nil {
+		return nil
+	}
+	return func() string {
+		text, _ := eval()
+		return text
+	}
+}
+
+// ResolveMemberTextEval returns the rendered text and source value of a member.
+// The source value lets callers preserve type-specific formatting decisions.
+func ResolveMemberTextEval(target reflect.Value, name string, from int) func() (string, any) {
 	member := resolveMember(target, name, from)
 	if member.field.IsValid() {
-		return func() string {
-			return fmt.Sprint(member.field.Interface())
+		return func() (string, any) {
+			value := member.field.Interface()
+			return fmt.Sprint(value), value
 		}
 	}
 	if member.method.IsValid() {
-		return makeMethodStringAccessor(member.method, member.autoProperty)
+		return makeMethodTextAccessor(member.method, member.autoProperty)
 	}
 
 	return nil
@@ -113,19 +127,19 @@ func methodHasAutoProperty(m reflect.Value) bool {
 	return mType.NumIn() == 0 && mType.NumOut() == 1
 }
 
-func makeMethodStringAccessor(m reflect.Value, autoProperty bool) func() string {
-	return func() string {
+func makeMethodTextAccessor(m reflect.Value, autoProperty bool) func() (string, any) {
+	return func() (string, any) {
 		if !autoProperty {
-			return fmt.Sprintf("%p", m.Interface())
+			return fmt.Sprintf("%p", m.Interface()), nil
 		}
 		result := callMethodValue(m)
 		if fVal, ok := result.(float64); ok {
-			return fmt.Sprintf("%.2f", fVal)
+			return fmt.Sprintf("%.2f", fVal), result
 		}
 		if f32Val, ok := result.(float32); ok {
-			return fmt.Sprintf("%.2f", f32Val)
+			return fmt.Sprintf("%.2f", f32Val), result
 		}
-		return fmt.Sprint(result)
+		return fmt.Sprint(result), result
 	}
 }
 
