@@ -65,7 +65,7 @@ func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	hasher := sha256.New()
-	for _, index := range []int{3, 14} {
+	for _, index := range []int{3} {
 		_, _ = hasher.Write([]byte(entries[index]))
 		_, _ = hasher.Write([]byte{0})
 	}
@@ -93,14 +93,14 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"internal/cmd/buildctl/simple_cmd.go", false},
 		{"internal/cmd/buildctl/runtimecmd/assets.go", false},
 		{"docs/zh/dev/engine/cmd_make.md", false},
-		{"cmd/spx/internal/command/export.go", true},
-		{"cmd/spx/internal/command/dispatch.go", true},
+		{"cmd/spx/internal/command/export.go", false},
+		{"cmd/spx/internal/command/dispatch.go", false},
 		{"cmd/spx/internal/command/build.go", false},
 		{"cmd/spx/internal/command/ai_module.go", false},
 		{"cmd/spx/internal/command/builderai/project.go", false},
-		{"cmd/spx/internal/util/io.go", true},
-		{"cmd/spx/internal/util/cmd.go", true},
-		{"cmd/spx/internal/logutil/logutil.go", true},
+		{"cmd/spx/internal/util/io.go", false},
+		{"cmd/spx/internal/util/cmd.go", false},
+		{"cmd/spx/internal/logutil/logutil.go", false},
 		{"cmd/spx/internal/command/buildlauncher.go", false},
 		{"cmd/spx/internal/command/run.go", false},
 		{"cmd/spx/internal/command/export_web.go", false},
@@ -133,7 +133,7 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"internal/base/strictjson/decode.go", false},
 		{"internal/base/quoted/quoted.go", false},
 		{"internal/base/licenseheader/licenseheader.go", false},
-		{"internal/base/log/log.go", true},
+		{"internal/base/log/log.go", false},
 		{"internal/base/log/log_test.go", false},
 		{"internal/log/log.go", false},
 		{"internal/log/log_test.go", false},
@@ -183,6 +183,9 @@ func TestRuntimePackSourceDigestIgnoresIndependentInputs(t *testing.T) {
 	const selected = "100644 blob 1111111111111111111111111111111111111111\tcmd/spx/template/project/main.tscn"
 	for _, path := range []string{
 		"cmd/spx/internal/command/buildlauncher.go",
+		"cmd/spx/internal/logutil/logutil.go",
+		"internal/base/log/log.go",
+		"cmd/spx/internal/command/export.go",
 		"cmd/spx/internal/command/export_staging.go",
 		"cmd/spx/internal/pack/pack.go",
 		"cmd/spx/template/project/.godot/gdspx_web_server.py",
@@ -208,27 +211,6 @@ func TestRuntimePackSourceDigestIgnoresIndependentInputs(t *testing.T) {
 	}
 }
 
-func TestRuntimePackSourceDigestTracksExportDispatch(t *testing.T) {
-	t.Parallel()
-
-	// Dispatch selects the resource-only setup and export phases. Changing it
-	// can change pack contents even when the project resources are unchanged.
-	digest := func(blob string) string {
-		t.Helper()
-		value, err := runtimePackSourcePathTreeSHA256(gitTreeFixture(
-			"100644 blob 1111111111111111111111111111111111111111\tcmd/spx/template/project/main.tscn",
-			"100644 blob "+blob+"\tcmd/spx/internal/command/dispatch.go",
-		))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return value
-	}
-	if digest(strings.Repeat("2", 40)) == digest(strings.Repeat("3", 40)) {
-		t.Fatal("changing export-pack dispatch did not invalidate the runtime digest")
-	}
-}
-
 func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 	t.Parallel()
 
@@ -237,23 +219,23 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		want bool
 	}{
 		{".github/actions/setup-toolchain/action.yml", false},
-		{".github/actions/setup-buildctl/action.yml", true},
-		{".github/actions/setup-buildctl/build.sh", true}, // Historical commits.
-		{".github/scripts/setup/build_buildctl.sh", true},
+		{".github/actions/setup-buildctl/action.yml", false},
+		{".github/actions/setup-buildctl/build.sh", false}, // Historical commits.
+		{".github/scripts/setup/build_buildctl.sh", false},
 		{".github/scripts/setup/install_linux_dependencies.sh", false},
 		{".github/scripts/setup/setup_test.py", false},
 		{".github/scripts/runtime/build_pack.sh", true},
-		{".github/scripts/runtime/build_contract.py", true},
+		{".github/scripts/runtime/build_contract.py", false},
 		{".github/scripts/runtime_build_contract.py", false},
 		{".github/scripts/runtime/build_contract_test.py", false},
 		{".github/scripts/runtime/lock_snapshot.py", false},
-		{"cmd/internal/macos_go_toolchain.sh", true},
-		{"internal/cmd/buildctl/shared/macos_go_toolchain.go", true},
-		{"internal/base/quoted/quoted.go", true},
+		{"cmd/internal/macos_go_toolchain.sh", false},
+		{"internal/cmd/buildctl/shared/macos_go_toolchain.go", false},
+		{"internal/base/quoted/quoted.go", false},
 		{"internal/base/quoted/quoted_test.go", false},
-		{"internal/base/httpclient/http.go", true},
+		{"internal/base/httpclient/http.go", false},
 		{"internal/base/httpclient/http_test.go", false},
-		{"internal/base/fileutil/fileutil.go", true},
+		{"internal/base/fileutil/fileutil.go", false},
 		{"internal/base/fileutil/fileutil_test.go", false},
 		{"internal/base/fileutil/path.go", false},
 		{"internal/base/fileutil/stable_read.go", false},
@@ -263,25 +245,25 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{".github/cmd/runtime-digest/main.go", false},
 		{".github/workflows/build_runtime_pack.yml", false},
 		{".github/workflows/release.yml", false},
-		{"internal/cmd/buildctl/main.go", true},
+		{"internal/cmd/buildctl/main.go", false},
 		{"internal/cmd/buildctl/root.go", false},
-		{"internal/cmd/buildctl/runtime_dispatch.go", true},
+		{"internal/cmd/buildctl/runtime_dispatch.go", false},
 		{"internal/cmd/buildctl/simple_cmd.go", false},
 		{"internal/cmd/buildctl/prepare.go", false},
 		{"internal/cmd/buildctl/runtimecmd/assets.go", false},
 		{"internal/cmd/buildctl/runtimecmd/common.go", false},
 		{"internal/cmd/buildctl/runtimecmd/cmd.go", false},
-		{"internal/cmd/buildctl/runtimecmd/dispatch.go", true},
+		{"internal/cmd/buildctl/runtimecmd/dispatch.go", false},
 		{"internal/cmd/buildctl/runtimecmd/compress.go", false},
 		{"internal/cmd/buildctl/runtimecmd/local_manifest.go", false},
 		{"internal/cmd/buildctl/runtimecmd/pack.go", true},
 		{"internal/cmd/buildctl/runtimecmd/workspace.go", true},
-		{"internal/cmd/buildctl/shared/api.go", true},
-		{"internal/cmd/buildctl/shared/command_runner.go", true},
-		{"internal/cmd/buildctl/shared/files.go", true},
-		{"internal/cmd/buildctl/shared/gopath.go", true},
+		{"internal/cmd/buildctl/shared/api.go", false},
+		{"internal/cmd/buildctl/shared/command_runner.go", false},
+		{"internal/cmd/buildctl/shared/files.go", false},
+		{"internal/cmd/buildctl/shared/gopath.go", false},
 		{"internal/cmd/buildctl/shared/gopath_test.go", false},
-		{"internal/cmd/buildctl/shared/runtime_files.go", true}, // Historical revisions.
+		{"internal/cmd/buildctl/shared/runtime_files.go", false}, // Historical revisions.
 		{"internal/cmd/buildctl/shared/runtime_files_test.go", false},
 		{"internal/cmd/buildctl/shared/runner.go", false},
 		{"internal/cmd/buildctl/shared/validate.go", false},
@@ -294,22 +276,22 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/engine/common.go", false},
 		{"internal/cmd/buildctl/engine/download.go", false},
 		{"internal/cmd/buildctl/engine/download_desktop.go", false},
-		{"internal/cmd/buildctl/engine/download_linux_pack.go", true},
-		{"internal/cmd/buildctl/engine/download_local.go", true},
-		{"internal/cmd/buildctl/engine/download_zip.go", true},
+		{"internal/cmd/buildctl/engine/download_linux_pack.go", false},
+		{"internal/cmd/buildctl/engine/download_local.go", false},
+		{"internal/cmd/buildctl/engine/download_zip.go", false},
 		{"internal/cmd/buildctl/engine/download_http.go", false},
 		{"internal/cmd/buildctl/engine/download_mobile.go", false},
 		{"internal/cmd/buildctl/engine/download_runtime.go", false},
 		{"internal/cmd/buildctl/engine/download_web.go", false},
 		{"internal/cmd/buildctl/engine/build.go", false},
-		{"internal/release/runtime_asset.go", true},
+		{"internal/release/runtime_asset.go", false},
 		{"internal/release/runtime.lock.json", false},
-		{"internal/release/runtime_lock.go", true},
+		{"internal/release/runtime_lock.go", false},
 		{"internal/release/runtime_manifest.go", false},
 		{"internal/release/runtime_pack_source.go", false},
 		{"internal/release/release_meta.go", false},
 		{"internal/release/future_mapping.go", false},
-		{"cmd/spx/internal/command/export.go", false},
+		{"cmd/spx/internal/command/export.go", true},
 		{"godot_modules/spx/register_types.cpp", false},
 		{"docs/zh/dev/engine/cmd_make.md", false},
 	}
@@ -338,24 +320,7 @@ func TestRuntimeBuildRecipeFilesExist(t *testing.T) {
 			t.Errorf("runtime build recipe input %q is not a regular file", name)
 		}
 	}
-	for _, prefix := range runtimeBuildRecipePrefixes {
-		directory := filepath.Join(repoRoot, filepath.FromSlash(strings.TrimSuffix(prefix, "/")))
-		entries, err := os.ReadDir(directory)
-		if err != nil {
-			t.Errorf("runtime build recipe prefix %q: %v", prefix, err)
-			continue
-		}
-		selected := false
-		for _, entry := range entries {
-			if !entry.IsDir() && isRuntimeBuildRecipePath(prefix+entry.Name()) {
-				selected = true
-				break
-			}
-		}
-		if !selected {
-			t.Errorf("runtime build recipe prefix %q contains no selected files", prefix)
-		}
-	}
+
 }
 
 func TestRuntimePackSourceSelectorsExist(t *testing.T) {
@@ -445,41 +410,6 @@ func TestRuntimeBuildRecipeIgnoresReleaseMappings(t *testing.T) {
 	}
 	if beforeDigest != afterDigest {
 		t.Fatalf("release mapping changed runtime build recipe: %s != %s", beforeDigest, afterDigest)
-	}
-}
-
-func TestRuntimeBuildRecipeTracksBuildInputs(t *testing.T) {
-	t.Parallel()
-
-	const recipeEntry = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/runtime/build_pack.sh"
-	for _, name := range []string{
-		".github/scripts/runtime/build_contract.py",
-		".github/scripts/setup/build_buildctl.sh",
-		"internal/cmd/buildctl/shared/files.go",
-		"internal/cmd/buildctl/shared/gopath.go",
-		"internal/cmd/buildctl/shared/runtime_files.go", // Historical revisions.
-		"internal/base/fileutil/fileutil.go",
-		"internal/base/httpclient/http.go",
-	} {
-		t.Run(name, func(t *testing.T) {
-			before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(
-				recipeEntry,
-				"100644 blob 2222222222222222222222222222222222222222\t"+name,
-			))
-			if err != nil {
-				t.Fatal(err)
-			}
-			after, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(
-				recipeEntry,
-				"100644 blob 3333333333333333333333333333333333333333\t"+name,
-			))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if before == after {
-				t.Fatalf("change to %q did not change the runtime build recipe", name)
-			}
-		})
 	}
 }
 
@@ -598,7 +528,7 @@ func TestTrackedRuntimeDigestsRejectInvalidRepositoryResponses(t *testing.T) {
 		})
 	}
 	t.Run("recipe success", func(t *testing.T) {
-		tree := gitTreeFixture("100644 blob abc\tinternal/cmd/buildctl/runtimecmd/pack.go")
+		tree := gitTreeFixture("100644 blob abc\t.github/scripts/runtime/build_pack.sh")
 		installReleaseGitFixture(t, strings.ReplaceAll(string(tree), "\x00", "\\000"))
 		want, err := runtimeBuildRecipeTreeSHA256(tree)
 		if err != nil {
@@ -650,7 +580,7 @@ func TestRuntimeSourceSelectionReadsOnlyExportPreset(t *testing.T) {
 	}
 }
 
-func TestRuntimePackSourceSHA256TracksResourcesAndExportCode(t *testing.T) {
+func TestRuntimePackSourceSHA256TracksResourcesOnly(t *testing.T) {
 	repo := t.TempDir()
 	runGit := func(args ...string) {
 		t.Helper()
@@ -735,8 +665,8 @@ binary_format/architecture="x86_64"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if active == baseline {
-		t.Fatal("export command did not change runtime pack digest")
+	if active != baseline {
+		t.Fatal("Go command changed resource-only runtime pack digest")
 	}
 	previous := active
 	for _, resource := range []string{
@@ -868,4 +798,34 @@ func installReleaseGitFixture(t *testing.T, output string) {
 	t.Setenv("SPX_GIT_OUTPUT", output)
 	t.Setenv("SPX_GIT_ERROR", "")
 	t.Setenv("SPX_GIT_STATUS", "0")
+}
+
+func TestRuntimeBuildRecipeTracksOnlySemanticExportSteps(t *testing.T) {
+	for name := range runtimeBuildRecipeFiles {
+		before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture("100644 blob " + strings.Repeat("1", 40) + "\t" + name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		after, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture("100644 blob " + strings.Repeat("2", 40) + "\t" + name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if before == after {
+			t.Fatalf("semantic export step %s ignored", name)
+		}
+	}
+	const step = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/runtime/build_pack.sh"
+	for _, name := range []string{"cmd/spx/internal/logutil/logutil.go", "internal/base/log/log.go", "internal/base/fileutil/fileutil.go", "internal/cmd/buildctl/shared/command_runner.go", "internal/cmd/buildctl/engine/download_local.go"} {
+		before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(step, "100644 blob "+strings.Repeat("1", 40)+"\t"+name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		after, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(step, "100644 blob "+strings.Repeat("2", 40)+"\t"+name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if before != after {
+			t.Fatalf("helper %s invalidated pack", name)
+		}
+	}
 }

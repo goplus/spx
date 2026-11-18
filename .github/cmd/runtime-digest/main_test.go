@@ -15,7 +15,7 @@ func TestRuntimeDigestUsesSelectedRevisionAndInputs(t *testing.T) {
 	git := newDigestRepo(t)
 	const (
 		pack   = "cmd/spx/template/project/main.tscn"
-		recipe = ".github/scripts/runtime/build_contract.py"
+		recipe = ".github/scripts/runtime/build_pack.sh"
 	)
 	writeDigestInput(t, pack, "[gd_scene format=3]\n")
 	writeDigestInput(t, recipe, "# initial build recipe\n")

@@ -27,49 +27,21 @@ import (
 )
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
-	".github/scripts/runtime/build_contract.py":           {},
-	".github/scripts/runtime/build_pack.sh":               {},
-	".github/scripts/setup/build_buildctl.sh":             {},
-	"cmd/internal/macos_go_toolchain.sh":                  {},
-	"internal/base/fileutil/fileutil.go":                  {},
-	"internal/cmd/buildctl/engine/download_linux_pack.go": {},
-	"internal/cmd/buildctl/engine/download_local.go":      {},
-	"internal/cmd/buildctl/engine/download_zip.go":        {},
-	"internal/cmd/buildctl/main.go":                       {},
-	"internal/cmd/buildctl/runtime_dispatch.go":           {},
-	"internal/cmd/buildctl/runtimecmd/dispatch.go":        {},
-	"internal/cmd/buildctl/runtimecmd/pack.go":            {},
-	"internal/cmd/buildctl/runtimecmd/workspace.go":       {},
-	"internal/cmd/buildctl/shared/api.go":                 {},
-	"internal/cmd/buildctl/shared/build_env.go":           {},
-	"internal/cmd/buildctl/shared/command_runner.go":      {},
-	"internal/cmd/buildctl/shared/files.go":               {},
-	"internal/cmd/buildctl/shared/gopath.go":              {},
-	"internal/cmd/buildctl/shared/macos_go_toolchain.go":  {},
-	"internal/cmd/buildctl/shared/repo.go":                {},
-	"internal/release/runtime_asset.go":                   {},
-	"internal/release/runtime_lock.go":                    {},
-}
-
-var runtimeBuildRecipePrefixes = []string{
-	".github/actions/setup-buildctl/",
-	"internal/base/httpclient/",
-	"internal/base/quoted/",
+	"cmd/spx/main.go":                               {},
+	"cmd/spx/internal/command/cmd.go":               {},
+	"cmd/spx/internal/command/args.go":              {},
+	"cmd/spx/internal/command/platform.go":          {},
+	"cmd/spx/internal/util/io.go":                   {},
+	"cmd/spx/internal/command/env.go":               {},
+	"cmd/spx/internal/command/dispatch.go":          {},
+	".github/scripts/runtime/build_pack.sh":         {},
+	"cmd/spx/internal/command/export.go":            {},
+	"internal/cmd/buildctl/runtimecmd/pack.go":      {},
+	"internal/cmd/buildctl/runtimecmd/workspace.go": {},
 }
 
 var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/appname.txt":                                           {},
-	"cmd/spx/internal/command/args.go":                              {},
-	"cmd/spx/internal/command/cmd.go":                               {},
-	"cmd/spx/internal/command/dispatch.go":                          {},
-	"cmd/spx/internal/command/env.go":                               {},
-	"cmd/spx/internal/command/export.go":                            {},
-	"cmd/spx/internal/command/logging.go":                           {},
-	"cmd/spx/internal/command/platform.go":                          {},
-	"cmd/spx/internal/logutil/logutil.go":                           {},
-	"cmd/spx/internal/util/cmd.go":                                  {},
-	"cmd/spx/internal/util/io.go":                                   {},
-	"cmd/spx/main.go":                                               {},
 	"cmd/spx/template/project/.godot/extension_list.cfg":            {},
 	"cmd/spx/template/project/.godot/global_script_class_cache.cfg": {},
 	"cmd/spx/template/project/export_presets.cfg":                   {},
@@ -78,7 +50,6 @@ var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/template/project/main.tscn":                            {},
 	"cmd/spx/template/project/project.godot":                        {},
 	"cmd/spx/template/project/runtime.gdextension.txt":              {},
-	"internal/base/log/log.go":                                      {},
 }
 
 const runtimePackResourcesPrefix = "cmd/spx/template/project/engine/"
@@ -218,38 +189,14 @@ func walkGitTree(tree []byte, visit func(entry []byte, name string) error) error
 }
 
 func isRuntimeBuildRecipePath(name string) bool {
-	if strings.HasSuffix(name, "_test.go") {
-		return false
-	}
-	// Keep this at file granularity: buildctl also contains engine compilation,
-	// Web compression, and developer orchestration that do not participate in
-	// the build_runtime_pack export-pack path. Its toolchain setup does not
-	// prepare engine assets, so the general setup/prepare path is excluded. If
-	// the executed call graph starts using a new helper, add it here with a
-	// selector test.
-	if _, ok := runtimeBuildRecipeFiles[name]; ok {
-		return true
-	}
-	// Historical revisions retain this name for the GOPATH helper. Keep it
-	// selectable without requiring it in the current worktree's file list.
-	if name == "internal/cmd/buildctl/shared/runtime_files.go" {
-		return true
-	}
-	for _, prefix := range runtimeBuildRecipePrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
+	_, ok := runtimeBuildRecipeFiles[name]
+	return ok
 }
 
-// isRuntimePackSourcePath is intentionally a positive list. In particular,
-// changes to Go game logic, release orchestration, documentation, or the external
-// Godot module must not invalidate the runtime pack source identity. The command
-// path uses the standard library and local logging only; its Go compiler is
-// locked independently. Whole-module go.mod/gox.mod changes describe unrelated
-// game/compiler dependencies. If pack generation starts executing a third-party
-// dependency, project that dependency's version into the inputs explicitly.
+// Pack identity describes resource data and export configuration, not the Go
+// executable that copies it. Semantic export/packaging steps are tracked
+// separately by RuntimeBuildRecipeSHA256. Game logic, logging, dependency
+// metadata and download transport are not resource inputs.
 func isRuntimePackSourcePath(name string) bool {
 	if strings.HasSuffix(name, "_test.go") {
 		return false

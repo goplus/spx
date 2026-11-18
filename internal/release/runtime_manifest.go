@@ -50,12 +50,21 @@ type RuntimeManifest struct {
 // RuntimeProvenance identifies the source tree and build inputs behind a
 // runtime manifest.
 type RuntimeProvenance struct {
-	SPXCommit               string        `json:"spx_commit"`
-	GodotCommit             string        `json:"godot_commit"`
-	ModuleTree              string        `json:"module_tree"`
-	RuntimePackSourceSHA256 string        `json:"runtime_pack_source_sha256"`
-	BuildRecipeSHA256       string        `json:"build_recipe_sha256"`
-	Toolchain               ToolchainLock `json:"toolchain"`
+	EngineSourceSHA256      string               `json:"engine_source_sha256,omitempty"`
+	EngineOrigin            *RuntimeEngineOrigin `json:"engine_origin,omitempty"`
+	SPXCommit               string               `json:"spx_commit"`
+	GodotCommit             string               `json:"godot_commit"`
+	ModuleTree              string               `json:"module_tree"`
+	RuntimePackSourceSHA256 string               `json:"runtime_pack_source_sha256"`
+	BuildRecipeSHA256       string               `json:"build_recipe_sha256"`
+	Toolchain               ToolchainLock        `json:"toolchain"`
+}
+
+// RuntimeEngineOrigin records the original engine build when assets are copied
+// into a new atomic runtime release. SPXCommit above describes the new pack.
+type RuntimeEngineOrigin struct {
+	RuntimeVersion string `json:"runtime_version"`
+	SPXCommit      string `json:"spx_commit"`
 }
 
 // RuntimeAsset is a checksummed release asset. Name is always a basename.
@@ -191,6 +200,14 @@ func (m RuntimeManifest) Validate() error {
 	}
 	if !isLowerHexDigest(m.LockSHA256, sha256.Size*2) {
 		return fmt.Errorf("release: invalid runtime lock SHA-256 %q", m.LockSHA256)
+	}
+	if digest := m.Provenance.EngineSourceSHA256; digest != "" && !isLowerHexDigest(digest, sha256.Size*2) {
+		return fmt.Errorf("release: invalid engine source SHA-256 %q", digest)
+	}
+	if origin := m.Provenance.EngineOrigin; origin != nil {
+		if m.Provenance.EngineSourceSHA256 == "" || !runtimeVersionPattern.MatchString(origin.RuntimeVersion) || !gitCommitPattern.MatchString(origin.SPXCommit) || origin.RuntimeVersion == m.RuntimeVersion {
+			return errors.New("release: invalid engine origin")
+		}
 	}
 	if !gitCommitPattern.MatchString(m.Provenance.SPXCommit) {
 		return fmt.Errorf("release: invalid SPX provenance commit %q", m.Provenance.SPXCommit)

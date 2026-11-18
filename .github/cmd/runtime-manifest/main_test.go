@@ -121,13 +121,17 @@ func TestRevisionManifestMatchesExplicitProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	engineDigest, err := release.RuntimeEngineSourceSHA256(".", commit, lock)
+	if err != nil {
+		t.Fatal(err)
+	}
 	recipeDigest, err := release.RuntimeBuildRecipeSHA256(".", commit)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// HEAD and dirty files differ from the requested revision in all three input
 	// groups, so reading a worktree or silently using HEAD changes the result.
-	for _, name := range []string{"cmd/spx/template/project/main.tscn", lock.Module.Path + "/register.cpp", "internal/cmd/buildctl/main.go"} {
+	for _, name := range []string{"cmd/spx/template/project/main.tscn", lock.Module.Path + "/register.cpp", ".github/scripts/runtime/build_pack.sh"} {
 		writeManifestFixtureFile(t, name, "// second commit\n")
 	}
 	git("add", ".")
@@ -143,7 +147,7 @@ func TestRevisionManifestMatchesExplicitProvenance(t *testing.T) {
 		args []string
 	}{
 		{"explicit", []string{"--spx-commit", commit, "--module-tree", moduleTree,
-			"--runtime-pack-source-sha256", packDigest, "--build-recipe-sha256", recipeDigest}},
+			"--runtime-pack-source-sha256", packDigest, "--build-recipe-sha256", recipeDigest, "--engine-source-sha256", engineDigest}},
 		{"revision", []string{"--revision", "HEAD^"}},
 		// Git resolves this short name to the tag and warns on stderr; the
 		// warning must not become part of the commit's object ID.
@@ -187,7 +191,7 @@ func TestRevisionManifestFailuresPreserveOutputs(t *testing.T) {
 		{"empty module", "HEAD", "", "", "module path"},
 		{"missing module", "HEAD", "missing/module", "", "resolve Git object"},
 		{"missing pack inputs", "HEAD", "modules/fixture", "cmd/spx/template/project/main.tscn", "runtime pack source tree contains no tracked inputs"},
-		{"missing recipe inputs", "HEAD", "modules/fixture", "internal/cmd/buildctl/main.go", "runtime build recipe tree contains no tracked inputs"},
+		{"missing recipe inputs", "HEAD", "modules/fixture", ".github/scripts/runtime/build_pack.sh", "runtime build recipe tree contains no tracked inputs"},
 		{"git unavailable", "HEAD", "modules/fixture", "", "resolve Git object"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -253,7 +257,9 @@ func newManifestRepository(t *testing.T) (release.RuntimeLock, func(...string) s
 	writeManifestFixtureFile(t, "runtime.lock.json", string(data))
 	writeManifestFixtureFile(t, "cmd/spx/template/project/main.tscn", "[gd_scene format=3]\n")
 	writeManifestFixtureFile(t, lock.Module.Path+"/register.cpp", "// module\n")
-	writeManifestFixtureFile(t, "internal/cmd/buildctl/main.go", "package main\n")
+	writeManifestFixtureFile(t, ".github/scripts/runtime/build_pack.sh", "package main\n")
+	writeManifestFixtureFile(t, ".github/scripts/runtime/build_contract.py", "contract\n")
+	writeManifestFixtureFile(t, ".github/workflows/build_release.yml", "    uses: goplus/godot/.github/workflows/release_builds.yml@"+strings.Repeat("1", 40)+"\n")
 	git("init", "--quiet")
 	git("config", "commit.gpgSign", "false")
 	git("add", ".")

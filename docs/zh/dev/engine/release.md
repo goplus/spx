@@ -25,11 +25,11 @@ SPX 发布的 Web 包和 npm 包只包含基础解释器，Builder 自行构建�
 
 SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime/build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
 
-manifest 记录的 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256` 共同构成会影响产物字节的源码身份。只有这些值与所选 SPX revision 一致，并且 lock 约束的 ABI、Godot commit、toolchain、repository 和资产契约也一致时，已发布 runtime 才能复用。任一输入发生变化，发布者都必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
+manifest 独立记录 `engine_source_sha256`，同时保留 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256`。引擎摘要覆盖 Godot、完整 native module、ABI、SCons 契约、固定的构建 workflow 与引擎工具链，不包含 Go/XGo 版本及产品、日志代码。只有这些值与所选 SPX revision 一致，并且 lock 约束的 ABI、Godot commit、toolchain、repository 和资产契约也一致时，已发布 runtime 才能复用。任一输入发生变化，发布者都必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
 
-module tree 仍覆盖完整的 `godot_modules/spx` tree，包括 C++、头文件、SCons profile、Web JS 与生成输入。pack-source 摘要只跟踪专用命令 `spx exportpack` 实际使用的项目模板、资源和导出代码；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件完整计算。普通 Go 游戏逻辑、monitor 实现及其运行时依赖不属于资源包输入，它们随 SPX 产品构建更新，不再仅因这些源码变化而要求升级 runtime。
+module tree 仍覆盖完整的 `godot_modules/spx` tree，包括 C++、头文件、SCons profile、Web JS 与生成输入。pack-source 摘要只跟踪专用命令 `spx exportpack` 实际使用的项目模板与资源；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件完整计算。普通 Go 游戏逻辑、monitor 实现及其运行时依赖不属于资源包输入，它们随 SPX 产品构建更新，不再仅因这些源码变化而要求升级 runtime。
 
-`exportpack` 直接准备资源项目，以 recovery mode 导入和导出 PCK，不生成 XGo 项目、不编译 Go 动态库，也不加载 Go 扩展初始化。它不依赖平台导出模板。资源的 `.import` 文件固定 UID，使独立导出不会因随机 UID 改变场景引用与 PCK 内容。build-recipe 摘要继续检查本地 Linux 引擎准备、pack 导出与 ZIP 写入路径；独立的运行命令、Web/mobile exporter、其他平台分发和 CI 编排不进入资源包摘要。
+`exportpack` 直接准备资源项目，以 recovery mode 导入和导出 PCK，不生成 XGo 项目、不编译 Go 动态库，也不加载 Go 扩展初始化。它不依赖平台导出模板。资源的 `.import` 文件固定 UID，使独立导出不会因随机 UID 改变场景引用与 PCK 内容。build-recipe 摘要检查专用资源项目准备、pack 导出与 ZIP 写入实现；共享项目准备、导入分发和预设选择按文件粒度保留在配方中。通用下载、日志 helper、独立的 Web/mobile exporter 和 CI 编排不进入资源包摘要；配方变化不会使引擎身份失效。
 
 ## 冻结顺序
 
@@ -98,6 +98,16 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 3. 让普通 CI 自动切换到已公开 runtime 路径，并通过 Web normal 产品 smoke。若合并导致 runtime 内容不兼容，先提升 `runtime_version`；否则在最终 SPX commit 上使用 `platforms=all`、`operation=publish-release`，流程会验证并复用同一 runtime，再发布 SPX 产品与 npm。
 
 runtime manifest、`SHA256SUMS` 和 required asset 集合必须内部自洽。runtime 复用会比较所选版本、lock 约束身份，以及 module-tree、runtime-pack-source 和 build-recipe digest；它不会重新构建 candidate 资产再与已发布文件逐字节比较。checksum 用于保护下载内容。未公开的 runtime/SPX draft tag 必须指向当前 `GITHUB_SHA`，兼容的同版本公开 runtime 可以来自前一阶段的 candidate commit。SPX tag 始终指向最终 commit。若 runtime 内容发生不兼容变化，必须先提升 `runtime_version`，不能覆盖或静默重新解释已有 tag。
+
+## 只重建资源包
+
+仅修改资源包时，先用 `make bump-release` 选择**尚未发布的新 runtime 版本**。触发 `release.yml` 时，在正常发布参数之外设置 `reuse_engine_version=<已发布的-runtime-版本号>`（不带 `runtime-v` 前缀）。该参数留空则执行完整引擎构建。
+
+resolver 先按源版本自己的不可变 lock snapshot 校验 release，再比较源引擎与当前 candidate 的独立引擎摘要。复用 job 按 manifest 校验每个引擎 ZIP，将原始字节上传为本轮标准构建 artifact；仅重新构建 pack。assemble 生成新 runtime 的 manifest 和 checksum，同时保留源 runtime 版本与真实引擎构建 commit。
+
+先用 `operation=dry-run` 验证，通过后可在 `publish-runtime` 或 `publish-release` 中使用相同参数。目标版本已公开且输入不兼容时，仍必须提升版本，绝不覆盖旧资产。源引擎缺失、不兼容或无法校验时直接失败，不会静默降级为完整构建。
+
+旧 manifest 没有 `engine_source_sha256`，不能作为引擎复用来源。因此首次采用该指纹格式的 runtime 需要完整构建，后续仅修改 pack 的版本才可复用它。普通 Go 游戏逻辑、日志修改在 runtime 输入不变时，既不重建引擎，也不重建 pack。
 
 ## 开发版 npm 包
 

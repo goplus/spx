@@ -27,18 +27,23 @@ const (
 )
 
 type runtimeResolutionConfig struct {
-	LockPath     string
-	RepoRoot     string
-	Revision     string
-	GitHubAPIURL string
-	GitHubToken  string
-	HTTPClient   *http.Client
+	ReuseEngineVersion string
+	LockPath           string
+	RepoRoot           string
+	Revision           string
+	GitHubAPIURL       string
+	GitHubToken        string
+	HTTPClient         *http.Client
 }
 
 type runtimeResolution struct {
-	State  string `json:"state"`
-	Reason string `json:"reason"`
-	Tag    string `json:"tag"`
+	EngineManifest string `json:"engine_manifest,omitempty"`
+	EngineState    string `json:"engine_state,omitempty"`
+	EngineVersion  string `json:"engine_version,omitempty"`
+	EngineTag      string `json:"engine_tag,omitempty"`
+	State          string `json:"state"`
+	Reason         string `json:"reason"`
+	Tag            string `json:"tag"`
 }
 
 type gitHubRelease struct {
@@ -64,6 +69,7 @@ func runRuntimeResolution(args []string) error {
 	fs.SetOutput(os.Stderr)
 	config := runtimeResolutionConfig{}
 	var githubOutput string
+	fs.StringVar(&config.ReuseEngineVersion, "reuse-engine-version", "", "published runtime version whose compatible engine assets may seed a new release")
 	fs.StringVar(&config.LockPath, "lock", "internal/release/runtime.lock.json", "runtime lock JSON")
 	fs.StringVar(&config.RepoRoot, "repo-root", ".", "SPX repository root")
 	fs.StringVar(&config.Revision, "revision", "HEAD", "SPX revision to verify")
@@ -94,6 +100,81 @@ func runRuntimeResolution(args []string) error {
 }
 
 func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtimeResolution, error) {
+	result, err := resolveTargetRuntime(ctx, config)
+	if err != nil {
+		return result, err
+	}
+	if result.State != runtimeStateMissing {
+		return result, nil
+	}
+	result.EngineState = "build"
+	if config.ReuseEngineVersion == "" {
+		return result, nil
+	}
+	target, err := loadRuntimeResolutionLock(config.LockPath)
+	if err != nil {
+		return result, err
+	}
+	source, err := release.RuntimeLockForVersion(config.ReuseEngineVersion)
+	if err != nil {
+		return result, err
+	}
+	if source.RuntimeVersion == target.RuntimeVersion {
+		return result, errors.New("engine source must be a different published runtime version")
+	}
+	if source.ReleaseRepository != target.ReleaseRepository {
+		return result, errors.New("engine source repository differs from target")
+	}
+	manifest, err := publishedEngineManifest(ctx, config, source)
+	if err != nil {
+		return result, err
+	}
+	if err := release.ValidateEngineReuse(manifest, target, config.RepoRoot, config.Revision); err != nil {
+		return result, err
+	}
+	result.EngineManifest = source.Manifest
+	result.EngineState, result.EngineVersion, result.EngineTag = "reuse", source.RuntimeVersion, source.RuntimeReleaseTag()
+	return result, nil
+}
+
+func publishedEngineManifest(ctx context.Context, config runtimeResolutionConfig, lock release.RuntimeLock) (release.RuntimeManifest, error) {
+	apiURL, err := runtimeReleaseAPIURL(config.GitHubAPIURL, lock.ReleaseRepository, lock.RuntimeReleaseTag())
+	if err != nil {
+		return release.RuntimeManifest{}, err
+	}
+	status, body, err := fetchGitHub(ctx, config, apiURL, "application/vnd.github+json")
+	if err != nil {
+		return release.RuntimeManifest{}, err
+	}
+	if status != http.StatusOK {
+		return release.RuntimeManifest{}, fmt.Errorf("engine source release HTTP status %d", status)
+	}
+	var published gitHubRelease
+	if err := json.Unmarshal(body, &published); err != nil {
+		return release.RuntimeManifest{}, err
+	}
+	if published.Draft || published.TagName != lock.RuntimeReleaseTag() {
+		return release.RuntimeManifest{}, errors.New("engine source must be the requested published release")
+	}
+	manifestURL, err := verifyPublishedAssetNames(lock, published.Assets)
+	if err != nil {
+		return release.RuntimeManifest{}, err
+	}
+	status, body, err = fetchGitHub(ctx, config, manifestURL, "application/octet-stream")
+	if err != nil {
+		return release.RuntimeManifest{}, err
+	}
+	if status != http.StatusOK {
+		return release.RuntimeManifest{}, fmt.Errorf("engine source manifest HTTP status %d", status)
+	}
+	manifest, err := release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets)
+	if err != nil {
+		return manifest, err
+	}
+	return manifest, manifest.ValidateForLock(lock)
+}
+
+func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig) (runtimeResolution, error) {
 	lock, err := loadRuntimeResolutionLock(config.LockPath)
 	if err != nil {
 		return runtimeResolution{}, err
@@ -288,6 +369,15 @@ func currentRuntimeIncompatibility(config runtimeResolutionConfig, lock release.
 	if manifest.Provenance.ModuleTree != moduleTree {
 		return fmt.Sprintf("module tree = %s, current runtime input = %s", manifest.Provenance.ModuleTree, moduleTree), nil
 	}
+	if manifest.Provenance.EngineSourceSHA256 != "" {
+		digest, err := release.RuntimeEngineSourceSHA256(repoRoot, commit, lock)
+		if err != nil {
+			return "", err
+		}
+		if digest != manifest.Provenance.EngineSourceSHA256 {
+			return "engine source digest differs from current inputs", nil
+		}
+	}
 	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, commit)
 	if err != nil {
 		return "", err
@@ -336,5 +426,9 @@ func writeRuntimeResolutionOutputs(path string, resolution runtimeResolution) er
 	}
 	defer file.Close()
 	_, err = fmt.Fprintf(file, "runtime_state=%s\nruntime_reason=%s\n", resolution.State, resolution.Reason)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(file, "engine_state=%s\nengine_version=%s\nengine_tag=%s\nengine_manifest=%s\n", resolution.EngineState, resolution.EngineVersion, resolution.EngineTag, resolution.EngineManifest)
 	return err
 }

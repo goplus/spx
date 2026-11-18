@@ -39,15 +39,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         call = self.jobs["build-release"]
         self.assertEqual(call["uses"], "./.github/workflows/build_release.yml")
         self.assertEqual(call["with"], {name: f"${{{{ inputs.{name} }}}}"
-                                       for name in ("operation", "release_tag", "platforms")})
+                                       for name in ("operation", "release_tag", "platforms", "reuse_engine_version")})
         self.assertEqual(set(self.build_workflow["on"]), {"workflow_call"})
         self.assertEqual(self.build_workflow["permissions"], {"contents": "read"})
         self.assertNotIn("concurrency", self.build_workflow)
         self.assertTrue(all("permissions" not in job for job in self.build_jobs.values()))
         interface = self.build_workflow["on"]["workflow_call"]
         self.assertEqual(set(interface["inputs"]), set(call["with"]))
-        self.assertTrue(all(spec["required"] == "true" and spec["type"] == "string"
-                            for spec in interface["inputs"].values()))
+        for name, spec in interface["inputs"].items():
+            self.assertEqual(spec["type"], "string")
+            self.assertEqual(spec["required"], "false" if name == "reuse_engine_version" else "true")
+        self.assertEqual(interface["inputs"]["reuse_engine_version"]["default"], "")
         outputs = {"release_tag", "version", "runtime_version", "runtime_tag",
                    "runtime_manifest", "runtime_state", "release_repository"}
         self.assertEqual(set(interface["outputs"]), outputs)
@@ -142,8 +144,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "runtime-prerequisites": (
                 "!cancelled()&&needs.plan-release.result=='success'&&needs.check-source.result=='success'&&"
                 "((needs.plan-release.outputs.runtime_state=='ready'&&needs.build-godot-runtime.result=='skipped'&&"
-                "needs.build-runtime-pack.result=='skipped')||(needs.plan-release.outputs.runtime_state=='missing'&&"
-                "needs.build-godot-runtime.result=='success'&&needs.build-runtime-pack.result=='success'))"
+                "needs.reuse-godot-runtime.result=='skipped'&&needs.build-runtime-pack.result=='skipped')||"
+                "(needs.plan-release.outputs.runtime_state=='missing'&&needs.build-runtime-pack.result=='success'&&"
+                "((needs.build-godot-runtime.result=='success'&&needs.reuse-godot-runtime.result=='skipped')||"
+                "(needs.build-godot-runtime.result=='skipped'&&needs.reuse-godot-runtime.result=='success'))))"
             ),
             "assemble-release": (
                 "!cancelled()&&needs.plan-release.result=='success'&&needs.runtime-prerequisites.result=='success'&&"
@@ -156,13 +160,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         dependencies = {
             "plan-release": (), "check-source": ("plan-release",),
             "build-godot-runtime": ("plan-release", "check-source"),
-            "build-runtime-pack": ("build-godot-runtime",),
-            "runtime-prerequisites": ("plan-release", "check-source", "build-godot-runtime", "build-runtime-pack"),
+            "reuse-godot-runtime": ("plan-release", "check-source"),
+            "build-runtime-pack": ("plan-release", "build-godot-runtime", "reuse-godot-runtime"),
+            "runtime-prerequisites": ("plan-release", "check-source", "build-godot-runtime", "reuse-godot-runtime", "build-runtime-pack"),
             "assemble-release": ("plan-release", "runtime-prerequisites", "package-web", "package-macos", "package-windows", "package-linux"),
             "build-gate": ("plan-release", "assemble-release"),
         }
         godot = self.build_jobs["build-godot-runtime"]
-        self.assertEqual(job_condition(godot), "needs.plan-release.outputs.runtime_state=='missing'")
+        self.assertEqual(job_condition(godot), "needs.plan-release.outputs.runtime_state=='missing'&&needs.plan-release.outputs.engine_state=='build'")
         self.assertRegex(godot["uses"], r"^goplus/godot/\.github/workflows/release_builds\.yml@[0-9a-f]{40}$")
         for platform in ("web", "macos", "windows", "linux"):
             name = f"package-{platform}"
@@ -176,6 +181,52 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertEqual(job_needs(self.build_jobs[name]), needs, name)
         for name, condition in conditions.items():
             self.assertEqual(job_condition(self.build_jobs[name]), condition, name)
+
+    def test_engine_reuse_keeps_existing_artifact_names_and_provenance(self):
+        job = self.build_jobs["reuse-godot-runtime"]
+        self.assertEqual(job_condition(job),
+                         "needs.plan-release.outputs.runtime_state=='missing'&&needs.plan-release.outputs.engine_state=='reuse'")
+        verify = named_step(job, "Download and verify source engine")
+        self.assertEqual(verify["run"], "python3 .github/scripts/release/reuse_engine.py")
+        self.assertEqual(verify["env"]["RUNTIME_MANIFEST"], "${{ needs.plan-release.outputs.engine_manifest }}")
+        assemble = named_step(self.build_jobs["assemble-release"], "Assemble immutable asset sets")
+        self.assertEqual(assemble["env"]["ENGINE_STATE"], "${{ needs.plan-release.outputs.engine_state }}")
+        uploads = action_steps(job, "actions/upload-artifact")
+        actual = {step["with"]["path"]: step["with"]["name"] for step in uploads}
+        lock = json.loads((WORKFLOWS.parent.parent / "internal/release/runtime.lock.json").read_text())
+        expected = {f"reused-engine/{name}": "runtime-" + ("macos-universal" if name == "macos.zip" else name[:-4])
+                    for name in lock["required_assets"] if name != "spx-runtime-assets.zip"}
+        expected["reused-engine/engine-source-manifest.json"] = "runtime-engine-provenance"
+        self.assertEqual(actual, expected)
+        self.assertEqual(len(actual), len(uploads))
+        for step in uploads:
+            self.assertLess(job["steps"].index(verify), job["steps"].index(step))
+            self.assertEqual(step["with"]["if-no-files-found"], "error")
+        pack = self.build_jobs["build-runtime-pack"]
+        self.assertEqual(job_condition(pack),
+                         "!cancelled()&&needs.plan-release.outputs.runtime_state=='missing'&&"
+                         "(needs.build-godot-runtime.result=='success'||needs.reuse-godot-runtime.result=='success')")
+        resolve = named_step(self.build_jobs["plan-release"], "Resolve locked runtime release")
+        self.assertEqual(resolve["env"]["REUSE_ENGINE_VERSION"], "${{ inputs.reuse_engine_version }}")
+        self.assertIn('--reuse-engine-version "$REUSE_ENGINE_VERSION"', resolve["run"])
+
+    def test_runtime_gate_requires_one_complete_engine_path(self):
+        condition = job_condition(self.build_jobs["runtime-prerequisites"])
+        statuses = ("success", "failure", "skipped", "cancelled")
+        for state, build, reuse, pack in itertools.product(("ready", "missing"), statuses, statuses, statuses):
+            expression = condition.replace("!cancelled()", "True")
+            values = {"plan-release.outputs.runtime_state": state,
+                      "plan-release.result": "success", "check-source.result": "success",
+                      "build-godot-runtime.result": build, "reuse-godot-runtime.result": reuse,
+                      "build-runtime-pack.result": pack}
+            for key, value in values.items():
+                expression = expression.replace("needs." + key, repr(value))
+            expression = expression.replace("&&", " and ").replace("||", " or ")
+            expected = ((state == "ready" and build == reuse == pack == "skipped") or
+                        (state == "missing" and pack == "success" and
+                         (build, reuse) in (("success", "skipped"), ("skipped", "success"))))
+            with self.subTest(state=state, build=build, reuse=reuse, pack=pack):
+                self.assertEqual(eval(expression, {"__builtins__": {}}), expected)
 
     def test_publication_scheduling_and_development_isolation(self):
         contract = {

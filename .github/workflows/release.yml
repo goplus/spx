@@ -8,6 +8,11 @@ on:
         required: false
         default: ''
         type: string
+      reuse_engine_version:
+        description: 'Optional published runtime version whose verified engine assets should be reused'
+        required: false
+        default: ''
+        type: string
       platforms:
         description: 'SPX packages: all or comma-separated web,macos,windows,linux; ignored by publish-runtime and publish-dev-npm'
         required: true
@@ -40,6 +45,7 @@ jobs:
       operation: ${{ inputs.operation }}
       release_tag: ${{ inputs.release_tag }}
       platforms: ${{ inputs.platforms }}
+      reuse_engine_version: ${{ inputs.reuse_engine_version }}
 
   publish-runtime:
     name: Publish or reuse runtime release

@@ -54,6 +54,7 @@ func runReleaseManifest(args []string) error {
 	fs := flag.NewFlagSet("runtime-manifest", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
+		engineSourceHash      string
 		lockPath              string
 		outputPath            string
 		checksumsPath         string
@@ -62,6 +63,8 @@ func runReleaseManifest(args []string) error {
 		moduleTree            string
 		runtimePackSourceHash string
 		buildRecipeHash       string
+		verifyEngineManifest  string
+		engineManifest        string
 		verifyManifest        string
 		assetDirectory        string
 		specs                 assetSpecs
@@ -73,7 +76,10 @@ func runReleaseManifest(args []string) error {
 	fs.StringVar(&spxCommit, "spx-commit", "", "full lowercase SPX commit SHA")
 	fs.StringVar(&moduleTree, "module-tree", "", "full lowercase SPX module tree SHA")
 	fs.StringVar(&runtimePackSourceHash, "runtime-pack-source-sha256", "", "SHA-256 of the tracked SPX runtime pack source inputs")
+	fs.StringVar(&engineSourceHash, "engine-source-sha256", "", "SHA-256 of the independent engine inputs")
 	fs.StringVar(&buildRecipeHash, "build-recipe-sha256", "", "SHA-256 of the tracked runtime build recipe")
+	fs.StringVar(&verifyEngineManifest, "verify-engine-manifest", "", "verify an engine reuse source against its saved lock and current inputs")
+	fs.StringVar(&engineManifest, "engine-manifest", "", "verified source manifest for copied engine assets")
 	fs.StringVar(&verifyManifest, "verify-manifest", "", "verify an existing release manifest instead of generating one")
 	fs.StringVar(&assetDirectory, "asset-directory", "", "optionally verify manifest assets below this directory")
 	fs.Var(&specs, "asset", "release asset in name=path form; repeat for every required asset")
@@ -93,7 +99,7 @@ func runReleaseManifest(args []string) error {
 		switch f.Name {
 		case "revision":
 			revisionSet = true
-		case "spx-commit", "module-tree", "runtime-pack-source-sha256", "build-recipe-sha256":
+		case "spx-commit", "module-tree", "runtime-pack-source-sha256", "build-recipe-sha256", "engine-source-sha256":
 			explicitProvenance = true
 		case "verify-manifest":
 			verifySet = true
@@ -119,8 +125,24 @@ func runReleaseManifest(args []string) error {
 		}
 		lock = parsed
 	}
+	if verifyEngineManifest != "" {
+		if !revisionSet || explicitProvenance || verifySet || engineManifest != "" || len(specs) != 0 || checksumsPath != "" {
+			return errors.New("--verify-engine-manifest requires --revision and cannot be combined with generation flags")
+		}
+		source, err := release.LoadRuntimeManifest(verifyEngineManifest)
+		if err != nil {
+			return err
+		}
+		if err := release.ValidateEngineReuse(source, lock, ".", revision); err != nil {
+			return err
+		}
+		if assetDirectory != "" {
+			return source.VerifyEngineFiles(assetDirectory)
+		}
+		return nil
+	}
 	if verifyManifest != "" {
-		if len(specs) != 0 || checksumsPath != "" || spxCommit != "" || moduleTree != "" || runtimePackSourceHash != "" || buildRecipeHash != "" {
+		if engineManifest != "" || engineSourceHash != "" || len(specs) != 0 || checksumsPath != "" || spxCommit != "" || moduleTree != "" || runtimePackSourceHash != "" || buildRecipeHash != "" {
 			return errors.New("generation flags cannot be combined with --verify-manifest")
 		}
 		data, err := os.ReadFile(verifyManifest)
@@ -155,6 +177,7 @@ func runReleaseManifest(args []string) error {
 		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: path})
 	}
 	provenance := release.RuntimeProvenance{
+		EngineSourceSHA256:      engineSourceHash,
 		SPXCommit:               spxCommit,
 		ModuleTree:              moduleTree,
 		RuntimePackSourceSHA256: runtimePackSourceHash,
@@ -167,11 +190,34 @@ func runReleaseManifest(args []string) error {
 			return err
 		}
 	}
+	if revisionSet {
+		var err error
+		provenance.EngineSourceSHA256, err = release.RuntimeEngineSourceSHA256(".", provenance.SPXCommit, lock)
+		if err != nil {
+			return err
+		}
+	}
 	provenance.GodotCommit = lock.Godot.Commit
 	provenance.Toolchain = lock.Toolchain
 	manifest, err := release.GenerateRuntimeManifest(lock, provenance, inputs)
 	if err != nil {
 		return err
+	}
+
+	if engineManifest != "" {
+		if !revisionSet {
+			return errors.New("--engine-manifest requires --revision")
+		}
+		source, err := release.LoadRuntimeManifest(engineManifest)
+		if err != nil {
+			return err
+		}
+		if err := release.ValidateEngineReuse(source, lock, ".", provenance.SPXCommit); err != nil {
+			return err
+		}
+		if err := manifest.InheritEngine(source); err != nil {
+			return err
+		}
 	}
 
 	if outputPath == "-" {
