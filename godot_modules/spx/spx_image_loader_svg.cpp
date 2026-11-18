@@ -37,6 +37,97 @@
 
 #include <cstring>
 
+namespace {
+
+constexpr int tiled_svg_image_threshold = 64;
+constexpr double tiled_svg_overlap = 2.0;
+
+static int count_svg_image_elements(const String &p_svg) {
+	int count = 0;
+	int cursor = 0;
+	while ((cursor = p_svg.find("<image", cursor)) >= 0) {
+		const int after = cursor + 6;
+		if (after >= p_svg.length() || p_svg[after] == ' ' || p_svg[after] == '\t' || p_svg[after] == '\n' || p_svg[after] == '\r' || p_svg[after] == '/' || p_svg[after] == '>') {
+			count++;
+		}
+		cursor = after;
+	}
+	return count;
+}
+
+static String adjust_svg_image_attribute(const String &p_tag, const char *p_name, double p_delta) {
+	const String name = String(" ") + p_name + "=";
+	const int attr = p_tag.find(name);
+	if (attr < 0) {
+		return p_tag;
+	}
+	const int value_start = attr + name.length();
+	if (value_start >= p_tag.length() || (p_tag[value_start] != '\"' && p_tag[value_start] != '\'')) {
+		return p_tag;
+	}
+	const char quote = p_tag[value_start];
+	const int value_end = p_tag.find_char(quote, value_start + 1);
+	if (value_end < 0) {
+		return p_tag;
+	}
+	const String value = p_tag.substr(value_start + 1, value_end - value_start - 1);
+	const double number = value.to_float();
+	if (!Math::is_finite(number) || (p_delta > 0.0 && number <= 0.0)) {
+		return p_tag;
+	}
+	const String adjusted = String::num_real(number + p_delta);
+	return p_tag.substr(0, value_start + 1) + adjusted + p_tag.substr(value_end);
+}
+
+static String expand_tiled_svg_images(const String &p_svg) {
+	if (count_svg_image_elements(p_svg) < tiled_svg_image_threshold) {
+		return p_svg;
+	}
+
+	String result;
+	int cursor = 0;
+	while (true) {
+		const int image_start = p_svg.find("<image", cursor);
+		if (image_start < 0) {
+			result += p_svg.substr(cursor);
+			break;
+		}
+		const int after = image_start + 6;
+		if (after >= p_svg.length() || !(p_svg[after] == ' ' || p_svg[after] == '\t' || p_svg[after] == '\n' || p_svg[after] == '\r' || p_svg[after] == '/' || p_svg[after] == '>')) {
+			result += p_svg.substr(cursor, after - cursor);
+			cursor = after;
+			continue;
+		}
+		const int tag_end = p_svg.find_char('>', after);
+		if (tag_end < 0) {
+			result += p_svg.substr(cursor);
+			break;
+		}
+		result += p_svg.substr(cursor, image_start - cursor);
+		String tag = p_svg.substr(image_start, tag_end - image_start + 1);
+		if (tag.find("transform=") >= 0 && tag.find("scale") >= 0) {
+			const double half_overlap = tiled_svg_overlap * 0.5;
+			tag = adjust_svg_image_attribute(tag, "x", -half_overlap);
+			tag = adjust_svg_image_attribute(tag, "y", -half_overlap);
+			tag = adjust_svg_image_attribute(tag, "width", tiled_svg_overlap);
+			tag = adjust_svg_image_attribute(tag, "height", tiled_svg_overlap);
+		}
+		result += tag;
+		cursor = tag_end + 1;
+	}
+	return result;
+}
+
+} // namespace
+
+namespace TestSpxSvg {
+
+String expand_tiled_svg_images_for_test(const String &p_svg) {
+	return expand_tiled_svg_images(p_svg);
+}
+
+} // namespace TestSpxSvg
+
 Error SpxImageLoaderSVG::rasterize(Ref<Image> p_image, const String &p_svg, float p_raster_scale, Vector2 *r_logical_size) {
 	ERR_FAIL_COND_V_MSG(Math::is_zero_approx(p_raster_scale), ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Can't load SVG with a scale of 0.");
 	ERR_FAIL_COND_V_MSG(!Math::is_finite(p_raster_scale) || p_raster_scale < 0.0f, ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Scale must be finite and positive.");
@@ -44,7 +135,8 @@ Error SpxImageLoaderSVG::rasterize(Ref<Image> p_image, const String &p_svg, floa
 	ERR_FAIL_COND_V_MSG(!SpxSvgUtils::ensure_font_faces_registered(), ERR_CANT_CREATE,
 			"SpxImageLoaderSVG: Failed to install the complete project font snapshot.");
 
-	const CharString bytes = p_svg.utf8();
+	const String raster_svg = expand_tiled_svg_images(p_svg);
+	const CharString bytes = raster_svg.utf8();
 	auto document = lunasvg::Document::loadFromData(bytes.get_data(), bytes.length());
 	if (document == nullptr) {
 		return ERR_INVALID_DATA;

@@ -51,6 +51,45 @@
 
 namespace TestSpxSvg {
 
+String expand_tiled_svg_images_for_test(const String &p_svg);
+
+TEST_CASE("[SPX] SVG tiled image preprocessing leaves small SVGs unchanged") {
+	const String svg = "<svg><image width=\"1\" height=\"1\"/></svg>";
+	CHECK(expand_tiled_svg_images_for_test(svg) == svg);
+}
+
+TEST_CASE("[SPX] SVG tiled image preprocessing expands scaled tiles around their centers") {
+	String svg = "<svg>";
+	for (int i = 0; i < 64; i++) {
+		svg += "<image x=\"10\" y=\"20\" width=\"64\" height=\"32\" transform=\"scale(0.5)\"/>";
+	}
+	svg += "</svg>";
+
+	const String expanded = expand_tiled_svg_images_for_test(svg);
+	CHECK(expanded.find("<image x=\"9.0\" y=\"19.0\" width=\"66.0\" height=\"34.0\" transform=\"scale(0.5)\"/>") >= 0);
+	CHECK(svg.find("<image x=\"10\" y=\"20\" width=\"64\" height=\"32\" transform=\"scale(0.5)\"/>") >= 0);
+}
+
+TEST_CASE("[SPX] SVG tiled image preprocessing preserves malformed and non-scaled tags") {
+	String svg = "<svg><imageX width=\"1\" height=\"1\"/>";
+	for (int i = 0; i < 59; i++) {
+		svg += "<image x=\"10\" y=\"20\" width=\"64\" height=\"32\" transform=\"scale(0.5)\"/>";
+	}
+	svg += "<image width=\"64\" height=\"32\"/>";
+	svg += "<image y=\"20\" width=\"64\" height=\"32\" transform=\"scale(0.5)\"/>";
+	svg += "<image x=1 y=\"20\" width=\"64\" height=\"32\" transform=\"scale(0.5)\"/>";
+	svg += "<image x=\"10 y=20 width=64 height=32 transform=scale(0.5)>";
+	svg += "<image x=\"10\" y=\"20\" width=\"0\" height=\"inf\" transform=\"scale(0.5)\"/>";
+	svg += "<image ";
+	svg += "<image";
+
+	const String expanded = expand_tiled_svg_images_for_test(svg);
+	CHECK(expanded.find("<imageX width=\"1\" height=\"1\"/>") >= 0);
+	CHECK(expanded.find("<image width=\"64\" height=\"32\"/>") >= 0);
+	CHECK(expanded.find("<image x=\"9.0\" y=\"19.0\" width=\"0\" height=\"inf\" transform=\"scale(0.5)\"/>") >= 0);
+	CHECK(expanded.find("<image ") >= 0);
+}
+
 TEST_CASE("[SPX] SVG loading keeps unpremultiplied RGBA data") {
 	Ref<Image> image = memnew(Image());
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"3\"><rect width=\"2\" height=\"3\" fill=\"#ff000080\"/></svg>";
