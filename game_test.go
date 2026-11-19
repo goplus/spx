@@ -745,6 +745,18 @@ func TestResolveBackdropIndex(t *testing.T) {
 	}
 }
 
+func TestResolveBackdropIndexDebugLogging(t *testing.T) {
+	game := &Game{visualObject: visualObject{costumes: []*costume{{name: "first"}, {name: "second"}}}}
+	previousGame := engine.GetGame()
+	engine.SetGame(game)
+	game.debugState.DebugInstr = true
+	t.Cleanup(func() { engine.SetGame(previousGame) })
+
+	if got := game.ResolveBackdropIndex("second"); got != 1 {
+		t.Fatalf("ResolveBackdropIndex(%q) = %d, want 1", "second", got)
+	}
+}
+
 func TestResolveBackdropIndexPrefersNames(t *testing.T) {
 	for _, name := range []string{"1", "0", "-2", strconv.Itoa(math.MaxInt) + "0"} {
 		t.Run(name, func(t *testing.T) {
