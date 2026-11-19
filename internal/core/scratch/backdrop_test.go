@@ -32,7 +32,9 @@ func TestParseBackdropIndex(t *testing.T) {
 		{name: "large fraction wraps", backdrop: "2.5", count: 2, want: 0},
 		{name: "invalid", backdrop: "missing", count: 2, want: -1},
 		{name: "non-finite", backdrop: "NaN", count: 2, want: -1},
+		{name: "infinite", backdrop: "Inf", count: 2, want: -1},
 		{name: "empty backdrop list", backdrop: "3", count: 0, want: 2},
+		{name: "empty backdrop list overflow", backdrop: "1e100", count: 0, want: -1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := ParseBackdropIndex(test.backdrop, test.count); got != test.want {
