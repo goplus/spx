@@ -49,6 +49,8 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 		{name: "escaping project URI", path: "res://../outside/image.png", want: ""},
 		{name: "Windows absolute project URI", path: "res://C:/outside/image.png", want: ""},
 		{name: "triple slash project URI", path: "res:///etc/passwd", want: ""},
+		{name: "colon filename remains unsupported in packmode", path: "costume-Animation:1.svg", want: ""},
+		{name: "reject colon before cleaning", path: "bad:name/../image.png", want: ""},
 		{name: "malformed project URI", path: "res:media/image.png", want: ""},
 		{name: "backslash project URI", path: `res:\media\image.png`, want: ""},
 		{name: "UNC path", path: `\\server\share\image.png`, want: ""},

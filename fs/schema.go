@@ -71,8 +71,18 @@ func SplitSchema(path string) (schema, file string) {
 		return "", path
 	}
 	schema, file = path[:idx], path[idx+1:]
-	file = strings.TrimPrefix(file, "//")
-	return
+	if explicitFile, ok := strings.CutPrefix(file, "//"); ok {
+		return schema, explicitFile
+	}
+	// A bare colon separates a schema only for built-in or registered schemes.
+	switch schema {
+	case "zip", "hzip", "hzips", "res":
+		return schema, file
+	}
+	if _, ok := openSchemas[schema]; ok {
+		return schema, file
+	}
+	return "", path
 }
 
 func RegisterSchema(schema string, open OpenFunc) {

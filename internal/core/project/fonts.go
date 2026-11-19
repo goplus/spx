@@ -162,8 +162,8 @@ func projectFontFamilyNames(fs spxfs.Dir) ([]string, error) {
 }
 
 func validateFontFamilyName(name string) (string, error) {
-	if name == "" {
-		return "", fmt.Errorf("font family name must be non-empty")
+	if !validResourceName(name) {
+		return "", fmt.Errorf("font family name %q is not a valid path segment", name)
 	}
 	folded := asciiFold(name)
 	if folded == defaultFontFamilyName {

@@ -8,6 +8,8 @@ SPX supports project-provided fonts while preserving reliable fallback for multi
 
 A project can declare an ordered collection of preferred fonts. Order matters: the first font that can render a text cluster is selected. Project fonts are resolved from project assets and coexist with bundled fallback fonts.
 
+Names used as directory-backed resource names follow a POSIX path-segment contract. Sprite, sound, and font family names used this way must be non-empty, must not be `.` or `..`, and must not contain `/` or NUL. Spaces and Unicode are allowed. Backslash and colon are not POSIX separators, but project producers must still choose physical paths supported by their target filesystem and archive format.
+
 ## Loading and validation
 
 The runtime loads every configured font, validates it, and builds a replacement collection before publishing the new configuration. If required input is invalid, the previous valid configuration remains active instead of exposing a partial update.

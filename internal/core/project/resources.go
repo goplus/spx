@@ -96,7 +96,15 @@ func LoadConfig(ret any, fs spxfs.Dir, index any) error {
 	}
 }
 
+// validResourceName checks logical directory names in the project format.
+func validResourceName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\x00")
+}
+
 func LoadSpriteConfig(fs spxfs.Dir, name string) (SpriteConfig, error) {
+	if !validResourceName(name) {
+		return SpriteConfig{}, fmt.Errorf("sprite name %q is not a valid path segment", name)
+	}
 	baseDir := path.Join("sprites", name)
 	var conf SpriteConfig
 	if err := LoadJSON(&conf, fs, baseDir+"/index.json"); err != nil {
@@ -107,6 +115,9 @@ func LoadSpriteConfig(fs spxfs.Dir, name string) (SpriteConfig, error) {
 }
 
 func LoadSoundConfig(fs spxfs.Dir, name string) (SoundConfig, error) {
+	if !validResourceName(name) {
+		return SoundConfig{}, fmt.Errorf("sound name %q is not a valid path segment", name)
+	}
 	baseDir := path.Join("sounds", name)
 	var conf SoundConfig
 	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
