@@ -122,6 +122,8 @@ make dev MODE=normal
 
 For a narrower source build, replace `dev` with `build-editor`, `build-desktop`, `build-web MODE=...`, `build-android`, or `build-ios`.
 
+`make build-editor`, `make build-android`, and `make build-ios` build only their engine target; they do not install the SPX CLI or download an existing runtime. Use `make install` to install the CLI, or `make dev` for the complete build-and-install workflow.
+
 `make dev` and `make build-editor` automatically generate `GODOT_SRC/compile_commands.json` during the host editor build, using the actual compilation arguments for Godot and the external `SPX_MODULE_SRC` module. Subsequent desktop, Web, and mobile template builds leave this host compilation database intact. Run either command again after adding source files or changing build options to refresh it.
 
 VS Code's Microsoft C/C++ extension can use this database for navigation across repositories. Add the following to `.vscode/settings.json` for the default `GODOT_SRC=./godot`. For an external Godot checkout, replace the path with its actual absolute path, such as `/absolute/path/to/godot/compile_commands.json`:
