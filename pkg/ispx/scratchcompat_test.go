@@ -58,6 +58,11 @@ func main() {
 			panic("native and interpreted costume resolvers")
 		}
 	}
+	var game spx.Game
+	var backdrop compat.BackdropResolver = &game
+	if compat.ResolveBackdropIndex(backdrop, "3") != 2 {
+		panic("native and interpreted backdrop resolvers")
+	}
 	var custom spx.Sprite = &CustomSprite{}
 	if compat.ResolveCostumeIndex(custom, "costume") != 7 {
 		panic("overridden costume resolver")
@@ -195,6 +200,7 @@ func TestInterpreterScratchCompat(t *testing.T) {
 						"github.com/goplus/spx/v4/pkg/scratchcompat.NewList":                 scratchcompat.NewList,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.PenColorParamFromString": scratchcompat.PenColorParamFromString,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.Rand":                    scratchcompat.Rand,
+						"github.com/goplus/spx/v4/pkg/scratchcompat.ResolveBackdropIndex":    scratchcompat.ResolveBackdropIndex,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex":     scratchcompat.ResolveCostumeIndex,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.SetSoundEffect":          scratchcompat.SetSoundEffect,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.SetVolume":               scratchcompat.SetVolume,

@@ -43,6 +43,7 @@ func init() {
 			"github.com/goplus/spx/v4/internal/engine":       "engine",
 		},
 		Interfaces: map[string]reflect.Type{
+			"BackdropResolver":   reflect.TypeOf((*q.BackdropResolver)(nil)).Elem(),
 			"CostumeResolver":    reflect.TypeOf((*q.CostumeResolver)(nil)).Elem(),
 			"SoundEffectChanger": reflect.TypeOf((*q.SoundEffectChanger)(nil)).Elem(),
 			"SoundEffectSetter":  reflect.TypeOf((*q.SoundEffectSetter)(nil)).Elem(),
@@ -68,6 +69,7 @@ func init() {
 			"NewList":                 reflect.ValueOf(q.NewList),
 			"PenColorParamFromString": reflect.ValueOf(q.PenColorParamFromString),
 			"Rand":                    reflect.ValueOf(q.Rand),
+			"ResolveBackdropIndex":    reflect.ValueOf(q.ResolveBackdropIndex),
 			"ResolveCostumeIndex":     reflect.ValueOf(q.ResolveCostumeIndex),
 			"SetSoundEffect":          reflect.ValueOf(q.SetSoundEffect),
 			"SetVolume":               reflect.ValueOf(q.SetVolume),
@@ -96,6 +98,7 @@ func init() {
 		"NewList":                 func_NewList,
 		"PenColorParamFromString": func_PenColorParamFromString,
 		"Rand":                    func_Rand,
+		"ResolveBackdropIndex":    func_ResolveBackdropIndex,
 		"ResolveCostumeIndex":     func_ResolveCostumeIndex,
 		"SetSoundEffect":          func_SetSoundEffect,
 		"SetVolume":               func_SetVolume,
@@ -152,6 +155,10 @@ func func_PenColorParamFromString(ctx ixgo.DirectCallContext) {
 
 func func_Rand(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.Rand(ixgo.DirectCallArg[any](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
+}
+
+func func_ResolveBackdropIndex(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.ResolveBackdropIndex(ixgo.DirectCallArg[q.BackdropResolver](ctx, 0), ixgo.DirectCallArg[string](ctx, 1)))
 }
 
 func func_ResolveCostumeIndex(ctx ixgo.DirectCallContext) {
