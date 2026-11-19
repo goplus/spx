@@ -21,12 +21,14 @@ import (
 	"errors"
 	"flag"
 	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"syscall"
 	"testing"
+	"testing/fstest"
 
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
@@ -48,6 +50,71 @@ func TestLoadConfigRejectsTrailingContent(t *testing.T) {
 		if err := LoadConfig(&config, nil, strings.NewReader(input)); err == nil {
 			t.Fatalf("LoadConfig(%q) error = nil", input)
 		}
+	}
+}
+
+func TestDirectoryResourceNamesUsePOSIXSegments(t *testing.T) {
+	// Virtual paths exercise the format without relying on host filename rules.
+	for _, name := range []string{"Bell:1", `Bell\1`, "铃 声"} {
+		t.Run(name, func(t *testing.T) {
+			dir := projectMapDir{fstest.MapFS{
+				"sprites/" + name + "/index.json": {Data: []byte(`{}`)},
+				"sounds/" + name + "/index.json":  {Data: []byte(`{"path":"sound.wav"}`)},
+				"fonts/" + name + "/index.json":   {Data: []byte(`{"faces":[{"path":"font.ttf"}]}`)},
+				"fonts/" + name + "/font.ttf":     {Data: []byte("font")},
+			}}
+			if _, err := LoadSpriteConfig(dir, name); err != nil {
+				t.Fatal(err)
+			}
+			sound, err := LoadSoundConfig(dir, name)
+			if want := "sounds/" + name + "/sound.wav"; err != nil || sound.Path != want {
+				t.Fatalf("sound path = %q, %v; want %q", sound.Path, err, want)
+			}
+			fonts, err := LoadProjectFonts(dir, nil)
+			wantFonts := []ProjectFontFamily{{Name: name, Faces: []ProjectFontFace{{Path: "fonts/" + name + "/font.ttf"}}}}
+			if err != nil || !reflect.DeepEqual(fonts.Families, wantFonts) {
+				t.Fatalf("font families = %+v, %v; want %+v", fonts.Families, err, wantFonts)
+			}
+		})
+	}
+}
+
+func TestDirectoryResourceNamesRejectInvalidSegments(t *testing.T) {
+	for _, name := range []string{"", ".", "..", "a/b", "bad\x00name"} {
+		if _, err := LoadSpriteConfig(panicPathDir{}, name); err == nil {
+			t.Errorf("LoadSpriteConfig(%q) accepted an invalid path segment", name)
+		}
+		if _, err := LoadSoundConfig(panicPathDir{}, name); err == nil {
+			t.Errorf("LoadSoundConfig(%q) accepted an invalid path segment", name)
+		}
+		if _, err := validateFontFamilyName(name); err == nil {
+			t.Errorf("validateFontFamilyName(%q) accepted an invalid path segment", name)
+		}
+	}
+}
+
+func TestSpriteConfigKeepsColonFilename(t *testing.T) {
+	const dir = "sprites/Media/"
+	for _, tt := range []struct{ path, want string }{
+		{"costume-Animation:1.svg", dir + "costume-Animation:1.svg"},
+		{"./res:image.png", dir + "res:image.png"},
+		{"media/res:image.png", dir + "media/res:image.png"},
+		{"../res:media/image.png", "sprites/res:media/image.png"},
+		{"res:image.png", "res:image.png"},
+		{"res://image.png", "res://image.png"},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			src := projectMapDir{fstest.MapFS{
+				dir + "index.json": {Data: []byte(`{"costumes":[{"path":"` + tt.path + `"}]}`)},
+			}}
+			conf, err := LoadSpriteConfig(src, "Media")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(conf.Costumes) != 1 || conf.Costumes[0].Path != tt.want {
+				t.Fatalf("costumes = %+v, want path %q", conf.Costumes, tt.want)
+			}
+		})
 	}
 }
 
@@ -1207,6 +1274,18 @@ func (d localDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
 		result = append(result, spxfs.DirEntry{Name: entry.Name(), IsDir: entry.IsDir()})
 	}
 	return result, nil
+}
+
+type projectMapDir struct{ fstest.MapFS }
+
+func (d projectMapDir) Open(name string) (io.ReadCloser, error) { return d.MapFS.Open(name) }
+func (d projectMapDir) Close() error                            { return nil }
+func (d projectMapDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	entries, err := iofs.ReadDir(d.MapFS, name)
+	if err != nil {
+		return nil, err
+	}
+	return spxfs.DirEntriesFromFS(entries), nil
 }
 
 func writeProjectFile(t *testing.T, dir, relPath, content string) {

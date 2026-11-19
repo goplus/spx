@@ -21,6 +21,7 @@ import (
 	"os"
 	pathpkg "path"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -112,7 +113,7 @@ func newLegacyFilesystemAssetResolver(prefix, dir string, enforceCanonical bool)
 }
 
 func (r assetResolver) filesystemPath(relPath string) string {
-	name, projectResource, ok := parseAssetReference(relPath)
+	name, projectResource, ok := parseAssetReference(relPath, runtime.GOOS != "windows")
 	if !ok {
 		return ""
 	}
@@ -156,7 +157,7 @@ func (r assetResolver) filesystemPath(relPath string) string {
 }
 
 func (r assetResolver) packmodePath(reference string) string {
-	relPath, projectResource, ok := parseAssetReference(reference)
+	relPath, projectResource, ok := parseAssetReference(reference, false)
 	if !ok {
 		return ""
 	}
@@ -196,9 +197,12 @@ func (r assetResolver) extAssetSuffix(relPath string) (string, bool) {
 }
 
 // parseAssetReference shares lexical validation across filesystem and archive paths.
-func parseAssetReference(reference string) (name string, projectResource, ok bool) {
+func parseAssetReference(reference string, allowColon bool) (name string, projectResource, ok bool) {
 	name, projectResource = strings.CutPrefix(reference, packmodeAssetPrefix)
-	return name, projectResource, isPortableRelativeResourcePath(name)
+	if !projectResource && strings.HasPrefix(reference, "res:") {
+		return "", false, false
+	}
+	return name, projectResource, isRelativeResourcePath(name, allowColon)
 }
 
 func validateFilesystemRoot(name, root string) (string, error) {
@@ -214,11 +218,22 @@ func validateFilesystemRoot(name, root string) (string, error) {
 	return cleanFilesystemPath(root), nil
 }
 
-func isPortableRelativeResourcePath(name string) bool {
-	if name == "" || strings.ContainsAny(name, "\\:\x00") {
+func isRelativeResourcePath(name string, allowColon bool) bool {
+	if name == "" || strings.ContainsAny(name, "\\\x00") {
+		return false
+	}
+	if strings.ContainsRune(name, ':') && (!allowColon || strings.Contains(name, "://") || isWindowsDriveAbsolute(name)) {
 		return false
 	}
 	return !pathpkg.IsAbs(name) && !filepath.IsAbs(filepath.FromSlash(name))
+}
+
+func isWindowsDriveAbsolute(name string) bool {
+	if len(name) < 3 || name[1:3] != ":/" {
+		return false
+	}
+	c := name[0]
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 func isWithinRoot(path, root string) bool {
@@ -243,7 +258,7 @@ func leadingParentCount(name string) int {
 
 func projectResourcePath(name string) string {
 	name = pathpkg.Clean(name)
-	if name == "." || name == ".." || strings.HasPrefix(name, "../") || !isPortableRelativeResourcePath(name) {
+	if name == "." || name == ".." || strings.HasPrefix(name, "../") || !isRelativeResourcePath(name, false) {
 		return ""
 	}
 	return packmodeAssetPrefix + name

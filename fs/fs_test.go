@@ -67,8 +67,12 @@ func TestSplitSchema(t *testing.T) {
 		{"zip://project.zip", "zip", "project.zip"},
 		{"zip:///absolute/project.zip", "zip", "/absolute/project.zip"},
 		{"zip:", "zip", ""},
+		{"res:media/image.png", "res", "media/image.png"},
+		{"./res:image.png", "", "./res:image.png"},
+		{"sprites/Media/media/res:image.png", "", "sprites/Media/media/res:image.png"},
 		{"hzips://example.test/project.zip?v=2", "hzips", "example.test/project.zip?v=2"},
 		{"assets/project:one.zip", "", "assets/project:one.zip"},
+		{"project:one.zip", "", "project:one.zip"},
 		{`assets\project:one.zip`, "", `assets\project:one.zip`},
 		{"project one:assets", "", "project one:assets"},
 	}

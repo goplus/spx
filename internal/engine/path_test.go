@@ -19,6 +19,7 @@ package engine
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -267,6 +268,32 @@ func TestAssetResolversKeepConfigurationSnapshots(t *testing.T) {
 	}
 }
 
+func TestFilesystemAssetPathColonFilename(t *testing.T) {
+	root := t.TempDir()
+	resolver, err := newFilesystemAssetResolver(root, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"costume-Animation:1.svg", "sprites/Media/res:image.png"} {
+		want := ""
+		if runtime.GOOS != "windows" {
+			file := filepath.Join(root, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(file, []byte("asset"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			want = filepath.ToSlash(file)
+		}
+		for _, reference := range []string{name, "res://" + name} {
+			if got := resolver.filesystemPath(reference); got != want {
+				t.Errorf("filesystemPath(%q) = %q, want %q", reference, got, want)
+			}
+		}
+	}
+}
+
 func TestBuildFilesystemAssetPath(t *testing.T) {
 	resolver := newAssetResolver(defaultAssetPathPrefix, defaultAssetDirName)
 
@@ -312,6 +339,8 @@ func TestBuildFilesystemAssetPath(t *testing.T) {
 		{name: "reject NUL in project URI", path: "res://bad\x00/../image.png", want: ""},
 		{name: "reject file URI", path: "file:///tmp/image.png", want: ""},
 		{name: "reject malformed res URI", path: "res:res/image.png", want: ""},
+		{name: "reject Windows drive absolute path", path: "C:/outside/image.png", want: ""},
+		{name: "reject Windows drive absolute project URI", path: "res://z:/outside/image.png", want: ""},
 		{name: "reject Windows path", path: `C:\outside\image.png`, want: ""},
 		{name: "reject UNC path", path: `\\server\share\image.png`, want: ""},
 	}
