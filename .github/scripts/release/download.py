@@ -5,9 +5,10 @@ import sys
 import time
 
 
-def download_release(tag, repository, directory):
+def download_release(tag, repository, directory, *patterns):
     command = ("gh", "release", "download", tag, "--repo", repository,
-               "--dir", str(directory), "--clobber")
+               "--dir", str(directory), "--clobber",
+               *("--pattern=" + pattern for pattern in patterns))
     for attempt in range(1, 4):
         try:
             run(command, check=True)

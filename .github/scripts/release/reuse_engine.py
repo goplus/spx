@@ -4,6 +4,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -13,30 +14,40 @@ from download import download_release
 
 
 def reuse_engine(env):
+    tag = env["ENGINE_TAG"]
+    repository = env["REPOSITORY"]
+    manifest_name = env["RUNTIME_MANIFEST"]
     with tempfile.TemporaryDirectory(prefix="spx-engine-source-") as temporary:
         source = Path(temporary)
-        download_release(env["ENGINE_TAG"], env["REPOSITORY"], source)
-        manifest = source / env["RUNTIME_MANIFEST"]
+        download_release(tag, repository, source, manifest_name)
+        manifest = source / manifest_name
+        metadata = json.loads(manifest.read_text())
+        if tag != "runtime-v" + metadata["runtime_version"]:
+            raise ValueError("Engine source manifest does not match the selected release tag")
+
+        engine_names = [asset["name"] for asset in metadata["assets"] if asset["name"] != "spx-runtime-assets.zip"]
+        # The Go verifier enforces the complete locked inventory and checksums
+        # below. Before download, only allow literal ZIP names as CLI patterns.
+        if not engine_names or any(
+            not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\.zip", name)
+            for name in engine_names
+        ):
+            raise ValueError("Engine source manifest must contain literal engine ZIP names")
+        download_release(tag, repository, source, *engine_names)
         subprocess.run(("go", "run", "./.github/cmd/runtime-manifest",
                         "--verify-engine-manifest", str(manifest),
                         "--asset-directory", str(source), "--revision", "HEAD"), check=True)
-        # The Go verifier binds the manifest to its own immutable lock, compares
-        # engine inputs with HEAD, and verifies every engine asset before staging.
-        metadata = json.loads(manifest.read_text())
-        if env["ENGINE_TAG"] != "runtime-v" + metadata["runtime_version"]:
-            raise ValueError("Engine source manifest does not match the selected release tag")
+
         destination = Path("reused-engine")
         destination.mkdir()
-        for asset in metadata["assets"]:
-            name = asset["name"]
-            if name != "spx-runtime-assets.zip":
-                shutil.copyfile(source / name, destination / name)
+        for name in engine_names:
+            shutil.copyfile(source / name, destination / name)
         shutil.copyfile(manifest, destination / "engine-source-manifest.json")
 
 
 if __name__ == "__main__":
     try:
         reuse_engine(os.environ)
-    except (KeyError, OSError, ValueError, subprocess.CalledProcessError) as error:
+    except (KeyError, OSError, TypeError, ValueError, subprocess.CalledProcessError) as error:
         print(f"[error] {error}", file=sys.stderr)
         sys.exit(1)
