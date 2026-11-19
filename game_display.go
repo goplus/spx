@@ -34,6 +34,8 @@ func (p *Game) BackdropIndex() int {
 }
 
 // ResolveBackdropIndex resolves a backdrop name or 1-based integer string to an index.
+//
+// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveBackdropIndex] instead.
 func (p *Game) ResolveBackdropIndex(backdrop string) int {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("ResolveBackdropIndex: backdrop=%v", backdrop)
