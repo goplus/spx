@@ -61,9 +61,11 @@ jobs:
         shell: bash
         run: python3 .github/scripts/runtime/lock_snapshot.py verify-godot
 
-      - name: Set up locked Go and XGo for release verification
+      - name: Set up locked Go for release verification
         if: needs.build-release.outputs.runtime_state == 'missing'
         uses: ./.github/actions/setup-toolchain
+        with:
+          xgo: 'false'
 
       - name: Download assembled runtime release
         if: needs.build-release.outputs.runtime_state == 'missing'
@@ -147,8 +149,10 @@ jobs:
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
         run: python3 .github/scripts/release/plan.py dev-target
 
-      - name: Set up locked Go and XGo
+      - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
+        with:
+          xgo: 'false'
 
       - name: Resolve development runtime release
         id: runtime
