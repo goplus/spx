@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -716,6 +717,60 @@ func TestGameBackdropOverloads(t *testing.T) {
 			}
 			if game.BackdropIndex() != test.want || game.BackdropName() != game.costumes[test.want].name {
 				t.Fatalf("backdrop index/name=%d/%s", game.BackdropIndex(), game.BackdropName())
+			}
+		})
+	}
+}
+
+func TestResolveBackdropIndex(t *testing.T) {
+	game := &Game{visualObject: visualObject{costumes: []*costume{{name: "first"}, {name: "second"}}}}
+
+	for _, tt := range []struct {
+		name     string
+		backdrop string
+		want     int
+	}{
+		{name: "name", backdrop: "second", want: 1},
+		{name: "zero", backdrop: "0", want: -1},
+		{name: "in range", backdrop: "2", want: 1},
+		{name: "wrap", backdrop: "3", want: 0},
+		{name: "negative", backdrop: "-2", want: -1},
+		{name: "invalid", backdrop: "missing", want: -1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := game.ResolveBackdropIndex(tt.backdrop); got != tt.want {
+				t.Fatalf("ResolveBackdropIndex(%q) = %d, want %d", tt.backdrop, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveBackdropIndexPrefersNames(t *testing.T) {
+	for _, name := range []string{"1", "0", "-2", strconv.Itoa(math.MaxInt) + "0"} {
+		t.Run(name, func(t *testing.T) {
+			game := &Game{visualObject: visualObject{costumes: []*costume{{name: "first"}, {name: name}}}}
+			if got := game.ResolveBackdropIndex(name); got != 1 {
+				t.Fatalf("ResolveBackdropIndex(%q) = %d, want named backdrop at 1", name, got)
+			}
+		})
+	}
+}
+
+func TestResolveBackdropIndexWithNoBackdrops(t *testing.T) {
+	game := &Game{}
+
+	for _, tt := range []struct {
+		backdrop string
+		want     int
+	}{
+		{backdrop: "3", want: 2},
+		{backdrop: "0", want: -1},
+		{backdrop: "-2", want: -3},
+		{backdrop: "missing", want: -1},
+	} {
+		t.Run(tt.backdrop, func(t *testing.T) {
+			if got := game.ResolveBackdropIndex(tt.backdrop); got != tt.want {
+				t.Fatalf("ResolveBackdropIndex(%q) = %d, want %d", tt.backdrop, got, tt.want)
 			}
 		})
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
@@ -30,6 +31,18 @@ func (p *Game) BackdropName() string {
 
 func (p *Game) BackdropIndex() int {
 	return p.getCostumeIndex()
+}
+
+// ResolveBackdropIndex resolves a backdrop name or 1-based integer string to an index.
+func (p *Game) ResolveBackdropIndex(backdrop string) int {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("ResolveBackdropIndex: backdrop=%v", backdrop)
+	}
+	if idx := p.findCostume(SpriteCostumeName(backdrop)); idx >= 0 {
+		return idx
+	}
+
+	return scratch.ParseCostumeIndex(backdrop, len(p.costumes))
 }
 
 func (p *Game) SetBackdrop__0(name BackdropName) {
