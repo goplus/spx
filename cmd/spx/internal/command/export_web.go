@@ -53,7 +53,7 @@ func (cmd *CmdTool) ExportTemplateWeb() error {
 	os.Mkdir(targetDir, 0o755)
 	os.Remove(filepath.Join(cmd.ProjectDir, "gdspx.gdextension"))
 	os.Remove(filepath.Join(cmd.ProjectDir, ".godot", "extension_list.cfg"))
-	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
+	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--recovery-mode", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
 // ExportWeb exports the project for the standard web runtime.

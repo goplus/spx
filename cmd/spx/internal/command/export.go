@@ -53,13 +53,13 @@ func (cmd *CmdTool) Export() error {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, "--headless", "--quit", "--path", cmd.ProjectDir, "--export-debug", platformName, targetPath)
 }
 
-// setupPackEnv prepares the resource template without generating a Go project.
-func (cmd *CmdTool) setupPackEnv(fsRelDir string) error {
+// setupResourceEnv prepares the resource template without generating a Go project.
+func (cmd *CmdTool) setupResourceEnv(fsRelDir string) error {
 	if err := cmd.setupEnginePaths(); err != nil {
 		return err
 	}
 	if err := util.CopyDir(cmd.ProjectFS, fsRelDir, cmd.ProjectDir, true); err != nil {
-		return fmt.Errorf("prepare runtime pack files: %w", err)
+		return fmt.Errorf("prepare resource template files: %w", err)
 	}
 	return cmd.updateProjectName()
 }

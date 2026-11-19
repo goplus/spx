@@ -53,52 +53,57 @@ func TestExportPackUsesPackOnlyExport(t *testing.T) {
 	}
 }
 
-func TestExportPackDoesNotPrepareOrBuildGoProject(t *testing.T) {
-	root := t.TempDir()
-	project := filepath.Join(root, "resource project")
-	if err := os.Mkdir(project, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logPath := filepath.Join(root, "commands.log")
-	t.Setenv("SPX_PACK_TEST_LOG", logPath)
-	t.Setenv("GOPATH", filepath.Join(root, "gopath"))
-	t.Setenv(projectImportTimeoutEnvVar, "0")
-	// The isolated PATH contains only Godot, so Go build tools are unavailable.
-	installCommandTestTools(t, map[string]string{
-		"gdspxtest": `if [ "$1" = --version ]; then exit 0; fi
+func TestResourceExportsDoNotPrepareOrBuildGoProject(t *testing.T) {
+	for _, command := range []string{"exportpack", "exporttemplateweb"} {
+		t.Run(command, func(t *testing.T) {
+			root := t.TempDir()
+			project := filepath.Join(root, "resource project")
+			if err := os.Mkdir(project, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			logPath := filepath.Join(root, "commands.log")
+			t.Setenv("SPX_RESOURCE_TEST_LOG", logPath)
+			t.Setenv("GOPATH", filepath.Join(root, "gopath"))
+			t.Setenv(projectImportTimeoutEnvVar, "0")
+			// The isolated PATH contains only Godot, so Go build tools are unavailable.
+			installCommandTestTools(t, map[string]string{
+				"gdspxtest": `if [ "$1" = --version ]; then exit 0; fi
 case " $* " in
     *" --recovery-mode "*) ;;
     *) exit 74 ;;
 esac
 case " $* " in
-    *" --import "*) printf 'import\n' >> "$SPX_PACK_TEST_LOG" ;;
-    *" --export-pack "*) printf 'export\n' >> "$SPX_PACK_TEST_LOG" ;;
+    *" --import "*) printf 'import\n' >> "$SPX_RESOURCE_TEST_LOG" ;;
+    *" --export-pack "*|*" --export-debug Web "*) printf 'export\n' >> "$SPX_RESOURCE_TEST_LOG" ;;
     *) exit 75 ;;
 esac
 `,
-	})
-	setTestCommandLine(t, "spx", "exportpack", "--path", project)
-	cmd := &CmdTool{}
-	if err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project"); err != nil {
-		t.Fatal(err)
-	}
-	if got := readTestFile(t, logPath); got != "import\nexport\n" {
-		t.Fatalf("pack subprocesses = %q, want only Godot import and export", got)
-	}
-	for _, name := range []string{"go.mod", "go.sum", "gox.mod", "xgo_autogen.go", "main.spx", "project/go/main.go", "project/lib", ".temp"} {
-		if _, err := os.Stat(filepath.Join(project, name)); !os.IsNotExist(err) {
-			t.Errorf("resource export created %s: %v", name, err)
-		}
-	}
-	if got := readTestFile(t, filepath.Join(project, "project", "project.godot")); !strings.Contains(got, `config/name="resourceproject"`) {
-		t.Fatalf("pack project name was not set: %q", got)
+			})
+			setTestCommandLine(t, "spx", command, "--path", project)
+			cmd := &CmdTool{}
+			if err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project"); err != nil {
+				t.Fatal(err)
+			}
+			if got := readTestFile(t, logPath); got != "import\nexport\n" {
+				t.Fatalf("resource subprocesses = %q, want only Godot import and export", got)
+			}
+			for _, name := range []string{"go.mod", "go.sum", "gox.mod", "xgo_autogen.go", "main.spx", "project/go/main.go", "project/lib", ".temp"} {
+				if _, err := os.Stat(filepath.Join(project, name)); !os.IsNotExist(err) {
+					t.Errorf("resource export created %s: %v", name, err)
+				}
+			}
+			if got := readTestFile(t, filepath.Join(project, "project", "project.godot")); !strings.Contains(got, `config/name="resourceproject"`) {
+				t.Fatalf("resource project name was not set: %q", got)
+			}
+
+		})
 	}
 }
 
-func TestExportPackStopsOnPreparationFailure(t *testing.T) {
+func TestResourceExportStopsOnPreparationFailure(t *testing.T) {
 	for _, tc := range []struct{ name, blocked, want string }{
 		{"engine path", "bin", "requires engine to be installed"},
-		{"resource destination", "project", "prepare runtime pack files"},
+		{"resource destination", "project", "prepare resource template files"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -107,8 +112,8 @@ func TestExportPackStopsOnPreparationFailure(t *testing.T) {
 				Version: "pack-fixture", GoBinPath: filepath.Join(root, "bin"),
 				TargetDir: root, ProjectDir: filepath.Join(root, "project"), ProjectFS: webExportTestFS,
 			}
-			if err := cmd.setupPackEnv("template/project"); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("prepare pack = %v, want %q", err, tc.want)
+			if err := cmd.setupResourceEnv("template/project"); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("prepare resource export = %v, want %q", err, tc.want)
 			}
 		})
 	}
