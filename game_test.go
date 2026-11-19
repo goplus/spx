@@ -731,10 +731,10 @@ func TestResolveBackdropIndex(t *testing.T) {
 		want     int
 	}{
 		{name: "name", backdrop: "second", want: 1},
-		{name: "zero", backdrop: "0", want: -1},
+		{name: "zero wraps", backdrop: "0", want: 1},
 		{name: "in range", backdrop: "2", want: 1},
 		{name: "wrap", backdrop: "3", want: 0},
-		{name: "negative", backdrop: "-2", want: -1},
+		{name: "negative wraps", backdrop: "-2", want: 1},
 		{name: "invalid", backdrop: "missing", want: -1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -742,6 +742,62 @@ func TestResolveBackdropIndex(t *testing.T) {
 				t.Fatalf("ResolveBackdropIndex(%q) = %d, want %d", tt.backdrop, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveBackdropIndexUsesScratchNumericSelectors(t *testing.T) {
+	game := &Game{visualObject: visualObject{costumes: []*costume{{name: "first"}, {name: "second"}}}}
+	for _, test := range []struct {
+		selector string
+		want     int
+	}{
+		{selector: "0", want: 1},
+		{selector: "-2", want: 1},
+		{selector: "1.5", want: 1},
+		{selector: "2.5", want: 0},
+	} {
+		t.Run(test.selector, func(t *testing.T) {
+			game.costumeIndex = 0
+			selector := game.ResolveBackdropIndex(test.selector)
+			if !game.selectBackdrop(selector) || game.costumeIndex != test.want {
+				t.Fatalf("dynamic selector %q selected index %d, want %d", test.selector, game.costumeIndex, test.want)
+			}
+		})
+	}
+}
+
+func TestResolveBackdropIndexHandlesDynamicActions(t *testing.T) {
+	game := &Game{visualObject: visualObject{costumes: []*costume{{name: "first"}, {name: "second"}, {name: "third"}}}}
+	for _, test := range []struct {
+		selector string
+		initial  int
+		want     int
+	}{
+		{selector: "next backdrop", initial: 0, want: 1},
+		{selector: "previous backdrop", initial: 0, want: 2},
+	} {
+		t.Run(test.selector, func(t *testing.T) {
+			game.costumeIndex = test.initial
+			selector := game.ResolveBackdropIndex(test.selector)
+			if !game.selectBackdrop(selector) || game.costumeIndex != test.want {
+				t.Fatalf("dynamic selector %q -> index %d, want %d", test.selector, game.costumeIndex, test.want)
+			}
+		})
+	}
+
+	game.costumeIndex = 1
+	SetRandomSeed(1)
+	t.Cleanup(ResetRandomSeed)
+	selector := game.ResolveBackdropIndex("random backdrop")
+	if !game.selectBackdrop(selector) || game.costumeIndex == 1 {
+		t.Fatalf("dynamic random selector kept backdrop index %d", game.costumeIndex)
+	}
+}
+
+func TestResolveBackdropIndexPrefersActionNames(t *testing.T) {
+	game := &Game{visualObject: visualObject{costumes: []*costume{{name: "first"}, {name: "next backdrop"}}}}
+	if got := game.ResolveBackdropIndex("next backdrop"); got != 1 {
+		t.Fatalf("ResolveBackdropIndex(%q) = %d, want named backdrop at 1", "next backdrop", got)
 	}
 }
 

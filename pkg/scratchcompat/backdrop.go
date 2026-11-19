@@ -16,16 +16,16 @@
 
 package scratchcompat
 
-// BackdropResolver resolves a backdrop name or number to an index.
+// BackdropResolver resolves a backdrop name, action, or numeric selector.
 // [github.com/goplus/spx/v4.Game] values and custom stage implementations
 // with the same method satisfy this interface.
 type BackdropResolver interface {
 	ResolveBackdropIndex(backdrop string) int
 }
 
-// ResolveBackdropIndex delegates backdrop lookup to the stage implementation.
-// For SPX stages, exact names take precedence over 1-based integer strings and
-// the result is zero-based. Invalid and negative results are returned unchanged.
+// ResolveBackdropIndex delegates backdrop selector resolution to the stage
+// implementation. Exact names take precedence over special selectors and
+// numeric values use Scratch's 1-based rounding and wrapping rules.
 func ResolveBackdropIndex(game BackdropResolver, backdrop string) int {
 	return game.ResolveBackdropIndex(backdrop)
 }
