@@ -233,6 +233,8 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                         options.extend(["-tags", "packmode"])
                     elif suite in ("native", "codegen"):
                         options.append("-coverpkg=" + ",".join(packages))
+                    elif suite == "tools":
+                        options.append("-coverpkg=./.github/cmd/...,./internal/release")
                     if suite in ("native", "tools", "macos", "windows"):
                         options.append("-v")
                     if suite in ("macos", "windows", "web-process") or profile in ("coverage-web-touch.out", "coverage-web-engine.out"):

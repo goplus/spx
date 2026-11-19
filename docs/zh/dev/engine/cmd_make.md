@@ -73,7 +73,7 @@ Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，使�
 Godot 引擎制品与 SPX runtime pack 使用不同的构建身份：
 
 - Godot 引擎制品由锁定的 Godot commit、`godot_modules/spx` tree（包含 SCons profile）、引擎工具链和平台动态参数决定。修改 `buildctl`、release 元数据或文档不会让 Godot 编译缓存失效。
-- `spx-runtime-assets.zip` 是独立的 SPX runtime pack，由专用的 desktop pack-only 命令（`spx exportpack`）、项目模板、SPX Go runtime 和实际生成字节的 `runtime export-pack` 路径决定；pack-only 命令直接写出 `.builds/pc/gdexport.pck`，不依赖平台导出模板。独立的 run、launcher、Web/mobile export 与 release 编排变化不会让它失效。
+- `spx-runtime-assets.zip` 由 `spx exportpack` 根据项目资源和导出逻辑生成；仅修改 Go 游戏逻辑不会让它失效。详见[发布输入边界](release.md#发布版本与完整性边界)。
 
 当前 runtime tag 原子地发布这两类资产，因此任一类产物发生变化都应提升 `runtime_version`；不过未变化的 Godot 引擎输入仍会命中独立的编译缓存，不会因为版本号或 release 编排变化而整套重编。
 

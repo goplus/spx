@@ -88,7 +88,7 @@ consumer together when changing them.
   packages remain in the profiles; `.github/codecov.yml` applies file exclusions when reporting.
 - `macos` and `windows` require their native OS and run targeted platform tests. macOS covers child toolchain environments, local Homebrew JDK/Brotli fixtures, and CLI permission repair; Windows covers command lookup, replacement, tool setup, and process locks. They neither install real tools nor download SDKs.
 - `tools` tests every automation command with `go test ./.github/cmd/...` and
-  produces one `coverage-tools.out`. Root `go test ./...` does not discover
+  produces one `coverage-tools.out`, including `internal/release` calls made by the CLI tests. Root `go test ./...` does not discover
   `.github` packages.
 - `check_source.yml` owns Linux/Web/tooling suite ordering. `build_go.yml` runs the targeted native suites in its existing macOS/Windows build jobs. Both save profiles as Actions artifacts using the test runner's outputs. Release source checks keep Go coverage collection disabled; release assembly independently downloads only runtime, Web, and standalone artifact namespaces.
 - `test_godot_module.yml` verifies the locked Godot checks and produces

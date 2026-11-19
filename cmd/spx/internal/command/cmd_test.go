@@ -443,7 +443,7 @@ func TestRunCmdBuildsOnceBeforeImportAndAction(t *testing.T) {
 	}
 	built := "tidy generate tidy " + dllBuild
 	var cases []testCase
-	for _, command := range []string{"build", "editor", "rune", "export", "exportpack"} {
+	for _, command := range []string{"build", "editor", "rune", "export"} {
 		action := " run"
 		if command == "build" {
 			action = ""
@@ -454,6 +454,9 @@ func TestRunCmdBuildsOnceBeforeImportAndAction(t *testing.T) {
 		)
 	}
 	cases = append(cases,
+		testCase{name: "pack fresh", command: "exportpack", want: "import run"},
+		testCase{name: "pack cached", command: "exportpack", cache: true, want: "run"},
+		testCase{name: "pack import failure", command: "exportpack", failure: "import", want: "import", errorContext: "godot import failed"},
 		testCase{name: "generation failure", command: "editor", failure: "generate", want: "tidy generate", errorContext: "code generation failed"},
 		testCase{name: "tidy failure", command: "editor", failure: "tidy:2", want: "tidy generate tidy", errorContext: "go mod tidy failed"},
 		testCase{name: "build failure", command: "editor", failure: "dll", want: "tidy generate tidy dll", errorContext: "go shared-library build"},

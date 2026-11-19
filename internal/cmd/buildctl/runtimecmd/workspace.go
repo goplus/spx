@@ -80,9 +80,6 @@ func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (run
 	if err := os.WriteFile(filepath.Join(workDir, "main.spx"), nil, 0o644); err != nil {
 		return runtimeWorkspace{}, nil, err
 	}
-	if err := os.RemoveAll(filepath.Join(workDir, "project", ".builds")); err != nil {
-		return runtimeWorkspace{}, nil, err
-	}
 	if includeRuntimeExtension {
 		src := filepath.Join(repoRoot, "cmd", "spx", "template", "project", "runtime.gdextension.txt")
 		dst := filepath.Join(goPath, "bin", "runtime.gdextension")

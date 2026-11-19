@@ -37,7 +37,7 @@ func TestExportPackUsesPackOnlyExport(t *testing.T) {
 			targetPath := filepath.Join(projectDir, ".builds", "pc", "gdexport.pck")
 			err := cmd.exportPack(tt.goos, func(dir, name string, args ...string) error {
 				calls++
-				want := []string{"--headless", "--quit", "--path", projectDir, "--export-pack", tt.platform, targetPath}
+				want := []string{"--headless", "--quit", "--recovery-mode", "--path", projectDir, "--export-pack", tt.platform, targetPath}
 				if dir != projectDir || name != "godot" || !reflect.DeepEqual(args, want) {
 					t.Fatalf("export command = (%q, %q, %v), want (%q, godot, %v)", dir, name, args, projectDir, want)
 				}
@@ -48,6 +48,67 @@ func TestExportPackUsesPackOnlyExport(t *testing.T) {
 			}
 			if info, err := os.Stat(filepath.Dir(targetPath)); err != nil || !info.IsDir() {
 				t.Fatalf("pack output directory was not created: %v", err)
+			}
+		})
+	}
+}
+
+func TestExportPackDoesNotPrepareOrBuildGoProject(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "resource project")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(root, "commands.log")
+	t.Setenv("SPX_PACK_TEST_LOG", logPath)
+	t.Setenv("GOPATH", filepath.Join(root, "gopath"))
+	t.Setenv(projectImportTimeoutEnvVar, "0")
+	// The isolated PATH contains only Godot, so Go build tools are unavailable.
+	installCommandTestTools(t, map[string]string{
+		"gdspxtest": `if [ "$1" = --version ]; then exit 0; fi
+case " $* " in
+    *" --recovery-mode "*) ;;
+    *) exit 74 ;;
+esac
+case " $* " in
+    *" --import "*) printf 'import\n' >> "$SPX_PACK_TEST_LOG" ;;
+    *" --export-pack "*) printf 'export\n' >> "$SPX_PACK_TEST_LOG" ;;
+    *) exit 75 ;;
+esac
+`,
+	})
+	setTestCommandLine(t, "spx", "exportpack", "--path", project)
+	cmd := &CmdTool{}
+	if err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTestFile(t, logPath); got != "import\nexport\n" {
+		t.Fatalf("pack subprocesses = %q, want only Godot import and export", got)
+	}
+	for _, name := range []string{"go.mod", "go.sum", "gox.mod", "xgo_autogen.go", "main.spx", "project/go/main.go", "project/lib", ".temp"} {
+		if _, err := os.Stat(filepath.Join(project, name)); !os.IsNotExist(err) {
+			t.Errorf("resource export created %s: %v", name, err)
+		}
+	}
+	if got := readTestFile(t, filepath.Join(project, "project", "project.godot")); !strings.Contains(got, `config/name="resourceproject"`) {
+		t.Fatalf("pack project name was not set: %q", got)
+	}
+}
+
+func TestExportPackStopsOnPreparationFailure(t *testing.T) {
+	for _, tc := range []struct{ name, blocked, want string }{
+		{"engine path", "bin", "requires engine to be installed"},
+		{"resource destination", "project", "prepare runtime pack files"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeCommandTestFile(t, filepath.Join(root, tc.blocked), "occupied")
+			cmd := &CmdTool{
+				Version: "pack-fixture", GoBinPath: filepath.Join(root, "bin"),
+				TargetDir: root, ProjectDir: filepath.Join(root, "project"), ProjectFS: webExportTestFS,
+			}
+			if err := cmd.setupPackEnv("template/project"); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("prepare pack = %v, want %q", err, tc.want)
 			}
 		})
 	}

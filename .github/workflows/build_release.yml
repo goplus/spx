@@ -11,6 +11,11 @@ on:
         description: 'SPX release tag declared by the source commit'
         required: true
         type: string
+      reuse_engine_version:
+        description: 'Optional published source runtime version for engine reuse'
+        required: false
+        default: ''
+        type: string
       platforms:
         description: 'all or comma-separated web,macos,windows,linux'
         required: true
@@ -56,6 +61,9 @@ jobs:
       godot_repository: ${{ steps.release.outputs.godot_repository }}
       godot_commit: ${{ steps.release.outputs.godot_commit }}
       runtime_state: ${{ steps.runtime.outputs.runtime_state }}
+      engine_state: ${{ steps.runtime.outputs.engine_state }}
+      engine_tag: ${{ steps.runtime.outputs.engine_tag }}
+      engine_manifest: ${{ steps.runtime.outputs.engine_manifest }}
       run_web: ${{ steps.plan.outputs.run_web }}
       run_macos: ${{ steps.plan.outputs.run_macos }}
       run_windows: ${{ steps.plan.outputs.run_windows }}
@@ -97,7 +105,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: go run ./.github/cmd/runtime-resolution --github-output "$GITHUB_OUTPUT"
+          REUSE_ENGINE_VERSION: ${{ inputs.reuse_engine_version }}
+        run: go run ./.github/cmd/runtime-resolution --reuse-engine-version "$REUSE_ENGINE_VERSION" --github-output "$GITHUB_OUTPUT"
 
       - name: Enforce runtime reuse policy
         shell: bash
@@ -166,7 +175,7 @@ jobs:
   build-godot-runtime:
     name: Build locked Godot runtime
     needs: [plan-release, check-source]
-    if: needs.plan-release.outputs.runtime_state == 'missing'
+    if: needs.plan-release.outputs.runtime_state == 'missing' && needs.plan-release.outputs.engine_state == 'build'
     # Pin the canonical workflow implementation independently from the Godot
     # source identity supplied by runtime.lock through godot_ref below.
     uses: goplus/godot/.github/workflows/release_builds.yml@28e4566d7dd3f53f942fb55bcba621f3bc25600b
@@ -179,22 +188,195 @@ jobs:
       spx_repository: ${{ github.repository }}
       spx_ref: ${{ github.sha }}
 
+  reuse-godot-runtime:
+    name: Reuse verified Godot engine
+    needs: [plan-release, check-source]
+    if: needs.plan-release.outputs.runtime_state == 'missing' && needs.plan-release.outputs.engine_state == 'reuse'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up locked Go
+        uses: ./.github/actions/setup-toolchain
+        with:
+          xgo: 'false'
+
+      - name: Download and verify source engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ needs.plan-release.outputs.release_repository }}
+          ENGINE_TAG: ${{ needs.plan-release.outputs.engine_tag }}
+          RUNTIME_MANIFEST: ${{ needs.plan-release.outputs.engine_manifest }}
+        run: python3 .github/scripts/release/reuse_engine.py
+
+      - name: Upload verified android.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-android
+          path: reused-engine/android.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified editor-linux-x86_64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-editor-linux-x86_64
+          path: reused-engine/editor-linux-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified editor-macos-arm64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-editor-macos-arm64
+          path: reused-engine/editor-macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified editor-macos-x86_64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-editor-macos-x86_64
+          path: reused-engine/editor-macos-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified editor-web.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-editor-web
+          path: reused-engine/editor-web.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified editor-windows-x86_64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-editor-windows-x86_64
+          path: reused-engine/editor-windows-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified ios.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-ios
+          path: reused-engine/ios.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified linux-x86_64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-linux-x86_64
+          path: reused-engine/linux-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified macos-arm64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-macos-arm64
+          path: reused-engine/macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified macos-x86_64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-macos-x86_64
+          path: reused-engine/macos-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified macos.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-macos-universal
+          path: reused-engine/macos.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified web-minigame.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-web-minigame
+          path: reused-engine/web-minigame.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified web-miniprogram.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-web-miniprogram
+          path: reused-engine/web-miniprogram.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified web-threads.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-web-threads
+          path: reused-engine/web-threads.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified web-worker.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-web-worker
+          path: reused-engine/web-worker.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified web.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-web
+          path: reused-engine/web.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verified windows-x86_64.zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-windows-x86_64
+          path: reused-engine/windows-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload engine source provenance
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-engine-provenance
+          path: reused-engine/engine-source-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
   build-runtime-pack:
     name: Build runtime pack
-    needs: build-godot-runtime
+    needs: [plan-release, build-godot-runtime, reuse-godot-runtime]
+    if: >-
+      ${{
+        !cancelled() && needs.plan-release.outputs.runtime_state == 'missing' &&
+        (needs.build-godot-runtime.result == 'success' || needs.reuse-godot-runtime.result == 'success')
+      }}
     uses: ./.github/workflows/build_runtime_pack.yml
 
   runtime-prerequisites:
     name: Verify runtime prerequisites
-    needs: [plan-release, check-source, build-godot-runtime, build-runtime-pack]
+    needs: [plan-release, check-source, build-godot-runtime, reuse-godot-runtime, build-runtime-pack]
     if: >-
       ${{
         !cancelled() &&
         needs.plan-release.result == 'success' &&
         needs.check-source.result == 'success' &&
         (
-          (needs.plan-release.outputs.runtime_state == 'ready' && needs.build-godot-runtime.result == 'skipped' && needs.build-runtime-pack.result == 'skipped') ||
-          (needs.plan-release.outputs.runtime_state == 'missing' && needs.build-godot-runtime.result == 'success' && needs.build-runtime-pack.result == 'success')
+          (needs.plan-release.outputs.runtime_state == 'ready' && needs.build-godot-runtime.result == 'skipped' && needs.reuse-godot-runtime.result == 'skipped' && needs.build-runtime-pack.result == 'skipped') ||
+          (needs.plan-release.outputs.runtime_state == 'missing' && needs.build-runtime-pack.result == 'success' &&
+            ((needs.build-godot-runtime.result == 'success' && needs.reuse-godot-runtime.result == 'skipped') ||
+             (needs.build-godot-runtime.result == 'skipped' && needs.reuse-godot-runtime.result == 'success')))
         )
       }}
     runs-on: ubuntu-22.04
@@ -285,6 +467,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ needs.plan-release.outputs.release_repository }}
           RUNTIME_STATE: ${{ needs.plan-release.outputs.runtime_state }}
+          ENGINE_STATE: ${{ needs.plan-release.outputs.engine_state }}
           RUNTIME_TAG: ${{ needs.plan-release.outputs.runtime_tag }}
           RUNTIME_MANIFEST: ${{ needs.plan-release.outputs.runtime_manifest }}
           RUN_WEB: ${{ needs.plan-release.outputs.run_web }}

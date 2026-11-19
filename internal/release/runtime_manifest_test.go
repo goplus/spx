@@ -230,6 +230,59 @@ func TestRuntimeManifestValidation(t *testing.T) {
 	}
 }
 
+func TestRuntimeManifestEngineProvenance(t *testing.T) {
+	original, _ := runtimeEngineManifestFixture(t)
+	origin := RuntimeEngineOrigin{RuntimeVersion: original.RuntimeVersion, SPXCommit: original.Provenance.SPXCommit}
+	original.RuntimeVersion = "99.0.0"
+	for _, test := range []struct {
+		name   string
+		origin *RuntimeEngineOrigin
+	}{
+		{"new engine", nil},
+		{"reused engine", &origin},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manifest := original
+			manifest.Provenance.EngineOrigin = test.origin
+			data, err := manifest.JSON()
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, err := ParseRuntimeManifest(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := parsed.Provenance
+			if got.EngineSourceSHA256 != original.Provenance.EngineSourceSHA256 ||
+				(got.EngineOrigin == nil) != (test.origin == nil) ||
+				(got.EngineOrigin != nil && *got.EngineOrigin != *test.origin) {
+				t.Fatalf("engine provenance changed after JSON round trip: %#v", got)
+			}
+		})
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*RuntimeManifest)
+		want   string
+	}{
+		{"short digest", func(m *RuntimeManifest) { m.Provenance.EngineSourceSHA256 = "deadbeef" }, "invalid engine source SHA-256"},
+		{"uppercase digest", func(m *RuntimeManifest) { m.Provenance.EngineSourceSHA256 = strings.Repeat("E", 64) }, "invalid engine source SHA-256"},
+		{"origin without digest", func(m *RuntimeManifest) { m.Provenance.EngineSourceSHA256 = "" }, "invalid engine origin"},
+		{"origin version", func(m *RuntimeManifest) { m.Provenance.EngineOrigin.RuntimeVersion = "bad" }, "invalid engine origin"},
+		{"origin commit", func(m *RuntimeManifest) { m.Provenance.EngineOrigin.SPXCommit = "deadbeef" }, "invalid engine origin"},
+		{"self origin", func(m *RuntimeManifest) { m.Provenance.EngineOrigin.RuntimeVersion = m.RuntimeVersion }, "invalid engine origin"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manifest, copiedOrigin := original, origin
+			manifest.Provenance.EngineOrigin = &copiedOrigin
+			test.mutate(&manifest)
+			if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("provenance error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestParseRuntimeManifestRejectsUnknownAndTrailingJSON(t *testing.T) {
 	lock, provenance, inputs, _ := runtimeManifestFixture(t)
 	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)

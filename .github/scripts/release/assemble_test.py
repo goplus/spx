@@ -95,6 +95,27 @@ class AssemblyTest(unittest.TestCase):
     def assert_no_output(self):
         self.assertFalse(Path(self.env["GITHUB_OUTPUT"]).exists())
 
+    def test_reused_engine_requires_and_preserves_source_manifest(self):
+        self.stage_runtime()
+        self.env["ENGINE_STATE"] = "reuse"
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.run_assembly()
+        self.assert_no_output()
+        # Re-stage inputs consumed by the rejected assembly.
+        self.stage_runtime()
+        source = self.write("artifacts/runtime-engine-provenance/engine-source-manifest.json", "{}")
+        self.run_assembly()
+        generation, = [args for args in self.calls if "--output" in args]
+        self.assertEqual(generation[generation.index("--engine-manifest") + 1], str(source))
+        self.assertFalse(Path("dist/runtime/engine-source-manifest.json").exists())
+
+    def test_source_manifest_rejected_for_fresh_engine_build(self):
+        self.stage_runtime()
+        self.write("artifacts/runtime-engine-provenance/engine-source-manifest.json", "{}")
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.run_assembly()
+        self.assert_no_output()
+
     def test_missing_runtime_generates_canonical_manifest_and_product_checksums(self):
         self.stage_runtime()
         self.env.update(RUN_WEB="true", RUN_LINUX="true")

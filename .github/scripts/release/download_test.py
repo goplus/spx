@@ -30,6 +30,10 @@ class ReleaseDownloadTest(unittest.TestCase):
         self.assertTrue(self.run.call_args.kwargs["check"])
         self.sleep.assert_not_called()
 
+    def test_selected_assets_are_forwarded_as_separate_patterns(self):
+        download.download_release("runtime-v4.0.2", "fixture/spx", "runtime", "first.zip", "second.zip")
+        self.assertEqual(self.run.call_args.args[0][-2:], ("--pattern=first.zip", "--pattern=second.zip"))
+
     def test_retry_replaces_partial_asset(self):
         with tempfile.TemporaryDirectory(prefix="spx release download ") as directory:
             asset = Path(directory) / "engine.zip"

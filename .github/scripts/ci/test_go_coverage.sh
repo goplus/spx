@@ -82,7 +82,8 @@ case "${1:-}" in
     covered_test coverage.out -coverpkg=./... ./...
     ;;
   tools)
-    covered_test coverage-tools.out -v ./.github/cmd/...
+    # Runtime CLI tests exercise release validation across the package boundary.
+    covered_test coverage-tools.out -v -coverpkg=./.github/cmd/...,./internal/release ./.github/cmd/...
     ;;
   native)
     bash .github/scripts/ci/test_go.sh --cover -v -coverprofile=coverage.out -covermode=atomic

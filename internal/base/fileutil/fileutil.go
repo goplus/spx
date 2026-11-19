@@ -21,18 +21,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
-	"time"
 )
-
-// ZIP's portable DOS timestamp range starts in 1980. Using that epoch and
-// canonical regular/executable modes keeps archives independent of workspace
-// mtimes and the process umask.
-var normalizedZipModTime = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // CopyFile streams a file from src to dst, creating dst's parent directory and preserving file mode.
 func CopyFile(src, dst string) (err error) {
@@ -117,27 +110,6 @@ func CopyDir(src, dst string) error {
 	})
 }
 
-// WriteNamedZip writes files to dst using the provided zip entry names.
-func WriteNamedZip(dst string, namedFiles map[string]string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(dst); err != nil {
-		return err
-	}
-
-	return writeZipFile(dst, func(writer *zip.Writer) error {
-		names := slices.Sorted(maps.Keys(namedFiles))
-
-		for _, name := range names {
-			if err := addFileToZip(writer, namedFiles[name], name); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
 // ZipDirectory writes the files in srcDir to dstZip using slash-separated relative paths.
 func ZipDirectory(srcDir, dstZip string) error {
 	info, err := os.Stat(srcDir)
@@ -186,64 +158,9 @@ func ZipDirectory(srcDir, dstZip string) error {
 	})
 }
 
-func writeZipFile(dst string, writeEntries func(*zip.Writer) error) (err error) {
-	file, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	writer := zip.NewWriter(file)
-	if err := writeEntries(writer); err != nil {
-		return err
-	}
-	return writer.Close()
-}
-
 func mkdirAllWithMode(path string, mode fs.FileMode) error {
 	if err := os.MkdirAll(path, mode); err != nil {
 		return err
 	}
 	return os.Chmod(path, mode)
-}
-
-func addFileToZip(writer *zip.Writer, src, name string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return fmt.Errorf("fileutil.addFileToZip: %s is a directory", src)
-	}
-	header := &zip.FileHeader{
-		Name:   name,
-		Method: zip.Deflate,
-	}
-	header.Modified = normalizedZipModTime.UTC()
-	header.SetMode(normalizedZipMode(info.Mode()))
-
-	entry, err := writer.CreateHeader(header)
-	if err != nil {
-		return err
-	}
-	input, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(entry, input); err != nil {
-		_ = input.Close()
-		return err
-	}
-	return input.Close()
-}
-
-func normalizedZipMode(mode fs.FileMode) fs.FileMode {
-	if mode.Perm()&0o111 != 0 {
-		return 0o755
-	}
-	return 0o644
 }

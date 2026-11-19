@@ -30,6 +30,11 @@ type resolutionErrorReader struct{ err error }
 func TestResolveRuntimeReadyDownloadsOnlyManifest(t *testing.T) {
 	fixture := newRuntimeResolutionFixture(t)
 	fixture.manifest.Provenance.SPXCommit = strings.Repeat("0", 40)
+	var err error
+	fixture.manifest.Provenance.EngineSourceSHA256, err = release.RuntimeEngineSourceSHA256(fixture.config.RepoRoot, "HEAD", fixture.lock)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server, requests := fixture.server(t, http.StatusOK, false, fixture.manifest, nil)
 	defer server.Close()
 	fixture.config.GitHubAPIURL = server.URL
@@ -163,6 +168,9 @@ func TestResolveRuntimeReportsIncompatibleCurrentSourceInputs(t *testing.T) {
 		{name: "runtime build recipe", mutate: func(manifest *release.RuntimeManifest) {
 			manifest.Provenance.BuildRecipeSHA256 = strings.Repeat("0", 64)
 		}, want: "runtime build recipe digest"},
+		{name: "engine source", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.Provenance.EngineSourceSHA256 = strings.Repeat("0", 64)
+		}, want: "engine source digest differs"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -179,6 +187,80 @@ func TestResolveRuntimeReportsIncompatibleCurrentSourceInputs(t *testing.T) {
 			}
 			if got.State != runtimeStateIncompatible || !strings.Contains(got.Reason, test.want) || !strings.Contains(got.Reason, "bump runtime_version") {
 				t.Fatalf("resolveRuntime = %#v, want incompatible %q with bump reminder", got, test.want)
+			}
+		})
+	}
+}
+
+func TestRuntimeReuseFollowsArtifactInputs(t *testing.T) {
+	fixture := newRuntimeResolutionFixture(t)
+	root := t.TempDir()
+	write := func(t *testing.T, name, content string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range map[string]string{
+		fixture.lock.Module.Path + "/module.cpp":            "// engine\n",
+		"cmd/spx/template/project/engine/ui/UiMonitor.tscn": "[gd_scene format=3]\n",
+		".github/scripts/runtime/build_pack.sh":             "#!/bin/sh\n",
+		"monitor.go":                                        "package spx\n",
+	} {
+		write(t, name, content)
+	}
+	gitOutput(t, root, "init", "--quiet")
+	commit := func(t *testing.T, message string) {
+		t.Helper()
+		gitOutput(t, root, "add", ".")
+		gitOutput(t, root, "-c", "user.name=Runtime Test", "-c", "user.email=runtime@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message)
+	}
+	commit(t, "published runtime inputs")
+	manifest := fixture.manifest
+	manifest.Provenance.SPXCommit = gitOutput(t, root, "rev-parse", "HEAD")
+	manifest.Provenance.ModuleTree = gitOutput(t, root, "rev-parse", "HEAD:"+fixture.lock.Module.Path)
+	var err error
+	manifest.Provenance.RuntimePackSourceSHA256, err = release.RuntimePackSourceSHA256(root, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Provenance.BuildRecipeSHA256, err = release.RuntimeBuildRecipeSHA256(root, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := fixture.config
+	config.RepoRoot = root
+	for _, test := range []struct {
+		name, path, content, incompatibility string
+	}{
+		{"monitor behavior", "monitor.go", "package spx\n// updated display behavior\n", ""},
+		{"monitor renderer", "internal/engine/ui/ui_monitor.go", "package ui\n// updated rendering\n", ""},
+		{"member evaluation", "internal/core/project/member_eval.go", "package project\n// preserve source values\n", ""},
+		{"new Go helper", "internal/core/scratch/monitor.go", "package scratch\n// new formatting helper\n", ""},
+		{"Go dependencies", "go.mod", "module example.com/game\n\ngo 1.26.0\n", ""},
+		{"resource", "cmd/spx/template/project/engine/ui/UiMonitor.tscn", "[gd_scene format=3]\n; changed layout\n", "runtime pack source digest"},
+		{"resource import", "cmd/spx/template/project/engine/fonts/default.ttf.import", "[remap]\nuid=\"uid://changed\"\n", "runtime pack source digest"},
+		{"pack project config", "cmd/spx/internal/command/env.go", "package command\n// changed project config\n", "runtime build recipe digest"},
+		{"pack import ordering", "cmd/spx/internal/command/dispatch.go", "package command\n// changed import order\n", "runtime build recipe digest"},
+		{"pack exporter", "cmd/spx/internal/command/export.go", "package command\n// changed export behavior\n", "runtime build recipe digest"},
+		{"C++ module", fixture.lock.Module.Path + "/module.cpp", "// changed engine\n", "module tree"},
+		{"SCons profile", fixture.lock.Module.Path + "/spx_scons_profile.json", "{\"changed\":true}\n", "module tree"},
+		{"pack build recipe", ".github/scripts/runtime/build_pack.sh", "#!/bin/sh\n# changed pack recipe\n", "runtime build recipe digest"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			gitOutput(t, root, "reset", "--hard", "--quiet", manifest.Provenance.SPXCommit)
+			write(t, test.path, test.content)
+			commit(t, test.name)
+			reason, err := currentRuntimeIncompatibility(config, fixture.lock, manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.incompatibility == "" && reason != "" || test.incompatibility != "" && !strings.Contains(reason, test.incompatibility) {
+				t.Fatalf("runtime incompatibility = %q, want %q", reason, test.incompatibility)
 			}
 		})
 	}
@@ -267,18 +349,24 @@ func TestResolveRuntimeRejectsMissingManifestOnPublicRelease(t *testing.T) {
 
 func TestWriteRuntimeResolutionOutputs(t *testing.T) {
 	tests := []struct {
-		name   string
-		state  string
-		reason string
+		name       string
+		resolution runtimeResolution
 	}{
-		{name: "ready", state: runtimeStateReady, reason: "verified runtime-v1.2.3"},
-		{name: "missing", state: runtimeStateMissing, reason: "runtime-v1.2.3 is not published"},
-		{name: "incompatible", state: runtimeStateIncompatible, reason: "runtime-v1.2.3 cannot be reused; bump runtime_version"},
+		{"ready", runtimeResolution{State: runtimeStateReady, Reason: "verified runtime-v1.2.3"}},
+		{"build", runtimeResolution{State: runtimeStateMissing, Reason: "runtime-v1.2.3 is not published", EngineState: "build"}},
+		{"reuse engine", runtimeResolution{
+			State: runtimeStateMissing, Reason: "runtime-v1.2.3 is not published", EngineState: "reuse",
+			EngineVersion: "1.2.2", EngineTag: "runtime-v1.2.2", EngineManifest: "runtime-manifest.json",
+		}},
+		{"incompatible", runtimeResolution{State: runtimeStateIncompatible, Reason: "runtime-v1.2.3 cannot be reused; bump runtime_version"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "github-output")
-			resolution := runtimeResolution{State: test.state, Reason: test.reason, Tag: "runtime-v1.2.3"}
+			if err := os.WriteFile(path, []byte("previous=value\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			resolution := test.resolution
 			if err := writeRuntimeResolutionOutputs(path, resolution); err != nil {
 				t.Fatal(err)
 			}
@@ -286,10 +374,11 @@ func TestWriteRuntimeResolutionOutputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, line := range []string{"runtime_state=" + test.state, "runtime_reason=" + test.reason} {
-				if !strings.Contains(string(data), line+"\n") {
-					t.Fatalf("GitHub output %q does not contain %q", data, line)
-				}
+			want := "previous=value\nruntime_state=" + resolution.State + "\nruntime_reason=" + resolution.Reason +
+				"\nengine_state=" + resolution.EngineState + "\nengine_version=" + resolution.EngineVersion +
+				"\nengine_tag=" + resolution.EngineTag + "\nengine_manifest=" + resolution.EngineManifest + "\n"
+			if string(data) != want {
+				t.Fatalf("GitHub output = %q, want %q", data, want)
 			}
 		})
 	}
@@ -640,11 +729,13 @@ func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
 		name   string
 		module bool
 		pack   bool
+		engine bool
 		want   string
 	}{
-		{"module tree", false, false, "resolve current module tree:"},
-		{"pack inputs", true, false, "runtime pack source"},
-		{"recipe inputs", true, true, "runtime build recipe tree contains no tracked inputs"},
+		{"module tree", false, false, false, "resolve current module tree:"},
+		{"pack inputs", true, false, false, "runtime pack source"},
+		{"recipe inputs", true, true, false, "runtime build recipe tree contains no tracked inputs"},
+		{"engine inputs", true, false, true, "runtime engine contract tree contains no tracked inputs"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -653,7 +744,7 @@ func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
 				files[filepath.Join(fixture.lock.Module.Path, "module.cpp")] = "// module input\n"
 			}
 			if tt.pack {
-				files["go.mod"] = "module example.com/runtime\n\ngo 1.26.0\n"
+				files["cmd/spx/template/project/main.tscn"] = "[gd_scene format=3]\n"
 			}
 			for name, data := range files {
 				path := filepath.Join(root, name)
@@ -669,6 +760,9 @@ func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
 			gitOutput(t, root, "-c", "user.name=Runtime Test", "-c", "user.email=runtime@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "incomplete inputs")
 			config, manifest := fixture.config, fixture.manifest
 			config.RepoRoot = root
+			if tt.engine {
+				manifest.Provenance.EngineSourceSHA256 = strings.Repeat("0", 64)
+			}
 			if tt.module {
 				manifest.Provenance.ModuleTree = gitOutput(t, root, "rev-parse", "HEAD:"+fixture.lock.Module.Path)
 			}

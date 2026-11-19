@@ -58,11 +58,13 @@ def verify_runtime(directory, manifest):
         "--asset-directory", str(directory))
 
 
-def generate_runtime_manifest(directory, names, env):
+def generate_runtime_manifest(directory, names, env, engine_manifest=None):
     manifest = directory / env["RUNTIME_MANIFEST"]
     checksums = directory / "SHA256SUMS"
     arguments = [*MANIFEST_COMMAND, "--lock", str(LOCK), "--revision", "HEAD", "--output", str(manifest),
                  "--checksums", str(checksums)]
+    if engine_manifest is not None:
+        arguments.extend(("--engine-manifest", str(engine_manifest)))
     for name in names:
         arguments.extend(("--asset", f"{name}={directory / name}"))
     run(*arguments)
@@ -100,12 +102,18 @@ def assemble(env):
     else:
         copy_assets(files, required_assets, runtime, "locked runtime asset")
 
+    engine_manifest = files.pop("engine-source-manifest.json", None)
+    if (env.get("ENGINE_STATE") == "reuse") != (engine_manifest is not None):
+        raise ValueError("Engine source provenance does not match the selected build plan")
+    if state == "ready" and engine_manifest is not None:
+        raise ValueError("Published runtime reuse must not contain copied engine provenance")
+
     selected = [name for platform, names in PRODUCTS.items() if env[f"RUN_{platform}"] == "true" for name in names]
     copy_assets(files, selected, product, "selected SPX product asset")
     if files:
         raise ValueError(f"Unexpected build artifact: {', '.join(sorted(files))}")
     if state == "missing":
-        generate_runtime_manifest(runtime, required_assets, env)
+        generate_runtime_manifest(runtime, required_assets, env, engine_manifest)
         verify_runtime(runtime, manifest)
     require_runtime_files(runtime, {*required_assets, manifest, "SHA256SUMS"})
     if selected:
