@@ -30,7 +30,7 @@ const (
 	projectSetup
 	interpretedSetup
 	webExportSetup
-	packSetup
+	resourceSetup
 )
 
 type commandBuild uint8
@@ -38,7 +38,6 @@ type commandBuild uint8
 const (
 	noBuild commandBuild = iota
 	dllBuild
-	initialDllBuild // Preserve the web template command's fresh-project build.
 	wasmBuild
 	tinyGoBuild
 )
@@ -71,10 +70,10 @@ var commandSpecs = []commandSpec{
 	{name: "runwebworker", group: "Web Development", summary: "Run with a web worker", setup: webExportSetup, runtime: true, run: (*CmdTool).RunWebWorker},
 	{name: "exportweb", group: "Web Development", summary: "Export the web package", setup: webExportSetup, run: (*CmdTool).ExportWeb},
 	{name: "exportwebworker", group: "Web Development", summary: "Export the web worker package", setup: webExportSetup, run: (*CmdTool).ExportWebWorker},
-	{name: "exporttemplateweb", group: "Web Development", summary: "Export the web template project", setup: projectSetup, build: initialDllBuild, run: (*CmdTool).ExportTemplateWeb},
+	{name: "exporttemplateweb", group: "Web Development", summary: "Export the web template project", setup: resourceSetup, run: (*CmdTool).ExportTemplateWeb},
 	{name: "stopweb", group: "Web Development", summary: "Stop the web server", setup: pathSetup, run: (*CmdTool).StopWeb},
 	{name: "export", group: "Export & Distribution", summary: "Export the PC package", setup: projectSetup, build: dllBuild, run: (*CmdTool).Export},
-	{name: "exportpack", group: "Export & Distribution", summary: "Export project data for the desktop runtime", setup: packSetup, hidden: true, run: (*CmdTool).ExportPack},
+	{name: "exportpack", group: "Export & Distribution", summary: "Export project data for the desktop runtime", setup: resourceSetup, hidden: true, run: (*CmdTool).ExportPack},
 	{name: "exportapk", group: "Export & Distribution", summary: "Export an Android APK", setup: projectSetup, build: dllBuild, stageAssets: true, run: (*CmdTool).executeExportApk},
 	{name: "exportios", group: "Export & Distribution", summary: "Export an iOS package", setup: projectSetup, build: dllBuild, stageAssets: true, run: (*CmdTool).executeExportIos},
 	{name: "exportminigame", group: "Export & Distribution", summary: "Export a minigame package", setup: webExportSetup, run: (*CmdTool).ExportMinigame},
@@ -94,12 +93,8 @@ func (cmd *CmdTool) dispatch(spec commandSpec, fsRelDir, dstRelDir string) error
 	if err := cmd.prepareCommand(spec, fsRelDir, dstRelDir); err != nil {
 		return err
 	}
-	needsImport := (spec.setup == projectSetup || spec.setup == packSetup) && cmd.ShouldReimport()
-	build := spec.build
-	if build == initialDllBuild && !needsImport {
-		build = noBuild
-	}
-	if err := cmd.buildCommand(build); err != nil {
+	needsImport := (spec.setup == projectSetup || spec.setup == resourceSetup) && cmd.ShouldReimport()
+	if err := cmd.buildCommand(spec.build); err != nil {
 		return err
 	}
 	if needsImport {
@@ -119,15 +114,15 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 		return nil
 	case interpretedSetup:
 		return cmd.resolveProjectPaths(cmd.Args.Path, dstRelDir)
-	case pathSetup, projectSetup, webExportSetup, packSetup:
+	case pathSetup, projectSetup, webExportSetup, resourceSetup:
 		if err := cmd.setupPaths(dstRelDir); err != nil {
 			return err
 		}
 		if spec.setup == pathSetup {
 			return nil
 		}
-		if spec.setup == packSetup {
-			return cmd.setupPackEnv(fsRelDir)
+		if spec.setup == resourceSetup {
+			return cmd.setupResourceEnv(fsRelDir)
 		}
 	default:
 		return fmt.Errorf("command %q has an invalid setup", spec.name)
@@ -155,7 +150,7 @@ func (cmd *CmdTool) buildCommand(build commandBuild) error {
 	switch build {
 	case noBuild:
 		return nil
-	case dllBuild, initialDllBuild:
+	case dllBuild:
 		return cmd.BuildDll()
 	case wasmBuild:
 		return cmd.BuildWasm()
