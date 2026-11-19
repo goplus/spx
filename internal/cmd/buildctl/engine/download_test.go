@@ -865,6 +865,9 @@ func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
 				"editor-linux-" + env.arch + ".zip": {"godot.linuxbsd.editor." + env.arch: "editor"},
 				release.RuntimeAssetZipName:         {"gdspxrt.pck": "pack", "runtime.gdextension": "extension"},
 			} {
+				if operation == "linux pack" && !strings.HasPrefix(archive, "editor-") {
+					continue
+				}
 				if err := writeZipFixture(filepath.Join(assets, archive), files); err != nil {
 					t.Fatal(err)
 				}
@@ -887,7 +890,7 @@ func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
 			}
 			if operation != "ios command" {
 				want[filepath.Join(env.goBinDir, "gdspx"+env.version)] = "editor"
-				if operation != "editor" {
+				if operation != "editor" && operation != "linux pack" {
 					want[filepath.Join(env.goBinDir, "gdspxrt"+env.version)] = "runtime"
 					want[filepath.Join(env.goBinDir, "gdspxrtdbg"+env.version)] = "debug"
 					want[filepath.Join(env.templateDir, "linux_release."+env.arch)] = "runtime"

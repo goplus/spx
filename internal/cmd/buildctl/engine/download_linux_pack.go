@@ -42,8 +42,8 @@ type engineDownloadEnv struct {
 	manifest             *release.RuntimeManifest
 }
 
-// PrepareLinuxRuntimePackAssets installs only the Linux/amd64 assets used by
-// the release runtime pack workflow.
+// PrepareLinuxRuntimePackAssets installs the Linux/amd64 editor used by the
+// release runtime pack workflow. Resource-only export does not need templates.
 func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return fmt.Errorf("preparing Linux runtime packs requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
@@ -57,9 +57,6 @@ func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
 		return err
 	}
 	env.arch = linuxRuntimePackArch
-	if err := downloadLinuxAssets(env, false); err != nil {
-		return err
-	}
 	return downloadLinuxAssets(env, true)
 }
 
