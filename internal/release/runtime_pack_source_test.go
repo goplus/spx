@@ -236,6 +236,7 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/base/httpclient/http.go", false},
 		{"internal/base/httpclient/http_test.go", false},
 		{"internal/base/fileutil/fileutil.go", false},
+		{"internal/base/fileutil/zip_writer.go", true},
 		{"internal/base/fileutil/fileutil_test.go", false},
 		{"internal/base/fileutil/path.go", false},
 		{"internal/base/fileutil/stable_read.go", false},
@@ -580,7 +581,7 @@ func TestRuntimeSourceSelectionReadsOnlyExportPreset(t *testing.T) {
 	}
 }
 
-func TestRuntimePackSourceSHA256TracksResourcesOnly(t *testing.T) {
+func TestRuntimePackDigestsSeparateResourcesAndRecipe(t *testing.T) {
 	repo := t.TempDir()
 	runGit := func(args ...string) {
 		t.Helper()
@@ -667,6 +668,33 @@ binary_format/architecture="x86_64"
 	}
 	if active != baseline {
 		t.Fatal("Go command changed resource-only runtime pack digest")
+	}
+	recipe, err := RuntimeBuildRecipeSHA256(repo, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []struct {
+		path   string
+		repack bool
+	}{
+		{"internal/base/fileutil/zip_writer.go", true},
+		{"internal/base/fileutil/fileutil.go", false},
+		{"cmd/spx/internal/logutil/logutil.go", false},
+	} {
+		write(change.path, "updated implementation\n")
+		commit("change " + change.path)
+		pack, err := RuntimePackSourceSHA256(repo, "HEAD")
+		if err != nil || pack != baseline {
+			t.Fatalf("%s changed resource identity: %s, %v", change.path, pack, err)
+		}
+		next, err := RuntimeBuildRecipeSHA256(repo, "HEAD")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (next != recipe) != change.repack {
+			t.Fatalf("%s requires repack = %t, want %t", change.path, next != recipe, change.repack)
+		}
+		recipe = next
 	}
 	previous := active
 	for _, resource := range []string{
@@ -798,34 +826,4 @@ func installReleaseGitFixture(t *testing.T, output string) {
 	t.Setenv("SPX_GIT_OUTPUT", output)
 	t.Setenv("SPX_GIT_ERROR", "")
 	t.Setenv("SPX_GIT_STATUS", "0")
-}
-
-func TestRuntimeBuildRecipeTracksOnlySemanticExportSteps(t *testing.T) {
-	for name := range runtimeBuildRecipeFiles {
-		before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture("100644 blob " + strings.Repeat("1", 40) + "\t" + name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		after, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture("100644 blob " + strings.Repeat("2", 40) + "\t" + name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if before == after {
-			t.Fatalf("semantic export step %s ignored", name)
-		}
-	}
-	const step = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/runtime/build_pack.sh"
-	for _, name := range []string{"cmd/spx/internal/logutil/logutil.go", "internal/base/log/log.go", "internal/base/fileutil/fileutil.go", "internal/cmd/buildctl/shared/command_runner.go", "internal/cmd/buildctl/engine/download_local.go"} {
-		before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(step, "100644 blob "+strings.Repeat("1", 40)+"\t"+name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		after, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(step, "100644 blob "+strings.Repeat("2", 40)+"\t"+name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if before != after {
-			t.Fatalf("helper %s invalidated pack", name)
-		}
-	}
 }

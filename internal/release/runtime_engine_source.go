@@ -70,10 +70,8 @@ func RuntimeEngineSourceSHA256(repoRoot, revision string, lock RuntimeLock) (str
 		module, contract, workflow,
 		lock.Toolchain.SCons, lock.Toolchain.EMSDK, lock.Toolchain.AndroidNDK, lock.Toolchain.JDK,
 	}
-	data, err := json.Marshal(identity)
-	if err != nil {
-		return "", err
-	}
+	// This fixed projection contains only strings and an int.
+	data, _ := json.Marshal(identity)
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:]), nil
 }

@@ -21,8 +21,6 @@ import (
 	"path/filepath"
 )
 
-const RuntimePackAssetName = "spx-runtime-assets.zip"
-
 // ValidateEngineReuse binds a published source to its immutable lock snapshot
 // before comparing the independent engine identity. Old manifests intentionally
 // cannot seed partial reuse: they did not record this build contract.
@@ -47,10 +45,7 @@ func ValidateEngineReuse(manifest RuntimeManifest, target RuntimeLock, repoRoot,
 	if manifest.Provenance.EngineSourceSHA256 != digest {
 		return fmt.Errorf("release: engine source digest differs from current inputs")
 	}
-	if err := manifest.ValidateRequiredAssets(target.RequiredAssets); err != nil {
-		return err
-	}
-	return nil
+	return manifest.validateRequiredAssets(target.RequiredAssets)
 }
 
 // VerifyEngineFiles checks each reusable engine ZIP, not the obsolete pack.
@@ -59,7 +54,7 @@ func (m RuntimeManifest) VerifyEngineFiles(directory string) error {
 		return err
 	}
 	for _, asset := range m.Assets {
-		if asset.Name == RuntimePackAssetName {
+		if asset.Name == RuntimeAssetZipName {
 			continue
 		}
 		if err := verifyRuntimeAssetFile(asset, filepath.Join(directory, asset.Name)); err != nil {
@@ -79,7 +74,7 @@ func (m *RuntimeManifest) InheritEngine(source RuntimeManifest) error {
 		return fmt.Errorf("release: copied engine identity differs from source")
 	}
 	for _, asset := range m.Assets {
-		if asset.Name == RuntimePackAssetName {
+		if asset.Name == RuntimeAssetZipName {
 			continue
 		}
 		original, ok := source.Asset(asset.Name)
@@ -87,10 +82,10 @@ func (m *RuntimeManifest) InheritEngine(source RuntimeManifest) error {
 			return fmt.Errorf("release: reused engine asset %q differs from source", asset.Name)
 		}
 	}
-	origin := source.Provenance.EngineOrigin
-	if origin == nil {
-		origin = &RuntimeEngineOrigin{RuntimeVersion: source.RuntimeVersion, SPXCommit: source.Provenance.SPXCommit}
+	origin := RuntimeEngineOrigin{RuntimeVersion: source.RuntimeVersion, SPXCommit: source.Provenance.SPXCommit}
+	if source.Provenance.EngineOrigin != nil {
+		origin = *source.Provenance.EngineOrigin
 	}
-	m.Provenance.EngineOrigin = &RuntimeEngineOrigin{RuntimeVersion: origin.RuntimeVersion, SPXCommit: origin.SPXCommit}
+	m.Provenance.EngineOrigin = &origin
 	return m.Validate()
 }

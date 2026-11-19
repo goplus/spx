@@ -103,7 +103,7 @@ func TestRunReleaseManifestRejectsMixedModes(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot be combined") {
 		t.Fatalf("mixed modes error = %v", err)
 	}
-	for _, flag := range []string{"--spx-commit", "--module-tree", "--runtime-pack-source-sha256", "--build-recipe-sha256", "--verify-manifest"} {
+	for _, flag := range []string{"--spx-commit", "--module-tree", "--runtime-pack-source-sha256", "--build-recipe-sha256", "--engine-source-sha256", "--verify-manifest"} {
 		for _, value := range []string{"", "explicit"} {
 			args := []string{"--revision", "HEAD", flag, value}
 			if err := runReleaseManifest(args); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
@@ -177,6 +177,7 @@ func TestRevisionManifestMatchesExplicitProvenance(t *testing.T) {
 }
 
 func TestRevisionManifestFailuresPreserveOutputs(t *testing.T) {
+	module := release.DefaultRuntimeLock().Module.Path
 	for _, test := range []struct {
 		name     string
 		revision string
@@ -184,15 +185,16 @@ func TestRevisionManifestFailuresPreserveOutputs(t *testing.T) {
 		remove   string
 		want     string
 	}{
-		{"unknown revision", "missing-revision", "modules/fixture", "", "resolve Git object"},
-		{"empty revision", "", "modules/fixture", "", "--revision must not be empty"},
-		{"blank revision", " ", "modules/fixture", "", "--revision must not be empty"},
-		{"option-shaped revision", "--help", "modules/fixture", "", "resolve Git object"},
+		{"unknown revision", "missing-revision", module, "", "resolve Git object"},
+		{"empty revision", "", module, "", "--revision must not be empty"},
+		{"blank revision", " ", module, "", "--revision must not be empty"},
+		{"option-shaped revision", "--help", module, "", "resolve Git object"},
 		{"empty module", "HEAD", "", "", "module path"},
 		{"missing module", "HEAD", "missing/module", "", "resolve Git object"},
-		{"missing pack inputs", "HEAD", "modules/fixture", "cmd/spx/template/project/main.tscn", "runtime pack source tree contains no tracked inputs"},
-		{"missing recipe inputs", "HEAD", "modules/fixture", ".github/scripts/runtime/build_pack.sh", "runtime build recipe tree contains no tracked inputs"},
-		{"git unavailable", "HEAD", "modules/fixture", "", "resolve Git object"},
+		{"missing pack inputs", "HEAD", module, "cmd/spx/template/project/main.tscn", "runtime pack source tree contains no tracked inputs"},
+		{"missing recipe inputs", "HEAD", module, ".github/scripts/runtime/build_pack.sh", "runtime build recipe tree contains no tracked inputs"},
+		{"missing engine contract", "HEAD", module, ".github/scripts/runtime/build_contract.py", "runtime engine contract tree contains no tracked inputs"},
+		{"git unavailable", "HEAD", module, "", "resolve Git object"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			lock, git := newManifestRepository(t)
@@ -249,7 +251,6 @@ func newManifestRepository(t *testing.T) (release.RuntimeLock, func(...string) s
 		return strings.TrimSpace(string(output))
 	}
 	lock := release.DefaultRuntimeLock()
-	lock.Module.Path = "modules/fixture"
 	data, err := lock.JSON()
 	if err != nil {
 		t.Fatal(err)

@@ -94,24 +94,34 @@ func runReleaseManifest(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	var revisionSet, explicitProvenance, verifySet bool
+	set := make(map[string]bool)
 	fs.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "revision":
-			revisionSet = true
-		case "spx-commit", "module-tree", "runtime-pack-source-sha256", "build-recipe-sha256", "engine-source-sha256":
-			explicitProvenance = true
-		case "verify-manifest":
-			verifySet = true
-		}
+		set[f.Name] = true
 	})
-	if revisionSet {
-		if explicitProvenance || verifySet {
+	explicitProvenance := set["spx-commit"] || set["module-tree"] || set["runtime-pack-source-sha256"] || set["build-recipe-sha256"] || set["engine-source-sha256"]
+	if set["revision"] {
+		if explicitProvenance || set["verify-manifest"] {
 			return errors.New("--revision cannot be combined with explicit provenance flags or --verify-manifest")
 		}
 		if strings.TrimSpace(revision) == "" {
 			return errors.New("--revision must not be empty")
 		}
+	}
+	for name, value := range map[string]string{"verify-manifest": verifyManifest, "verify-engine-manifest": verifyEngineManifest, "engine-manifest": engineManifest} {
+		if set[name] && strings.TrimSpace(value) == "" {
+			return fmt.Errorf("--%s must not be empty", name)
+		}
+	}
+	if set["verify-manifest"] || set["verify-engine-manifest"] {
+		if explicitProvenance || set["engine-manifest"] || len(specs) != 0 || set["checksums"] || set["output"] {
+			return errors.New("generation flags cannot be combined with manifest verification")
+		}
+	}
+	if set["verify-engine-manifest"] && (!set["revision"] || set["verify-manifest"]) {
+		return errors.New("--verify-engine-manifest requires --revision and cannot be combined with --verify-manifest")
+	}
+	if set["engine-manifest"] && !set["revision"] {
+		return errors.New("--engine-manifest requires --revision")
 	}
 	lock := release.DefaultRuntimeLock()
 	if lockPath != "" {
@@ -126,14 +136,8 @@ func runReleaseManifest(args []string) error {
 		lock = parsed
 	}
 	if verifyEngineManifest != "" {
-		if !revisionSet || explicitProvenance || verifySet || engineManifest != "" || len(specs) != 0 || checksumsPath != "" {
-			return errors.New("--verify-engine-manifest requires --revision and cannot be combined with generation flags")
-		}
-		source, err := release.LoadRuntimeManifest(verifyEngineManifest)
+		source, err := loadEngineSource(verifyEngineManifest, lock, revision)
 		if err != nil {
-			return err
-		}
-		if err := release.ValidateEngineReuse(source, lock, ".", revision); err != nil {
 			return err
 		}
 		if assetDirectory != "" {
@@ -142,9 +146,6 @@ func runReleaseManifest(args []string) error {
 		return nil
 	}
 	if verifyManifest != "" {
-		if engineManifest != "" || engineSourceHash != "" || len(specs) != 0 || checksumsPath != "" || spxCommit != "" || moduleTree != "" || runtimePackSourceHash != "" || buildRecipeHash != "" {
-			return errors.New("generation flags cannot be combined with --verify-manifest")
-		}
 		data, err := os.ReadFile(verifyManifest)
 		if err != nil {
 			return fmt.Errorf("read runtime manifest: %w", err)
@@ -154,14 +155,12 @@ func runReleaseManifest(args []string) error {
 			return err
 		}
 		if assetDirectory != "" {
-			if err := manifest.VerifyFiles(assetDirectory); err != nil {
-				return err
-			}
+			return manifest.VerifyFiles(assetDirectory)
 		}
 		return nil
 	}
 	if assetDirectory != "" {
-		return errors.New("--asset-directory requires --verify-manifest")
+		return errors.New("--asset-directory requires --verify-manifest or --verify-engine-manifest")
 	}
 	if len(specs) == 0 {
 		fs.Usage()
@@ -183,16 +182,9 @@ func runReleaseManifest(args []string) error {
 		RuntimePackSourceSHA256: runtimePackSourceHash,
 		BuildRecipeSHA256:       buildRecipeHash,
 	}
-	if revisionSet {
+	if set["revision"] {
 		var err error
-		provenance, err = revisionProvenance(revision, lock.Module.Path)
-		if err != nil {
-			return err
-		}
-	}
-	if revisionSet {
-		var err error
-		provenance.EngineSourceSHA256, err = release.RuntimeEngineSourceSHA256(".", provenance.SPXCommit, lock)
+		provenance, err = revisionProvenance(revision, lock)
 		if err != nil {
 			return err
 		}
@@ -205,14 +197,8 @@ func runReleaseManifest(args []string) error {
 	}
 
 	if engineManifest != "" {
-		if !revisionSet {
-			return errors.New("--engine-manifest requires --revision")
-		}
-		source, err := release.LoadRuntimeManifest(engineManifest)
+		source, err := loadEngineSource(engineManifest, lock, provenance.SPXCommit)
 		if err != nil {
-			return err
-		}
-		if err := release.ValidateEngineReuse(source, lock, ".", provenance.SPXCommit); err != nil {
 			return err
 		}
 		if err := manifest.InheritEngine(source); err != nil {
@@ -239,7 +225,15 @@ func runReleaseManifest(args []string) error {
 	return nil
 }
 
-func revisionProvenance(revision, modulePath string) (release.RuntimeProvenance, error) {
+func loadEngineSource(path string, lock release.RuntimeLock, revision string) (release.RuntimeManifest, error) {
+	source, err := release.LoadRuntimeManifest(path)
+	if err != nil {
+		return source, err
+	}
+	return source, release.ValidateEngineReuse(source, lock, ".", revision)
+}
+
+func revisionProvenance(revision string, lock release.RuntimeLock) (release.RuntimeProvenance, error) {
 	var provenance release.RuntimeProvenance
 	commit, err := gitObject(revision + "^{commit}")
 	if err != nil {
@@ -248,7 +242,7 @@ func revisionProvenance(revision, modulePath string) (release.RuntimeProvenance,
 	// Resolve a movable ref once, then use the same immutable commit for every
 	// provenance field. Local generated files never participate in these hashes.
 	provenance.SPXCommit = commit
-	provenance.ModuleTree, err = gitObject(commit + ":" + modulePath)
+	provenance.ModuleTree, err = gitObject(commit + ":" + lock.Module.Path)
 	if err != nil {
 		return provenance, err
 	}
@@ -257,6 +251,10 @@ func revisionProvenance(revision, modulePath string) (release.RuntimeProvenance,
 		return provenance, err
 	}
 	provenance.BuildRecipeSHA256, err = release.RuntimeBuildRecipeSHA256(".", commit)
+	if err != nil {
+		return provenance, err
+	}
+	provenance.EngineSourceSHA256, err = release.RuntimeEngineSourceSHA256(".", commit, lock)
 	return provenance, err
 }
 

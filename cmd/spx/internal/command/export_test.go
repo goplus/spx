@@ -95,6 +95,25 @@ esac
 	}
 }
 
+func TestExportPackStopsOnPreparationFailure(t *testing.T) {
+	for _, tc := range []struct{ name, blocked, want string }{
+		{"engine path", "bin", "requires engine to be installed"},
+		{"resource destination", "project", "prepare runtime pack files"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeCommandTestFile(t, filepath.Join(root, tc.blocked), "occupied")
+			cmd := &CmdTool{
+				Version: "pack-fixture", GoBinPath: filepath.Join(root, "bin"),
+				TargetDir: root, ProjectDir: filepath.Join(root, "project"), ProjectFS: webExportTestFS,
+			}
+			if err := cmd.setupPackEnv("template/project"); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("prepare pack = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestExportPackRejectsUnsupportedPlatformBeforeRunning(t *testing.T) {
 	called := false
 	cmd := &CmdTool{ProjectDir: t.TempDir(), CmdPath: "godot"}

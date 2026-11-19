@@ -29,7 +29,7 @@ manifest 独立记录 `engine_source_sha256`，同时保留 `module_tree`、`run
 
 module tree 仍覆盖完整的 `godot_modules/spx` tree，包括 C++、头文件、SCons profile、Web JS 与生成输入。pack-source 摘要只跟踪专用命令 `spx exportpack` 实际使用的项目模板与资源；`export_presets.cfg` 只投影 Linux preset，`gdspx.gdextension` 等实际进入 PCK 的文件完整计算。普通 Go 游戏逻辑、monitor 实现及其运行时依赖不属于资源包输入，它们随 SPX 产品构建更新，不再仅因这些源码变化而要求升级 runtime。
 
-`exportpack` 直接准备资源项目，以 recovery mode 导入和导出 PCK，不生成 XGo 项目、不编译 Go 动态库，也不加载 Go 扩展初始化。它不依赖平台导出模板。资源的 `.import` 文件固定 UID，使独立导出不会因随机 UID 改变场景引用与 PCK 内容。build-recipe 摘要检查专用资源项目准备、pack 导出与 ZIP 写入实现；共享项目准备、导入分发和预设选择按文件粒度保留在配方中。通用下载、日志 helper、独立的 Web/mobile exporter 和 CI 编排不进入资源包摘要；配方变化不会使引擎身份失效。
+`exportpack` 直接准备资源项目，以 recovery mode 导入和导出 PCK，不生成 XGo 项目、不编译 Go 动态库，也不加载 Go 扩展初始化。它不依赖平台导出模板。资源的 `.import` 文件固定 UID，使独立导出不会因随机 UID 改变场景引用与 PCK 内容。build-recipe 摘要检查专用资源项目准备、pack 导出与独立的 ZIP 写入实现（`internal/base/fileutil/zip_writer.go`）；共享项目准备、导入分发和预设选择按文件粒度保留在配方中。通用下载、日志 helper、独立的 Web/mobile exporter 和 CI 编排不进入资源包摘要；配方变化不会使引擎身份失效。
 
 ## 冻结顺序
 

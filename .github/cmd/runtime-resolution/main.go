@@ -100,20 +100,17 @@ func runRuntimeResolution(args []string) error {
 }
 
 func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtimeResolution, error) {
-	result, err := resolveTargetRuntime(ctx, config)
+	target, err := loadRuntimeResolutionLock(config.LockPath)
 	if err != nil {
-		return result, err
+		return runtimeResolution{}, err
 	}
-	if result.State != runtimeStateMissing {
-		return result, nil
+	result, err := resolveTargetRuntime(ctx, config, target)
+	if err != nil || result.State != runtimeStateMissing {
+		return result, err
 	}
 	result.EngineState = "build"
 	if config.ReuseEngineVersion == "" {
 		return result, nil
-	}
-	target, err := loadRuntimeResolutionLock(config.LockPath)
-	if err != nil {
-		return result, err
 	}
 	source, err := release.RuntimeLockForVersion(config.ReuseEngineVersion)
 	if err != nil {
@@ -156,29 +153,14 @@ func publishedEngineManifest(ctx context.Context, config runtimeResolutionConfig
 	if published.Draft || published.TagName != lock.RuntimeReleaseTag() {
 		return release.RuntimeManifest{}, errors.New("engine source must be the requested published release")
 	}
-	manifestURL, err := verifyPublishedAssetNames(lock, published.Assets)
+	manifest, err := fetchPublishedManifest(ctx, config, lock, published.Assets)
 	if err != nil {
-		return release.RuntimeManifest{}, err
+		return manifest, fmt.Errorf("engine source %w", err)
 	}
-	status, body, err = fetchGitHub(ctx, config, manifestURL, "application/octet-stream")
-	if err != nil {
-		return release.RuntimeManifest{}, err
-	}
-	if status != http.StatusOK {
-		return release.RuntimeManifest{}, fmt.Errorf("engine source manifest HTTP status %d", status)
-	}
-	manifest, err := release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets)
-	if err != nil {
-		return manifest, err
-	}
-	return manifest, manifest.ValidateForLock(lock)
+	return manifest, nil
 }
 
-func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig) (runtimeResolution, error) {
-	lock, err := loadRuntimeResolutionLock(config.LockPath)
-	if err != nil {
-		return runtimeResolution{}, err
-	}
+func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig, lock release.RuntimeLock) (runtimeResolution, error) {
 	tag := lock.RuntimeReleaseTag()
 	result := runtimeResolution{Tag: tag}
 
@@ -215,20 +197,9 @@ func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig) (
 		return result, nil
 	}
 
-	manifestURL, err := verifyPublishedAssetNames(lock, published.Assets)
+	manifest, err := fetchPublishedManifest(ctx, config, lock, published.Assets)
 	if err != nil {
-		return runtimeResolution{}, runtimeConflict(tag, "%v", err)
-	}
-	status, body, err = fetchGitHub(ctx, config, manifestURL, "application/octet-stream")
-	if err != nil {
-		return runtimeResolution{}, fmt.Errorf("resolve runtime release %s manifest: %w", tag, err)
-	}
-	if status != http.StatusOK {
-		return runtimeResolution{}, runtimeConflict(tag, "download manifest: HTTP %d %s", status, http.StatusText(status))
-	}
-	manifest, err := release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets)
-	if err != nil {
-		return runtimeResolution{}, runtimeConflict(tag, "parse manifest: %v", err)
+		return runtimeResolution{}, fmt.Errorf("runtime %s is not reusable: %w", tag, err)
 	}
 	incompatibility, err := currentRuntimeIncompatibility(config, lock, manifest)
 	if err != nil {
@@ -243,6 +214,21 @@ func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig) (
 	result.State = runtimeStateReady
 	result.Reason = fmt.Sprintf("verified published %s against current runtime inputs at %s", tag, strings.TrimSpace(config.Revision))
 	return result, nil
+}
+
+func fetchPublishedManifest(ctx context.Context, config runtimeResolutionConfig, lock release.RuntimeLock, assets []gitHubAsset) (release.RuntimeManifest, error) {
+	manifestURL, err := verifyPublishedAssetNames(lock, assets)
+	if err != nil {
+		return release.RuntimeManifest{}, err
+	}
+	status, body, err := fetchGitHub(ctx, config, manifestURL, "application/octet-stream")
+	if err != nil {
+		return release.RuntimeManifest{}, fmt.Errorf("download manifest: %w", err)
+	}
+	if status != http.StatusOK {
+		return release.RuntimeManifest{}, fmt.Errorf("download manifest: HTTP %d %s", status, http.StatusText(status))
+	}
+	return release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets)
 }
 
 func loadRuntimeResolutionLock(path string) (release.RuntimeLock, error) {
@@ -425,10 +411,8 @@ func writeRuntimeResolutionOutputs(path string, resolution runtimeResolution) er
 		return fmt.Errorf("open GitHub output: %w", err)
 	}
 	defer file.Close()
-	_, err = fmt.Fprintf(file, "runtime_state=%s\nruntime_reason=%s\n", resolution.State, resolution.Reason)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(file, "engine_state=%s\nengine_version=%s\nengine_tag=%s\nengine_manifest=%s\n", resolution.EngineState, resolution.EngineVersion, resolution.EngineTag, resolution.EngineManifest)
+	_, err = fmt.Fprintf(file, "runtime_state=%s\nruntime_reason=%s\n"+
+		"engine_state=%s\nengine_version=%s\nengine_tag=%s\nengine_manifest=%s\n",
+		resolution.State, resolution.Reason, resolution.EngineState, resolution.EngineVersion, resolution.EngineTag, resolution.EngineManifest)
 	return err
 }

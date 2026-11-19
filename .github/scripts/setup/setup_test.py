@@ -113,6 +113,7 @@ class ToolchainSetupTest(unittest.TestCase):
         expected = {
             ("ci.yml", "resolve-runtime"),
             ("build_release.yml", "plan-release"),
+            ("build_release.yml", "reuse-godot-runtime"),
             ("build_release.yml", "assemble-release"),
             ("release.yml", "publish-runtime"),
             ("release.yml", "validate-dev-npm"),

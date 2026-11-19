@@ -27,15 +27,16 @@ import (
 )
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
-	"cmd/spx/main.go":                               {},
-	"cmd/spx/internal/command/cmd.go":               {},
+	".github/scripts/runtime/build_pack.sh":         {},
 	"cmd/spx/internal/command/args.go":              {},
+	"cmd/spx/internal/command/cmd.go":               {},
+	"cmd/spx/internal/command/dispatch.go":          {},
+	"cmd/spx/internal/command/env.go":               {},
+	"cmd/spx/internal/command/export.go":            {},
 	"cmd/spx/internal/command/platform.go":          {},
 	"cmd/spx/internal/util/io.go":                   {},
-	"cmd/spx/internal/command/env.go":               {},
-	"cmd/spx/internal/command/dispatch.go":          {},
-	".github/scripts/runtime/build_pack.sh":         {},
-	"cmd/spx/internal/command/export.go":            {},
+	"cmd/spx/main.go":                               {},
+	"internal/base/fileutil/zip_writer.go":          {},
 	"internal/cmd/buildctl/runtimecmd/pack.go":      {},
 	"internal/cmd/buildctl/runtimecmd/workspace.go": {},
 }

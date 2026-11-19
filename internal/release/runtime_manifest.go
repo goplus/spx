@@ -205,7 +205,10 @@ func (m RuntimeManifest) Validate() error {
 		return fmt.Errorf("release: invalid engine source SHA-256 %q", digest)
 	}
 	if origin := m.Provenance.EngineOrigin; origin != nil {
-		if m.Provenance.EngineSourceSHA256 == "" || !runtimeVersionPattern.MatchString(origin.RuntimeVersion) || !gitCommitPattern.MatchString(origin.SPXCommit) || origin.RuntimeVersion == m.RuntimeVersion {
+		if m.Provenance.EngineSourceSHA256 == "" ||
+			!runtimeVersionPattern.MatchString(origin.RuntimeVersion) ||
+			!gitCommitPattern.MatchString(origin.SPXCommit) ||
+			origin.RuntimeVersion == m.RuntimeVersion {
 			return errors.New("release: invalid engine origin")
 		}
 	}
