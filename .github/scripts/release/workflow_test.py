@@ -117,6 +117,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_runtime_pack_consumes_the_explicit_buildctl_output(self):
         job = load_workflow(WORKFLOWS / "build_runtime_pack.yml")["jobs"]["build-runtime-pack"]
+        download, = action_steps(job, "actions/download-artifact")
+        self.assertEqual(download["with"], {
+            "name": "runtime-editor-linux-x86_64",
+            "path": "runtime-assets",
+        })
         buildctl, = action_steps(job, "./.github/actions/setup-buildctl")
         pack = named_step(job, "Build runtime asset bundle")
         self.assertEqual(pack["env"]["BUILDCTL"], f"${{{{ steps.{buildctl['id']}.outputs.path }}}}")

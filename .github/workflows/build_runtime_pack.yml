@@ -11,12 +11,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v7
 
-      - name: Download current-run engine artifacts
+      - name: Download current-run host editor
         uses: actions/download-artifact@v8
         with:
-          pattern: runtime-*linux-x86_64
+          name: runtime-editor-linux-x86_64
           path: runtime-assets
-          merge-multiple: true
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-dependencies
