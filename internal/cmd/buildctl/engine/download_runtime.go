@@ -20,59 +20,33 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/goplus/spx/v4/internal/release"
 )
 
 func downloadRuntimePack(env engineDownloadEnv) error {
-	versionedPack := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s.pck", env.version))
-	zipName := release.RuntimeAssetZipName
-	zipPath := filepath.Join(env.cacheDir, zipName)
-	if err := fetchEngineAsset(env, zipName, zipPath); err != nil {
-		return err
-	}
-	defer os.Remove(zipPath)
+	return withExtractedEngineArchive(env, release.RuntimeAssetZipName, func(dir string) error {
+		return installRuntimePack(env, dir)
+	})
+}
 
-	extractDir, err := os.MkdirTemp(env.cacheDir, "runtime-pck-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(extractDir)
-
-	if err := extractZip(zipPath, extractDir); err != nil {
-		return err
+func installRuntimePack(env engineDownloadEnv, extractDir string) error {
+	installs := []binaryInstall{
+		{"runtime.gdextension", filepath.Join(env.goBinDir, "runtime.gdextension")},
+		{"gdspxrt.pck", filepath.Join(env.goBinDir, "gdspxrt"+env.version+".pck")},
 	}
 	entries, err := os.ReadDir(extractDir)
 	if err != nil {
 		return err
 	}
-	destinations := map[string]string{
-		"gdspxrt.pck":         versionedPack,
-		"runtime.gdextension": filepath.Join(env.goBinDir, "runtime.gdextension"),
-	}
-	seen := make(map[string]struct{}, len(destinations))
 	for _, entry := range entries {
-		_, ok := destinations[entry.Name()]
-		if !ok || entry.IsDir() {
+		expected := slices.ContainsFunc(installs, func(target binaryInstall) bool {
+			return target.assetName == entry.Name()
+		})
+		if !expected || !entry.Type().IsRegular() {
 			return fmt.Errorf("runtime asset bundle contains unsupported entry %q", entry.Name())
 		}
-		src := filepath.Join(extractDir, entry.Name())
-		if info, err := os.Stat(src); err != nil {
-			return err
-		} else if !info.Mode().IsRegular() {
-			return fmt.Errorf("runtime asset bundle entry %q is not a regular file", entry.Name())
-		}
-		seen[entry.Name()] = struct{}{}
 	}
-	for name := range destinations {
-		if _, ok := seen[name]; !ok {
-			return fmt.Errorf("runtime asset bundle is missing %s", name)
-		}
-	}
-	for _, name := range []string{"runtime.gdextension", "gdspxrt.pck"} {
-		if err := copyEngineAssetAtomically(filepath.Join(extractDir, name), destinations[name]); err != nil {
-			return err
-		}
-	}
-	return nil
+	return installEngineBinaries(extractDir, "runtime asset bundle", installs)
 }

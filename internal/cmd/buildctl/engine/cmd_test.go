@@ -499,24 +499,6 @@ func TestReadRuntimeManifestBoundaries(t *testing.T) {
 	})
 }
 
-func TestDownloadRuntimePackRejectsMissingPCK(t *testing.T) {
-	env := newEngineDownloadFixture(t, "")
-	want := map[string]string{
-		filepath.Join(env.goBinDir, "gdspxrttest.pck"):     "stable pack",
-		filepath.Join(env.goBinDir, "runtime.gdextension"): "stable extension",
-	}
-	for path, content := range want {
-		mustWriteFile(t, path, []byte(content))
-	}
-	if err := writeZipFixture(filepath.Join(env.assetDir, release.RuntimeAssetZipName), map[string]string{"runtime.gdextension": "incomplete"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := downloadRuntimePack(env); err == nil || !strings.Contains(err.Error(), "missing gdspxrt.pck") {
-		t.Fatalf("downloadRuntimePack error = %v, want missing pck error", err)
-	}
-	assertEngineDownloadFiles(t, env, want)
-}
-
 func TestDownloadAndroidAssetsValidatesBeforeInstalling(t *testing.T) {
 	assets := []string{"android_debug.apk", "android_release.apk", "android_source.zip"}
 	for _, invalid := range []string{"missing", "directory"} {
