@@ -65,6 +65,19 @@ func DirEntriesFromFS(entries []iofs.DirEntry) []DirEntry {
 	return result
 }
 
+// IsAbsResourcePath recognizes POSIX, drive-absolute and UNC paths regardless
+// of the host reading the project.
+func IsAbsResourcePath(name string) bool {
+	if strings.HasPrefix(name, "/") || strings.HasPrefix(name, `\\`) {
+		return true
+	}
+	if len(name) < 3 || name[1] != ':' || (name[2] != '/' && name[2] != '\\') {
+		return false
+	}
+	letter := name[0]
+	return letter >= 'a' && letter <= 'z' || letter >= 'A' && letter <= 'Z'
+}
+
 func SplitSchema(path string) (schema, file string) {
 	idx := strings.IndexAny(path, ":/\\ ")
 	if idx < 0 || path[idx] != ':' {

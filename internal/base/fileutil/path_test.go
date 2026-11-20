@@ -16,7 +16,13 @@
 
 package fileutil
 
-import "testing"
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+)
 
 func TestPortableComponentCharacters(t *testing.T) {
 	for _, tt := range []struct {
@@ -40,5 +46,39 @@ func TestDeviceBasenames(t *testing.T) {
 		if IsDeviceBase(name) {
 			t.Errorf("changed caller folding policy for %q", name)
 		}
+	}
+}
+
+func TestCanonicalPathWithRemovedWorkingDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps the working directory open")
+	}
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	if err := os.Remove(cwd); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CanonicalPath("."); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("CanonicalPath in a removed working directory = %v, want ErrNotExist", err)
+	}
+}
+
+func TestIsWithinRoot(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct {
+		name, path string
+		want       bool
+	}{
+		{"root itself", root, true},
+		{"child", filepath.Join(root, "assets"), true},
+		{"parent", filepath.Dir(root), false},
+		{"sibling with matching prefix", root + "-other", false},
+		{"relative path against absolute root", "assets", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsWithinRoot(tc.path, root); got != tc.want {
+				t.Fatalf("IsWithinRoot(%q, %q) = %v, want %v", tc.path, root, got, tc.want)
+			}
+		})
 	}
 }

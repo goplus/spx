@@ -34,6 +34,10 @@ func Open(base string) (fs.Dir, error) {
 	return &FS{base: ""}, nil
 }
 
-func openAsset(path string) (io.ReadSeekCloser, error) {
-	return asset.Open(path)
+func (*FS) Open(name string) (io.ReadCloser, error) {
+	file, err := localResourcePath(name)
+	if err != nil {
+		return nil, err
+	}
+	return asset.Open(file)
 }

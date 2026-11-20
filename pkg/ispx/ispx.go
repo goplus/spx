@@ -39,13 +39,13 @@ var (
 	optimizeSSA bool
 )
 
+// InitOption configures interpreter initialization.
+type InitOption func(*initOptions)
+
 // initOptions controls optional interpreter initialization behavior.
 type initOptions struct {
 	optimizeSSA bool
 }
-
-// InitOption configures interpreter initialization.
-type InitOption func(*initOptions)
 
 // defaultPackagesToImport is the list of packages that are always imported by ispx.
 var defaultPackagesToImport = []string{
@@ -69,16 +69,22 @@ var defaultPackagesToImport = []string{
 	"github.com/qiniu/x/xgo/ng",
 }
 
-func init() {
-	xgobuild.RegisterProject(spxproject.New())
-}
-
 // WithSSAOptimization enables ixgo's default SSA transformation pipeline before
 // creating the interpreter.
 func WithSSAOptimization() InitOption {
 	return func(options *initOptions) {
 		options.optimizeSSA = true
 	}
+}
+
+// ConfigureFilesystemRoots sets strict project and asset roots before Init.
+func ConfigureFilesystemRoots(projectDir, assetDir string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if ixgoCtx != nil {
+		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
+	}
+	return engine.SetFilesystemRoots(projectDir, assetDir)
 }
 
 // Init initializes the interpreter with the given ctx, which must not be
@@ -139,17 +145,6 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 // Build builds the spx code from the provided files into the interpreter.
 func Build(files map[string][]byte) error {
 	return BuildFS(memfs.New(files))
-}
-
-// ConfigureFilesystemRoots sets strict project and asset roots before Init.
-func ConfigureFilesystemRoots(projectDir, assetDir string) error {
-	return configureFilesystemRoots(projectDir, assetDir, false)
-}
-
-// ConfigureLegacyFilesystemRoots retains bounded external asset references
-// used by existing interpreted and native commands.
-func ConfigureLegacyFilesystemRoots(projectDir, assetDir string) error {
-	return configureFilesystemRoots(projectDir, assetDir, true)
 }
 
 // BuildFS builds from a borrowed file system that must remain usable while the
@@ -248,14 +243,6 @@ func Shutdown() error {
 	return nil
 }
 
-func configureFilesystemRoots(projectDir, assetDir string, legacy bool) error {
-	mu.Lock()
-	defer mu.Unlock()
-	if ixgoCtx != nil {
-		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
-	}
-	if legacy {
-		return engine.SetLegacyFilesystemRoots(projectDir, assetDir)
-	}
-	return engine.SetFilesystemRoots(projectDir, assetDir)
+func init() {
+	xgobuild.RegisterProject(spxproject.New())
 }

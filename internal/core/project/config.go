@@ -224,6 +224,16 @@ type SoundConfig struct {
 	SampleCount int    `json:"sampleCount"`
 }
 
+// ResourcePaths yields the editable resource references in a project index.
+func (p *ProjectConfig) ResourcePaths(yield func(*string) bool) {
+	for _, backdrop := range p.Backdrops {
+		if backdrop != nil && !yield(&backdrop.Path) {
+			return
+		}
+	}
+	yield(&p.TilemapPath)
+}
+
 func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
 	return p.Backdrops
 }
@@ -232,8 +242,27 @@ func (p *ProjectConfig) GetBackdropIndex() int {
 	return p.BackdropIndex
 }
 
+// ResourcePaths yields the editable costume and atlas references in a sprite index.
+func (p *SpriteConfig) ResourcePaths(yield func(*string) bool) {
+	for _, costume := range p.Costumes {
+		if costume != nil && !yield(&costume.Path) {
+			return
+		}
+	}
+	if p.CostumeSet != nil && !yield(&p.CostumeSet.Path) {
+		return
+	}
+	if p.CostumeMPSet != nil {
+		yield(&p.CostumeMPSet.Path)
+	}
+}
+
 func (p *SpriteConfig) GetCostumeIndex() int {
 	return p.CostumeIndex
+}
+
+func (p *SoundConfig) ResourcePaths(yield func(*string) bool) {
+	yield(&p.Path)
 }
 
 func ToMapMode(mode string) int {

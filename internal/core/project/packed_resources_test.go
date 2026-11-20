@@ -47,16 +47,20 @@ func TestLoadJSONReadsPackedConfigWithoutInspectingResourcePath(t *testing.T) {
 		index: packedConfigIndex{
 			raw:        []byte(`{"name":"original"}`),
 			projectRaw: []byte(`{"name":"packed"}`),
-			sprites:    map[string]json.RawMessage{"Hero": json.RawMessage(`{"name":"hero"}`)},
+			sprites: map[string]json.RawMessage{
+				"Hero":   json.RawMessage(`{"name":"hero"}`),
+				`Hero\二`: json.RawMessage(`{"name":"second"}`),
+			},
 		},
 	}
 	for _, tt := range []struct{ path, name string }{
-		{packedIndexJSON, "original"},
+		{PackedIndexFile, "original"},
 		{"index.json", "packed"},
-		{"/index.json", "packed"},
 		{"sprites/Hero/index.json", "hero"},
 		{`sprites\Hero\index.json`, "hero"},
-		{"/sprites/Other/../Hero/index.json", "hero"},
+		{`sprites/Hero\index.json`, "hero"},
+		{`sprites/Hero\二/index.json`, "second"},
+		{"sprites/Other/../Hero/index.json", "hero"},
 	} {
 		t.Run(tt.path, func(t *testing.T) {
 			if err := spxfs.VerifyFile(fs, tt.path); err != nil {
@@ -72,6 +76,23 @@ func TestLoadJSONReadsPackedConfigWithoutInspectingResourcePath(t *testing.T) {
 				t.Fatalf("config name = %q, want %q", config.Name, tt.name)
 			}
 		})
+	}
+}
+
+func TestAbsoluteIndexRejectedBeforeLookup(t *testing.T) {
+	packed := &packedConfigDir{Dir: panicPathDir{}, index: packedConfigIndex{projectRaw: []byte(`{}`)}}
+	for _, index := range []string{"/a/b", "/index.json", "C:/a/b", `C:\a\b`, `\\server\share`, `\index.json`} {
+		for _, dir := range []spxfs.Dir{panicPathDir{}, packed} {
+			if _, err := LoadBuilderProject(dir, &Config{Index: index}); err == nil {
+				t.Errorf("%T accepted absolute index %q", dir, index)
+			}
+		}
+		if _, err := packed.Open(index); err == nil {
+			t.Errorf("packed Open accepted %q", index)
+		}
+		if err := packed.VerifyFile(index); err == nil {
+			t.Errorf("packed VerifyFile accepted %q", index)
+		}
 	}
 }
 
@@ -98,10 +119,10 @@ func TestResourceDirPreservesRawDirectoryIdentity(t *testing.T) {
 }
 
 func TestPackedResourcesPreserveSourceOpenErrors(t *testing.T) {
-	for _, file := range []string{packedIndexJSON, "index.json", "custom/settings.json"} {
+	for _, file := range []string{PackedIndexFile, "index.json", "custom/settings.json"} {
 		t.Run(file, func(t *testing.T) {
 			dir := t.TempDir()
-			writeProjectFile(t, dir, packedIndexJSON, `{}`)
+			writeProjectFile(t, dir, PackedIndexFile, `{}`)
 			writeProjectFile(t, dir, "index.json", `{}`)
 			base := &failingConfigDir{Dir: localDir{base: dir}, failPath: file, err: os.ErrPermission}
 			opened, err := OpenBuilderResources(base, nil)
@@ -132,9 +153,9 @@ func TestPackedResourcesPreserveSourceOpenErrors(t *testing.T) {
 
 func TestPackedRootPreservesOriginalJSONWithoutSourceFields(t *testing.T) {
 	packed := []byte("{ \"bgm\": \"first.wav\", \"bgm\": \"last.wav\" }\n")
-	for _, source := range []string{"", "{}", "null"} {
-		t.Run(source, func(t *testing.T) {
-			index, err := parsePackedConfigIndex(packed, []byte(source))
+	for _, source := range [][]byte{nil, []byte("{}"), []byte("null")} {
+		t.Run(string(source), func(t *testing.T) {
+			index, err := parsePackedConfigIndex(packed, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -272,3 +293,24 @@ func (d *failingConfigDir) Close() error {
 func (d streamedConfigDir) Open(string) (io.ReadCloser, error) { return d.reader, nil }
 
 func (streamedConfigDir) Close() error { return nil }
+
+func TestSourceAndPackedConfigAssetBoundary(t *testing.T) {
+	for _, packed := range []bool{false, true} {
+		for _, reference := range []string{"../outside.png", "res://engine/image.png", "/outside.png"} {
+			dir := t.TempDir()
+			data, err := json.Marshal(map[string]any{"backdrops": []any{map[string]string{"path": reference}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			index := "index.json"
+			if packed {
+				index = PackedIndexFile
+			}
+			writeProjectFile(t, dir, index, string(data))
+			if opened, err := OpenBuilderResources(localDir{base: dir}, nil); err == nil {
+				opened.FS.Close()
+				t.Errorf("packed=%v accepted %q", packed, reference)
+			}
+		}
+	}
+}

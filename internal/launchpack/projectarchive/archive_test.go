@@ -170,7 +170,7 @@ func TestCollectUsesImmutableConfigBytes(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			projectDir := t.TempDir()
-			writeArchiveTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"live"}`, 0o600)
+			writeArchiveTestFile(t, filepath.Join(projectDir, ".config"), `{"name":"live"}`, 0o600)
 
 			snapshot, err := collect(Config{
 				ProjectDir: projectDir, IncludeConfig: true, ConfigBytes: tt.data,
@@ -666,7 +666,7 @@ func TestArchiveInputFailuresPreserveErrorKinds(t *testing.T) {
 		t.Fatalf("unsafe entry = %v", err)
 	}
 	for _, name := range []string{"//host/share", `\\host\share`, "c:/file", `C:\file`} {
-		if !looksLikeWindowsAbsolutePath(name) {
+		if _, err := validateRelativePath(name, "entry"); !errors.Is(err, ErrInvalidPath) {
 			t.Errorf("Windows absolute path missed: %q", name)
 		}
 	}

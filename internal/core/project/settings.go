@@ -17,6 +17,7 @@
 package project
 
 import (
+	"path"
 	"path/filepath"
 
 	spxfs "github.com/goplus/spx/v4/fs"
@@ -69,7 +70,14 @@ func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, e
 	if err := LoadConfig(&loaded.Project, fs, index); err != nil {
 		return LoadedBuilderProject{}, err
 	}
-	normalizeProjectConfigPaths(&loaded.Project)
+	if err := ValidateBackgroundSoundName(loaded.Project.Bgm); err != nil {
+		return LoadedBuilderProject{}, err
+	}
+	indexFile, _ := index.(string)
+	configDir := path.Dir(indexFile)
+	if err := resolveResourcePaths(fs, configDir, loaded.Project.ResourcePaths); err != nil {
+		return LoadedBuilderProject{}, err
+	}
 	fonts, err := LoadProjectFonts(fs, loaded.Project.FontPreferences)
 	if err != nil {
 		return LoadedBuilderProject{}, err

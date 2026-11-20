@@ -186,7 +186,7 @@ func TestSpriteTextureUpdates(t *testing.T) {
 	setupSpriteManagerTest(t)
 	previousPaths := assetPaths
 	t.Cleanup(func() { assetPaths = previousPaths })
-	assetPaths = assetResolver{root: "assets/", projectRoot: "."}
+	assetPaths = assetResolver{assetRoot: "assets/", projectRoot: "."}
 
 	const id = gdx.Object(42)
 	const renderScale = 1.5

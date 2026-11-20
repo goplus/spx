@@ -16,87 +16,19 @@
 
 package engine
 
-import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-
-	spxlog "github.com/goplus/spx/v4/internal/base/log"
-)
-
 const (
-	defaultAssetPathPrefix = "../"
-	packmodeAssetPrefix    = "res://"
-	defaultAssetDirName    = "assets"
-	projectConfigFile      = ".config"
-	engineExtAssetPath     = "extasset"
+	projectResourcePrefix = "res://"
+	defaultAssetDirName   = "assets"
 )
-
-type assetProjectConfig struct {
-	ExtAsset string `json:"extasset"`
-}
-
-var assetPaths = assetResolver{
-	root:        defaultAssetPathPrefix + defaultAssetDirName + "/",
-	projectRoot: cleanFilesystemPath(defaultAssetPathPrefix),
-}
 
 // SetFilesystemRoots configures the physical project and asset roots used by
 // interpreted desktop sessions. It only updates path state; the Engine resource
 // manager is configured later, after the GDExtension has linked its callbacks.
 func SetFilesystemRoots(projectDir, assetDir string) error {
-	return setFilesystemRoots(projectDir, assetDir, false)
-}
-
-// SetLegacyFilesystemRoots enables bounded external-resource compatibility for
-// existing SPX commands.
-func SetLegacyFilesystemRoots(projectDir, assetDir string) error {
-	return setFilesystemRoots(projectDir, assetDir, true)
-}
-
-func setFilesystemRoots(projectDir, assetDir string, legacy bool) error {
-	resolver, err := newFilesystemAssetResolver(projectDir, assetDir, legacy)
+	resolver, err := newFilesystemAssetResolver(projectDir, assetDir)
 	if err != nil {
 		return err
 	}
-	resolver.extAssetDir = readExtAssetDirFromFilesystem(resolver.projectRoot, legacy)
 	assetPaths = resolver
 	return nil
-}
-
-func readExtAssetDirFromFilesystem(projectRoot string, enabled bool) string {
-	if !enabled {
-		return ""
-	}
-	configPath := filepath.Join(filepath.FromSlash(projectRoot), projectConfigFile)
-	data, err := os.ReadFile(configPath)
-	if os.IsNotExist(err) {
-		return ""
-	}
-	if err != nil {
-		spxlog.Warn("SetAssetDir: failed to read %s: %v", configPath, err)
-		return ""
-	}
-	return parseExtAssetDir(configPath, data)
-}
-
-func readExtAssetDirFromProjectConfig(prefix string) string {
-	configPath := projectConfigPath(prefix)
-	if !Managers().ResMgr.HasFile(configPath) {
-		return ""
-	}
-	return parseExtAssetDir(configPath, []byte(Managers().ResMgr.ReadAllText(configPath)))
-}
-
-func parseExtAssetDir(configPath string, data []byte) string {
-	var config assetProjectConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		spxlog.Warn("SetAssetDir: failed to parse %s: %v", configPath, err)
-		return ""
-	}
-	return config.ExtAsset
-}
-
-func projectConfigPath(prefix string) string {
-	return normalizeSlashes(prefix + projectConfigFile)
 }

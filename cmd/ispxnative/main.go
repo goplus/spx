@@ -27,10 +27,25 @@ import (
 	"sync"
 	_ "unsafe"
 
+	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/base/fileutil"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/interpsession"
 	"github.com/goplus/spx/v4/pkg/ispx"
 )
+
+// pinnedProjectFiles preserves os.Root.FS's optional file operations.
+type pinnedProjectFiles interface {
+	fs.ReadDirFS
+	fs.ReadFileFS
+	fs.ReadLinkFS
+	fs.StatFS
+}
+
+type directProjectFS struct {
+	pinnedProjectFiles
+	spxfs.NativeResourcePaths
+}
 
 var retainedProjectRoot struct {
 	sync.Mutex
@@ -62,11 +77,7 @@ func run(env []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	configureRoots := ispx.ConfigureLegacyFilesystemRoots
-	if configOverlay != nil {
-		configureRoots = ispx.ConfigureFilesystemRoots
-	}
-	if err := configureRoots(roots.ProjectDir, roots.AssetDir); err != nil {
+	if err := ispx.ConfigureFilesystemRoots(roots.ProjectDir, roots.AssetDir); err != nil {
 		return 1, fmt.Errorf("configure filesystem roots: %w", err)
 	}
 	if err := ispx.Init(nil); err != nil {
@@ -90,9 +101,11 @@ func buildPinnedProject(projectDir string, configOverlay *portableConfigOverlay,
 	if err != nil {
 		return err
 	}
-	projectFS := fs.FS(projectRoot.FS())
+	projectFS := projectRoot.FS()
 	if configOverlay != nil {
 		projectFS = newPortableConfigFS(projectFS, configOverlay)
+	} else {
+		projectFS = directProjectFS{pinnedProjectFiles: projectFS.(pinnedProjectFiles)}
 	}
 	if err := build(projectFS); err != nil {
 		projectRoot.Close()
@@ -114,7 +127,7 @@ func retainProjectRoot(root *os.Root) {
 
 func validateAssetIndex(assetDir string) error {
 	found := false
-	for _, name := range []string{"index_pack.json", "index.json"} {
+	for _, name := range []string{coreproject.PackedIndexFile, "index.json"} {
 		indexPath := filepath.Join(assetDir, name)
 		exists, err := validateStableRegularFile(indexPath)
 		if err != nil {
@@ -123,7 +136,7 @@ func validateAssetIndex(assetDir string) error {
 		found = found || exists
 	}
 	if !found {
-		return fmt.Errorf("validate asset index: neither %q nor %q exists", filepath.Join(assetDir, "index_pack.json"), filepath.Join(assetDir, "index.json"))
+		return fmt.Errorf("validate asset index: neither %q nor %q exists", filepath.Join(assetDir, coreproject.PackedIndexFile), filepath.Join(assetDir, "index.json"))
 	}
 	return nil
 }

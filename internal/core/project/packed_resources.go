@@ -24,12 +24,14 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 
 	spxfs "github.com/goplus/spx/v4/fs"
 )
 
-const packedIndexJSON = "index_pack.json"
+// PackedIndexFile names the optional combined index in the asset root.
+const PackedIndexFile = "index_pack.json"
 
 type packedConfigDir struct {
 	spxfs.Dir
@@ -46,6 +48,10 @@ type packedConfigIndex struct {
 }
 
 func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
+	name, err := cleanAssetPath(name)
+	if err != nil {
+		return nil, err
+	}
 	if raw, ok := p.lookupPackedConfig(name); ok {
 		return io.NopCloser(bytes.NewReader(raw)), nil
 	}
@@ -72,6 +78,10 @@ func (p *packedConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
 }
 
 func (p *packedConfigDir) VerifyFile(name string) error {
+	name, err := cleanAssetPath(name)
+	if err != nil {
+		return err
+	}
 	if _, ok := p.lookupPackedConfig(name); ok {
 		return nil
 	}
@@ -89,12 +99,21 @@ func (p *packedConfigDir) ListDirectories(name string) ([]string, error) {
 	return spxfs.ListDirectories(p.Dir, name)
 }
 
+func (p *packedConfigDir) ValidateResourcePath(name string) error {
+	return spxfs.ValidateResourcePath(p.Dir, name)
+}
+
+func (p *packedConfigDir) AllowsLiteralResPrefix() bool {
+	// Web mounts the same project files for both source and combined indexes.
+	return runtime.GOOS == "js" && spxfs.AllowsLiteralResPrefix(p.Dir)
+}
+
 func (p *packedConfigDir) lookupPackedConfig(name string) ([]byte, bool) {
 	normalized := normalizePackedConfigPath(name)
 	switch normalized {
 	case "index.json":
 		return p.index.projectRaw, true
-	case packedIndexJSON:
+	case PackedIndexFile:
 		return p.index.raw, true
 	}
 	parts := strings.Split(normalized, "/")
@@ -118,22 +137,19 @@ func (p *packedConfigDir) lookupPackedConfig(name string) ([]byte, bool) {
 }
 
 func loadPackedConfigIndex(fs spxfs.Dir) (packedConfigIndex, bool, error) {
-	data, ok, err := readConfigBytes(fs, packedIndexJSON)
-	if err != nil {
+	data, err := readConfigBytes(fs, PackedIndexFile)
+	if err != nil || data == nil {
 		return packedConfigIndex{}, false, err
 	}
-	if !ok {
-		return packedConfigIndex{}, false, nil
-	}
 
-	sourceData, _, err := readConfigBytes(fs, "index.json")
+	sourceData, err := readConfigBytes(fs, "index.json")
 	if err != nil {
 		return packedConfigIndex{}, false, err
 	}
 
 	index, err := parsePackedConfigIndex(data, sourceData)
 	if err != nil {
-		return packedConfigIndex{}, false, fmt.Errorf("parse %s: %w", packedIndexJSON, err)
+		return packedConfigIndex{}, false, fmt.Errorf("parse %s: %w", PackedIndexFile, err)
 	}
 	return index, true, nil
 }
@@ -174,7 +190,7 @@ func parsePackedConfigIndex(data []byte, sourceData []byte) (packedConfigIndex, 
 }
 
 func mergePackedProjectRoot(data []byte, packedRoot map[string]json.RawMessage, sourceData []byte) ([]byte, error) {
-	if len(sourceData) == 0 {
+	if sourceData == nil {
 		return data, nil
 	}
 
@@ -198,24 +214,31 @@ func parsePackedSection(root map[string]json.RawMessage, key string) (map[string
 }
 
 func normalizePackedConfigPath(name string) string {
-	name = strings.ReplaceAll(name, "\\", "/")
-	name = strings.TrimPrefix(name, "/")
-	return path.Clean(name)
+	// In a section/name/index.json path, a backslash belongs to the POSIX
+	// name. Other spellings may use legacy Windows separators.
+	if strings.ContainsRune(name, '\\') && !(strings.Count(name, "/") == 2 && strings.HasSuffix(name, "/index.json")) {
+		return path.Clean(strings.ReplaceAll(name, "\\", "/"))
+	}
+	return name
 }
 
-func readConfigBytes(fs spxfs.Dir, file string) ([]byte, bool, error) {
+// readConfigBytes returns nil for a missing index and an error for an empty one.
+func readConfigBytes(fs spxfs.Dir, file string) ([]byte, error) {
 	f, err := fs.Open(file)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, false, nil
+			return nil, nil
 		}
-		return nil, false, fmt.Errorf("open %s: %w", file, err)
+		return nil, fmt.Errorf("open %s: %w", file, err)
 	}
 	defer f.Close()
 
 	data, err := io.ReadAll(f)
 	if err != nil {
-		return nil, false, fmt.Errorf("read %s: %w", file, err)
+		return nil, fmt.Errorf("read %s: %w", file, err)
 	}
-	return data, true, nil
+	if len(data) == 0 {
+		return nil, fmt.Errorf("parse %s: %w", file, io.ErrUnexpectedEOF)
+	}
+	return data, nil
 }

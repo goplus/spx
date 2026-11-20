@@ -49,16 +49,15 @@ type WorldBounds struct {
 	WorldHeight int
 }
 
-func Load(fs spxfs.Dir, mapDir string) (LoadResult, error) {
-	if mapDir == "" {
+func Load(fs spxfs.Dir, mapPath string) (LoadResult, error) {
+	if mapPath == "" {
 		return LoadResult{}, nil
 	}
 
-	if isNewFormat(mapDir) {
-		tilemapPath := path.Join(mapDir, "tilemap.json")
-		decoratorPath := path.Join(mapDir, "decorator.json")
+	if configPath := ConfigPath(mapPath); configPath != mapPath {
+		decoratorPath := path.Join(mapPath, "decorator.json")
 		var tilemapJSON json.RawMessage
-		if err := coreproject.LoadJSON(&tilemapJSON, fs, tilemapPath); err != nil {
+		if err := coreproject.LoadJSON(&tilemapJSON, fs, configPath); err != nil {
 			return LoadResult{}, err
 		}
 		decoratorData, decoratorErr := loadDecoratorJSON(fs, decoratorPath)
@@ -66,21 +65,21 @@ func Load(fs spxfs.Dir, mapDir string) (LoadResult, error) {
 			DecoratorData: decoratorData,
 			DecoratorErr:  decoratorErr,
 			UseNewLoader:  true,
-			TilemapDir:    mapDir,
-			CurrentMap:    path.Base(mapDir),
-			TilemapPath:   tilemapPath,
+			TilemapDir:    mapPath,
+			CurrentMap:    path.Base(mapPath),
+			TilemapPath:   configPath,
 			DecoratorPath: decoratorPath,
 		}, nil
 	}
 
 	var data TscnMapData
-	if err := coreproject.LoadJSON(&data, fs, mapDir); err != nil {
+	if err := coreproject.LoadJSON(&data, fs, mapPath); err != nil {
 		return LoadResult{}, err
 	}
 	return LoadResult{
 		Data:       &data,
-		TilemapDir: path.Dir(mapDir),
-		CurrentMap: strings.TrimSuffix(path.Base(mapDir), ".json"),
+		TilemapDir: path.Dir(mapPath),
+		CurrentMap: strings.TrimSuffix(path.Base(mapPath), ".json"),
 	}, nil
 }
 
@@ -135,8 +134,12 @@ func CalcWorldBounds(data *TscnMapData) (WorldBounds, bool) {
 	}, true
 }
 
-func isNewFormat(tilemapPath string) bool {
-	return !strings.Contains(tilemapPath, ".json")
+// ConfigPath returns the JSON file loaded for a configured tilemap file or directory.
+func ConfigPath(mapPath string) string {
+	if mapPath == "" || path.Ext(mapPath) == ".json" {
+		return mapPath
+	}
+	return path.Join(mapPath, "tilemap.json")
 }
 
 func loadDecoratorJSON(fs spxfs.Dir, decoratorPath string) (*DecoratorJSON, error) {

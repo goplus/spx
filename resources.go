@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -35,32 +36,19 @@ type engineResourceDir struct {
 	assetDir string
 }
 
-type readableEngineResourceDir struct {
+type engineResourceDirWithReadDir struct {
 	*engineResourceDir
 	spxfs.ReadDirer
-}
-
-// openGameResources installs engine access beneath the packed configuration overlay.
-// The returned directory, or the core loader on failure, owns closing the source.
-func openGameResources(resource any, conf *coreproject.Config) (coreproject.OpenedBuilderResources, error) {
-	assetDir := coreproject.AssetDirFromResource(resource)
-	dir, err := coreproject.ResourceDir(resource)
-	if err != nil {
-		return coreproject.OpenedBuilderResources{}, err
-	}
-	opened, err := coreproject.OpenBuilderResources(withEngineAssets(dir), conf)
-	if err != nil {
-		return coreproject.OpenedBuilderResources{}, err
-	}
-	opened.AssetDir = assetDir
-	return opened, nil
 }
 
 func (d *engineResourceDir) GetPath() string { return d.assetDir }
 
 func (d *engineResourceDir) Open(name string) (io.ReadCloser, error) {
+	if spxfs.IsAbsResourcePath(name) {
+		return nil, fmt.Errorf("resource path %q must be relative", name)
+	}
 	if d.usesEngineFiles() {
-		for _, candidate := range assetCandidates(d.assetDir, name) {
+		for _, candidate := range engineLookupPaths(d.assetDir, name) {
 			if engine.HasFile(candidate) {
 				return io.NopCloser(strings.NewReader(engine.ReadAllText(candidate))), nil
 			}
@@ -71,6 +59,9 @@ func (d *engineResourceDir) Open(name string) (io.ReadCloser, error) {
 
 // VerifyFile checks binary assets without reading them through the text bridge.
 func (d *engineResourceDir) VerifyFile(name string) error {
+	if spxfs.IsAbsResourcePath(name) {
+		return fmt.Errorf("resource path %q must be relative", name)
+	}
 	if d.usesEngineFiles() {
 		return d.verifyEngineFile(name)
 	}
@@ -103,21 +94,45 @@ func (d *engineResourceDir) ListDirectories(name string) ([]string, error) {
 	return spxfs.ListDirectories(d.Dir, name)
 }
 
+func (d *engineResourceDir) ValidateResourcePath(name string) error {
+	return spxfs.ValidateResourcePath(d.Dir, name)
+}
+
+func (d *engineResourceDir) AllowsLiteralResPrefix() bool {
+	return !d.usesEngineFiles() && spxfs.AllowsLiteralResPrefix(d.Dir)
+}
+
 func (d *engineResourceDir) usesEngineFiles() bool {
 	schema, _ := spxfs.SplitSchema(d.assetDir)
 	return schema != ""
 }
 
 func (d *engineResourceDir) verifyEngineFile(name string) error {
-	if slices.ContainsFunc(assetCandidates(d.assetDir, name), engine.HasFile) {
+	if slices.ContainsFunc(engineLookupPaths(d.assetDir, name), engine.HasFile) {
 		return nil
 	}
 	return os.ErrNotExist
 }
 
+// openGameResources installs engine access beneath the packed configuration overlay.
+// The returned directory, or the core loader on failure, owns closing the source.
+func openGameResources(resource any, conf *coreproject.Config) (coreproject.OpenedBuilderResources, error) {
+	assetDir := coreproject.AssetDirFromResource(resource)
+	dir, err := coreproject.ResourceDir(resource)
+	if err != nil {
+		return coreproject.OpenedBuilderResources{}, err
+	}
+	opened, err := coreproject.OpenBuilderResources(withEngineAssets(dir), conf)
+	if err != nil {
+		return coreproject.OpenedBuilderResources{}, err
+	}
+	opened.AssetDir = assetDir
+	return opened, nil
+}
+
 func withEngineAssets(dir spxfs.Dir) spxfs.Dir {
 	switch dir.(type) {
-	case *engineResourceDir, *readableEngineResourceDir:
+	case *engineResourceDir, *engineResourceDirWithReadDir:
 		return dir
 	}
 	gdDir, ok := dir.(spxfs.GdDir)
@@ -130,14 +145,19 @@ func withEngineAssets(dir spxfs.Dir) spxfs.Dir {
 	}
 	adapted := &engineResourceDir{Dir: dir, assetDir: assetDir}
 	if reader, ok := dir.(spxfs.ReadDirer); ok {
-		return &readableEngineResourceDir{engineResourceDir: adapted, ReadDirer: reader}
+		return &engineResourceDirWithReadDir{engineResourceDir: adapted, ReadDirer: reader}
 	}
 	return adapted
 }
 
-func assetCandidates(assetDir, file string) []string {
-	file = path.Clean(strings.TrimPrefix(strings.ReplaceAll(file, "\\", "/"), "/"))
-	assetDir = strings.TrimSuffix(strings.ReplaceAll(assetDir, "\\", "/"), "/")
+func engineLookupPaths(assetDir, file string) []string {
+	// Godot treats backslashes as separators. Only the source filesystem
+	// can look up a POSIX resource name containing a literal backslash.
+	assetDir = strings.TrimSuffix(filepath.ToSlash(assetDir), "/")
+	if strings.ContainsRune(file, '\\') || strings.ContainsRune(assetDir, '\\') {
+		return nil
+	}
+	file = path.Clean(file)
 	if assetDir == "" {
 		return []string{file}
 	}

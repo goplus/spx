@@ -296,7 +296,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             with self.subTest(name=name):
                 self.assertRegex(name, args[args.index("-run") + 1])
 
-    def test_web_coverage_includes_host_independent_engine_lifecycle_tests(self):
+    def test_web_coverage_includes_host_independent_engine_tests(self):
         result = self.run_coverage_suite("web")
         self.assertEqual(result.returncode, 0, result.stderr)
         engine_test, = [call for call in self.recorded_calls() if "./internal/engine" in call["args"]]
@@ -306,7 +306,8 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                      "TestResetWebRuntimeCoalescesConcurrentRequests",
                      "TestResetWebRuntimeStopsManagedCaller",
                      "TestResetWebRuntimeWaitsForManagedCallersOnMainThread",
-                     "TestDrainAndReleaseGameFinishesCleanupBeforeRelease"):
+                     "TestDrainAndReleaseGameFinishesCleanupBeforeRelease",
+                     "TestSetAssetDirSelectsOneRoot"):
             with self.subTest(name=name):
                 self.assertRegex(name, pattern)
         self.assertNotRegex("TestMainStartsAndReleasesBinding", pattern)

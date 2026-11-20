@@ -18,16 +18,27 @@
 
 package engine
 
-import "github.com/goplus/spx/v4/internal/engine/platform"
+import (
+	"github.com/goplus/spx/v4/internal/base/fileutil"
+	"github.com/goplus/spx/v4/internal/engine/platform"
+)
+
+// A virtual source can use the default directory before any physical project
+// is configured. SetAssetDir enables canonical checks for native roots.
+var assetPaths = func() assetResolver {
+	project, assets := fileutil.AssetRoots(defaultAssetDirName)
+	return assetResolver{assetRoot: joinAssetRoot("", assets), projectRoot: project}
+}()
 
 func SetAssetDir(dir string) {
-	prefix := defaultAssetPathPrefix
-	if platform.IsWeb() {
-		prefix = ""
-	}
 	resolver := assetPaths
 	if !resolver.explicitFSRoots {
-		resolver = newLegacyFilesystemAssetResolver(prefix, dir, !platform.IsWeb())
+		if platform.IsWeb() {
+			resolver = newAssetResolver("", dir)
+		} else {
+			projectDir, assetDir := fileutil.AssetRoots(dir)
+			resolver = nativeAssetResolver(projectDir, assetDir)
+		}
 	}
 	Managers().ResMgr.SetLoadMode(true)
 	assetPaths = resolver

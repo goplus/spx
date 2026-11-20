@@ -28,6 +28,15 @@ type DirectoryLister interface {
 	ListDirectories(name string) ([]string, error)
 }
 
+// ResourcePathValidator validates a configuration resource against its physical
+// asset root. Virtual directories already enforce their own namespace.
+type ResourcePathValidator interface {
+	ValidateResourcePath(name string) error
+}
+
+// NativeResourcePaths supplies the filename capabilities of a native build.
+type NativeResourcePaths struct{}
+
 // VerifyFile uses a directory's optional verification capability, or opens and
 // closes the file. It returns the original verification, open, or close error.
 func VerifyFile(dir Dir, name string) error {
@@ -62,4 +71,23 @@ func ListDirectories(dir Dir, name string) ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+// ValidateResourcePath checks a normalized, nonempty configuration reference
+// when the directory exposes a physical asset root.
+func ValidateResourcePath(dir Dir, name string) error {
+	if name == "" {
+		return nil
+	}
+	if validator, ok := dir.(ResourcePathValidator); ok {
+		return validator.ValidateResourcePath(name)
+	}
+	return nil
+}
+
+// AllowsLiteralResPrefix reports whether configuration paths in this source
+// can use a bare res: prefix as part of a filename.
+func AllowsLiteralResPrefix(source any) bool {
+	v, ok := source.(interface{ AllowsLiteralResPrefix() bool })
+	return ok && v.AllowsLiteralResPrefix()
 }

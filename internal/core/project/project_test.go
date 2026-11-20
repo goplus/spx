@@ -25,6 +25,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -94,14 +96,15 @@ func TestDirectoryResourceNamesRejectInvalidSegments(t *testing.T) {
 }
 
 func TestSpriteConfigKeepsColonFilename(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("colon filenames are not supported on Windows")
+	}
 	const dir = "sprites/Media/"
 	for _, tt := range []struct{ path, want string }{
 		{"costume-Animation:1.svg", dir + "costume-Animation:1.svg"},
 		{"./res:image.png", dir + "res:image.png"},
 		{"media/res:image.png", dir + "media/res:image.png"},
 		{"../res:media/image.png", "sprites/res:media/image.png"},
-		{"res:image.png", "res:image.png"},
-		{"res://image.png", "res://image.png"},
 	} {
 		t.Run(tt.path, func(t *testing.T) {
 			src := projectMapDir{fstest.MapFS{
@@ -115,6 +118,112 @@ func TestSpriteConfigKeepsColonFilename(t *testing.T) {
 				t.Fatalf("costumes = %+v, want path %q", conf.Costumes, tt.want)
 			}
 		})
+	}
+}
+
+func TestResourceConfigsRejectURI(t *testing.T) {
+	const uri = `"res://image.png"`
+	for _, tt := range []struct{ name, index, json string }{
+		{"costume", "sprites/Media/index.json", `{"costumes":[{"path":` + uri + `}]}`},
+		{"costume atlas", "sprites/Media/index.json", `{"costumeSet":{"path":` + uri + `}}`},
+		{"multipart costume atlas", "sprites/Media/index.json", `{"costumeMPSet":{"path":` + uri + `}}`},
+		{"sound", "sounds/Media/index.json", `{"path":` + uri + `}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := projectMapDir{fstest.MapFS{tt.index: {Data: []byte(tt.json)}}}
+			var err error
+			if strings.HasPrefix(tt.index, "sounds/") {
+				_, err = LoadSoundConfig(dir, "Media")
+			} else {
+				_, err = LoadSpriteConfig(dir, "Media")
+			}
+			if err == nil || !strings.Contains(err.Error(), "must be relative") {
+				t.Fatalf("URI error = %v, want relative path error", err)
+			}
+		})
+	}
+}
+
+func TestNativeResourceConfigLiteralResPrefix(t *testing.T) {
+	dir := t.TempDir()
+	fs, err := ResourceDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fs.Close()
+	if !spxfs.AllowsLiteralResPrefix(fs) {
+		t.Skip("only native Unix filesystem mode accepts bare res: filenames")
+	}
+	writeProjectFile(t, dir, "index.json", `{"backdrops":[{"path":"res:image.png"}]}`)
+	writeProjectFile(t, dir, "res:image.png", "root asset")
+	writeProjectFile(t, dir, "sprites/Media/index.json", `{"costumes":[{"path":"res::image.png"}]}`)
+	writeProjectFile(t, dir, "sprites/Media/res::image.png", "sprite asset")
+
+	opened, err := OpenBuilderResources(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.FS.Close()
+	conf, err := LoadSpriteConfig(opened.FS, "Media")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct{ got, want, data string }{
+		{opened.Project.Backdrops[0].Path, "./res:image.png", "root asset"},
+		{conf.Costumes[0].Path, "sprites/Media/res::image.png", "sprite asset"},
+	} {
+		if tt.got != tt.want {
+			t.Fatalf("normalized path = %q, want %q", tt.got, tt.want)
+		}
+		f, err := opened.FS.Open(tt.got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil || string(data) != tt.data {
+			t.Fatalf("read %q = %q, %v", tt.got, data, err)
+		}
+	}
+
+	for _, tt := range []struct{ path, errorText string }{
+		{"res://image.png", "must be relative"},
+		{"zip:image.png", "must not use a URI scheme"},
+		{"missing.png", "missing.png"},
+	} {
+		writeProjectFile(t, dir, "index.json", `{"backdrops":[{"path":"`+tt.path+`"}]}`)
+		if _, err := OpenBuilderResources(dir, nil); err == nil || !strings.Contains(err.Error(), tt.errorText) {
+			t.Fatalf("native config %q error = %v, want %q", tt.path, err, tt.errorText)
+		}
+	}
+
+	writeProjectFile(t, dir, "index.json", `{}`)
+	writeProjectFile(t, dir, PackedIndexFile, `{"backdrops":[{"path":"res:image.png"}]}`)
+	if _, err := OpenBuilderResources(dir, nil); err == nil || !strings.Contains(err.Error(), "must not use a URI scheme") {
+		t.Fatalf("packed config URI error = %v, want scheme error", err)
+	}
+
+	writeProjectFile(t, dir, PackedIndexFile, `{"backdrops":[{"path":"./res:image.png"}]}`)
+	packed, err := OpenBuilderResources(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer packed.FS.Close()
+	if got := packed.Project.Backdrops[0].Path; got != "./res:image.png" {
+		t.Fatalf("explicit packed filename normalized to %q", got)
+	}
+}
+
+func TestLoadProjectFontRejectsMissingAsset(t *testing.T) {
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "fonts/Pixel/index.json", `{"faces":[{"path":"missing.ttf"}]}`)
+	fs, err := ResourceDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fs.Close()
+	if _, err := loadProjectFontFamily(fs, "Pixel"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing font error = %v, want file not found", err)
 	}
 }
 
@@ -551,7 +660,7 @@ func TestOpenBuilderResources(t *testing.T) {
 			writeProjectFile(t, dir, "index.json", `{"run":{"title":"demo"}}`)
 			writeProjectFile(t, dir, "sprites/Hero/index.json", `{}`)
 			if tt.packed {
-				writeProjectFile(t, dir, packedIndexJSON, `{}`)
+				writeProjectFile(t, dir, PackedIndexFile, `{}`)
 			}
 			var resource spxfs.Dir = localDir{base: dir}
 			if !tt.listing {
@@ -609,7 +718,7 @@ func TestOpenBuilderResourcesFromPackedConfig(t *testing.T) {
 		},
 		"zorder":["Hero"]
 	}`
-	if err := os.WriteFile(filepath.Join(dir, packedIndexJSON), []byte(packed), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, PackedIndexFile), []byte(packed), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -619,7 +728,7 @@ func TestOpenBuilderResourcesFromPackedConfig(t *testing.T) {
 	}
 	defer opened.FS.Close()
 
-	original, err := opened.FS.Open(packedIndexJSON)
+	original, err := opened.FS.Open(PackedIndexFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +772,7 @@ func TestOpenBuilderResourcesFallsBackToSourceRootConfigWhenPackedRootMissing(t 
 		"backdrops":[{"name":"bg","path":"bg.png"}],
 		"bgm":"theme.mp3"
 	}`)
-	writeProjectFile(t, dir, packedIndexJSON, `{
+	writeProjectFile(t, dir, PackedIndexFile, `{
 		"zorder":["Hero"]
 	}`)
 
@@ -695,7 +804,7 @@ func TestOpenBuilderResourcesPrefersPackedConfigOverSource(t *testing.T) {
 		"size":60
 	}`)
 	writeProjectFile(t, dir, "sounds/Jump/index.json", `{"path":"source.wav","rate":1}`)
-	writeProjectFile(t, dir, packedIndexJSON, `{
+	writeProjectFile(t, dir, PackedIndexFile, `{
 		"run":{"title":"packed-demo"},
 		"sprites":{
 			"Hero":{
@@ -749,7 +858,7 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 		"size":60
 	}`)
 	writeProjectFile(t, dir, "sounds/Jump/index.json", `{"path":"source.wav","rate":1}`)
-	writeProjectFile(t, dir, packedIndexJSON, `{
+	writeProjectFile(t, dir, PackedIndexFile, `{
 		"run":{"title":"packed-demo"},
 		"zorder":["Hero"]
 	}`)
@@ -819,12 +928,13 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 
 func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) {
 	dir := t.TempDir()
+	writeProjectFile(t, dir, "sprites/Hero/source.png", "image")
 	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
 	writeProjectFile(t, dir, "sprites/Hero/index.json", `{
 		"costumes":[{"name":"hero-source","path":"source.png","x":1,"y":2}],
 		"size":60
 	}`)
-	writeProjectFile(t, dir, packedIndexJSON, `{
+	writeProjectFile(t, dir, PackedIndexFile, `{
 		"run":{"title":"packed-demo"}
 	}`)
 
@@ -859,18 +969,19 @@ func TestOpenBuilderResourcesFailsOnInvalidConfig(t *testing.T) {
 	for _, tt := range []struct {
 		name, source, packed, directory, want string
 	}{
-		{name: "packed root", source: `{}`, packed: `{`, want: packedIndexJSON},
+		{name: "packed root", source: `{}`, packed: `{`, want: PackedIndexFile},
 		{name: "source root", source: `{`, packed: `{}`, want: "parse index.json"},
-		{name: "packed is directory", source: `{}`, directory: packedIndexJSON, want: packedIndexJSON},
+		{name: "zero-byte source root", packed: `{}`, want: "parse index.json"},
+		{name: "packed is directory", source: `{}`, directory: PackedIndexFile, want: PackedIndexFile},
 		{name: "source is directory", packed: `{}`, directory: "index.json", want: "index.json"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			if tt.source != "" {
+			if tt.directory != "index.json" {
 				writeProjectFile(t, dir, "index.json", tt.source)
 			}
 			if tt.packed != "" {
-				writeProjectFile(t, dir, packedIndexJSON, tt.packed)
+				writeProjectFile(t, dir, PackedIndexFile, tt.packed)
 			}
 			if tt.directory != "" {
 				if err := os.Mkdir(filepath.Join(dir, tt.directory), 0o755); err != nil {
@@ -910,15 +1021,12 @@ func TestResolveRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestLoadSpriteAndSoundConfigNormalizesPaths(t *testing.T) {
+func TestLoadSpriteAndSoundConfigResolvesResourcePaths(t *testing.T) {
 	for _, tt := range []struct {
 		name, input, spritePath, soundPath string
 	}{
 		{"relative", "./images/../asset.png", "sprites/Hero/asset.png", "sounds/Jump/asset.png"},
 		{"parent", "../shared/asset.png", "sprites/shared/asset.png", "sounds/shared/asset.png"},
-		{"outside project", "../../../../res/hero.png", "../../res/hero.png", "../../res/hero.png"},
-		{"absolute", "/shared/asset.png", "/shared/asset.png", "/shared/asset.png"},
-		{"engine", "res://shared/asset.png", "res://shared/asset.png", "res://shared/asset.png"},
 		{"empty", "", "", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -996,33 +1104,53 @@ func TestLoadSpriteAndSoundConfigErrorsReturnZeroValues(t *testing.T) {
 	}
 }
 
-func TestLoadBuilderProjectNormalizesProjectPaths(t *testing.T) {
-	dir := t.TempDir()
-	indexJSON := `{
-		"backdrops":[{"name":"lake","path":"../../res/lake.jpg"},null],
-		"bgm":"../../res/theme.mp3",
-		"tilemapPath":"../maps/level1.json"
-	}`
-	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(indexJSON), 0o644); err != nil {
-		t.Fatal(err)
+func TestProjectBackgroundSoundIsALogicalName(t *testing.T) {
+	const name = `主题\Bell:1`
+	for _, index := range []string{"index.json", PackedIndexFile} {
+		t.Run(index, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectFile(t, dir, index, `{"bgm":"主题\\Bell:1"}`)
+			opened, err := OpenBuilderResources(dir, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer opened.FS.Close()
+			if got := opened.Project.Bgm; got != name {
+				t.Fatalf("background sound = %q, want %q", got, name)
+			}
+			writeProjectFile(t, dir, index, `{"bgm":"sounds/Bell"}`)
+			if _, err := OpenBuilderResources(dir, nil); err == nil || !strings.Contains(err.Error(), "background sound") {
+				t.Fatalf("invalid background sound error = %v", err)
+			}
+		})
 	}
+}
 
-	loaded, err := LoadBuilderProject(localDir{base: dir}, nil)
-	if err != nil {
-		t.Fatalf("LoadBuilderProject error: %v", err)
-	}
-
-	if got := loaded.Project.Backdrops[0].Path; got != "../../res/lake.jpg" {
-		t.Fatalf("loaded.Project.Backdrops[0].Path = %q, want ../../res/lake.jpg", got)
-	}
-	if len(loaded.Project.Backdrops) != 2 || loaded.Project.Backdrops[1] != nil {
-		t.Fatalf("null backdrop was not preserved: %#v", loaded.Project.Backdrops)
-	}
-	if got := loaded.Project.Bgm; got != "../../res/theme.mp3" {
-		t.Fatalf("loaded.Project.Bgm = %q, want ../../res/theme.mp3", got)
-	}
-	if got := loaded.Project.TilemapPath; got != "../maps/level1.json" {
-		t.Fatalf("loaded.Project.TilemapPath = %q, want ../maps/level1.json", got)
+func TestLoadBuilderProjectResolvesResourcePaths(t *testing.T) {
+	for _, test := range []struct{ index, prefix string }{
+		{"index.json", ""},
+		{"levels/first/index.json", "levels/first/"},
+	} {
+		t.Run(test.index, func(t *testing.T) {
+			dir := projectMapDir{fstest.MapFS{test.index: {Data: []byte(`{
+				"backdrops":[{"path":"images/../lake.jpg"},null],
+				"bgm":"theme.mp3",
+				"tilemapPath":"maps/level1.json"
+			}`)}}}
+			loaded, err := LoadBuilderProject(dir, &Config{Index: test.index})
+			if err != nil {
+				t.Fatal(err)
+			}
+			conf := loaded.Project
+			if len(conf.Backdrops) != 2 || conf.Backdrops[0] == nil || conf.Backdrops[1] != nil {
+				t.Fatalf("unexpected backdrops: %+v", conf.Backdrops)
+			}
+			got := []string{conf.Backdrops[0].Path, conf.Bgm, conf.TilemapPath}
+			want := []string{test.prefix + "lake.jpg", "theme.mp3", test.prefix + "maps/level1.json"}
+			if !slices.Equal(got, want) {
+				t.Errorf("resolved paths = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -1186,6 +1314,7 @@ func TestLoadProjectFontsRejectsInvalidFamilies(t *testing.T) {
 		{"absolute path", "Family", `{"faces":[{"path":"/font.ttf"}]}`, "relative POSIX path"},
 		{"backslash path", "Family", `{"faces":[{"path":"dir\\font.ttf"}]}`, "relative POSIX path"},
 		{"dot path", "Family", `{"faces":[{"path":"."}]}`, "escapes"},
+		{"resource URI", "Family", `{"faces":[{"path":"res://font.ttf"}]}`, "must be relative"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -1297,5 +1426,27 @@ func writeProjectFile(t *testing.T, dir, relPath, content string) {
 	}
 	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestResolveResourcePathAssetBoundary(t *testing.T) {
+	for _, tt := range []struct{ base, reference, want string }{
+		{"sprites/Hero", "../../shared/image.png", "shared/image.png"},
+		{"", "images/../image.png", "image.png"},
+		{"", "", ""},
+	} {
+		got, err := ResolveResourcePath(tt.base, tt.reference, false)
+		if err != nil || got != tt.want {
+			t.Fatalf("ResolveResourcePath(%q, %q) = %q, %v", tt.base, tt.reference, got, err)
+		}
+	}
+	for _, reference := range []string{
+		"../../../outside.png", "/outside.png", "/a/b", `..\outside.png`, "bad\x00.png",
+		`\\server\share`, `C:\a\b`, "C:/image.png", "C:image.png", "d:image.png",
+		"res://assets/image.png", "res:image.png", "file:image.png", "http:image.png", "https:image.png",
+	} {
+		if _, err := ResolveResourcePath("sprites/Hero", reference, false); err == nil {
+			t.Errorf("accepted %q", reference)
+		}
 	}
 }

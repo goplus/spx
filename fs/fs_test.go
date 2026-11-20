@@ -54,6 +54,26 @@ type readDirTestDir struct {
 	read func(string) ([]DirEntry, error)
 }
 
+func TestIsAbsResourcePathAcrossPlatforms(t *testing.T) {
+	for _, tt := range []struct {
+		path string
+		want bool
+	}{
+		{"/a/b", true},
+		{"C:/a/b", true},
+		{`d:\a\b`, true},
+		{`\\server\share\a`, true},
+		{"a/b", false},
+		{"C:relative", false},
+		{"1:/image.png", false},
+		{"sounds/主题曲/1.wav", false},
+	} {
+		if got := IsAbsResourcePath(tt.path); got != tt.want {
+			t.Errorf("IsAbsResourcePath(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
 func TestSplitSchema(t *testing.T) {
 	tests := []struct {
 		path   string

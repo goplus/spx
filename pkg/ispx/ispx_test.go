@@ -80,24 +80,14 @@ func TestInterpreterInit(t *testing.T) {
 
 func TestConfigureFilesystemRoots(t *testing.T) {
 	isolateInterpreter(t)
-	for _, configure := range []struct {
-		name string
-		call func(string, string) error
-	}{
-		{"strict", ConfigureFilesystemRoots},
-		{"legacy", ConfigureLegacyFilesystemRoots},
-	} {
-		t.Run(configure.name, func(t *testing.T) {
-			if err := configure.call("", ""); err == nil || !strings.Contains(err.Error(), "project root is empty") {
-				t.Fatalf("empty roots = %v, want engine validation error", err)
-			}
-			ixgoCtx = &ixgo.Context{}
-			defer func() { ixgoCtx = nil }()
-			if err := configure.call("/unused/project", "/unused/assets"); err == nil || !strings.Contains(err.Error(), "before Init") {
-				t.Fatalf("initialized roots = %v, want lifecycle rejection", err)
-			}
-		})
+	if err := ConfigureFilesystemRoots("", ""); err == nil || !strings.Contains(err.Error(), "project root is empty") {
+		t.Fatalf("empty roots = %v, want engine validation error", err)
 	}
+	ixgoCtx = &ixgo.Context{}
+	if err := ConfigureFilesystemRoots("/unused/project", "/unused/assets"); err == nil || !strings.Contains(err.Error(), "before Init") {
+		t.Fatalf("initialized roots = %v, want lifecycle rejection", err)
+	}
+	ixgoCtx = nil
 }
 
 func TestInterpreterLifecycleGuards(t *testing.T) {

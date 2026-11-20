@@ -16,7 +16,11 @@
 
 package fileutil
 
-import "strings"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
 
 // PathComponentProblem identifies a non-portable character spelling.
 // Callers retain their format-specific error types and messages.
@@ -63,4 +67,38 @@ func IsDeviceBase(base string) bool {
 		}
 	}
 	return false
+}
+
+// AssetRoots selects the local asset directory, or the parent project's assets
+// when running from a generated project directory without its own assets.
+func AssetRoots(dir string) (projectDir, assetDir string) {
+	if dir == "" {
+		dir = "assets"
+	}
+	if !filepath.IsLocal(dir) {
+		return filepath.Dir(dir), dir
+	}
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		parent := filepath.Join("..", dir)
+		if info, err := os.Stat(parent); err == nil && info.IsDir() {
+			return "..", parent
+		}
+	}
+	return ".", dir
+}
+
+// CanonicalPath returns the absolute path to an existing file or directory
+// after resolving its symlink components.
+func CanonicalPath(name string) (string, error) {
+	absolute, err := filepath.Abs(name)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(absolute)
+}
+
+// IsWithinRoot reports whether name is root or a descendant using host path rules.
+func IsWithinRoot(name, root string) bool {
+	rel, err := filepath.Rel(root, name)
+	return err == nil && filepath.IsLocal(rel)
 }

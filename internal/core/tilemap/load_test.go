@@ -33,25 +33,25 @@ type testDir struct {
 func TestLoadNewFormat(t *testing.T) {
 	dir := testDir{
 		files: map[string]string{
-			"tilemaps/map1/tilemap.json":   `{}`,
-			"tilemaps/map1/decorator.json": `{"version":1,"decorators":[{"name":"tree","path":"tree.png"}]}`,
+			"tilemaps.json/map1/tilemap.json":   `{}`,
+			"tilemaps.json/map1/decorator.json": `{"version":1,"decorators":[{"name":"tree","path":"tree.png"}]}`,
 		},
 	}
 
-	got, err := Load(dir, "tilemaps/map1")
+	got, err := Load(dir, "tilemaps.json/map1")
 	if err != nil {
 		t.Fatalf("Load(new) error: %v", err)
 	}
 	if !got.UseNewLoader {
 		t.Fatal("Load(new) UseNewLoader = false, want true")
 	}
-	if got.TilemapDir != "tilemaps/map1" || got.CurrentMap != "map1" {
+	if got.TilemapDir != "tilemaps.json/map1" || got.CurrentMap != "map1" {
 		t.Fatalf("Load(new) dir/map = %q/%q", got.TilemapDir, got.CurrentMap)
 	}
-	if got.TilemapPath != "tilemaps/map1/tilemap.json" {
+	if got.TilemapPath != "tilemaps.json/map1/tilemap.json" {
 		t.Fatalf("Load(new) TilemapPath = %q", got.TilemapPath)
 	}
-	if got.DecoratorPath != "tilemaps/map1/decorator.json" {
+	if got.DecoratorPath != "tilemaps.json/map1/decorator.json" {
 		t.Fatalf("Load(new) DecoratorPath = %q", got.DecoratorPath)
 	}
 	if got.DecoratorErr != nil {

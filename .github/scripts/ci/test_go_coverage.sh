@@ -63,9 +63,9 @@ case "${1:-}" in
     covered_web_test coverage-web.out -timeout=1m \
       ./internal/core/project ./internal/gdengine/binding/web ./internal/gdengine/impl ./internal/engine/wrap ./pkg/ispx ./internal/engine/coroutine
     covered_web_test coverage-web-touch.out -run '^TestTouchSubscriptions' .
-    # These lifecycle tests run without the Godot host required by engine Main tests.
+    # These engine tests run in Node without a Godot host.
     covered_web_test coverage-web-engine.out \
-      -run '^Test(RequestExitStopsManagedCallerOnWeb|ResetWebRuntime.*|DrainAndReleaseGame.*)$' \
+      -run '^Test(RequestExitStopsManagedCallerOnWeb|ResetWebRuntime.*|DrainAndReleaseGame.*|SetAssetDirSelectsOneRoot)$' \
       ./internal/engine
     ;;
   web-process)

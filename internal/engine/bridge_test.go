@@ -95,7 +95,7 @@ func TestBackendAdaptersForwardResourcesCameraAndLayerMode(t *testing.T) {
 		SetScheduler(previousScheduler)
 		windowScale, state.layerSortMode = previousScale, previousMode
 	})
-	resources := &adapterResourceSpy{files: map[string]string{"data": "contents", "res://.config": `{"extasset":"shared"}`}}
+	resources := &adapterResourceSpy{files: map[string]string{"data": "contents"}}
 	camera := &adapterCameraSpy{position: mathf.NewVec2(10, -5), zoom: mathf.NewVec2(4, 4)}
 	platform, ext := &adapterPlatformSpy{}, &adapterExtSpy{}
 	gdx.ResMgr, gdx.CameraMgr, gdx.PlatformMgr, gdx.ExtMgr = resources, camera, platform, ext
@@ -107,13 +107,6 @@ func TestBackendAdaptersForwardResourcesCameraAndLayerMode(t *testing.T) {
 	SetDebugMode(true)
 	if !platform.debug {
 		t.Fatal("debug setting not forwarded")
-	}
-	if got := readExtAssetDirFromProjectConfig("res://"); got != "shared" {
-		t.Fatalf("extension assets=%q", got)
-	}
-	resources.files["res://.config"] = "invalid"
-	if readExtAssetDirFromProjectConfig("res://") != "" || readExtAssetDirFromProjectConfig("missing/") != "" {
-		t.Fatal("invalid/missing project config accepted")
 	}
 	world := mathf.NewVec2(13, 2)
 	wantView := mathf.NewVec2(6, 14)
@@ -152,7 +145,7 @@ func TestPublicFactoriesInitializeProxyAndUI(t *testing.T) {
 	gdx.SpriteMgr = manager
 	ui := &factoryUIManager{result: 20}
 	gdx.UiMgr = ui
-	assetPaths = assetResolver{root: "assets/", projectRoot: "."}
+	assetPaths = assetResolver{assetRoot: "assets/", projectRoot: "."}
 	target := &struct{}{}
 	proxy := NewBackdropProxy(target, "backdrop.png", 2)
 	if proxy.Target != target || manager.texture != ToAssetPath("backdrop.png") || manager.scale != mathf.NewVec2(2, 2) {

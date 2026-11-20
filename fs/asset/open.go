@@ -20,35 +20,63 @@
 package asset
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/v4/fs"
+	spxfs "github.com/goplus/spx/v4/fs"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
-// Open opens a local filesystem object.
-func Open(base string) (fs.Dir, error) {
+// Open selects one local asset directory. A generated project directory can
+// use its parent's assets when it has no local copy.
+func Open(base string) (spxfs.Dir, error) {
+	_, base = fileutil.AssetRoots(base)
 	return &FS{base: base + "/"}, nil
 }
 
-func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
-	dirPath := filepath.FromSlash(f.base + name)
-	entries, err := os.ReadDir(dirPath)
+func (f *FS) Open(name string) (io.ReadCloser, error) {
+	file, err := f.resolvePhysicalPath(name)
 	if err != nil {
-		entries, err = os.ReadDir(filepath.Join("..", dirPath))
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
-	return fs.DirEntriesFromFS(entries), nil
+	return os.Open(file)
 }
 
-func openAsset(path string) (io.ReadSeekCloser, error) {
-	filePath := filepath.FromSlash(path)
-	f, err := os.Open(filePath)
-	if err == nil {
-		return f, nil
+func (f *FS) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	dir, err := f.resolvePhysicalPath(name)
+	if err != nil {
+		return nil, err
 	}
-	return os.Open(filepath.Join("..", filePath))
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	return spxfs.DirEntriesFromFS(entries), nil
+}
+
+// ValidateResourcePath checks the physical location, including symlink targets.
+func (f *FS) ValidateResourcePath(name string) error {
+	_, err := f.resolvePhysicalPath(name)
+	return err
+}
+
+func (f *FS) resolvePhysicalPath(name string) (string, error) {
+	localName, err := localResourcePath(name)
+	if err != nil {
+		return "", err
+	}
+	root, err := fileutil.CanonicalPath(f.base)
+	if err != nil {
+		return "", err
+	}
+	target, err := filepath.EvalSymlinks(filepath.Join(root, localName))
+	if err != nil {
+		return "", err
+	}
+	if !fileutil.IsWithinRoot(target, root) {
+		return "", fmt.Errorf("resource %q is outside the asset directory", name)
+	}
+	return target, nil
 }

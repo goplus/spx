@@ -24,20 +24,19 @@ import (
 	"strings"
 	"time"
 
+	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/base/fileutil"
+	"github.com/goplus/spx/v4/internal/launchpack/assets"
 )
 
-type dirInfo struct {
-	path string
-	info os.FileInfo
-	// zipPath overrides the zip entry path for a legacy external asset.
-	zipPath  string
-	root     *os.Root
-	rootPath string
+type archiveEntry struct {
+	relPath string
+	zipName string
+	info    os.FileInfo
 }
 
-func PackProject(baseFolder string, dstZipPath string) error {
-	projectRoot, err := openPackRoot(baseFolder)
+func PackProject(projectDir, dstZipPath string) error {
+	projectRoot, err := openPackRoot(projectDir)
 	if err != nil {
 		return err
 	}
@@ -45,24 +44,13 @@ func PackProject(baseFolder string, dstZipPath string) error {
 	if err := validatePackDestination(dstZipPath); err != nil {
 		return err
 	}
-	paths, err := collectProjectPaths(baseFolder, dstZipPath, projectRoot)
+	entries, err := collectProjectEntries(projectDir, dstZipPath)
 	if err != nil {
 		return err
 	}
-	extAssetDir, err := validateLegacyPackInputs(baseFolder)
-	if err != nil {
-		return err
+	if err := assets.ValidateLegacy(projectRoot); err != nil {
+		return fmt.Errorf("pack: validate asset indexes: %w", err)
 	}
-	existingZipPaths := make(map[string]struct{}, len(paths))
-	for _, dirInfo := range paths {
-		existingZipPaths[zipEntryName(baseFolder, dirInfo)] = struct{}{}
-	}
-	extraPaths, err := collectExternalAssetPaths(baseFolder, existingZipPaths, extAssetDir)
-	if err != nil {
-		return err
-	}
-	defer closePackRoots(extraPaths)
-	paths = append(paths, extraPaths...)
 
 	tempName, file, err := createPackOutput(dstZipPath)
 	if err != nil {
@@ -76,7 +64,7 @@ func PackProject(baseFolder string, dstZipPath string) error {
 	}()
 
 	zipWriter := zip.NewWriter(file)
-	if err := closePackOutput(zipWriter, file, packZip(zipWriter, baseFolder, paths)); err != nil {
+	if err := closePackOutput(zipWriter, file, writeZipEntries(zipWriter, projectRoot, entries)); err != nil {
 		return err
 	}
 	if err := publishPackOutput(tempName, dstZipPath); err != nil {
@@ -86,26 +74,23 @@ func PackProject(baseFolder string, dstZipPath string) error {
 	return nil
 }
 
-// packZip requires each collected entry to have a root and a root-relative path.
-// The caller keeps the roots open for the entire call.
-func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
-	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
-	seenNames := make(map[string]struct{}, len(paths))
-	slices.SortFunc(paths, func(a, b dirInfo) int {
-		return strings.Compare(zipEntryName(baseFolder, a), zipEntryName(baseFolder, b))
+func writeZipEntries(zipWriter *zip.Writer, root *os.Root, entries []archiveEntry) error {
+	seenNames := make(map[string]struct{}, len(entries))
+	slices.SortFunc(entries, func(a, b archiveEntry) int {
+		return strings.Compare(a.zipName, b.zipName)
 	})
-	for _, dirInfo := range paths {
-		filePath := dirInfo.path
-		info := dirInfo.info
-		current, err := dirInfo.root.Lstat(dirInfo.rootPath)
+	for _, entry := range entries {
+		relPath := entry.relPath
+		info := entry.info
+		current, err := root.Lstat(relPath)
 		if err != nil {
-			return fmt.Errorf("inspect project entry %s before packing: %w", filePath, err)
-		}
-		if (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
-			return fmt.Errorf("project entry %s changed after collection", filePath)
+			return fmt.Errorf("inspect project entry %s before packing: %w", relPath, err)
 		}
 		if current.IsDir() != info.IsDir() {
-			return fmt.Errorf("project entry %s changed type after collection", filePath)
+			return fmt.Errorf("project entry %s changed type after collection", relPath)
+		}
+		if (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
+			return fmt.Errorf("project entry %s changed after collection", relPath)
 		}
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
@@ -113,15 +98,12 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 		}
 		header.Modified = time.Unix(0, 0)
 
-		header.Name = zipEntryName(baseFolder, dirInfo)
-		if header.Name == "" {
-			continue
-		}
+		header.Name = entry.zipName
 		if !validZipEntryName(header.Name) {
-			return fmt.Errorf("project entry %s has unsafe zip name %q", filePath, header.Name)
+			return fmt.Errorf("project entry %s has unsafe zip name %q", relPath, header.Name)
 		}
 		if _, exists := seenNames[header.Name]; exists {
-			return fmt.Errorf("project entry %s duplicates zip name %q", filePath, header.Name)
+			return fmt.Errorf("project entry %s duplicates zip name %q", relPath, header.Name)
 		}
 		seenNames[header.Name] = struct{}{}
 		if info.IsDir() {
@@ -137,13 +119,13 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 		if err != nil {
 			return err
 		}
-		reader := fileutil.StableReader{Expected: info, Lstat: dirInfo.root.Lstat, Open: dirInfo.root.Open}
-		if _, err := reader.Copy(dirInfo.rootPath, writer); err != nil {
+		reader := fileutil.StableReader{Expected: info, Lstat: root.Lstat, Open: root.Open}
+		if _, err := reader.Copy(relPath, writer); err != nil {
 			switch err {
 			case fileutil.ErrNotRegular, fileutil.ErrChangedOpening:
-				return fmt.Errorf("project entry %s changed while opening", filePath)
+				return fmt.Errorf("project entry %s changed while opening", relPath)
 			case fileutil.ErrChangedReading:
-				return fmt.Errorf("project entry %s changed while packing", filePath)
+				return fmt.Errorf("project entry %s changed while packing", relPath)
 			default:
 				return err
 			}
@@ -153,7 +135,7 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 }
 
 func validZipEntryName(name string) bool {
-	if name == "" || strings.HasPrefix(name, "/") {
+	if name == "" || spxfs.IsAbsResourcePath(name) {
 		return false
 	}
 	for _, segment := range strings.Split(name, "/") {
@@ -191,27 +173,4 @@ func openPackRoot(path string) (*os.Root, error) {
 		return nil, fmt.Errorf("pack root %q changed while it was opened", path)
 	}
 	return root, nil
-}
-
-func closePackRoots(paths []dirInfo) {
-	closed := make(map[*os.Root]struct{})
-	for _, dirInfo := range paths {
-		if dirInfo.root == nil {
-			continue
-		}
-		if _, ok := closed[dirInfo.root]; ok {
-			continue
-		}
-		closed[dirInfo.root] = struct{}{}
-		_ = dirInfo.root.Close()
-	}
-}
-
-func zipEntryName(baseFolder string, dirInfo dirInfo) string {
-	if dirInfo.zipPath != "" {
-		return strings.TrimPrefix(normalizeZipPath(dirInfo.zipPath), "/")
-	}
-	baseFolder = normalizeZipPath(baseFolder)
-	name := strings.TrimPrefix(normalizeZipPath(dirInfo.path), baseFolder)
-	return strings.TrimPrefix(name, "/")
 }

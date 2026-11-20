@@ -62,13 +62,10 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 		return nil, fmt.Errorf("launchpack: project file %q is not in the source allowlist", projectBase)
 	}
 
-	external, err := collectReferencedProjectFiles(cfg)
-	if err != nil {
-		return nil, err
+	if err := assets.Validate(assets.Config{ProjectDir: cfg.ProjectDir, PackDir: cfg.PackDir, PackIndex: cfg.PackIndex}); err != nil {
+		return nil, fmt.Errorf("launchpack: validate typed project resources: %w", err)
 	}
-	projectFiles = append(projectFiles, external...)
-	slices.Sort(projectFiles)
-	return slices.Compact(projectFiles), nil
+	return projectFiles, nil
 }
 
 func topLevelProjectName(projectDir, projectFile string) (string, error) {
@@ -98,17 +95,4 @@ func prepareProjectArchiveConfig(cfg Config, snapshot portableconfig.PortableCon
 	return projectarchive.Config{ProjectDir: cfg.ProjectDir, ProjectFiles: files,
 		IncludeConfig: snapshot.Present(), ConfigBytes: snapshot.Bytes(), PackDir: cfg.PackDir,
 		Output: cfg.Output}, nil
-}
-
-// collectReferencedProjectFiles resolves explicit resources outside PackDir.
-func collectReferencedProjectFiles(cfg Config) ([]string, error) {
-	referenced, err := assets.Collect(assets.Config{
-		ProjectDir: cfg.ProjectDir,
-		PackDir:    cfg.PackDir,
-		PackIndex:  cfg.PackIndex,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("launchpack: collect typed project resources: %w", err)
-	}
-	return referenced, nil
 }

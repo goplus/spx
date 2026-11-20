@@ -103,7 +103,7 @@ func (c Config) validateGraphInputs() error {
 // validatePackPath uses the slash-separated paths stored in project metadata;
 // filepath semantics would reject nested pack directories on Windows.
 func validatePackPath(name, value string, directory bool) error {
-	if value == "" || value == "." || value == ".." || strings.ContainsAny(value, "\\\x00:") || path.IsAbs(value) || looksLikeWindowsAbsolutePath(value) || path.Clean(value) != value {
+	if value == "" || value == "." || value == ".." || strings.ContainsAny(value, "\\\x00:") || path.IsAbs(value) || path.Clean(value) != value {
 		return fmt.Errorf("launchpack: %s must be a clean relative slash path: %q", name, value)
 	}
 	for _, component := range strings.Split(value, "/") {
@@ -115,14 +115,6 @@ func validatePackPath(name, value string, directory bool) error {
 		return fmt.Errorf("launchpack: %s must be a plain file name: %q", name, value)
 	}
 	return nil
-}
-
-func looksLikeWindowsAbsolutePath(value string) bool {
-	return strings.HasPrefix(value, "//") || len(value) >= 3 && isASCIIAlpha(value[0]) && value[1] == ':' && value[2] == '/'
-}
-
-func isASCIIAlpha(value byte) bool {
-	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
 }
 
 func validateGraphFlags(flags []string) error {

@@ -85,6 +85,9 @@ func TestPortableConfigFSHidesAbsentConfig(t *testing.T) {
 	if _, err := overlayFS.Open(".config/child"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Open(.config/child) error = %v, want not exist", err)
 	}
+	if _, err := overlayFS.Lstat(".config"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("Lstat exposed hidden .config: %v", err)
+	}
 	for _, entry := range mustReadDir(t, overlayFS) {
 		if isPortableConfigName(entry.Name()) {
 			t.Fatalf("root listing exposed %q", entry.Name())
@@ -194,6 +197,7 @@ func TestPortableConfigFSDelegationAndMetadata(t *testing.T) {
 	base := fstest.MapFS{
 		".config":        {Data: []byte("live config")},
 		"main.spx":       {Data: []byte("game source")},
+		"main-link":      {Mode: fs.ModeSymlink, Data: []byte("main.spx")},
 		"nested/.config": {Data: []byte("nested config")},
 	}
 	want := `{"name":"snapshot"}`
@@ -217,6 +221,14 @@ func TestPortableConfigFSDelegationAndMetadata(t *testing.T) {
 	if info.Name() != ".config" || info.Size() != int64(len(want)) || info.Mode() != 0o444 ||
 		!info.ModTime().IsZero() || info.IsDir() || info.Sys() != nil {
 		t.Errorf("synthetic config metadata = %#v", info)
+	}
+	info, err = overlay.Lstat(".config")
+	if err != nil || info.Size() != int64(len(want)) || info.Mode() != 0o444 {
+		t.Fatalf("Lstat(.config) = %v, %v; want snapshot metadata", info, err)
+	}
+	info, err = overlay.Lstat("main-link")
+	if err != nil || info.Mode()&fs.ModeSymlink == 0 {
+		t.Fatalf("Lstat(main-link) = %v, %v; want symlink metadata", info, err)
 	}
 	for _, name := range []string{"missing", ".config", ".config/child"} {
 		if _, err := overlay.ReadDir(name); !errors.Is(err, fs.ErrNotExist) {

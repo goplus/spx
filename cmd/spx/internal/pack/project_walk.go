@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-func collectProjectPaths(baseFolder, destination string, projectRoot *os.Root) ([]dirInfo, error) {
+func collectProjectEntries(projectDir, destination string) ([]archiveEntry, error) {
 	destination, err := filepath.Abs(destination)
 	if err != nil {
 		return nil, err
@@ -35,8 +35,8 @@ func collectProjectPaths(baseFolder, destination string, projectRoot *os.Root) (
 		return nil, err
 	}
 	skipDirs := map[string]struct{}{".git": {}, "project": {}}
-	paths := make([]dirInfo, 0)
-	err = filepath.Walk(baseFolder, func(name string, info os.FileInfo, err error) error {
+	entries := make([]archiveEntry, 0)
+	err = filepath.Walk(projectDir, func(name string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -53,7 +53,7 @@ func collectProjectPaths(baseFolder, destination string, projectRoot *os.Root) (
 		if absolute == destination || (destinationInfo != nil && os.SameFile(info, destinationInfo)) {
 			return nil
 		}
-		rel, err := filepath.Rel(baseFolder, name)
+		rel, err := filepath.Rel(projectDir, name)
 		if err != nil {
 			return err
 		}
@@ -72,8 +72,12 @@ func collectProjectPaths(baseFolder, destination string, projectRoot *os.Root) (
 				return nil
 			}
 		}
-		paths = append(paths, dirInfo{path: name, info: info, root: projectRoot, rootPath: rel})
+		zipName := filepath.ToSlash(rel)
+		if strings.Contains(zipName, "\\") {
+			return fmt.Errorf("project entry %s has unsafe zip name %q", name, zipName)
+		}
+		entries = append(entries, archiveEntry{relPath: rel, zipName: zipName, info: info})
 		return nil
 	})
-	return paths, err
+	return entries, err
 }

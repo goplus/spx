@@ -20,7 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	iofs "io/fs"
+	"iter"
 	"path"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -96,13 +99,21 @@ func LoadConfig(ret any, fs spxfs.Dir, index any) error {
 	}
 }
 
-// validResourceName checks logical directory names in the project format.
-func validResourceName(name string) bool {
+// ValidResourceName reports whether name is a single POSIX resource directory name.
+func ValidResourceName(name string) bool {
 	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\x00")
 }
 
+// ValidateBackgroundSoundName checks the optional sound name selected by a project.
+func ValidateBackgroundSoundName(name string) error {
+	if name != "" && !ValidResourceName(name) {
+		return fmt.Errorf("background sound name %q is not a valid path segment", name)
+	}
+	return nil
+}
+
 func LoadSpriteConfig(fs spxfs.Dir, name string) (SpriteConfig, error) {
-	if !validResourceName(name) {
+	if !ValidResourceName(name) {
 		return SpriteConfig{}, fmt.Errorf("sprite name %q is not a valid path segment", name)
 	}
 	baseDir := path.Join("sprites", name)
@@ -110,12 +121,14 @@ func LoadSpriteConfig(fs spxfs.Dir, name string) (SpriteConfig, error) {
 	if err := LoadJSON(&conf, fs, baseDir+"/index.json"); err != nil {
 		return SpriteConfig{}, err
 	}
-	normalizeSpriteConfigPaths(&conf, baseDir)
+	if err := resolveResourcePaths(fs, baseDir, conf.ResourcePaths); err != nil {
+		return SpriteConfig{}, err
+	}
 	return conf, nil
 }
 
 func LoadSoundConfig(fs spxfs.Dir, name string) (SoundConfig, error) {
-	if !validResourceName(name) {
+	if !ValidResourceName(name) {
 		return SoundConfig{}, fmt.Errorf("sound name %q is not a valid path segment", name)
 	}
 	baseDir := path.Join("sounds", name)
@@ -123,11 +136,17 @@ func LoadSoundConfig(fs spxfs.Dir, name string) (SoundConfig, error) {
 	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
 		return SoundConfig{}, err
 	}
-	conf.Path = NormalizeConfigPath(baseDir, conf.Path)
+	if err := resolveResourcePaths(fs, baseDir, conf.ResourcePaths); err != nil {
+		return SoundConfig{}, err
+	}
 	return conf, nil
 }
 
 func LoadJSON(ret any, fs spxfs.Dir, file string) error {
+	file, err := cleanAssetPath(file)
+	if err != nil {
+		return err
+	}
 	f, err := fs.Open(file)
 	if err != nil {
 		spxlog.Error("Failed to open file %s: %v", file, err)
@@ -137,44 +156,68 @@ func LoadJSON(ret any, fs spxfs.Dir, file string) error {
 	return decodeJSON(f, ret)
 }
 
-// NormalizeConfigPath resolves a relative project config path from configDir.
-func NormalizeConfigPath(configDir, relPath string) string {
-	if relPath == "" {
-		return ""
+// ResolveResourcePath resolves a configuration reference within the asset directory.
+// Engine-owned resource URIs are not part of the project configuration format.
+func ResolveResourcePath(configDir, reference string, literalResPrefix bool) (string, error) {
+	if reference == "" {
+		return "", nil
 	}
-	if strings.HasPrefix(relPath, "/") {
-		return relPath
+	if strings.ContainsAny(reference, "\\\x00") || spxfs.IsAbsResourcePath(reference) || strings.Contains(reference, "://") || (runtime.GOOS == "windows" && strings.ContainsRune(reference, ':')) {
+		return "", fmt.Errorf("resource path %q must be relative to the asset directory", reference)
 	}
-	if schema, _ := spxfs.SplitSchema(relPath); schema != "" {
-		return relPath
+	if prefix, _, found := strings.Cut(reference, ":"); found {
+		if len(prefix) == 1 && ((prefix[0] >= 'a' && prefix[0] <= 'z') || (prefix[0] >= 'A' && prefix[0] <= 'Z')) {
+			return "", fmt.Errorf("resource path %q must not use a drive prefix", reference)
+		}
+		scheme, _ := spxfs.SplitSchema(reference)
+		switch prefix {
+		case "file", "http", "https":
+			scheme = prefix
+		case "res":
+			if literalResPrefix {
+				scheme = ""
+			}
+		}
+		if scheme != "" {
+			return "", fmt.Errorf("resource path %q must not use a URI scheme", reference)
+		}
 	}
-	return path.Join(configDir, relPath)
+	name := path.Join(configDir, reference)
+	if name == "." || name == ".." || strings.HasPrefix(name, "../") || spxfs.IsAbsResourcePath(name) {
+		return "", fmt.Errorf("resource path %q escapes the asset directory", reference)
+	}
+	return name, nil
 }
 
-func normalizeProjectConfigPaths(conf *ProjectConfig) {
-	for _, backdrop := range conf.Backdrops {
-		if backdrop == nil {
-			continue
-		}
-		backdrop.Path = NormalizeConfigPath("", backdrop.Path)
+// cleanAssetPath preserves POSIX directory names while keeping file lookup
+// relative to the supplied resource directory.
+func cleanAssetPath(name string) (string, error) {
+	clean := path.Clean(name)
+	if spxfs.IsAbsResourcePath(name) || spxfs.IsAbsResourcePath(clean) ||
+		strings.HasPrefix(name, `\`) || strings.HasPrefix(clean, `\`) ||
+		clean == "." || !iofs.ValidPath(clean) || strings.ContainsRune(name, 0) || strings.Contains(name, "://") {
+		return "", fmt.Errorf("resource file %q must be relative to the asset directory", name)
 	}
-	conf.Bgm = NormalizeConfigPath("", conf.Bgm)
-	conf.TilemapPath = NormalizeConfigPath("", conf.TilemapPath)
+	return clean, nil
 }
 
-func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
-	for _, costume := range conf.Costumes {
-		if costume == nil {
-			continue
+func resolveResourcePaths(fs spxfs.Dir, configDir string, paths iter.Seq[*string]) error {
+	literalResPrefix := spxfs.AllowsLiteralResPrefix(fs)
+	for value := range paths {
+		resolved, err := ResolveResourcePath(configDir, *value, literalResPrefix)
+		if err != nil {
+			return err
 		}
-		costume.Path = NormalizeConfigPath(configDir, costume.Path)
+		if err := spxfs.ValidateResourcePath(fs, resolved); err != nil {
+			return err
+		}
+		// Keep root-level POSIX filenames distinct from engine resource URIs.
+		if strings.HasPrefix(resolved, "res:") {
+			resolved = "./" + resolved
+		}
+		*value = resolved
 	}
-	if conf.CostumeSet != nil {
-		conf.CostumeSet.Path = NormalizeConfigPath(configDir, conf.CostumeSet.Path)
-	}
-	if conf.CostumeMPSet != nil {
-		conf.CostumeMPSet.Path = NormalizeConfigPath(configDir, conf.CostumeMPSet.Path)
-	}
+	return nil
 }
 
 func decodeJSON(r io.Reader, ret any) error {
