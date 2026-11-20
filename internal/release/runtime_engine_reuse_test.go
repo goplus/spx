@@ -68,7 +68,7 @@ func TestValidateEngineReuse(t *testing.T) {
 			}
 		})
 	}
-	if err := ValidateEngineReuse(source, target, fixture.root, "missing"); err == nil || !strings.Contains(err.Error(), "list runtime engine source tree") {
+	if err := ValidateEngineReuse(source, target, fixture.root, "missing"); err == nil || !strings.Contains(err.Error(), "resolve runtime engine source tree") {
 		t.Fatalf("missing revision error = %v", err)
 	}
 }
@@ -135,17 +135,17 @@ func TestInheritedEngineProvenanceAndBytes(t *testing.T) {
 	if target.Provenance.EngineOrigin.SPXCommit != source.Provenance.SPXCommit || target.Provenance.EngineOrigin.RuntimeVersion != source.RuntimeVersion {
 		t.Fatal("lost original engine provenance")
 	}
-	next := target
-	next.RuntimeVersion = "99.0.1"
-	next.Provenance.SPXCommit = strings.Repeat("1", 40)
-	if err := next.InheritEngine(target); err != nil {
+	// The source release can itself carry an earlier build origin.
+	previous := RuntimeEngineOrigin{RuntimeVersion: "2.0.0", SPXCommit: strings.Repeat("1", 40)}
+	source.Provenance.EngineOrigin = &previous
+	if err := target.InheritEngine(source); err != nil {
 		t.Fatal(err)
 	}
-	if *next.Provenance.EngineOrigin != *target.Provenance.EngineOrigin {
+	if *target.Provenance.EngineOrigin != previous {
 		t.Fatal("reuse chain lost original build")
 	}
-	next.Provenance.EngineOrigin.SPXCommit = strings.Repeat("2", 40)
-	if target.Provenance.EngineOrigin.SPXCommit != source.Provenance.SPXCommit || source.Provenance.EngineOrigin != nil {
+	target.Provenance.EngineOrigin.SPXCommit = strings.Repeat("2", 40)
+	if *target.Provenance.EngineOrigin == *source.Provenance.EngineOrigin {
 		t.Fatal("inherited origin aliases source manifest")
 	}
 }
@@ -158,9 +158,13 @@ func TestInheritEngineRejectsChangedSourceOrTarget(t *testing.T) {
 		want   string
 	}{
 		{"invalid source", func(s, _ *RuntimeManifest) { s.Schema = 0 }, "manifest schema"},
-		{"missing identity", func(s, _ *RuntimeManifest) { s.Provenance.EngineSourceSHA256 = "" }, "copied engine identity differs"},
-		{"different identity", func(_, m *RuntimeManifest) { m.Provenance.EngineSourceSHA256 = strings.Repeat("0", 64) }, "copied engine identity differs"},
-		{"missing source engine", func(s, _ *RuntimeManifest) { s.Assets = s.Assets[1:] }, "reused engine asset"},
+		{"missing identity", func(s, _ *RuntimeManifest) { s.Provenance.EngineSourceSHA256 = "" }, "no engine identity"},
+		{"different identity", func(_, m *RuntimeManifest) { m.Provenance.EngineSourceSHA256 = strings.Repeat("0", 64) }, "engine source digest differs"},
+		{"missing source engine", func(s, _ *RuntimeManifest) { s.Assets = s.Assets[1:] }, "release requires exactly"},
+		{"source lock", func(s, _ *RuntimeManifest) { s.LockSHA256 = strings.Repeat("0", 64) }, "manifest lock SHA-256"},
+		{"different repository", func(_, m *RuntimeManifest) { m.ReleaseRepository = "example/target" }, "source repository differs"},
+		{"extra target asset", func(_, m *RuntimeManifest) { m.Assets = append(m.Assets, RuntimeAsset{Name: "zz-new.zip"}) }, "asset counts differ"},
+		{"replaced target asset", func(_, m *RuntimeManifest) { m.Assets[0].Name = "another.zip" }, "reused engine asset"},
 		{"changed engine checksum", func(_, m *RuntimeManifest) { m.Assets[0].SHA256 = strings.Repeat("0", 64) }, "reused engine asset"},
 		{"changed engine size", func(_, m *RuntimeManifest) { m.Assets[0].Size++ }, "reused engine asset"},
 		{"invalid target", func(_, m *RuntimeManifest) { m.Schema = 0 }, "manifest schema"},
@@ -174,6 +178,9 @@ func TestInheritEngineRejectsChangedSourceOrTarget(t *testing.T) {
 			err := target.InheritEngine(source)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("inherit error = %v, want %q", err, test.want)
+			}
+			if target.Provenance.EngineOrigin != nil {
+				t.Fatal("failed inheritance changed the engine origin")
 			}
 		})
 	}

@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,42 @@ func TestRuntimeEngineSourceUsesRequestedRevision(t *testing.T) {
 	fixture.write(t, ".github/workflows/build_release.yml", "uncommitted invalid workflow")
 	if fixture.digest(t, "HEAD", lock) != current || fixture.digest(t, revision, lock) != baseline {
 		t.Fatal("worktree or later commit contaminated requested engine revision")
+	}
+}
+
+func TestRuntimeEngineSourcePinsMovingRef(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX Git wrapper")
+	}
+	fixture := newRuntimeEngineFixture(t)
+	fixture.git(t, "branch", "engine-source")
+	lock := DefaultRuntimeLock()
+	original := fixture.digest(t, "engine-source", lock)
+	fixture.write(t, ".github/workflows/build_release.yml", engineWorkflowFixture(strings.Repeat("2", 40)))
+	fixture.commit(t)
+
+	// Advance the branch immediately after Git has listed its original tree.
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	script := `#!/bin/sh
+"$SPX_REAL_GIT" "$@" || exit $?
+if [ "$3" = ls-tree ]; then
+    "$SPX_REAL_GIT" -C "$2" update-ref refs/heads/engine-source HEAD
+fi
+`
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SPX_REAL_GIT", realGit)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if got := fixture.digest(t, "engine-source", lock); got != original {
+		t.Fatal("engine digest combined inputs from different revisions")
+	}
+	if got := fixture.digest(t, "engine-source", lock); got == original {
+		t.Fatal("updated branch did not change the engine digest")
 	}
 }
 

@@ -106,23 +106,21 @@ func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
 	if err != nil {
 		return err
 	}
-	if cfg.Target == "dev" {
+	switch cfg.Target {
+	case "dev":
 		return buildDevWorkflow(cfg, runner)
-	}
-	if cfg.Target == "desktop" || cfg.Target == "web" {
+	case "editor":
+		return engine.BuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
+	case "android", "ios":
+		return engine.BuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
+	case "desktop", "web":
 		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
 			return err
 		}
-	}
-	switch cfg.Target {
-	case "editor":
-		return engine.BuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
-	case "desktop":
+		if cfg.Target == "web" {
+			return buildWebWorkflow(cfg, runner)
+		}
 		return buildHostRuntimeWorkflow(runner)
-	case "web":
-		return buildWebWorkflow(cfg, runner)
-	case "android", "ios":
-		return engine.BuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
 	default:
 		return fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}

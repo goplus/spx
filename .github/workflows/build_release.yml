@@ -78,8 +78,6 @@ jobs:
 
       - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'false'
 
       - name: Describe release and runtime lock
         id: release
@@ -199,8 +197,6 @@ jobs:
 
       - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'false'
 
       - name: Download and verify source engine
         env:
@@ -210,149 +206,59 @@ jobs:
           RUNTIME_MANIFEST: ${{ needs.plan-release.outputs.engine_manifest }}
         run: python3 .github/scripts/release/reuse_engine.py
 
-      - name: Upload verified android.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-android
-          path: reused-engine/android.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: android}
 
-      - name: Upload verified editor-linux-x86_64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-editor-linux-x86_64
-          path: reused-engine/editor-linux-x86_64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: editor-linux-x86_64}
 
-      - name: Upload verified editor-macos-arm64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-editor-macos-arm64
-          path: reused-engine/editor-macos-arm64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: editor-macos-arm64}
 
-      - name: Upload verified editor-macos-x86_64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-editor-macos-x86_64
-          path: reused-engine/editor-macos-x86_64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: editor-macos-x86_64}
 
-      - name: Upload verified editor-web.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-editor-web
-          path: reused-engine/editor-web.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: editor-web}
 
-      - name: Upload verified editor-windows-x86_64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-editor-windows-x86_64
-          path: reused-engine/editor-windows-x86_64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: editor-windows-x86_64}
 
-      - name: Upload verified ios.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-ios
-          path: reused-engine/ios.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: ios}
 
-      - name: Upload verified linux-x86_64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-linux-x86_64
-          path: reused-engine/linux-x86_64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: linux-x86_64}
 
-      - name: Upload verified macos-arm64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-macos-arm64
-          path: reused-engine/macos-arm64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: macos-arm64}
 
-      - name: Upload verified macos-x86_64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-macos-x86_64
-          path: reused-engine/macos-x86_64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: macos-x86_64}
 
-      - name: Upload verified macos.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-macos-universal
-          path: reused-engine/macos.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: macos-universal, file: macos.zip}
 
-      - name: Upload verified web-minigame.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-web-minigame
-          path: reused-engine/web-minigame.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: web-minigame}
 
-      - name: Upload verified web-miniprogram.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-web-miniprogram
-          path: reused-engine/web-miniprogram.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: web-miniprogram}
 
-      - name: Upload verified web-threads.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-web-threads
-          path: reused-engine/web-threads.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: web-threads}
 
-      - name: Upload verified web-worker.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-web-worker
-          path: reused-engine/web-worker.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: web-worker}
 
-      - name: Upload verified web.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-web
-          path: reused-engine/web.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: web}
 
-      - name: Upload verified windows-x86_64.zip
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-windows-x86_64
-          path: reused-engine/windows-x86_64.zip
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: windows-x86_64}
 
-      - name: Upload engine source provenance
-        uses: actions/upload-artifact@v7
-        with:
-          name: runtime-engine-provenance
-          path: reused-engine/engine-source-manifest.json
-          if-no-files-found: error
-          retention-days: 14
+      - uses: ./.github/actions/upload-reused-engine
+        with: {artifact: engine-provenance, file: engine-source-manifest.json}
 
   build-runtime-pack:
     name: Build runtime pack
@@ -450,8 +356,6 @@ jobs:
 
       - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'false'
 
       - name: Download release build artifacts
         if: needs.plan-release.outputs.runtime_state == 'missing' || inputs.operation != 'publish-runtime'

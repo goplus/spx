@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -122,9 +120,16 @@ func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtim
 	if source.ReleaseRepository != target.ReleaseRepository {
 		return result, errors.New("engine source repository differs from target")
 	}
-	manifest, err := publishedEngineManifest(ctx, config, source)
+	published, err := lookupRuntimeRelease(ctx, config, source)
 	if err != nil {
-		return result, err
+		return result, fmt.Errorf("resolve engine source %s: %w", source.RuntimeReleaseTag(), err)
+	}
+	if published == nil || published.Draft {
+		return result, fmt.Errorf("engine source %s must be a published release", source.RuntimeReleaseTag())
+	}
+	manifest, err := fetchPublishedManifest(ctx, config, source, published.Assets)
+	if err != nil {
+		return result, fmt.Errorf("engine source %w", err)
 	}
 	if err := release.ValidateEngineReuse(manifest, target, config.RepoRoot, config.Revision); err != nil {
 		return result, err
@@ -134,62 +139,46 @@ func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtim
 	return result, nil
 }
 
-func publishedEngineManifest(ctx context.Context, config runtimeResolutionConfig, lock release.RuntimeLock) (release.RuntimeManifest, error) {
-	apiURL, err := runtimeReleaseAPIURL(config.GitHubAPIURL, lock.ReleaseRepository, lock.RuntimeReleaseTag())
+// lookupRuntimeRelease returns nil for a missing tag. Callers decide whether a
+// missing or draft release is eligible to be built or is a required input.
+func lookupRuntimeRelease(ctx context.Context, config runtimeResolutionConfig, lock release.RuntimeLock) (*gitHubRelease, error) {
+	tag := lock.RuntimeReleaseTag()
+	apiURL, err := runtimeReleaseAPIURL(config.GitHubAPIURL, lock.ReleaseRepository, tag)
 	if err != nil {
-		return release.RuntimeManifest{}, err
+		return nil, err
 	}
 	status, body, err := fetchGitHub(ctx, config, apiURL, "application/vnd.github+json")
-	if err != nil {
-		return release.RuntimeManifest{}, err
+	if err != nil || status == http.StatusNotFound {
+		return nil, err
 	}
 	if status != http.StatusOK {
-		return release.RuntimeManifest{}, fmt.Errorf("engine source release HTTP status %d", status)
+		return nil, fmt.Errorf("GitHub API returned %s (HTTP %d)", http.StatusText(status), status)
 	}
 	var published gitHubRelease
 	if err := json.Unmarshal(body, &published); err != nil {
-		return release.RuntimeManifest{}, err
+		return nil, fmt.Errorf("decode GitHub response: %w", err)
 	}
-	if published.Draft || published.TagName != lock.RuntimeReleaseTag() {
-		return release.RuntimeManifest{}, errors.New("engine source must be the requested published release")
+	if published.TagName != tag {
+		return nil, fmt.Errorf("GitHub returned tag %q, want %q", published.TagName, tag)
 	}
-	manifest, err := fetchPublishedManifest(ctx, config, lock, published.Assets)
-	if err != nil {
-		return manifest, fmt.Errorf("engine source %w", err)
-	}
-	return manifest, nil
+	return &published, nil
 }
 
 func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig, lock release.RuntimeLock) (runtimeResolution, error) {
 	tag := lock.RuntimeReleaseTag()
 	result := runtimeResolution{Tag: tag}
 
-	apiURL, err := runtimeReleaseAPIURL(config.GitHubAPIURL, lock.ReleaseRepository, tag)
-	if err != nil {
-		return runtimeResolution{}, err
-	}
-	status, body, err := fetchGitHub(ctx, config, apiURL, "application/vnd.github+json")
+	published, err := lookupRuntimeRelease(ctx, config, lock)
 	if err != nil {
 		return runtimeResolution{}, fmt.Errorf("resolve runtime release %s: %w", tag, err)
 	}
-	if status == http.StatusNotFound {
+	if published == nil {
 		if err := verifyReleaseRepository(ctx, config, lock.ReleaseRepository); err != nil {
 			return runtimeResolution{}, fmt.Errorf("resolve runtime release %s: %w", tag, err)
 		}
 		result.State = runtimeStateMissing
 		result.Reason = fmt.Sprintf("%s is not published", tag)
 		return result, nil
-	}
-	if status != http.StatusOK {
-		return runtimeResolution{}, fmt.Errorf("resolve runtime release %s: GitHub API returned %s", tag, http.StatusText(status))
-	}
-
-	var published gitHubRelease
-	if err := json.Unmarshal(body, &published); err != nil {
-		return runtimeResolution{}, fmt.Errorf("resolve runtime release %s: decode GitHub response: %w", tag, err)
-	}
-	if published.TagName != tag {
-		return runtimeResolution{}, runtimeConflict(tag, "GitHub returned tag %q", published.TagName)
 	}
 	if published.Draft {
 		result.State = runtimeStateMissing
@@ -201,7 +190,7 @@ func resolveTargetRuntime(ctx context.Context, config runtimeResolutionConfig, l
 	if err != nil {
 		return runtimeResolution{}, fmt.Errorf("runtime %s is not reusable: %w", tag, err)
 	}
-	incompatibility, err := currentRuntimeIncompatibility(config, lock, manifest)
+	incompatibility, err := manifest.ReuseIncompatibility(config.RepoRoot, config.Revision, lock)
 	if err != nil {
 		return runtimeResolution{}, fmt.Errorf("resolve current runtime compatibility: %w", err)
 	}
@@ -330,73 +319,6 @@ func verifyPublishedAssetNames(lock release.RuntimeLock, assets []gitHubAsset) (
 		return "", errors.New("release manifest has no download URL")
 	}
 	return manifestURL, nil
-}
-
-func currentRuntimeIncompatibility(config runtimeResolutionConfig, lock release.RuntimeLock, manifest release.RuntimeManifest) (string, error) {
-	if err := manifest.ValidateForLock(lock); err != nil {
-		return err.Error(), nil
-	}
-
-	// SPXCommit is traceability metadata, not a reuse input. SPX-only commits
-	// remain reusable when all scoped runtime source identities are unchanged.
-	repoRoot := filepath.Clean(config.RepoRoot)
-	revision := strings.TrimSpace(config.Revision)
-	if revision == "" {
-		return "", errors.New("SPX revision must not be empty")
-	}
-	commit, err := gitRevision(repoRoot, revision+"^{commit}")
-	if err != nil {
-		return "", fmt.Errorf("resolve current SPX commit: %w", err)
-	}
-	moduleTree, err := gitRevision(repoRoot, commit+":"+lock.Module.Path)
-	if err != nil {
-		return "", fmt.Errorf("resolve current module tree: %w", err)
-	}
-	if manifest.Provenance.ModuleTree != moduleTree {
-		return fmt.Sprintf("module tree = %s, current runtime input = %s", manifest.Provenance.ModuleTree, moduleTree), nil
-	}
-	if manifest.Provenance.EngineSourceSHA256 != "" {
-		digest, err := release.RuntimeEngineSourceSHA256(repoRoot, commit, lock)
-		if err != nil {
-			return "", err
-		}
-		if digest != manifest.Provenance.EngineSourceSHA256 {
-			return "engine source digest differs from current inputs", nil
-		}
-	}
-	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, commit)
-	if err != nil {
-		return "", err
-	}
-	if manifest.Provenance.RuntimePackSourceSHA256 != runtimePackDigest {
-		return fmt.Sprintf("runtime pack source digest = %s, current runtime input = %s", manifest.Provenance.RuntimePackSourceSHA256, runtimePackDigest), nil
-	}
-	buildRecipeDigest, err := release.RuntimeBuildRecipeSHA256(repoRoot, commit)
-	if err != nil {
-		return "", err
-	}
-	if manifest.Provenance.BuildRecipeSHA256 != buildRecipeDigest {
-		return fmt.Sprintf("runtime build recipe digest = %s, current runtime input = %s", manifest.Provenance.BuildRecipeSHA256, buildRecipeDigest), nil
-	}
-	return "", nil
-}
-
-func gitRevision(repoRoot, revision string) (string, error) {
-	command := exec.Command("git", "-C", repoRoot, "rev-parse", "--verify", "--end-of-options", revision)
-	output, err := command.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if detail := strings.TrimSpace(string(exitErr.Stderr)); detail != "" {
-				return "", errors.New(detail)
-			}
-		}
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func runtimeConflict(tag, format string, args ...any) error {
-	return fmt.Errorf("runtime %s is not reusable: %s", tag, fmt.Sprintf(format, args...))
 }
 
 func writeRuntimeResolutionOutputs(path string, resolution runtimeResolution) error {

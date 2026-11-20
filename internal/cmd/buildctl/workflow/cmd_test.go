@@ -428,26 +428,26 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 		t.Skip("fixture executables require Linux or macOS")
 	}
 	optimized, unoptimized := true, false
+	install := []recordedCall{{script: "cmd/spx/install.sh"}}
+	installWeb := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}}
 	for _, tt := range []struct {
 		name, target string
 		optimize     *bool
+		wantScripts  []recordedCall
+		wantExports  []string
 	}{
-		{"dev", "dev", nil},
-		{"editor", "editor", nil},
-		{"desktop", "desktop", nil},
-		{"web", "web", nil},
-		{"android", "android", nil},
-		{"ios", "ios", nil},
-		{"fast web", "web", &unoptimized},
-		{"optimized dev", "dev", &optimized},
+		{"dev", "dev", nil, installWeb, []string{"exportpack", "exporttemplateweb"}},
+		{"editor", "editor", nil, nil, nil},
+		{"desktop", "desktop", nil, install, []string{"exportpack"}},
+		{"web", "web", nil, install, []string{"exporttemplateweb"}},
+		{"android", "android", nil, nil, nil},
+		{"ios", "ios", nil, nil, nil},
+		{"fast web", "web", &unoptimized, install, []string{"exporttemplateweb"}},
+		{"optimized dev", "dev", &optimized, installWeb, []string{"exportpack", "exporttemplateweb"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			target, webLinkOptimize := tt.target, tt.optimize
 			runner := newWorkflowBuildFixture(t)
-			pureEngine := target == "editor" || target == "android" || target == "ios"
-			if pureEngine {
-				runner.scriptErr = errors.New("pure engine builds must not install tools")
-			}
 			database := filepath.Join(os.Getenv("GODOT_SRC"), "compile_commands.json")
 			previousDatabase := []byte("[{\"command\":\"previous editor\"}]\n")
 			mustWriteFile(t, database, previousDatabase)
@@ -480,23 +480,15 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 			if data, err := os.ReadFile(database); err != nil || string(data) != string(wantDatabase) {
 				t.Fatalf("%s compilation database = %q (%v), want %q", target, data, err, wantDatabase)
 			}
-			var wantScripts []recordedCall
-			if !pureEngine {
-				wantScripts = []recordedCall{{script: "cmd/spx/install.sh"}}
+			if !reflect.DeepEqual(runner.calls, tt.wantScripts) {
+				t.Fatalf("tool installation=%v,want %v", runner.calls, tt.wantScripts)
 			}
-			if target == "dev" {
-				wantScripts[0].args = []string{"--web"}
-			}
-			if !reflect.DeepEqual(runner.calls, wantScripts) {
-				t.Fatalf("tool installation=%v,want %v", runner.calls, wantScripts)
-			}
-			wantExports := map[string][]string{"dev": {"exportpack", "exporttemplateweb"}, "desktop": {"exportpack"}, "web": {"exporttemplateweb"}}[target]
 			var gotExports []string
 			for _, cmd := range runner.commands {
 				gotExports = append(gotExports, cmd.args[2])
 			}
-			if !reflect.DeepEqual(gotExports, wantExports) {
-				t.Fatalf("exports=%v,want %v", gotExports, wantExports)
+			if !reflect.DeepEqual(gotExports, tt.wantExports) {
+				t.Fatalf("exports=%v,want %v", gotExports, tt.wantExports)
 			}
 			testRecord, err := os.ReadFile(filepath.Join(runner.repoRoot, "module-tests"))
 			if target == "dev" {

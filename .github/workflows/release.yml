@@ -70,8 +70,6 @@ jobs:
       - name: Set up locked Go for release verification
         if: needs.build-release.outputs.runtime_state == 'missing'
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'false'
 
       - name: Download assembled runtime release
         if: needs.build-release.outputs.runtime_state == 'missing'
@@ -157,8 +155,6 @@ jobs:
 
       - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'false'
 
       - name: Resolve development runtime release
         id: runtime

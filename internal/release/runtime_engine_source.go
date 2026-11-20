@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 )
@@ -36,23 +35,36 @@ func RuntimeEngineSourceSHA256(repoRoot, revision string, lock RuntimeLock) (str
 	if err := lock.Validate(); err != nil {
 		return "", err
 	}
-	tree, err := trackedTree(repoRoot, revision, "runtime engine source")
+	// Both the module inventory and the workflow blob must come from the same
+	// tree, even when revision names a branch that advances between Git calls.
+	if strings.TrimSpace(revision) == "" {
+		return "", fmt.Errorf("release: runtime engine source revision must not be empty")
+	}
+	object, err := gitObject(repoRoot, revision+"^{tree}")
+	if err != nil {
+		return "", fmt.Errorf("release: resolve runtime engine source tree: %w", err)
+	}
+	tree, err := trackedTree(repoRoot, object, "runtime engine source")
 	if err != nil {
 		return "", err
 	}
-	module, err := selectedTreeSHA256(tree, "runtime engine module", func(name string) bool {
+	return tree.engineSourceSHA256(lock)
+}
+
+func (tree runtimeSourceTree) engineSourceSHA256(lock RuntimeLock) (string, error) {
+	module, err := selectedTreeSHA256(tree.entries, "runtime engine module", func(name string) bool {
 		return strings.HasPrefix(name, lock.Module.Path+"/")
 	})
 	if err != nil {
 		return "", err
 	}
-	contract, err := selectedTreeSHA256(tree, "runtime engine contract", func(name string) bool {
+	contract, err := selectedTreeSHA256(tree.entries, "runtime engine contract", func(name string) bool {
 		return name == ".github/scripts/runtime/build_contract.py"
 	})
 	if err != nil {
 		return "", err
 	}
-	workflow, err := runtimeEngineWorkflow(repoRoot, revision)
+	workflow, err := runtimeEngineWorkflow(tree.root, tree.revision)
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +93,7 @@ func RuntimeEngineSourceSHA256(repoRoot, revision string, lock RuntimeLock) (str
 var runtimeEngineWorkflowPattern = regexp.MustCompile(`(?m)^\s+uses:\s+([^\s]+/\.github/workflows/release_builds\.yml@[0-9a-f]{40})\s*$`)
 
 func runtimeEngineWorkflow(repoRoot, revision string) (string, error) {
-	output, err := exec.Command("git", "-C", repoRoot, "cat-file", "blob", revision+":.github/workflows/build_release.yml").Output()
+	output, err := gitOutput(repoRoot, "cat-file", "blob", revision+":.github/workflows/build_release.yml")
 	if err != nil {
 		return "", fmt.Errorf("release: read engine build workflow: %w", err)
 	}

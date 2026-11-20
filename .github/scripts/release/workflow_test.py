@@ -196,17 +196,25 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(verify["env"]["RUNTIME_MANIFEST"], "${{ needs.plan-release.outputs.engine_manifest }}")
         assemble = named_step(self.build_jobs["assemble-release"], "Assemble immutable asset sets")
         self.assertEqual(assemble["env"]["ENGINE_STATE"], "${{ needs.plan-release.outputs.engine_state }}")
-        uploads = action_steps(job, "actions/upload-artifact")
-        actual = {step["with"]["path"]: step["with"]["name"] for step in uploads}
-        lock = json.loads((WORKFLOWS.parent.parent / "internal/release/runtime.lock.json").read_text())
-        expected = {f"reused-engine/{name}": "runtime-" + ("macos-universal" if name == "macos.zip" else name[:-4])
-                    for name in lock["required_assets"] if name != "spx-runtime-assets.zip"}
-        expected["reused-engine/engine-source-manifest.json"] = "runtime-engine-provenance"
-        self.assertEqual(actual, expected)
-        self.assertEqual(len(actual), len(uploads))
+        root = WORKFLOWS.parent.parent
+        action = ".github/actions/upload-reused-engine"
+        upload, = action_steps(load_workflow(root / action / "action.yml")["runs"], "actions/upload-artifact")
+        self.assertEqual(upload["with"], {
+            "name": "runtime-${{ inputs.artifact }}",
+            "path": "reused-engine/${{ inputs.file || format('{0}.zip', inputs.artifact) }}",
+            "if-no-files-found": "error", "retention-days": "14",
+        })
+        uploads = action_steps(job, "./" + action)
+        lock = json.loads((root / "internal/release/runtime.lock.json").read_text())
+        expected = [("macos-universal" if name == "macos.zip" else name.removesuffix(".zip"), name)
+                    for name in lock["required_assets"] if name != "spx-runtime-assets.zip"]
+        expected.append(("engine-provenance", "engine-source-manifest.json"))
+        actual = []
         for step in uploads:
+            artifact = step["with"]["artifact"]
+            actual.append((artifact, step["with"].get("file", artifact + ".zip")))
             self.assertLess(job["steps"].index(verify), job["steps"].index(step))
-            self.assertEqual(step["with"]["if-no-files-found"], "error")
+        self.assertCountEqual(actual, expected)
         pack = self.build_jobs["build-runtime-pack"]
         self.assertEqual(job_condition(pack),
                          "!cancelled()&&needs.plan-release.outputs.runtime_state=='missing'&&"

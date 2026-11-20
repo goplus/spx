@@ -345,10 +345,22 @@ func (m RuntimeManifest) VerifyAsset(name, path string) error {
 
 // VerifyFiles verifies every manifest asset below dir by exact size and SHA-256.
 func (m RuntimeManifest) VerifyFiles(dir string) error {
+	return m.verifyFiles(dir, false)
+}
+
+// VerifyEngineFiles checks the engine ZIPs while allowing the pack to be absent.
+func (m RuntimeManifest) VerifyEngineFiles(dir string) error {
+	return m.verifyFiles(dir, true)
+}
+
+func (m RuntimeManifest) verifyFiles(dir string, engineOnly bool) error {
 	if err := m.Validate(); err != nil {
 		return err
 	}
 	for _, asset := range m.Assets {
+		if engineOnly && asset.Name == RuntimeAssetZipName {
+			continue
+		}
 		if err := verifyRuntimeAssetFile(asset, filepath.Join(dir, asset.Name)); err != nil {
 			return err
 		}

@@ -255,7 +255,7 @@ func TestRuntimeReuseFollowsArtifactInputs(t *testing.T) {
 			gitOutput(t, root, "reset", "--hard", "--quiet", manifest.Provenance.SPXCommit)
 			write(t, test.path, test.content)
 			commit(t, test.name)
-			reason, err := currentRuntimeIncompatibility(config, fixture.lock, manifest)
+			reason, err := manifest.ReuseIncompatibility(config.RepoRoot, config.Revision, fixture.lock)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -498,7 +498,7 @@ func TestResolveRuntimeRejectsMalformedReleaseResponses(t *testing.T) {
 		})
 	}
 	fixture.config.Revision = " \t"
-	if _, err := currentRuntimeIncompatibility(fixture.config, fixture.lock, fixture.manifest); err == nil || !strings.Contains(err.Error(), "must not be empty") {
+	if _, err := fixture.manifest.ReuseIncompatibility(fixture.config.RepoRoot, fixture.config.Revision, fixture.lock); err == nil || !strings.Contains(err.Error(), "must not be empty") {
 		t.Fatalf("empty revision error = %v", err)
 	}
 }
@@ -773,18 +773,10 @@ func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
 				}
 				manifest.Provenance.RuntimePackSourceSHA256 = digest
 			}
-			reason, err := currentRuntimeIncompatibility(config, fixture.lock, manifest)
+			reason, err := manifest.ReuseIncompatibility(config.RepoRoot, config.Revision, fixture.lock)
 			if err == nil || !strings.Contains(err.Error(), tt.want) || reason != "" {
 				t.Fatalf("incomplete source = %q, %v; want %q error, not an incompatibility result", reason, err, tt.want)
 			}
 		})
-	}
-}
-
-func TestGitRevisionReportsMissingExecutable(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	revision, err := gitRevision(t.TempDir(), "HEAD")
-	if !errors.Is(err, exec.ErrNotFound) || revision != "" {
-		t.Fatalf("gitRevision = %q, %v; want missing Git executable error", revision, err)
 	}
 }

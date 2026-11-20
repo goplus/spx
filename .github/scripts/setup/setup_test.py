@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 
-from test_support import load_workflow
+from test_support import action_steps, load_workflow
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -97,40 +97,31 @@ else:
 
 
 class ToolchainSetupTest(unittest.TestCase):
-    def test_go_only_and_default_xgo_paths_use_the_same_locked_go(self):
+    def test_xgo_is_optional_and_both_installers_use_locked_go(self):
         action = load_workflow(ROOT / ".github/actions/setup-toolchain/action.yml")
-        self.assertEqual(action["inputs"]["xgo"]["default"], "true")
-        steps = action["runs"]["steps"]
-        go_only, = [step for step in steps if step.get("uses", "").startswith("actions/setup-go@")]
-        xgo, = [step for step in steps if step.get("uses", "").startswith("goplus/setup-xgo@")]
-        self.assertEqual(go_only["if"], "inputs.xgo == 'false'")
-        self.assertEqual(xgo["if"], "inputs.xgo != 'false'")
+        self.assertEqual(action["inputs"]["xgo"]["default"], "false")
+        go_only, = action_steps(action["runs"], "actions/setup-go")
+        xgo, = action_steps(action["runs"], "goplus/setup-xgo")
+        self.assertEqual(go_only["if"], "inputs.xgo != 'true'")
+        self.assertEqual(xgo["if"], "inputs.xgo == 'true'")
         for step in (go_only, xgo):
             self.assertEqual(step["with"]["go-version"], "${{ steps.toolchain.outputs.go-version }}")
         self.assertEqual(xgo["with"]["xgo-version"], "${{ steps.toolchain.outputs.xgo-version }}")
 
-    def test_only_metadata_jobs_opt_out_of_xgo(self):
-        expected = {
-            ("ci.yml", "resolve-runtime"),
-            ("build_release.yml", "plan-release"),
-            ("build_release.yml", "reuse-godot-runtime"),
-            ("build_release.yml", "assemble-release"),
-            ("release.yml", "publish-runtime"),
-            ("release.yml", "validate-dev-npm"),
-        }
-        actual = set()
-        for path in (ROOT / ".github/workflows").glob("*.yml"):
-            for name, job in load_workflow(path)["jobs"].items():
-                for step in job.get("steps", []):
-                    if step.get("uses") == "./.github/actions/setup-toolchain":
-                        if step.get("with", {}).get("xgo") == "false":
-                            actual.add((path.name, name))
-        self.assertEqual(actual, expected)
-        for name in ("build-web-bundle", "package-standalone"):
-            steps = load_workflow(ROOT / f".github/actions/{name}/action.yml")["runs"]["steps"]
-            for step in steps:
-                if step.get("uses") == "./.github/actions/setup-toolchain":
-                    self.assertNotEqual(step.get("with", {}).get("xgo"), "false")
+    def test_workflow_jobs_request_their_toolchain(self):
+        for workflow, xgo, names in (
+            ("ci.yml", "false", ("resolve-runtime",)),
+            ("build_release.yml", "false", ("plan-release", "reuse-godot-runtime", "assemble-release")),
+            ("release.yml", "false", ("publish-runtime", "validate-dev-npm")),
+            ("build_go.yml", "true", ("build-go",)),
+            ("build_runtime_pack.yml", "true", ("build-runtime-pack",)),
+            ("check_source.yml", "true", ("check-source",)),
+        ):
+            jobs = load_workflow(ROOT / ".github/workflows" / workflow)["jobs"]
+            for name in names:
+                with self.subTest(workflow=workflow, job=name):
+                    setup, = action_steps(jobs[name], "./.github/actions/setup-toolchain")
+                    self.assertEqual(setup.get("with", {}).get("xgo", "false"), xgo)
 
 
 class LinuxDependenciesTest(ActionScriptTest):
@@ -220,6 +211,7 @@ class ProductActionsTest(ActionScriptTest):
                 builders = [i for i, step in enumerate(steps) if step.get("uses") == "./.github/actions/setup-buildctl"]
                 consumers = [i for i, step in enumerate(steps) if "BUILDCTL" in step.get("env", {})]
                 self.assertEqual((len(toolchains), len(builders), len(consumers)), (1, 1, 1))
+                self.assertEqual(steps[toolchains[0]]["with"]["xgo"], "true")
                 self.assertLess(toolchains[0], builders[0])
                 self.assertLess(builders[0], consumers[0])
                 self.assertEqual(steps[consumers[0]]["env"]["BUILDCTL"], "${{ steps." + steps[builders[0]]["id"] + ".outputs.path }}")

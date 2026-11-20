@@ -1,0 +1,18 @@
+name: Upload verified engine artifact
+description: Upload a verified engine file from the staging directory.
+inputs:
+  artifact:
+    description: Artifact name after the runtime- prefix
+    required: true
+  file:
+    description: Staged filename when it differs from <artifact>.zip
+    required: false
+runs:
+  using: composite
+  steps:
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runtime-${{ inputs.artifact }}
+        path: reused-engine/${{ inputs.file || format('{0}.zip', inputs.artifact) }}
+        if-no-files-found: error
+        retention-days: 14

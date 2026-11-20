@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/release"
@@ -136,8 +135,11 @@ func runReleaseManifest(args []string) error {
 		lock = parsed
 	}
 	if verifyEngineManifest != "" {
-		source, err := loadEngineSource(verifyEngineManifest, lock, revision)
+		source, err := release.LoadRuntimeManifest(verifyEngineManifest)
 		if err != nil {
+			return err
+		}
+		if err := release.ValidateEngineReuse(source, lock, ".", revision); err != nil {
 			return err
 		}
 		if assetDirectory != "" {
@@ -177,6 +179,8 @@ func runReleaseManifest(args []string) error {
 	}
 	provenance := release.RuntimeProvenance{
 		EngineSourceSHA256:      engineSourceHash,
+		GodotCommit:             lock.Godot.Commit,
+		Toolchain:               lock.Toolchain,
 		SPXCommit:               spxCommit,
 		ModuleTree:              moduleTree,
 		RuntimePackSourceSHA256: runtimePackSourceHash,
@@ -184,20 +188,18 @@ func runReleaseManifest(args []string) error {
 	}
 	if set["revision"] {
 		var err error
-		provenance, err = revisionProvenance(revision, lock)
+		provenance, err = release.RuntimeProvenanceAt(".", revision, lock)
 		if err != nil {
 			return err
 		}
 	}
-	provenance.GodotCommit = lock.Godot.Commit
-	provenance.Toolchain = lock.Toolchain
 	manifest, err := release.GenerateRuntimeManifest(lock, provenance, inputs)
 	if err != nil {
 		return err
 	}
 
 	if engineManifest != "" {
-		source, err := loadEngineSource(engineManifest, lock, provenance.SPXCommit)
+		source, err := release.LoadRuntimeManifest(engineManifest)
 		if err != nil {
 			return err
 		}
@@ -223,50 +225,6 @@ func runReleaseManifest(args []string) error {
 		}
 	}
 	return nil
-}
-
-func loadEngineSource(path string, lock release.RuntimeLock, revision string) (release.RuntimeManifest, error) {
-	source, err := release.LoadRuntimeManifest(path)
-	if err != nil {
-		return source, err
-	}
-	return source, release.ValidateEngineReuse(source, lock, ".", revision)
-}
-
-func revisionProvenance(revision string, lock release.RuntimeLock) (release.RuntimeProvenance, error) {
-	var provenance release.RuntimeProvenance
-	commit, err := gitObject(revision + "^{commit}")
-	if err != nil {
-		return provenance, err
-	}
-	// Resolve a movable ref once, then use the same immutable commit for every
-	// provenance field. Local generated files never participate in these hashes.
-	provenance.SPXCommit = commit
-	provenance.ModuleTree, err = gitObject(commit + ":" + lock.Module.Path)
-	if err != nil {
-		return provenance, err
-	}
-	provenance.RuntimePackSourceSHA256, err = release.RuntimePackSourceSHA256(".", commit)
-	if err != nil {
-		return provenance, err
-	}
-	provenance.BuildRecipeSHA256, err = release.RuntimeBuildRecipeSHA256(".", commit)
-	if err != nil {
-		return provenance, err
-	}
-	provenance.EngineSourceSHA256, err = release.RuntimeEngineSourceSHA256(".", commit, lock)
-	return provenance, err
-}
-
-func gitObject(revision string) (string, error) {
-	output, err := exec.Command("git", "rev-parse", "--verify", "--end-of-options", revision).Output()
-	if err != nil {
-		if exit, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("resolve Git object %q: %w: %s", revision, err, strings.TrimSpace(string(exit.Stderr)))
-		}
-		return "", fmt.Errorf("resolve Git object %q: %w", revision, err)
-	}
-	return strings.TrimSpace(string(output)), nil
 }
 
 func writeEmbeddedAssetManifest(args []string, output io.Writer) error {

@@ -21,8 +21,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -70,8 +68,12 @@ func RuntimePackSourceSHA256(repoRoot, revision string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return transformedTreeSHA256(tree, "runtime pack source", func(entry []byte, name string) ([]byte, error) {
-		return runtimePackSourceEntry(repoRoot, entry, name)
+	return tree.packSourceSHA256()
+}
+
+func (tree runtimeSourceTree) packSourceSHA256() (string, error) {
+	return transformedTreeSHA256(tree.entries, "runtime pack source", func(entry []byte, name string) ([]byte, error) {
+		return runtimePackSourceEntry(tree.root, entry, name)
 	})
 }
 
@@ -87,8 +89,7 @@ func runtimePackSourceEntry(repoRoot string, entry []byte, name string) ([]byte,
 		return nil, fmt.Errorf("release: invalid git blob entry %q", entry)
 	}
 
-	command := exec.Command("git", "-C", filepath.Clean(repoRoot), "cat-file", "blob", fields[2])
-	output, err := command.Output()
+	output, err := gitOutput(repoRoot, "cat-file", "blob", fields[2])
 	if err != nil {
 		return nil, fmt.Errorf("release: read runtime pack preset: %w", err)
 	}
@@ -103,37 +104,15 @@ func runtimePackSourceEntry(repoRoot string, entry []byte, name string) ([]byte,
 // can change runtime-pack bytes. CI transport details such as workflow layout
 // and external Action versions are deliberately excluded.
 func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
-	return trackedTreeSHA256(repoRoot, revision, "runtime build recipe", isRuntimeBuildRecipePath)
-}
-
-func trackedTreeSHA256(repoRoot, revision, label string, include func(string) bool) (string, error) {
-	tree, err := trackedTree(repoRoot, revision, label)
+	tree, err := trackedTree(repoRoot, revision, "runtime build recipe")
 	if err != nil {
 		return "", err
 	}
-	return selectedTreeSHA256(tree, label, include)
+	return tree.buildRecipeSHA256()
 }
 
-func trackedTree(repoRoot, revision, label string) ([]byte, error) {
-	if strings.TrimSpace(repoRoot) == "" {
-		return nil, fmt.Errorf("release: %s repository must not be empty", label)
-	}
-	if strings.TrimSpace(revision) == "" {
-		return nil, fmt.Errorf("release: %s revision must not be empty", label)
-	}
-
-	command := exec.Command("git", "-C", filepath.Clean(repoRoot), "ls-tree", "-r", "-z", "--full-tree", revision)
-	output, err := command.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			detail := strings.TrimSpace(string(exitErr.Stderr))
-			if detail != "" {
-				return nil, fmt.Errorf("release: list %s tree at %q: %s", label, revision, detail)
-			}
-		}
-		return nil, fmt.Errorf("release: list %s tree at %q: %w", label, revision, err)
-	}
-	return output, nil
+func (tree runtimeSourceTree) buildRecipeSHA256() (string, error) {
+	return selectedTreeSHA256(tree.entries, "runtime build recipe", isRuntimeBuildRecipePath)
 }
 
 func selectedTreeSHA256(tree []byte, label string, include func(string) bool) (string, error) {
