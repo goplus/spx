@@ -236,6 +236,21 @@ func TestFindLocalEngineAsset(t *testing.T) {
 	}
 }
 
+func TestEngineDownloadUsesLockedRelease(t *testing.T) {
+	root := isolateEngineEnvironment(t)
+	env, err := prepareEngineDownloadEnv(root, "linux", t.TempDir(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := release.DefaultRuntimeLock()
+	if env.version != lock.RuntimeVersion {
+		t.Errorf("download version = %q, want %q", env.version, lock.RuntimeVersion)
+	}
+	if got, want := env.urlPrefix+lock.Manifest, lock.RuntimeAssetDownloadURL(lock.Manifest); got != want {
+		t.Errorf("manifest URL = %q, want %q", got, want)
+	}
+}
+
 func TestSetLocalAssetDir(t *testing.T) {
 	for _, tt := range []struct {
 		name, path, message string

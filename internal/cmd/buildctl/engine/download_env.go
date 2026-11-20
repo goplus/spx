@@ -17,7 +17,6 @@
 package engine
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,12 +58,8 @@ func prepareEngineDownloadEnv(repoRoot, platform, assetDir string, allowMissingM
 		return engineDownloadEnv{}, err
 	}
 	lock := release.DefaultRuntimeLock()
-	if buildEnv.Version != lock.RuntimeVersion {
-		return engineDownloadEnv{}, fmt.Errorf("resolved runtime version %q does not match runtime lock %q", buildEnv.Version, lock.RuntimeVersion)
-	}
-
 	env := engineDownloadEnv{
-		version:     buildEnv.Version,
+		version:     lock.RuntimeVersion,
 		platform:    buildEnv.Platform,
 		arch:        buildEnv.Arch,
 		goBinDir:    filepath.Join(buildEnv.GoPath, "bin"),

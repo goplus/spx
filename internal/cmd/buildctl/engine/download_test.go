@@ -708,6 +708,25 @@ func TestDownloadHostRuntimeAssetsDesktopLifecycle(t *testing.T) {
 	}
 }
 
+func TestWindowsTemplateInstallStopsAtBlockedAlias(t *testing.T) {
+	t.Setenv("SPX_PREPARE_FORCE_REFRESH", "0")
+	env := newEngineDownloadFixture(t, "windows")
+	mustWriteFile(t, filepath.Join(env.goBinDir, "gdspxrtdbgtest.exe"), []byte("debug"))
+	mustWriteFile(t, filepath.Join(env.goBinDir, "gdspxrttest.exe"), []byte("release"))
+	blocked := filepath.Join(env.templateDir, "windows_debug_x86_64.exe")
+	mustWriteFile(t, filepath.Join(blocked, "keep"), nil)
+
+	err := downloadHostRuntimeAssets(env)
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) || pathErr.Path != blocked {
+		t.Fatalf("install error = %v, want filesystem error for %s", err, blocked)
+	}
+	entries, err := os.ReadDir(env.templateDir)
+	if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(blocked) {
+		t.Fatalf("template directory after failure = %v, %v; want only the blocked alias", entries, err)
+	}
+}
+
 func TestTemplateDownloadFailurePreservesInstalledAssets(t *testing.T) {
 	for _, platform := range []string{"macos", "web"} {
 		t.Run(platform, func(t *testing.T) {
