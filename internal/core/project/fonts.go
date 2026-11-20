@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"sort"
-	"strings"
 
 	spxfs "github.com/goplus/spx/v4/fs"
 )
@@ -52,6 +51,14 @@ type FontFaceConfig struct {
 
 type FontFamilyConfig struct {
 	Faces []FontFaceConfig `json:"faces"`
+}
+
+func (p *FontFamilyConfig) ResourcePaths(yield func(*string) bool) {
+	for i := range p.Faces {
+		if !yield(&p.Faces[i].Path) {
+			return
+		}
+	}
 }
 
 func LoadProjectFonts(fs spxfs.Dir, preferences []string) (ProjectFonts, error) {
@@ -95,6 +102,19 @@ func ResolveFontPreferences(value []string, families []ProjectFontFamily) ([]str
 	return resolved, nil
 }
 
+// ResolveFontFacePath resolves a configuration reference within its font family.
+func ResolveFontFacePath(familyDir, reference string, literalResPrefix bool) (string, error) {
+	if reference == "" {
+		return "", errors.New("font face path must not be empty")
+	}
+	// Resolve from the family root first so a face cannot leave its own family.
+	name, err := ResolveResourcePath("", reference, literalResPrefix)
+	if err != nil {
+		return "", fmt.Errorf("invalid relative POSIX path for font face: %w", err)
+	}
+	return path.Join(familyDir, name), nil
+}
+
 func loadProjectFontFamilies(fs spxfs.Dir) ([]ProjectFontFamily, error) {
 	names, err := projectFontFamilyNames(fs)
 	if err != nil {
@@ -133,9 +153,12 @@ func loadProjectFontFamily(fs spxfs.Dir, name string) (ProjectFontFamily, error)
 		return ProjectFontFamily{}, fmt.Errorf("font family %q must contain exactly one face, got %d", name, len(config.Faces))
 	}
 
-	facePath, err := resolveFontFacePath(baseDir, config.Faces[0].Path)
+	facePath, err := ResolveFontFacePath(baseDir, config.Faces[0].Path, spxfs.AllowsLiteralResPrefix(fs))
 	if err != nil {
 		return ProjectFontFamily{}, fmt.Errorf("font family %q: %w", name, err)
+	}
+	if err := spxfs.ValidateResourcePath(fs, facePath); err != nil {
+		return ProjectFontFamily{}, fmt.Errorf("validate font face %q for family %q: %w", facePath, name, err)
 	}
 	if err := spxfs.VerifyFile(fs, facePath); err != nil {
 		return ProjectFontFamily{}, fmt.Errorf("open font face %q for family %q: %w", facePath, name, err)
@@ -162,7 +185,7 @@ func projectFontFamilyNames(fs spxfs.Dir) ([]string, error) {
 }
 
 func validateFontFamilyName(name string) (string, error) {
-	if !validResourceName(name) {
+	if !ValidResourceName(name) {
 		return "", fmt.Errorf("font family name %q is not a valid path segment", name)
 	}
 	folded := asciiFold(name)
@@ -170,24 +193,6 @@ func validateFontFamilyName(name string) (string, error) {
 		return "", fmt.Errorf("font family name %q is reserved", name)
 	}
 	return folded, nil
-}
-
-func resolveFontFacePath(baseDir, relativePath string) (string, error) {
-	if relativePath == "" {
-		return "", errors.New("font face path must not be empty")
-	}
-	if strings.Contains(relativePath, "\\") || strings.HasPrefix(relativePath, "/") {
-		return "", fmt.Errorf("font face path %q must be a relative POSIX path", relativePath)
-	}
-	cleaned := path.Clean(relativePath)
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-		return "", fmt.Errorf("font face path %q escapes its family directory", relativePath)
-	}
-	resolved := path.Join(baseDir, cleaned)
-	if resolved == baseDir || !strings.HasPrefix(resolved, baseDir+"/") {
-		return "", fmt.Errorf("font face path %q escapes its family directory", relativePath)
-	}
-	return resolved, nil
 }
 
 func asciiFold(value string) string {

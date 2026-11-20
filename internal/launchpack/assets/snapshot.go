@@ -130,7 +130,7 @@ func readPinnedDir(root *os.Root, name string) ([]os.DirEntry, bool, error) {
 	return entries, true, nil
 }
 
-func pinRegularFile(root *os.Root, name string) error {
+func verifyRegularFile(root *os.Root, name string) error {
 	before, err := inspectPath(root, name, false)
 	if err != nil {
 		return err

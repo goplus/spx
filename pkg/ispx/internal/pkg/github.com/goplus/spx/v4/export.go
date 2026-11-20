@@ -80,6 +80,7 @@ func init() {
 			"math/rand":     "rand",
 			"os":            "os",
 			"path":          "path",
+			"path/filepath": "filepath",
 			"reflect":       "reflect",
 			"runtime/debug": "debug",
 			"slices":        "slices",

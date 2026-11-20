@@ -29,11 +29,7 @@ import (
 
 type pathResourceSpy struct {
 	gdx.IResMgr
-	modes      []bool
-	checks     int
-	reads      int
-	files      map[string]string
-	beforeRead func(string)
+	modes []bool
 }
 
 func TestExplicitFilesystemRoots(t *testing.T) {
@@ -80,6 +76,7 @@ func TestExplicitFilesystemRoots(t *testing.T) {
 			path: "sprites/cat.svg",
 			want: filepath.Join(assetDir, "sprites", "cat.svg"),
 		},
+		{name: "missing asset", path: "sprites/missing.svg"},
 		{
 			name: "resource elsewhere in project",
 			path: "../res/image.png",
@@ -129,7 +126,7 @@ func TestExplicitFilesystemRoots(t *testing.T) {
 			if tt.path == "linked/outside.png" && !symlinkDirAvailable {
 				t.Skip("symlink unavailable")
 			}
-			if got := assetPaths.filesystemPath(tt.path); got != normalizeSlashes(filepath.Clean(tt.want)) && !(got == "" && tt.want == "") {
+			if got := assetPaths.filesystemPath(tt.path); got != filepath.ToSlash(tt.want) {
 				t.Fatalf("filesystemPath(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
@@ -172,109 +169,28 @@ func TestSetFilesystemRootsRejectsInvalidRootsWithoutChangingState(t *testing.T)
 	}
 }
 
-func TestLegacyFilesystemRootsRetainBoundedExternalAssets(t *testing.T) {
-	original := assetPaths
-	t.Cleanup(func() {
-		assetPaths = original
-	})
-
-	root := t.TempDir()
-	projectDir := filepath.Join(root, "project")
-	assetDir := filepath.Join(projectDir, "assets")
-	for _, dir := range []string{assetDir, filepath.Join(root, "custom_asset"), filepath.Join(root, "shared")} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, ".config"), []byte(`{"extasset":"custom_asset"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"custom_asset/image.png", "shared/image.png"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := SetLegacyFilesystemRoots(projectDir, assetDir); err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		name string
-		path string
-		want string
-	}{
-		{name: "extasset", path: "../../custom_asset/image.png", want: filepath.Join(root, "custom_asset", "image.png")},
-		{name: "shared", path: "../../shared/image.png", want: filepath.Join(root, "shared", "image.png")},
-		{name: "escape", path: "../../../outside/image.png", want: ""},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := assetPaths.filesystemPath(test.path); got != normalizeSlashes(filepath.Clean(test.want)) && !(got == "" && test.want == "") {
-				t.Fatalf("filesystemPath(%q) = %q, want %q", test.path, got, test.want)
-			}
-		})
-	}
-}
-
-func TestReadFilesystemConfigHandlesMissingUnreadableAndInvalidFiles(t *testing.T) {
-	root := t.TempDir()
-	config := filepath.Join(root, projectConfigFile)
-	if got := readExtAssetDirFromFilesystem(root, true); got != "" {
-		t.Fatalf("missing config returned %q", got)
-	}
-	// A directory is reliably unreadable as a file, even when tests run as root.
-	if err := os.Mkdir(config, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := readExtAssetDirFromFilesystem(root, true); got != "" {
-		t.Fatalf("unreadable config returned %q", got)
-	}
-	if err := os.Remove(config); err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct{ name, content, want string }{
-		{"invalid JSON", "{", ""},
-		{"wrong field type", `{"extasset":1}`, ""},
-		{"missing field", `{}`, ""},
-		{"configured", `{"extasset":"shared"}`, "shared"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := os.WriteFile(config, []byte(tc.content), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			if got := readExtAssetDirFromFilesystem(root, true); got != tc.want {
-				t.Fatalf("read config = %q, want %q", got, tc.want)
-			}
-			if got := readExtAssetDirFromFilesystem(root, false); got != "" {
-				t.Fatalf("disabled config returned %q", got)
-			}
-		})
-	}
-}
-
 func TestAssetResolversKeepConfigurationSnapshots(t *testing.T) {
 	original := assetPaths
 	t.Cleanup(func() { assetPaths = original })
 	filesystem := newAssetResolver("project/", "assets")
-	archive := newAssetResolver(packmodeAssetPrefix, "assets")
-	archive.extAssetDir = "shared"
-	assetPaths = assetResolver{root: "other/", projectRoot: "other", extAssetDir: "different"}
+	archive := newAssetResolver(projectResourcePrefix, "assets")
+	assetPaths = assetResolver{assetRoot: "other/", projectRoot: "other"}
 	if got := filesystem.filesystemPath("cat.png"); got != "project/assets/cat.png" {
 		t.Fatalf("filesystem resolver used installed configuration: %q", got)
 	}
 	if got := archive.packmodePath("cat.png"); got != "res://assets/cat.png" {
 		t.Fatalf("archive resolver used installed configuration: %q", got)
 	}
-	if got := archive.packmodePath("../../shared/cat.png"); got != "res://extasset/cat.png" {
-		t.Fatalf("archive resolver lost its external asset configuration: %q", got)
-	}
+
 }
 
 func TestFilesystemAssetPathColonFilename(t *testing.T) {
 	root := t.TempDir()
-	resolver, err := newFilesystemAssetResolver(root, root, false)
+	resolver, err := newFilesystemAssetResolver(root, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"costume-Animation:1.svg", "sprites/Media/res:image.png"} {
+	for _, name := range []string{"costume-Animation:1.svg", "sprites/Media/res:image.png", "./res:image.png"} {
 		want := ""
 		if runtime.GOOS != "windows" {
 			file := filepath.Join(root, filepath.FromSlash(name))
@@ -294,8 +210,37 @@ func TestFilesystemAssetPathColonFilename(t *testing.T) {
 	}
 }
 
+func TestFilesystemAssetPathRejectsGodotSeparatorAliases(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("backslashes cannot be part of Windows filenames")
+	}
+	project := t.TempDir()
+	for _, dir := range []string{"assets", `assets/字:句\一`, `assets\dir`, `project\dir/assets`} {
+		if err := os.MkdirAll(filepath.Join(project, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ project, assets, name string }{
+		{".", "assets", `字:句\一/image.png`},
+		{".", `assets\dir`, "image.png"},
+		{`project\dir`, `project\dir/assets`, "image.png"},
+	} {
+		assets := filepath.Join(project, tc.assets)
+		if err := os.WriteFile(filepath.Join(assets, tc.name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		resolver, err := newFilesystemAssetResolver(filepath.Join(project, tc.project), assets)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := resolver.filesystemPath(tc.name); got != "" {
+			t.Errorf("Godot path = %q for %+v", got, tc)
+		}
+	}
+}
+
 func TestBuildFilesystemAssetPath(t *testing.T) {
-	resolver := newAssetResolver(defaultAssetPathPrefix, defaultAssetDirName)
+	resolver := newAssetResolver("../", defaultAssetDirName)
 
 	tests := []struct {
 		name string
@@ -361,31 +306,11 @@ func TestFilesystemPathRejectsUnresolvedRoots(t *testing.T) {
 		resolver assetResolver
 	}{
 		{"absolute assets without project root", newAssetResolver("", root)},
-		{"missing canonical project", newLegacyFilesystemAssetResolver(filepath.Join(root, "missing")+string(os.PathSeparator), "assets", true)},
+		{"missing canonical project", nativeAssetResolver(filepath.Join(root, "missing"), filepath.Join(root, "missing", "assets"))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.resolver.filesystemPath("image.png"); got != "" {
 				t.Fatalf("filesystemPath() = %q, want unresolved root rejected", got)
-			}
-		})
-	}
-}
-
-func TestIsWithinRoot(t *testing.T) {
-	root := t.TempDir()
-	for _, tc := range []struct {
-		name, path string
-		want       bool
-	}{
-		{"root itself", root, true},
-		{"child", filepath.Join(root, "assets"), true},
-		{"parent", filepath.Dir(root), false},
-		{"sibling with matching prefix", root + "-other", false},
-		{"relative path against absolute root", "assets", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := isWithinRoot(tc.path, root); got != tc.want {
-				t.Fatalf("isWithinRoot(%q, %q) = %v, want %v", tc.path, root, got, tc.want)
 			}
 		})
 	}
@@ -407,12 +332,12 @@ func TestToAssetPathRejectsNULBeforeNormalization(t *testing.T) {
 	}
 }
 
-func TestPackmodePathNormalizesCompatibilityPrefix(t *testing.T) {
-	resolver := newAssetResolver(packmodeAssetPrefix, "assets")
+func TestPackmodePathRejectsEscapeAfterCleaning(t *testing.T) {
+	resolver := newAssetResolver(projectResourcePrefix, "assets")
 	for _, tc := range []struct{ reference, want string }{
-		{"../../shared/cat.svg", "res://shared/cat.svg"},
-		{"./../../shared//sprites/../cat.svg", "res://shared/cat.svg"},
-		{"sprites/../../../shared/cat.svg", "res://shared/cat.svg"},
+		{"../../shared/cat.svg", ""},
+		{"./../../shared//sprites/../cat.svg", ""},
+		{"sprites/../../../shared/cat.svg", ""},
 		{"../res/cat.svg", "res://res/cat.svg"},
 		{"../..", ""},
 		{"../../", ""},
@@ -428,47 +353,7 @@ func TestPackmodePathNormalizesCompatibilityPrefix(t *testing.T) {
 	}
 }
 
-func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
-	for _, tc := range []struct {
-		name, directory, path, want string
-		match                       bool
-	}{
-		{"disabled", "", "../../shared/cat.svg", "", false},
-		{"empty", "shared", "", "", false},
-		{"parents only", "shared", "../..", "", false},
-		{"absolute root", "shared", "/", "", false},
-		{"not a parent reference", "shared", "shared/cat.svg", "", false},
-		{"different directory", "shared", "../../other/cat.svg", "", false},
-		{"prefix is not a segment", "shared", "../../shared-extra/cat.svg", "", false},
-		{"one parent", "shared", "../shared/cat.svg", "cat.svg", true},
-		{"multiple parents", "shared", "../../../shared/sprites/cat.svg", "sprites/cat.svg", true},
-		{"directory itself", "shared", "../../shared", "", true},
-		{"normalized suffix", "shared", "../../shared/sprites/../cat.svg", "cat.svg", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			resolver := assetResolver{extAssetDir: tc.directory}
-			if suffix, ok := resolver.extAssetSuffix(tc.path); suffix != tc.want || ok != tc.match {
-				t.Fatalf("external suffix = %q, %v; want %q, %v", suffix, ok, tc.want, tc.match)
-			}
-		})
-	}
-}
-
 func (s *pathResourceSpy) SetLoadMode(filesystem bool) { s.modes = append(s.modes, filesystem) }
-
-func (s *pathResourceSpy) HasFile(path string) bool {
-	s.checks++
-	_, ok := s.files[path]
-	return ok
-}
-
-func (s *pathResourceSpy) ReadAllText(path string) string {
-	s.reads++
-	if s.beforeRead != nil {
-		s.beforeRead(path)
-	}
-	return s.files[path]
-}
 
 func setupAssetPathTest(t *testing.T) *pathResourceSpy {
 	t.Helper()
@@ -477,7 +362,7 @@ func setupAssetPathTest(t *testing.T) *pathResourceSpy {
 		assetPaths, gdx.ResMgr = previousPaths, previousRes
 		wrap.Init(WaitMainThread)
 	})
-	resources := &pathResourceSpy{files: make(map[string]string)}
+	resources := &pathResourceSpy{}
 	gdx.ResMgr = resources
 	wrap.Init(func(call func()) { call() })
 	return resources

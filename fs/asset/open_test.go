@@ -62,7 +62,7 @@ func TestOpenRegistersDefaultSchema(t *testing.T) {
 		wantErr error
 	}{
 		{name: "local takes precedence", path: "local.txt", want: "local contents"},
-		{name: "parent fallback", path: "nested/parent.txt", want: "parent-only contents"},
+		{name: "parent file stays in its root", path: "nested/parent.txt", wantErr: iofs.ErrNotExist},
 		{name: "missing in both locations", path: "missing.txt", wantErr: iofs.ErrNotExist},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,6 +88,12 @@ func TestOpenRegistersDefaultSchema(t *testing.T) {
 				t.Errorf("Open(%q) contents = %q, want %q", tc.path, contents, tc.want)
 			}
 		})
+	}
+	if err := os.Rename("assets", "moved-assets"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dir.Open("local.txt"); !errors.Is(err, iofs.ErrNotExist) {
+		t.Errorf("Open after removal of local asset root = %v, want not exist", err)
 	}
 }
 
@@ -122,6 +128,10 @@ func TestReadDir(t *testing.T) {
 		t.Fatalf("%T does not implement fs.ReadDirer", dir)
 	}
 
+	if _, err := reader.ReadDir("sprites/a.txt"); err == nil || errors.Is(err, iofs.ErrNotExist) {
+		t.Errorf("ReadDir on a regular file = %v, want a directory error", err)
+	}
+
 	for _, tc := range []struct {
 		name    string
 		path    string
@@ -134,9 +144,9 @@ func TestReadDir(t *testing.T) {
 			want: []spxfs.DirEntry{{Name: "a.txt"}, {Name: "sub", IsDir: true}, {Name: "z.txt"}},
 		},
 		{
-			name: "parent fallback",
-			path: "sounds",
-			want: []spxfs.DirEntry{{Name: "a.wav"}, {Name: "z.wav"}},
+			name:    "parent directory stays in its root",
+			path:    "sounds",
+			wantErr: iofs.ErrNotExist,
 		},
 		{name: "empty directory", path: "empty"},
 		{name: "missing in both locations", path: "missing", wantErr: iofs.ErrNotExist},
@@ -150,6 +160,45 @@ func TestReadDir(t *testing.T) {
 				t.Errorf("ReadDir(%q) = %#v, want %#v", tc.path, entries, tc.want)
 			}
 		})
+	}
+}
+
+func TestValidateConfigurationResourceRoot(t *testing.T) {
+	root := t.TempDir()
+	writeAssetFile(t, root, "game/assets/shared/image.png", "image")
+	writeAssetFile(t, root, "game/outside.png", "outside")
+	writeAssetFile(t, root, "assets/other/index_pack.json", "{}")
+	if err := os.Mkdir(filepath.Join(root, "game", "project"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(filepath.Join(root, "game", "project"))
+	dir, err := asset.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	if _, err := dir.Open("other/index_pack.json"); !errors.Is(err, iofs.ErrNotExist) {
+		t.Errorf("Open from another root: %v", err)
+	}
+	if _, err := dir.(spxfs.ReadDirer).ReadDir("other"); !errors.Is(err, iofs.ErrNotExist) {
+		t.Errorf("ReadDir from another root: %v", err)
+	}
+	if err := spxfs.ValidateResourcePath(dir, "shared/image.png"); err != nil {
+		t.Fatal(err)
+	}
+	if err := spxfs.ValidateResourcePath(dir, "missing.png"); !errors.Is(err, iofs.ErrNotExist) {
+		t.Fatalf("missing resource: %v", err)
+	}
+
+	if err := os.Symlink("../outside.png", filepath.Join(root, "game", "assets", "linked.png")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := spxfs.ValidateResourcePath(dir, "linked.png"); err == nil {
+		t.Fatal("accepted symlink outside assets")
+	}
+	if f, err := dir.Open("linked.png"); err == nil {
+		f.Close()
+		t.Fatal("opened link outside assets")
 	}
 }
 

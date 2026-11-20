@@ -188,38 +188,23 @@ func TestRuntimeLockRejectsIncompatibleIdentity(t *testing.T) {
 	}
 }
 
-func TestProjectArchiveIncludesSortedUniqueSourcesAndResources(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		index string
-		want  []string
-	}{
-		{"no references", `{}`, []string{"Hero.spx", "main.spx"}},
-		{"only source references", `{"backdrops":[{"path":"res://main.spx"},{"path":"res://Hero.spx"}]}`, []string{"Hero.spx", "main.spx"}},
-		{"mixed references", `{"backdrops":[{"path":"res://main.spx"},{"path":"res://z.png"},{"path":"res://Hero.spx"},{"path":"res://a.png"}]}`, []string{"Hero.spx", "a.png", "main.spx", "z.png"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			projectDir := t.TempDir()
-			for _, name := range []string{"main.spx", "Hero.spx", "a.png", "z.png", "assets/hero.png"} {
-				writeProjectTestFile(t, filepath.Join(projectDir, name), name)
-			}
-			writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), tc.index)
-			snapshot, err := portableconfig.SnapshotPortableConfig(projectDir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			cfg := Config{ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "main.spx"), ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json"}
-			archiveConfig, err := prepareProjectArchiveConfig(cfg, snapshot)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if archiveConfig.PackDir != "assets" {
-				t.Fatalf("PackDir = %q, want assets", archiveConfig.PackDir)
-			}
-			if !slices.Equal(archiveConfig.ProjectFiles, tc.want) {
-				t.Fatalf("project files = %q, want %q", archiveConfig.ProjectFiles, tc.want)
-			}
-		})
+func TestProjectArchiveIncludesSortedSourcesAndPackDir(t *testing.T) {
+	projectDir := t.TempDir()
+	for _, name := range []string{"main.spx", "Hero.spx", "outside.png", "assets/hero.png"} {
+		writeProjectTestFile(t, filepath.Join(projectDir, name), name)
+	}
+	writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{"backdrops":[{"path":"hero.png"},{"path":"./hero.png"}]}`)
+	snapshot, err := portableconfig.SnapshotPortableConfig(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "main.spx"), ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json"}
+	archiveConfig, err := prepareProjectArchiveConfig(cfg, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if archiveConfig.PackDir != "assets" || !slices.Equal(archiveConfig.ProjectFiles, []string{"Hero.spx", "main.spx"}) {
+		t.Fatalf("archive inputs = %q and %q", archiveConfig.PackDir, archiveConfig.ProjectFiles)
 	}
 }
 
@@ -254,7 +239,7 @@ func TestProjectAllowlistRejectsUnsafeOrIncompleteProjects(t *testing.T) {
 				t.Skip(err)
 			}
 		}},
-		{"invalid resources", "collect typed project resources", func(t *testing.T, c *Config) {
+		{"invalid resources", "validate typed project resources", func(t *testing.T, c *Config) {
 			writeProjectTestFile(t, filepath.Join(c.ProjectDir, c.PackDir, c.PackIndex), "{")
 		}},
 		{"config appeared", "changed after validation", func(t *testing.T, c *Config) { writeProjectTestFile(t, filepath.Join(c.ProjectDir, ".config"), "{}") }},

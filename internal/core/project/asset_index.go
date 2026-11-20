@@ -16,20 +16,18 @@
 
 package project
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"maps"
+)
 
 // MergeIndexRoot overlays packed index root fields on source fields.
 func MergeIndexRoot(source, packed map[string]json.RawMessage) map[string]json.RawMessage {
 	if len(source) == 0 {
 		return packed
 	}
-	merged := make(map[string]json.RawMessage, len(source)+len(packed))
-	for key, value := range source {
-		merged[key] = value
-	}
-	for key, value := range packed {
-		merged[key] = value
-	}
+	merged := maps.Clone(source)
+	maps.Copy(merged, packed)
 	return merged
 }
 

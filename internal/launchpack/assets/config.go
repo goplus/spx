@@ -16,13 +16,11 @@
 
 package assets
 
-import (
-	"encoding/json"
-	"fmt"
-	"sort"
+import coreproject "github.com/goplus/spx/v4/internal/core/project"
 
-	coreproject "github.com/goplus/spx/v4/internal/core/project"
-)
+type resourcePaths interface {
+	ResourcePaths(func(*string) bool)
+}
 
 type resourceConfig struct {
 	Path string `json:"path"`
@@ -40,90 +38,48 @@ type spriteConfig struct {
 	CostumeMPSet *resourceConfig   `json:"costumeMPSet"`
 }
 
-type soundConfig struct {
-	Path string `json:"path"`
+func (c *resourceConfig) ResourcePaths(yield func(*string) bool) {
+	yield(&c.Path)
 }
 
-type fontFamilyConfig struct {
-	Faces []resourceConfig `json:"faces"`
-}
-
-type packedConfig struct {
-	project  projectConfig
-	sprites  map[string]spriteConfig
-	sounds   map[string]soundConfig
-	fonts    map[string]fontFamilyConfig
-	hasFonts bool
-}
-
-func parseConfig(sourceName string, sourceData []byte, packedName string, packedData []byte) (packedConfig, error) {
-	sourceRoot, err := parseRoot(sourceName, sourceData)
-	if err != nil {
-		return packedConfig{}, err
-	}
-	packedRoot, err := parseRoot(packedName, packedData)
-	if err != nil {
-		return packedConfig{}, err
-	}
-
-	var config packedConfig
-	if err := coreproject.DecodeIndexRoot(coreproject.MergeIndexRoot(sourceRoot, packedRoot), &config.project); err != nil {
-		name := sourceName
-		if len(packedData) != 0 {
-			name = packedName
+func (c *projectConfig) ResourcePaths(yield func(*string) bool) {
+	for _, backdrop := range c.Backdrops {
+		if backdrop != nil && !yield(&backdrop.Path) {
+			return
 		}
-		return packedConfig{}, fmt.Errorf("projectassets: decode merged project config at %q: %w", name, err)
 	}
-	config.sprites, err = decodePackedObjects[spriteConfig](packedName, "sprites", packedRoot["sprites"])
-	if err != nil {
-		return packedConfig{}, err
-	}
-	config.sounds, err = decodePackedObjects[soundConfig](packedName, "sounds", packedRoot["sounds"])
-	if err != nil {
-		return packedConfig{}, err
-	}
-	_, config.hasFonts = packedRoot["fonts"]
-	config.fonts, err = decodePackedObjects[fontFamilyConfig](packedName, "fonts", packedRoot["fonts"])
-	if err != nil {
-		return packedConfig{}, err
-	}
-	return config, nil
+	yield(&c.TilemapPath)
 }
 
-func parseRoot(name string, data []byte) (map[string]json.RawMessage, error) {
-	if data == nil {
-		return nil, nil
+func (c *spriteConfig) ResourcePaths(yield func(*string) bool) {
+	for _, costume := range c.Costumes {
+		if costume != nil && !yield(&costume.Path) {
+			return
+		}
 	}
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(data, &root); err != nil {
-		return nil, fmt.Errorf("projectassets: decode %q: %w", name, err)
+	if c.CostumeSet != nil && !yield(&c.CostumeSet.Path) {
+		return
 	}
-	return root, nil
+	if c.CostumeMPSet != nil {
+		yield(&c.CostumeMPSet.Path)
+	}
 }
 
-func decodePackedObjects[T any](indexName, section string, raw json.RawMessage) (map[string]T, error) {
-	entries, err := coreproject.ParseIndexEntries(raw)
-	if err != nil {
-		return nil, fmt.Errorf("projectassets: decode %q section %q: %w", indexName, section, err)
-	}
-	if entries == nil {
-		return nil, nil
-	}
-	names := make([]string, 0, len(entries))
-	for name := range entries {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	configs := make(map[string]T, len(entries))
-	for _, name := range names {
-		if err := validateConfigEntryName(section, name); err != nil {
-			return nil, err
+// The launcher inspects only fields that reference resources. Legacy packing
+// also checks the types of all other fields in the project format.
+func (v *indexValidator) childConfig(section string) resourcePaths {
+	switch section {
+	case "sprites":
+		if v.legacy {
+			return new(coreproject.SpriteConfig)
 		}
-		var config T
-		if err := json.Unmarshal(entries[name], &config); err != nil {
-			return nil, fmt.Errorf("projectassets: decode %q section %q entry %q: %w", indexName, section, name, err)
+		return new(spriteConfig)
+	case "sounds":
+		if v.legacy {
+			return new(coreproject.SoundConfig)
 		}
-		configs[name] = config
+		return new(resourceConfig)
+	default: // fonts
+		return new(coreproject.FontFamilyConfig)
 	}
-	return configs, nil
 }

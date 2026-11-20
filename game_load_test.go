@@ -1231,7 +1231,9 @@ func TestRuntimeTitleUsesProjectDirectory(t *testing.T) {
 
 func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
 	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
-	game := setupStageLoadTestGame(t, gameTestFS{})
+	game := setupStageLoadTestGame(t, gameTestFS{
+		"sounds/主题曲/index.json": `{"path":"theme.wav"}`,
+	})
 	manager := &gameDisplayPlatformMgr{}
 	pkgengine.PlatformMgr = manager
 	previousScale := engine.WindowScale()
@@ -1240,10 +1242,9 @@ func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
 		engine.SetDebugMode(false)
 		spxlog.SetLevel(spxlog.LevelInfo)
 	})
-	project := &coreproject.ProjectConfig{Debug: true, FullScreen: true, WindowScale: 2, Bgm: "theme", Map: coreproject.MapConfig{Width: 480, Height: 360}}
+	project := &coreproject.ProjectConfig{Debug: true, FullScreen: true, WindowScale: 2, Bgm: "主题曲", Map: coreproject.MapConfig{Width: 480, Height: 360}}
 	backend := &fakeAudioBackend{}
 	game.soundMgr.Init(backend)
-	game.sounds["theme"] = &coreproject.SoundConfig{Path: "sounds/theme.wav"}
 	game.setupDisplayConfig(project)
 	game.setupWorldAndWindow(project)
 	game.setupPlatformAndCamera(project)
@@ -1411,6 +1412,36 @@ func TestEngineAssetsPreserveFileVerifier(t *testing.T) {
 				t.Fatalf("source verification = %q, %v; want font.ttf, %v", base.verified, err, test.err)
 			}
 		})
+	}
+}
+
+func TestOpenResourcesLiteralResFilename(t *testing.T) {
+	assets := t.TempDir()
+	base, err := coreproject.ResourceDir(assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer base.Close()
+	if !spxfs.AllowsLiteralResPrefix(base) {
+		t.Skip("only native Unix filesystem mode accepts bare res: filenames")
+	}
+	for name, content := range map[string]string{
+		"index.json":    `{"backdrops":[{"path":"res:image.png"}]}`,
+		"res:image.png": "asset",
+	} {
+		if err := os.WriteFile(filepath.Join(assets, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	opened, err := openGameResources(base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.FS.Close()
+	backdrops := opened.Project.Backdrops
+	if len(backdrops) != 1 || backdrops[0].Path != "./res:image.png" {
+		t.Fatalf("backdrops = %+v, want literal filename", backdrops)
 	}
 }
 

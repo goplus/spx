@@ -20,81 +20,109 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestCollectTypedReferences(t *testing.T) {
+func TestValidateTypedReferences(t *testing.T) {
 	projectDir := t.TempDir()
-	writeAssetTestFile(t, projectDir, "root/background.png", "image")
-	writeAssetTestFile(t, projectDir, "root/music.wav", "sound")
-	writeAssetTestFile(t, projectDir, "assets/local.png", "local")
+	writeAssetTestFile(t, projectDir, "assets/root/background.png", "image")
+	writeAssetTestFile(t, projectDir, "assets/root/music.wav", "sound")
+	writeAssetTestFile(t, projectDir, "assets/maps/forest/tilemap.json", "{}")
 	writeAssetTestFile(t, projectDir, "assets/sprites/Hero/hero.png", "hero")
 	writeAssetTestFile(t, projectDir, "assets/sounds/Jump/jump.wav", "jump")
 	writeAssetTestFile(t, projectDir, "assets/fonts/Body/body.ttf", "font")
 	writeAssetTestFile(t, projectDir, "assets/index.json", `{
 		"description":"../this-is-not-a-resource",
-		"backdrops":[{"path":"res://root/background.png"}],
-		"bgm":"../root/music.wav",
-		"sprites":{"Packed":{"costumeSet":{"path":"res://root/background.png"}}},
-		"sounds":{"Packed":{"path":"res://root/music.wav"}}
+		"tilemapPath":"maps/forest",
+		"backdrops":[{"path":"root/background.png"}],
+		"bgm":"Jump",
+		"sprites":{"Packed":{"costumeSet":{"path":"../../root/background.png"}}},
+		"sounds":{"Packed":{"path":"../root/music.wav"}}
 	}`)
 	writeAssetTestFile(t, projectDir, "assets/sprites/Hero/index.json", `{"costumes":[{"path":"hero.png"}],"description":"../../../../not-a-resource"}`)
 	writeAssetTestFile(t, projectDir, "assets/sounds/Jump/index.json", `{"path":"jump.wav"}`)
 	writeAssetTestFile(t, projectDir, "assets/fonts/Body/index.json", `{"faces":[{"path":"body.ttf"}]}`)
 
-	files, err := Collect(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
-	if err != nil {
+	if err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"}); err != nil {
 		t.Fatal(err)
-	}
-	want := []string{"root/background.png", "root/music.wav"}
-	if !reflect.DeepEqual(files, want) {
-		t.Fatalf("Collect() = %#v, want %#v", files, want)
 	}
 }
 
-func TestResolvePackedOnly(t *testing.T) {
+func TestValidateBackgroundSoundIsALogicalName(t *testing.T) {
+	for _, index := range []string{"index.json", "index_pack.json"} {
+		t.Run(index, func(t *testing.T) {
+			project := t.TempDir()
+			writeAssetTestFile(t, project, "assets/"+index, `{"bgm":"铃 声"}`)
+			cfg := Config{ProjectDir: project, PackDir: "assets", PackIndex: "index.json"}
+			if err := Validate(cfg); err != nil {
+				t.Fatalf("background sound lookup must be deferred: %v", err)
+			}
+			writeAssetTestFile(t, project, "assets/sounds/铃 声/index.json", `{"path":"ring.wav"}`)
+			writeAssetTestFile(t, project, "assets/sounds/铃 声/ring.wav", "ring")
+			if err := Validate(cfg); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestValidatePackedOnly(t *testing.T) {
 	projectDir := t.TempDir()
-	for name := range map[string]string{
-		"root/background.png": "image",
-		"root/hero.png":       "hero",
-		"root/jump.wav":       "sound",
-		"root/body.ttf":       "font",
+	for _, name := range []string{
+		"assets/root/background.png", "assets/root/hero.png",
+		"assets/root/jump.wav", "assets/fonts/Body/body.ttf",
 	} {
 		writeAssetTestFile(t, projectDir, name, name)
 	}
 	writeAssetTestFile(t, projectDir, "assets/index_pack.json", `{
-		"backdrops":[{"path":"res://root/background.png"}],
-		"sprites":{"Hero":{"costumes":[{"path":"res://root/hero.png"}]}},
-		"sounds":{"Jump":{"path":"res://root/jump.wav"}},
-		"fonts":{"Body":{"faces":[{"path":"res://root/body.ttf"}]}}
+		"backdrops":[{"path":"root/background.png"}],
+		"sprites":{"Hero":{"costumes":[{"path":"../../root/hero.png"}]}},
+		"sounds":{"Jump":{"path":"../../root/jump.wav"}},
+		"fonts":{"Body":{"faces":[{"path":"body.ttf"}]}}
 	}`)
 
-	resolved, err := Resolve(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
-	if err != nil {
+	if err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"}); err != nil {
 		t.Fatal(err)
-	}
-	if resolved.HasSourceIndex || !resolved.HasPackedIndex {
-		t.Fatalf("index presence = source:%v packed:%v, want false/true", resolved.HasSourceIndex, resolved.HasPackedIndex)
-	}
-	want := []string{"root/background.png", "root/body.ttf", "root/hero.png", "root/jump.wav"}
-	if !reflect.DeepEqual(resolved.Files, want) {
-		t.Fatalf("Resolve().Files = %#v, want %#v", resolved.Files, want)
 	}
 }
 
-func TestResolvePackedOverridesStaleSource(t *testing.T) {
+func TestValidatePackedLogicalNameWithoutPhysicalDirectory(t *testing.T) {
+	project := t.TempDir()
+	writeAssetTestFile(t, project, "assets/audio/ring.wav", "sound")
+	writeAssetTestFile(t, project, "assets/index_pack.json", `{
+		"bgm":"铃\\声",
+		"sounds":{"铃\\声":{"path":"../../audio/ring.wav"}}
+	}`)
+	if err := Validate(Config{project, "assets", "index_pack.json"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateExplicitPackedIndexMergesSource(t *testing.T) {
+	project := t.TempDir()
+	cfg := Config{project, "assets", "index_pack.json"}
+	writeAssetTestFile(t, project, "assets/index.json", `{"backdrops":[{"path":"unavailable.png"}]}`)
+	writeAssetTestFile(t, project, "assets/index_pack.json", `{}`)
+	if err := Validate(cfg); err == nil || !strings.Contains(err.Error(), "unavailable.png") {
+		t.Fatalf("inherited backdrop error = %v", err)
+	}
+	writeAssetTestFile(t, project, "assets/index_pack.json", `{"backdrops":[]}`)
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("packed backdrop override: %v", err)
+	}
+}
+
+func TestValidatePackedOverridesStaleSource(t *testing.T) {
 	projectDir := t.TempDir()
 	for _, name := range []string{
-		"root/packed-bg.png",
-		"root/packed-map.json",
-		"root/packed-music.wav",
-		"root/packed-hero.png",
-		"root/packed-jump.wav",
-		"root/packed-font.ttf",
+		"assets/root/packed-bg.png",
+		"assets/root/packed-map.json",
+		"assets/root/packed-hero.png",
+		"assets/root/packed-jump.wav",
+		"assets/fonts/Packed/packed-font.ttf",
 	} {
 		writeAssetTestFile(t, projectDir, name, name)
 	}
@@ -107,122 +135,127 @@ func TestResolvePackedOverridesStaleSource(t *testing.T) {
 	writeAssetTestFile(t, projectDir, "assets/sounds/Jump/index.json", `{"path":"res://stale/jump.wav"}`)
 	writeAssetTestFile(t, projectDir, "assets/fonts/Stale/index.json", `{not source json`)
 	writeAssetTestFile(t, projectDir, "assets/index_pack.json", `{
-		"backdrops":[{"path":"res://root/packed-bg.png"}],
-		"bgm":"res://root/packed-music.wav",
-		"tilemapPath":"res://root/packed-map.json",
-		"sprites":{"Hero":{"costumes":[{"path":"res://root/packed-hero.png"}]}},
-		"sounds":{"Jump":{"path":"res://root/packed-jump.wav"}},
-		"fonts":{"Packed":{"faces":[{"path":"res://root/packed-font.ttf"}]}}
+		"backdrops":[{"path":"root/packed-bg.png"}],
+		"bgm":"Jump",
+		"tilemapPath":"root/packed-map.json",
+		"sprites":{"Hero":{"costumes":[{"path":"../../root/packed-hero.png"}]}},
+		"sounds":{"Jump":{"path":"../../root/packed-jump.wav"}},
+		"fonts":{"Packed":{"faces":[{"path":"packed-font.ttf"}]}}
 	}`)
 
-	files, err := Collect(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
-	if err != nil {
+	if err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"}); err != nil {
 		t.Fatal(err)
-	}
-	want := []string{
-		"root/packed-bg.png",
-		"root/packed-font.ttf",
-		"root/packed-hero.png",
-		"root/packed-jump.wav",
-		"root/packed-map.json",
-		"root/packed-music.wav",
-	}
-	if !reflect.DeepEqual(files, want) {
-		t.Fatalf("Collect() = %#v, want %#v", files, want)
 	}
 }
 
-func TestResolveFallsBackToMissingPackedChildren(t *testing.T) {
+func TestValidateFallsBackToMissingPackedChildren(t *testing.T) {
 	projectDir := t.TempDir()
 	for _, name := range []string{
-		"root/source-bg.png",
-		"root/source-hero.png",
-		"root/packed-hero.png",
-		"root/source-jump.wav",
-		"root/packed-jump.wav",
-		"root/source-font.ttf",
+		"assets/root/source-bg.png",
+		"assets/root/source-hero.png",
+		"assets/root/packed-hero.png",
+		"assets/root/source-jump.wav",
+		"assets/root/packed-jump.wav",
+		"assets/fonts/Source/source-font.ttf",
 	} {
 		writeAssetTestFile(t, projectDir, name, name)
 	}
 	writeAssetTestFile(t, projectDir, "assets/index.json", `{
-		"backdrops":[{"path":"res://root/source-bg.png"}]
+		"backdrops":[{"path":"root/source-bg.png"}]
 	}`)
-	writeAssetTestFile(t, projectDir, "assets/sprites/Hero/index.json", `{"costumes":[{"path":"res://root/source-hero.png"}]}`)
+	writeAssetTestFile(t, projectDir, "assets/sprites/Hero/index.json", `{"costumes":[{"path":"../../root/source-hero.png"}]}`)
 	writeAssetTestFile(t, projectDir, "assets/sprites/Packed/index.json", `{"costumes":[{"path":"res://stale/hero.png"}]}`)
-	writeAssetTestFile(t, projectDir, "assets/sounds/Jump/index.json", `{"path":"res://root/source-jump.wav"}`)
+	writeAssetTestFile(t, projectDir, "assets/sounds/Jump/index.json", `{"path":"../../root/source-jump.wav"}`)
 	writeAssetTestFile(t, projectDir, "assets/sounds/Packed/index.json", `{"path":"res://stale/jump.wav"}`)
-	writeAssetTestFile(t, projectDir, "assets/fonts/Source/index.json", `{"faces":[{"path":"res://root/source-font.ttf"}]}`)
+	writeAssetTestFile(t, projectDir, "assets/fonts/Source/index.json", `{"faces":[{"path":"source-font.ttf"}]}`)
 	writeAssetTestFile(t, projectDir, "assets/index_pack.json", `{
 		"zorder":["Hero","Packed"],
-		"sprites":{"Packed":{"costumes":[{"path":"res://root/packed-hero.png"}]}},
-		"sounds":{"Packed":{"path":"res://root/packed-jump.wav"}}
+		"sprites":{"Packed":{"costumes":[{"path":"../../root/packed-hero.png"}]}},
+		"sounds":{"Packed":{"path":"../../root/packed-jump.wav"}}
 	}`)
 
-	files, err := Collect(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
-	if err != nil {
+	if err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{
-		"root/packed-hero.png",
-		"root/packed-jump.wav",
-		"root/source-bg.png",
-		"root/source-font.ttf",
-		"root/source-hero.png",
-		"root/source-jump.wav",
-	}
-	if !reflect.DeepEqual(files, want) {
-		t.Fatalf("Collect() = %#v, want %#v", files, want)
-	}
 }
 
-func TestResolveRejectsUnsafePackedEntryName(t *testing.T) {
+func TestValidateRejectsUnsafePackedEntryName(t *testing.T) {
 	projectDir := t.TempDir()
 	writeAssetTestFile(t, projectDir, "assets/index_pack.json", `{"sprites":{"../Hero":{}}}`)
-	_, err := Resolve(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
+	err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
 	if err == nil || !strings.Contains(err.Error(), `unsafe entry name "../Hero"`) {
-		t.Fatalf("Resolve() error = %v, want unsafe packed entry name", err)
+		t.Fatalf("Validate() error = %v, want unsafe packed entry name", err)
 	}
 }
 
-func TestCollectRejectsUnsafeTypedReferences(t *testing.T) {
+func TestValidateRejectsUnsafeTypedReferences(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		reference string
 		want      string
 	}{
-		{name: "escape", reference: "../../outside.png", want: "escapes ProjectDir"},
-		{name: "absolute", reference: "/private/host.png", want: "absolute resource path"},
+		{name: "escape", reference: "../../outside.png", want: "asset directory"},
 		{name: "host scheme", reference: "file:///private/host.png", want: "unsupported resource path"},
-		{name: "missing", reference: "res://missing.png", want: "is missing"},
+		{name: "missing", reference: "missing.png", want: "is missing"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			projectDir := t.TempDir()
 			writeAssetTestFile(t, projectDir, "assets/index.json", `{"backdrops":[{"path":"`+test.reference+`"}]}`)
-			_, err := Collect(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
+			err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("Collect() error = %v, want containing %q", err, test.want)
+				t.Fatalf("Validate() error = %v, want containing %q", err, test.want)
 			}
 		})
 	}
 }
 
-func TestCollectRejectsSymlinkedReferencedFile(t *testing.T) {
+func TestPackersRejectAbsoluteReferencesBeforeJoining(t *testing.T) {
+	for _, tt := range []struct {
+		name, index, config string
+		files               []string
+	}{
+		{"source backdrop", "index.json", `{"backdrops":[{"path":"/a/b"}]}`, []string{"a/b"}},
+		{"packed tilemap", "index_pack.json", `{"tilemapPath":"/a/b"}`, []string{"a/b/tilemap.json"}},
+		{"packed font", "index_pack.json", `{"fonts":{"Body":{"faces":[{"path":"/a/b"}]}}}`, []string{"a/b", "fonts/Body/a/b"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			project := t.TempDir()
+			writeAssetTestFile(t, project, "assets/"+tt.index, tt.config)
+			for _, file := range tt.files {
+				writeAssetTestFile(t, project, "assets/"+file, "{}")
+			}
+			root, err := os.OpenRoot(project)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			if err := ValidateLegacy(root); err == nil || !strings.Contains(err.Error(), "/a/b") {
+				t.Fatalf("legacy validation = %v, want rejection of /a/b", err)
+			}
+			if err := Validate(Config{project, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "/a/b") {
+				t.Fatalf("launcher validation = %v, want rejection of /a/b", err)
+			}
+		})
+	}
+}
+
+func TestValidateRejectsSymlinkedReferencedFile(t *testing.T) {
 	projectDir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside.png")
 	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writeAssetTestFile(t, projectDir, "assets/index.json", `{"backdrops":[{"path":"res://linked.png"}]}`)
-	if err := os.Symlink(outside, filepath.Join(projectDir, "linked.png")); err != nil {
+	writeAssetTestFile(t, projectDir, "assets/index.json", `{"backdrops":[{"path":"linked.png"}]}`)
+	if err := os.Symlink(outside, filepath.Join(projectDir, "assets", "linked.png")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	_, err := Collect(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
+	err := Validate(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
 	if err == nil || !strings.Contains(err.Error(), "non-symlink") {
-		t.Fatalf("Collect() error = %v", err)
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
-func TestResolveRejectsInvalidConfigurationAndLayout(t *testing.T) {
+func TestValidateRejectsInvalidConfigurationAndLayout(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
 		configure  func(*Config)
@@ -231,6 +264,7 @@ func TestResolveRejectsInvalidConfigurationAndLayout(t *testing.T) {
 		{"missing project", "inspect ProjectDir", func(c *Config) { c.ProjectDir += ".missing" }},
 		{"file project", "not a real directory", func(c *Config) { c.ProjectDir = filepath.Join(c.ProjectDir, "assets", "index.json") }},
 		{"empty pack", "PackDir must", func(c *Config) { c.PackDir = "" }},
+		{"drive-absolute pack", "PackDir must", func(c *Config) { c.PackDir = "C:/a/b" }},
 		{"escaping pack", "PackDir must", func(c *Config) { c.PackDir = "../assets" }},
 		{"nested index", "PackIndex must", func(c *Config) { c.PackIndex = "child/index.json" }},
 		{"missing pack", "PackDir \"missing\" is missing", func(c *Config) { c.PackDir = "missing" }},
@@ -242,8 +276,8 @@ func TestResolveRejectsInvalidConfigurationAndLayout(t *testing.T) {
 			writeAssetTestFile(t, root, "assets/index.json", "{}")
 			cfg := Config{ProjectDir: root, PackDir: "assets", PackIndex: "index.json"}
 			tt.configure(&cfg)
-			if _, err := Resolve(cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Resolve = %v, want %q", err, tt.want)
+			if err := Validate(cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate = %v, want %q", err, tt.want)
 			}
 		})
 	}
@@ -253,14 +287,14 @@ func TestResolveRejectsInvalidConfigurationAndLayout(t *testing.T) {
 			if err := os.MkdirAll(filepath.Join(root, "assets", name), 0700); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "regular non-symlink file") {
+			if err := Validate(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "regular non-symlink file") {
 				t.Fatalf("directory config = %v", err)
 			}
 		})
 	}
 }
 
-func TestResolveReportsMalformedTypedConfiguration(t *testing.T) {
+func TestValidateReportsMalformedTypedConfiguration(t *testing.T) {
 	for _, tt := range []struct{ name, file, data, want string }{
 		{"source JSON", "index.json", "{", "decode"},
 		{"packed JSON", "index_pack.json", "{", "decode"},
@@ -272,28 +306,31 @@ func TestResolveReportsMalformedTypedConfiguration(t *testing.T) {
 		{"source sprite", "sprites/Hero/index.json", "{", "decode"},
 		{"source sound", "sounds/Bell/index.json", "{", "decode"},
 		{"source font", "fonts/Body/index.json", "{", "decode"},
-		{"sprite costume", "index_pack.json", `{"sprites":{"Hero":{"costumes":[null,{"path":"res://missing"}]}}}`, "is missing"},
-		{"sprite set", "index_pack.json", `{"sprites":{"Hero":{"costumeSet":{"path":"res://missing"}}}}`, "is missing"},
-		{"sprite MP set", "sprites/Hero/index.json", `{"costumeMPSet":{"path":"res://missing"}}`, "is missing"},
-		{"packed sound", "index_pack.json", `{"sounds":{"Bell":{"path":"res://missing"}}}`, "is missing"},
-		{"packed font", "index_pack.json", `{"fonts":{"Body":{"faces":[{"path":"res://missing"}]}}}`, "is missing"},
-		{"music", "index.json", `{"bgm":"res://missing"}`, "is missing"},
-		{"empty resource", "index.json", `{"bgm":"res://"}`, "absolute resource"},
-		{"resource scheme", "index.json", `{"bgm":"res://file:private"}`, "unsupported resource"},
-		{"backslash", "index.json", `{"bgm":"a\\b"}`, "unsafe resource"},
+		{"sprite costume", "index_pack.json", `{"sprites":{"Hero":{"costumes":[null,{"path":"missing"}]}}}`, "is missing"},
+		{"sprite set", "index_pack.json", `{"sprites":{"Hero":{"costumeSet":{"path":"missing"}}}}`, "is missing"},
+		{"sprite MP set", "sprites/Hero/index.json", `{"costumeMPSet":{"path":"missing"}}`, "is missing"},
+		{"packed sound", "index_pack.json", `{"sounds":{"Bell":{"path":"missing"}}}`, "is missing"},
+		{"empty font path", "fonts/Body/index.json", `{"faces":[{"path":""}]}`, "must not be empty"},
+		{"face outside font family", "fonts/Body/index.json", `{"faces":[{"path":"../Other/regular.ttf"}]}`, "font face"},
+		{"packed font", "index_pack.json", `{"fonts":{"Body":{"faces":[{"path":"missing"}]}}}`, "is missing"},
+		{"invalid sound name", "index.json", `{"bgm":"sounds/Bell"}`, "segment"},
+		{"empty resource", "index.json", `{"tilemapPath":"res://"}`, "unsupported resource"},
+		{"resource scheme", "index.json", `{"tilemapPath":"res://file:private"}`, "unsupported resource"},
+		{"literal res filename", "index.json", `{"backdrops":[{"path":"res:image.png"}]}`, "unsupported resource"},
+		{"backslash", "index.json", `{"tilemapPath":"a\\b"}`, "asset directory"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			writeAssetTestFile(t, root, "assets/index.json", "{}")
 			writeAssetTestFile(t, root, "assets/"+tt.file, tt.data)
-			if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Resolve = %v, want %q", err, tt.want)
+			if err := Validate(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate = %v, want %q", err, tt.want)
 			}
 		})
 	}
 }
 
-func TestResolveSourceSectionsRejectUnsafeLayouts(t *testing.T) {
+func TestValidateSourceSectionsRejectUnsafeLayouts(t *testing.T) {
 	for _, kind := range []string{"section file", "index directory", "symlink child", "unsafe child name", "ignored files and missing index"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
@@ -321,10 +358,10 @@ func TestResolveSourceSectionsRejectUnsafeLayouts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, err := Resolve(Config{root, "assets", "index.json"})
+			err := Validate(Config{root, "assets", "index.json"})
 			if kind == "ignored files and missing index" {
-				if err != nil || len(got.Files) != 0 {
-					t.Fatalf("ignored entries: %#v, %v", got, err)
+				if err != nil {
+					t.Fatal(err)
 				}
 			} else if err == nil {
 				t.Fatal("unsafe section accepted")
@@ -360,7 +397,7 @@ func TestPinnedProjectRootSurvivesPathReplacement(t *testing.T) {
 	if err != nil || !found || len(entries) != 1 || entries[0].Name() != "config.json" {
 		t.Fatalf("pinned directory = %v, %v, %v, want original config.json", entries, found, err)
 	}
-	if err := pinRegularFile(root, "assets/config.json"); err != nil {
+	if err := verifyRegularFile(root, "assets/config.json"); err != nil {
 		t.Fatalf("pin original file: %v", err)
 	}
 	if data, found, err := readPinnedFile(root, "assets/replacement.json"); err != nil || found || data != nil {
@@ -392,7 +429,7 @@ func TestPinnedAssetsReportPermissionErrors(t *testing.T) {
 				if !errors.Is(err, os.ErrPermission) || found || data != nil {
 					t.Fatalf("unreadable file = %q, %v, %v", data, found, err)
 				}
-				if err := pinRegularFile(root, "assets/config.json"); !errors.Is(err, os.ErrPermission) {
+				if err := verifyRegularFile(root, "assets/config.json"); !errors.Is(err, os.ErrPermission) {
 					t.Fatalf("pin unreadable file = %v", err)
 				}
 			case "asset directory":
@@ -484,25 +521,25 @@ func TestPinnedAssetPathsAndSnapshots(t *testing.T) {
 	if _, _, err := readPinnedDir(root, "assets"); err == nil {
 		t.Fatal("closed root directory read accepted")
 	}
-	if err := pinRegularFile(root, "config.json"); err == nil {
+	if err := verifyRegularFile(root, "config.json"); err == nil {
 		t.Fatal("closed root pin accepted")
 	}
 }
 
-func TestResolveRejectsOversizedConfig(t *testing.T) {
+func TestValidateRejectsOversizedConfig(t *testing.T) {
 	root := t.TempDir()
 	writeAssetTestFile(t, root, "assets/index.json", strings.Repeat(" ", int(maxConfigBytes)+1))
-	if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "exceeds") {
+	if err := Validate(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("oversized config = %v", err)
 	}
 }
 
-func TestResolveRequiresAtLeastOneIndex(t *testing.T) {
+func TestValidateRequiresAtLeastOneIndex(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "assets"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "contains neither") {
+	if err := Validate(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "contains neither") {
 		t.Fatalf("missing indexes = %v", err)
 	}
 }

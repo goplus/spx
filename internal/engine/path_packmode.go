@@ -19,12 +19,11 @@
 
 package engine
 
+var assetPaths = newAssetResolver(projectResourcePrefix, defaultAssetDirName)
+
 func SetAssetDir(dir string) {
-	// Packmode keeps the legacy archive and export policy.
-	resolver := newAssetResolver(packmodeAssetPrefix, dir)
 	Managers().ResMgr.SetLoadMode(false)
-	resolver.extAssetDir = readExtAssetDirFromProjectConfig(packmodeAssetPrefix)
-	assetPaths = resolver
+	assetPaths = newAssetResolver(projectResourcePrefix, dir)
 }
 
 func ToAssetPath(relPath string) string {

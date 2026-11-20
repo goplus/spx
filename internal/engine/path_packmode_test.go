@@ -19,8 +19,6 @@
 package engine
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -31,9 +29,8 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 		assetPaths = original
 	})
 	assetPaths = assetResolver{
-		root:        joinAssetRoot(packmodeAssetPrefix, "assets"),
-		projectRoot: packmodeAssetPrefix,
-		extAssetDir: "custom_asset",
+		assetRoot:   joinAssetRoot(projectResourcePrefix, "assets"),
+		projectRoot: projectResourcePrefix,
 	}
 
 	for _, test := range []struct {
@@ -44,8 +41,8 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 		{name: "asset", path: "sprites/cat.svg", want: "res://assets/sprites/cat.svg"},
 		{name: "project resource", path: "../res/image.png", want: "res://res/image.png"},
 		{name: "project URI", path: "res://media/image.png", want: "res://media/image.png"},
-		{name: "shared legacy asset", path: "../../shared/image.png", want: "res://shared/image.png"},
-		{name: "extasset legacy asset", path: "../../custom_asset/image.png", want: "res://extasset/image.png"},
+		{name: "shared legacy asset", path: "../../shared/image.png", want: ""},
+		{name: "extasset legacy asset", path: "../../custom_asset/image.png", want: ""},
 		{name: "escaping project URI", path: "res://../outside/image.png", want: ""},
 		{name: "Windows absolute project URI", path: "res://C:/outside/image.png", want: ""},
 		{name: "triple slash project URI", path: "res:///etc/passwd", want: ""},
@@ -66,7 +63,6 @@ func TestPackmodeAssetPathStaysWithinProject(t *testing.T) {
 
 func TestSetAssetDirConfiguresPackmodeRoots(t *testing.T) {
 	resources := setupAssetPathTest(t)
-	resources.files["res://.config"] = `{"extasset":"shared"}`
 	for _, dir := range []string{"", "images"} {
 		assetPaths = assetResolver{explicitFSRoots: true}
 		SetAssetDir(dir)
@@ -74,79 +70,11 @@ func TestSetAssetDirConfiguresPackmodeRoots(t *testing.T) {
 		if wantDir == "" {
 			wantDir = "assets"
 		}
-		if assetPaths.root != "res://"+wantDir+"/" || assetPaths.projectRoot != "res://" || assetPaths.extAssetDir != "shared" || assetPaths.explicitFSRoots {
+		if assetPaths.assetRoot != "res://"+wantDir+"/" || assetPaths.projectRoot != "res://" || assetPaths.explicitFSRoots {
 			t.Fatalf("SetAssetDir(%q) = %+v", dir, assetPaths)
 		}
 	}
 	if !slices.Equal(resources.modes, []bool{false, false}) {
 		t.Fatalf("resource load modes = %v, want archive mode for both calls", resources.modes)
-	}
-}
-
-func TestSetAssetDirInstallsOnlyAfterReadingConfiguration(t *testing.T) {
-	for _, interrupted := range []bool{false, true} {
-		t.Run(map[bool]string{false: "complete", true: "interrupted"}[interrupted], func(t *testing.T) {
-			resources := setupAssetPathTest(t)
-			resources.files[projectConfigPath(packmodeAssetPrefix)] = `{"extasset":"shared"}`
-			previous := assetResolver{root: "previous/assets/", projectRoot: "previous"}
-			assetPaths = previous
-			read := false
-			resources.beforeRead = func(string) {
-				read = true
-				if assetPaths != previous {
-					t.Error("configuration changed before the project config was read")
-				}
-				if interrupted {
-					panic("configuration interrupted")
-				}
-			}
-			func() {
-				defer func() {
-					got := recover()
-					if interrupted && got != "configuration interrupted" || !interrupted && got != nil {
-						t.Errorf("configuration panic = %v, interrupted = %v", got, interrupted)
-					}
-				}()
-				SetAssetDir("next")
-			}()
-			if !read {
-				t.Fatal("project configuration was not read")
-			}
-			if interrupted {
-				if assetPaths != previous {
-					t.Fatal("interrupted configuration changed the installed resolver")
-				}
-			} else if assetPaths.root == previous.root || assetPaths.extAssetDir != "shared" {
-				t.Fatalf("completed configuration was not installed: %+v", assetPaths)
-			}
-		})
-	}
-}
-
-func TestPackmodePreservesLegacyConfigUntilAssetDirectoryIsSet(t *testing.T) {
-	resources := setupAssetPathTest(t)
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := os.Mkdir(assetDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, projectConfigFile), []byte(`{"extasset":"shared"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := SetLegacyFilesystemRoots(projectDir, assetDir); err != nil {
-		t.Fatal(err)
-	}
-	if got := ToAssetPath("../../shared/cat.svg"); got != "res://extasset/cat.svg" {
-		t.Fatalf("legacy config path = %q, want res://extasset/cat.svg", got)
-	}
-	resources.files[projectConfigPath(packmodeAssetPrefix)] = `{"extasset":"archive"}`
-	SetAssetDir("assets")
-	for reference, want := range map[string]string{
-		"../../shared/cat.svg":  "res://shared/cat.svg",
-		"../../archive/cat.svg": "res://extasset/cat.svg",
-	} {
-		if got := ToAssetPath(reference); got != want {
-			t.Fatalf("archive path %q = %q, want %q", reference, got, want)
-		}
 	}
 }

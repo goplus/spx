@@ -17,23 +17,17 @@
 package asset
 
 import (
-	"io"
+	iofs "io/fs"
+	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/goplus/spx/v4/fs"
 )
 
 type FS struct {
+	fs.NativeResourcePaths
 	base string
-}
-
-func init() {
-	fs.RegisterSchema("", Open)
-}
-
-// Open opens a zipped file object.
-func (p *FS) Open(name string) (io.ReadCloser, error) {
-	f, err := openAsset(p.base + name)
-	return f, err
 }
 
 // Close closes the filesystem object.
@@ -43,4 +37,18 @@ func (f *FS) Close() error {
 
 func (f *FS) GetPath() string {
 	return f.base
+}
+
+func init() {
+	fs.RegisterSchema("", Open)
+}
+
+// localResourcePath translates a logical child path for the host asset reader.
+func localResourcePath(name string) (string, error) {
+	clean := path.Clean(name)
+	local, err := filepath.Localize(clean)
+	if err != nil || fs.IsAbsResourcePath(name) || fs.IsAbsResourcePath(clean) || strings.IndexByte(name, 0) >= 0 {
+		return "", &iofs.PathError{Op: "resolve", Path: name, Err: iofs.ErrInvalid}
+	}
+	return local, nil
 }

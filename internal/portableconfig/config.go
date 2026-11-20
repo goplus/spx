@@ -151,7 +151,7 @@ func makePortableConfigSnapshot(configPath string, data []byte, info os.FileInfo
 		return PortableConfigSnapshot{}, fmt.Errorf("parse project config %q: %w", configPath, err)
 	}
 	if config.ExtAsset != nil {
-		return PortableConfigSnapshot{}, fmt.Errorf("project config %q uses unsupported extasset; move resources inside the project directory", configPath)
+		return PortableConfigSnapshot{}, fmt.Errorf("project config %q uses unsupported extasset; move the referenced files under assets/", configPath)
 	}
 	return PortableConfigSnapshot{
 		ready: true, data: data, digest: sha256.Sum256(data), fileInfo: info,

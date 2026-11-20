@@ -25,6 +25,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
@@ -37,7 +38,7 @@ func validateRelativePath(name, field string) (string, error) {
 	if name == "" || name == "." || !utf8.ValidString(name) || strings.IndexByte(name, 0) >= 0 {
 		return "", fmt.Errorf("%w: %s %q", ErrInvalidPath, field, name)
 	}
-	if strings.ContainsRune(name, '\\') || path.IsAbs(name) || filepath.IsAbs(name) || looksLikeWindowsAbsolutePath(name) {
+	if strings.ContainsRune(name, '\\') || spxfs.IsAbsResourcePath(name) {
 		return "", fmt.Errorf("%w: %s %q must be slash-separated and relative", ErrInvalidPath, field, name)
 	}
 	if path.Clean(name) != name {
@@ -72,13 +73,6 @@ func validatePortableComponent(component string) error {
 		return errors.New("component uses a reserved DOS device name")
 	}
 	return nil
-}
-
-func looksLikeWindowsAbsolutePath(name string) bool {
-	if strings.HasPrefix(name, "//") || strings.HasPrefix(name, `\\`) {
-		return true
-	}
-	return len(name) >= 3 && ((name[0] >= 'a' && name[0] <= 'z') || (name[0] >= 'A' && name[0] <= 'Z')) && name[1] == ':' && (name[2] == '/' || name[2] == '\\')
 }
 
 func validateOutputs(projectDir, output, finalOutput, packRoot string) error {

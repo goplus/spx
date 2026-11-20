@@ -89,19 +89,11 @@ func (f *portableConfigFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-func (f *portableConfigFS) overlayRootEntries(entries []fs.DirEntry) []fs.DirEntry {
-	result := make([]fs.DirEntry, 0, len(entries)+1)
-	for _, entry := range entries {
-		if isPortableConfigName(entry.Name()) {
-			continue
-		}
-		result = append(result, entry)
+func (f *portableConfigFS) Lstat(name string) (fs.FileInfo, error) {
+	if isPortableConfigPath(name) {
+		return fs.Stat(f, name)
 	}
-	if f.present {
-		result = append(result, fs.FileInfoToDirEntry(portableConfigInfo{size: int64(len(f.data))}))
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Name() < result[j].Name() })
-	return result
+	return fs.Lstat(f.base, name)
 }
 
 func (f *portableConfigRoot) ReadDir(n int) ([]fs.DirEntry, error) {
@@ -154,6 +146,21 @@ func (portableConfigInfo) ModTime() time.Time { return time.Time{} }
 func (portableConfigInfo) IsDir() bool { return false }
 
 func (portableConfigInfo) Sys() any { return nil }
+
+func (f *portableConfigFS) overlayRootEntries(entries []fs.DirEntry) []fs.DirEntry {
+	result := make([]fs.DirEntry, 0, len(entries)+1)
+	for _, entry := range entries {
+		if isPortableConfigName(entry.Name()) {
+			continue
+		}
+		result = append(result, entry)
+	}
+	if f.present {
+		result = append(result, fs.FileInfoToDirEntry(portableConfigInfo{size: int64(len(f.data))}))
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name() < result[j].Name() })
+	return result
+}
 
 func newPortableConfigFS(base fs.FS, overlay *portableConfigOverlay) *portableConfigFS {
 	return &portableConfigFS{base: base, present: overlay.present, data: overlay.data}

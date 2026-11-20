@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -1070,6 +1071,44 @@ func TestOpenResourcesDoesNotReadPreviousProjectAssets(t *testing.T) {
 	}
 }
 
+func TestEngineLookupPreservesLiteralBackslashInResourceName(t *testing.T) {
+	const name = `Bell\1`
+	const index = "sounds/" + name + "/index.json"
+	manager := installConfigTestResMgr(t, map[string]string{
+		"res://assets/sounds/Bell/1/index.json": `{"path":"other.wav"}`,
+		"res://assets/sounds/Bell/1/bell.wav":   "other sound",
+	})
+	dir := withEngineAssets(&sourceConfigDir{
+		resourceTestDir: resourceTestDir{path: "res://assets"},
+		files:           map[string]string{index: `{"path":"bell.wav"}`},
+	})
+	sound, err := coreproject.LoadSoundConfig(dir, name)
+	if err != nil || sound.Path != "sounds/"+name+"/bell.wav" {
+		t.Fatalf("sound path = %q, %v", sound.Path, err)
+	}
+	if err := spxfs.VerifyFile(dir, sound.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("VerifyFile(%q) = %v, want missing", sound.Path, err)
+	}
+	if len(manager.reads) != 0 {
+		t.Fatalf("read another sound's config: %v", manager.reads)
+	}
+}
+
+func TestEngineAssetsRejectAbsoluteLookup(t *testing.T) {
+	manager := installConfigTestResMgr(t, map[string]string{"res://assets/a/b": "mounted"})
+	dir := withEngineAssets(&sourceConfigDir{
+		resourceTestDir: resourceTestDir{path: "res://assets"},
+		files:           map[string]string{"/a/b": "source"},
+	})
+	if f, err := dir.Open("/a/b"); err == nil {
+		f.Close()
+		t.Fatal("opened absolute resource /a/b")
+	}
+	if err := spxfs.VerifyFile(dir, "/a/b"); err == nil || len(manager.reads) != 0 {
+		t.Fatalf("absolute resource verification = %v, engine reads = %v", err, manager.reads)
+	}
+}
+
 // Font discovery and file verification.
 
 func TestOpenResourcesPreservesNativeAndWebFontSources(t *testing.T) {
@@ -1081,6 +1120,9 @@ func TestOpenResourcesPreservesNativeAndWebFontSources(t *testing.T) {
 		{"Windows root binary fallback", `\`, "fonts/Local/local.ttf"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			if test.root == `\` && runtime.GOOS != "windows" {
+				t.Skip("Windows root directory")
+			}
 			engineFiles := map[string]string{}
 			base := &sourceConfigDir{
 				resourceTestDir: resourceTestDir{path: test.root},

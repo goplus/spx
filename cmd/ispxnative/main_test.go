@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/interpsession"
 )
@@ -394,8 +395,12 @@ func TestBuildPinnedProjectUsesConfigOverlay(t *testing.T) {
 			dir := t.TempDir()
 			writeNativeTestFile(t, filepath.Join(dir, ".config"), "project config")
 			writeNativeTestFile(t, filepath.Join(dir, "main.spx"), "onStart => {}")
+			wantLiteralPrefix := test.overlay == nil && spxfs.AllowsLiteralResPrefix(spxfs.NativeResourcePaths{})
 			checkConfig := func(fsys fs.FS) {
 				t.Helper()
+				if got := spxfs.AllowsLiteralResPrefix(fsys); got != wantLiteralPrefix {
+					t.Fatalf("native filename support = %v, want %v", got, wantLiteralPrefix)
+				}
 				got, err := fs.ReadFile(fsys, ".config")
 				if test.absent {
 					if !errors.Is(err, fs.ErrNotExist) {

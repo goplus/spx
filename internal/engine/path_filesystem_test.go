@@ -27,65 +27,55 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/platform"
 )
 
-func TestSetAssetDirConfiguresLegacyPathsAndDefaultDirectory(t *testing.T) {
+func TestSetAssetDirSelectsOneRoot(t *testing.T) {
 	resources := setupAssetPathTest(t)
-	t.Chdir(t.TempDir())
-	prefix := defaultAssetPathPrefix
+	project := t.TempDir()
+	session := filepath.Join(project, "project")
+	for _, dir := range []string{session, filepath.Join(project, "assets")} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(session)
+	assetPaths = assetResolver{}
+	SetAssetDir("")
+	want := "../assets/"
 	if platform.IsWeb() {
-		prefix = ""
+		want = "assets/"
 	}
-	resources.files[projectConfigPath(prefix)] = `invalid unused config`
-	for _, dir := range []string{"", "images"} {
-		assetPaths = assetResolver{}
-		SetAssetDir(dir)
-		wantDir := dir
-		if wantDir == "" {
-			wantDir = "assets"
-		}
-		if assetPaths.root != prefix+wantDir+"/" || assetPaths.extAssetDir != "" || assetPaths.compatibilityRoot == "" || assetPaths.explicitFSRoots {
-			t.Fatalf("SetAssetDir(%q) = %+v", dir, assetPaths)
-		}
+	if assetPaths.assetRoot != want {
+		t.Fatalf("default asset root = %q, want %q", assetPaths.assetRoot, want)
 	}
-	if resources.checks != 0 || resources.reads != 0 {
-		t.Fatalf("filesystem setup read unused archive config: checks=%d reads=%d", resources.checks, resources.reads)
+	if err := os.Mkdir("assets", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	SetAssetDir("assets")
+	if assetPaths.assetRoot != "assets/" || assetPaths.projectRoot != "." {
+		t.Fatalf("local asset root = %+v", assetPaths)
 	}
 	if !slices.Equal(resources.modes, []bool{true, true}) {
-		t.Fatalf("resource load modes = %v, want filesystem mode for both calls", resources.modes)
+		t.Fatalf("resource load modes = %v", resources.modes)
 	}
 }
 
 func TestSetAssetDirPreservesExplicitRoots(t *testing.T) {
-	resources := setupAssetPathTest(t)
+	setupAssetPathTest(t)
 	projectDir := t.TempDir()
 	assetDir := filepath.Join(projectDir, "assets")
 	if err := os.Mkdir(assetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, legacy := range []bool{false, true} {
-		if err := os.WriteFile(filepath.Join(projectDir, projectConfigFile), []byte(`{"extasset":"initial"}`), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := setFilesystemRoots(projectDir, assetDir, legacy); err != nil {
-			t.Fatal(err)
-		}
-		configured := assetPaths
-		if err := os.WriteFile(filepath.Join(projectDir, projectConfigFile), []byte(`{"extasset":"updated"}`), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		SetAssetDir("ignored")
-		if assetPaths != configured {
-			t.Fatalf("legacy=%v: SetAssetDir changed explicit roots: %+v, want %+v", legacy, assetPaths, configured)
-		}
+	if err := SetFilesystemRoots(projectDir, assetDir); err != nil {
+		t.Fatal(err)
 	}
-	if resources.checks != 0 || resources.reads != 0 {
-		t.Fatalf("filesystem setup read unused archive config: checks=%d reads=%d", resources.checks, resources.reads)
-	}
-	if !slices.Equal(resources.modes, []bool{true, true}) {
-		t.Fatalf("resource load modes = %v, want filesystem mode for both calls", resources.modes)
+	configured := assetPaths
+	SetAssetDir("ignored")
+	if assetPaths != configured {
+		t.Fatalf("SetAssetDir changed explicit roots: %+v, want %+v", assetPaths, configured)
 	}
 }
 
-func TestLegacyFilesystemRootsResolveAssetsWithoutSymlinkEscape(t *testing.T) {
+func TestGeneratedProjectResolvesAssetsWithoutSymlinkEscape(t *testing.T) {
 	projectDir := t.TempDir()
 	assetDir := filepath.Join(projectDir, "assets")
 	sessionDir := filepath.Join(projectDir, "project")
@@ -106,12 +96,31 @@ func TestLegacyFilesystemRootsResolveAssetsWithoutSymlinkEscape(t *testing.T) {
 	if err := os.Symlink(externalDir, filepath.Join(assetDir, "linked")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	t.Chdir(sessionDir)
-	resolver := newLegacyFilesystemAssetResolver(defaultAssetPathPrefix, "assets", true)
-	if got, want := resolver.filesystemPath("inside.png"), filepath.Join("..", "assets", "inside.png"); got != want {
-		t.Fatalf("resolver.filesystemPath() = %q, want %q", got, want)
+	for link, target := range map[string]string{
+		"alias.png": "inside.png", "parent.png": "../project-file.png",
+	} {
+		if err := os.Symlink(target, filepath.Join(assetDir, link)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if got := resolver.filesystemPath("linked/outside.png"); got != "" {
-		t.Fatalf("resolver.filesystemPath() followed legacy symlink escape: %q", got)
+	if err := os.WriteFile(filepath.Join(projectDir, "project-file.png"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sessionDir)
+	resolver := nativeAssetResolver("..", "../assets")
+	for name, want := range map[string]string{
+		"inside.png": "../assets/inside.png", "alias.png": "../assets/alias.png",
+		"parent.png": "", "linked/outside.png": "", "res://assets/alias.png": "",
+	} {
+		if got := resolver.filesystemPath(name); got != want {
+			t.Errorf("filesystemPath(%q) = %q, want %q", name, got, want)
+		}
+	}
+	explicit, err := newFilesystemAssetResolver(projectDir, assetDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := explicit.filesystemPath("alias.png"); got != "" {
+		t.Errorf("explicit root accepted final symlink: %q", got)
 	}
 }
