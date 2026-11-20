@@ -202,6 +202,20 @@ func TestInterpreterBuildRunAndRebuild(t *testing.T) {
 	}
 }
 
+func TestProjectTutorials(t *testing.T) {
+	for _, name := range []string{"01-Weather", "02-Dragon", "03-Clone"} {
+		t.Run(name, func(t *testing.T) {
+			isolateInterpreter(t)
+			if err := Init(nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := BuildFS(os.DirFS("../../tutorial/" + name)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestReadmeTutorialExamplesMatchSource(t *testing.T) {
 	readme, err := os.ReadFile("../../README.md")
 	if err != nil {
