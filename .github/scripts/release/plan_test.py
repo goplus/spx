@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -35,8 +36,7 @@ class ReleasePlanTest(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output),
             })
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(output.read_text(), "existing=output\nrun_web=true\nrun_macos=false\n"
-                             "run_windows=false\nrun_linux=true\n")
+            self.assertEqual(output.read_text(), 'existing=output\npackage_platforms=["web", "linux"]\n')
             result = run_plan("dev-target", env={
                 "PATH": "", "CURRENT_REPOSITORY": "goplus/spx",
                 "CURRENT_REF": "refs/heads/dev", "RELEASE_TAG_INPUT": "",
@@ -65,8 +65,8 @@ class ReleasePlanTest(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, ok, result.stderr)
                 expected = "existing=output\n"
                 if ok:
-                    expected += "".join(f"run_{platform}={str(operation != 'publish-runtime').lower()}\n"
-                                        for platform in ("web", "macos", "windows", "linux"))
+                    platforms = [] if operation == "publish-runtime" else ["web", "macos", "windows", "linux"]
+                    expected += f"package_platforms={json.dumps(platforms)}\n"
                 self.assertEqual(output.read_text(), expected)
 
     def test_release_and_development_runtime_policies(self):
@@ -131,10 +131,7 @@ class ReleasePlanTest(unittest.TestCase):
                     self.assertFalse(output.exists())
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(output.read_text().splitlines(), [
-                        f"run_{platform}={'true' if platform in expected else 'false'}"
-                        for platform in ("web", "macos", "windows", "linux")
-                    ])
+                    self.assertEqual(output.read_text(), f"package_platforms={json.dumps(expected)}\n")
 
     def test_development_requires_canonical_repository_branch_and_no_tag(self):
         cases = (

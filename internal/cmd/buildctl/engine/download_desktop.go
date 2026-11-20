@@ -21,61 +21,63 @@ import (
 	"path/filepath"
 )
 
-func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
-	platformName := env.platform
-	postfix := ""
-	if env.platform == "windows" {
-		postfix = ".exe"
-	}
-
-	if editor {
-		zipName := fmt.Sprintf("editor-%s-%s.zip", env.platform, env.arch)
-		binaryName := fmt.Sprintf("godot.%s.editor.%s%s", platformName, env.arch, postfix)
-		finalBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspx%s%s", env.version, postfix))
-		if !shouldDownloadPreparedAsset(finalBinary) {
-			return nil
-		}
-		return downloadBinaryFromZip(env, zipName, binaryName, finalBinary)
-	}
-
-	zipName := fmt.Sprintf("%s-%s.zip", env.platform, env.arch)
-	releaseBinaryName := fmt.Sprintf("godot.%s.template_release.%s%s", platformName, env.arch, postfix)
-	templateBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrt%s%s", env.version, postfix))
-
+func downloadDesktopAssets(env engineDownloadEnv, editorOnly bool) error {
+	binaryPlatform, ext := env.platform, ""
 	switch env.platform {
+	case "linux":
+		binaryPlatform = "linuxbsd"
 	case "windows":
-		debugBinary := filepath.Join(env.goBinDir, fmt.Sprintf("gdspxrtdbg%s.exe", env.version))
-		if shouldDownloadPreparedAsset(templateBinary) || shouldDownloadPreparedAsset(debugBinary) {
-			if err := downloadBinariesFromZip(env, zipName, []binaryInstall{
-				{releaseBinaryName, templateBinary},
-				{fmt.Sprintf("godot.%s.template_debug.%s%s", platformName, env.arch, postfix), debugBinary},
-			}); err != nil {
-				return err
-			}
-		}
-		for _, name := range []string{"windows_debug_" + env.arch + ".exe", "windows_debug_" + env.arch + "_console.exe"} {
-			if err := linkOrCopyFile(debugBinary, filepath.Join(env.templateDir, name)); err != nil {
-				return err
-			}
-		}
-		for _, name := range []string{"windows_release_" + env.arch + ".exe", "windows_release_" + env.arch + "_console.exe"} {
-			if err := linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, name)); err != nil {
-				return err
-			}
-		}
-	case "macos":
-		if shouldDownloadPreparedAsset(templateBinary) {
-			if err := downloadBinaryFromZip(env, zipName, releaseBinaryName, templateBinary); err != nil {
-				return err
-			}
-		}
-		macosZip := filepath.Join(env.templateDir, "macos.zip")
-		if shouldDownloadPreparedAsset(macosZip) {
-			if err := fetchEngineAsset(env, "macos.zip", macosZip); err != nil {
-				return err
-			}
+		ext = ".exe"
+	}
+	binary := func(target, prefix string) binaryInstall {
+		return binaryInstall{
+			assetName: fmt.Sprintf("godot.%s.%s.%s%s", binaryPlatform, target, env.arch, ext),
+			dst:       filepath.Join(env.goBinDir, prefix+env.version+ext),
 		}
 	}
 
-	return nil
+	archive := env.platform + "-" + env.arch + ".zip"
+	if editorOnly {
+		editor := binary("editor", "gdspx")
+		if shouldDownloadPreparedAsset(editor.dst) {
+			return downloadBinariesFromZip(env, "editor-"+archive, editor)
+		}
+		return nil
+	}
+
+	release := binary("template_release", "gdspxrt")
+	if env.platform == "macos" {
+		if shouldDownloadPreparedAsset(release.dst) {
+			if err := downloadBinariesFromZip(env, archive, release); err != nil {
+				return err
+			}
+		}
+		template := filepath.Join(env.templateDir, "macos.zip")
+		if shouldDownloadPreparedAsset(template) {
+			return fetchEngineAsset(env, "macos.zip", template)
+		}
+		return nil
+	}
+
+	debug := binary("template_debug", "gdspxrtdbg")
+	if shouldDownloadPreparedAsset(release.dst) || shouldDownloadPreparedAsset(debug.dst) {
+		if err := downloadBinariesFromZip(env, archive, release, debug); err != nil {
+			return err
+		}
+	}
+	if err := linkDesktopTemplate(env, "debug", debug.dst); err != nil {
+		return err
+	}
+	return linkDesktopTemplate(env, "release", release.dst)
+}
+
+func linkDesktopTemplate(env engineDownloadEnv, target, binary string) error {
+	if env.platform == "linux" {
+		return linkOrCopyFile(binary, filepath.Join(env.templateDir, "linux_"+target+"."+env.arch))
+	}
+	stem := filepath.Join(env.templateDir, "windows_"+target+"_"+env.arch)
+	if err := linkOrCopyFile(binary, stem+".exe"); err != nil {
+		return err
+	}
+	return linkOrCopyFile(binary, stem+"_console.exe")
 }

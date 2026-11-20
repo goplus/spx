@@ -69,7 +69,7 @@ func runAssemble(args []string) error {
 	if len(descriptors) != len(targets) {
 		return fmt.Errorf("descriptor count = %d, want %d", len(descriptors), len(targets))
 	}
-	lock, err := loadDriverLock(lockPath)
+	lock, err := release.LoadRuntimeLock(lockPath)
 	if err != nil {
 		return err
 	}
@@ -123,18 +123,6 @@ func runAssemble(args []string) error {
 		return fmt.Errorf("write driver manifest: %w", err)
 	}
 	return nil
-}
-
-func loadDriverLock(path string) (release.RuntimeLock, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return release.RuntimeLock{}, fmt.Errorf("read runtime lock: %w", err)
-	}
-	lock, err := release.ParseRuntimeLock(data)
-	if err != nil {
-		return release.RuntimeLock{}, err
-	}
-	return lock, nil
 }
 
 func compareDriverBundles(a, b driverbundle.Bundle) int {

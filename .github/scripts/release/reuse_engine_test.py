@@ -44,11 +44,12 @@ class ReuseEngineTest(unittest.TestCase):
         self.assertTrue(check)
         self.assertFalse(Path("reused-engine").exists())
         self.assertEqual(command[:3], ("go", "run", "./.github/cmd/runtime-manifest"))
-        self.assertIn("--verify-engine-manifest", command)
+        manifest = Path(command[command.index("--verify-engine-manifest") + 1])
+        self.assertEqual(json.loads(manifest.read_text()), self.metadata)
         self.assertEqual(command[-2:], ("--revision", "HEAD"))
         source = Path(command[command.index("--asset-directory") + 1])
         self.assertEqual({path.name for path in source.iterdir()},
-                         {"runtime-manifest.json", "editor-linux-x86_64.zip", "linux-x86_64.zip"})
+                         {"editor-linux-x86_64.zip", "linux-x86_64.zip"})
 
     def test_verified_engines_and_original_manifest_are_staged_without_pack(self):
         reuse_engine.reuse_engine(self.env)
@@ -106,9 +107,9 @@ class ReuseEngineTest(unittest.TestCase):
 
     def test_existing_destination_is_not_overwritten(self):
         Path("reused-engine").mkdir()
-        self.verify.side_effect = None
         with self.assertRaises(FileExistsError):
             reuse_engine.reuse_engine(self.env)
+        self.download.assert_not_called()
 
 
 if __name__ == "__main__":

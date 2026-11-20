@@ -14,6 +14,8 @@ runs:
   steps:
     - name: Set up toolchain
       uses: ./.github/actions/setup-toolchain
+      with:
+        xgo: 'true'
 
     - name: Build local buildctl
       id: buildctl

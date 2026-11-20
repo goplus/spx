@@ -21,10 +21,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 )
+
+// The caller's jobs and transport may change without recompiling an engine,
+// but its pinned reusable build implementation can change effective SCons args.
+var runtimeEngineWorkflowPattern = regexp.MustCompile(`(?m)^\s+uses:\s+([^\s]+/\.github/workflows/release_builds\.yml@[0-9a-f]{40})\s*$`)
 
 // RuntimeEngineSourceSHA256 identifies compiled engine inputs independently of
 // runtime version and pack resources. Godot's pinned commit also pins its build
@@ -36,23 +39,27 @@ func RuntimeEngineSourceSHA256(repoRoot, revision string, lock RuntimeLock) (str
 	if err := lock.Validate(); err != nil {
 		return "", err
 	}
-	tree, err := trackedTree(repoRoot, revision, "runtime engine source")
+	tree, err := readGitTree(repoRoot, revision, "runtime engine source")
 	if err != nil {
 		return "", err
 	}
-	module, err := selectedTreeSHA256(tree, "runtime engine module", func(name string) bool {
+	return tree.engineSourceSHA256(lock)
+}
+
+func (tree gitTree) engineSourceSHA256(lock RuntimeLock) (string, error) {
+	module, err := tree.digest("runtime engine module", func(name string) bool {
 		return strings.HasPrefix(name, lock.Module.Path+"/")
-	})
+	}, nil)
 	if err != nil {
 		return "", err
 	}
-	contract, err := selectedTreeSHA256(tree, "runtime engine contract", func(name string) bool {
+	contract, err := tree.digest("runtime engine contract", func(name string) bool {
 		return name == ".github/scripts/runtime/build_contract.py"
-	})
+	}, nil)
 	if err != nil {
 		return "", err
 	}
-	workflow, err := runtimeEngineWorkflow(repoRoot, revision)
+	workflow, err := tree.engineWorkflow()
 	if err != nil {
 		return "", err
 	}
@@ -76,12 +83,8 @@ func RuntimeEngineSourceSHA256(repoRoot, revision string, lock RuntimeLock) (str
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// The caller's jobs and transport may change without recompiling an engine,
-// but its pinned reusable build implementation can change effective SCons args.
-var runtimeEngineWorkflowPattern = regexp.MustCompile(`(?m)^\s+uses:\s+([^\s]+/\.github/workflows/release_builds\.yml@[0-9a-f]{40})\s*$`)
-
-func runtimeEngineWorkflow(repoRoot, revision string) (string, error) {
-	output, err := exec.Command("git", "-C", repoRoot, "cat-file", "blob", revision+":.github/workflows/build_release.yml").Output()
+func (tree gitTree) engineWorkflow() (string, error) {
+	output, err := tree.readBlob(".github/workflows/build_release.yml")
 	if err != nil {
 		return "", fmt.Errorf("release: read engine build workflow: %w", err)
 	}

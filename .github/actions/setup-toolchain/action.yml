@@ -1,9 +1,9 @@
 name: Set up toolchain
-description: Install locked Go, with XGo enabled by default.
+description: Install locked Go and optionally XGo.
 inputs:
   xgo:
     description: Install XGo in addition to Go
-    default: 'true'
+    default: 'false'
 runs:
   using: "composite"
   steps:
@@ -26,13 +26,13 @@ runs:
           --lock internal/release/runtime.lock.json --github-output "$GITHUB_OUTPUT"
 
     - name: Set up Go only
-      if: inputs.xgo == 'false'
+      if: inputs.xgo != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: ${{ steps.toolchain.outputs.go-version }}
 
     - name: Set up Go and XGo
-      if: inputs.xgo != 'false'
+      if: inputs.xgo == 'true'
       uses: goplus/setup-xgo@v1
       with:
         go-version: ${{ steps.toolchain.outputs.go-version }}

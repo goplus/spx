@@ -385,6 +385,36 @@ func TestRuntimeManifestRejectsLockMetadataDrift(t *testing.T) {
 	}
 }
 
+func TestRuntimeProvenanceRejectsInvalidLock(t *testing.T) {
+	if _, err := RuntimeProvenanceAt(t.TempDir(), "HEAD", RuntimeLock{}); err == nil || !strings.Contains(err.Error(), "runtime lock schema") {
+		t.Fatalf("invalid lock error = %v", err)
+	}
+}
+
+func TestRuntimeSourceRequiresReadableTree(t *testing.T) {
+	repo := newRuntimeEngineFixture(t)
+	lock, provenance, inputs, _ := runtimeManifestFixture(t)
+	provenance.ModuleTree = repo.git(t, "rev-parse", "HEAD:"+lock.Module.Path)
+	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// HEAD and its module still resolve when a sibling tree object is missing.
+	oid := repo.git(t, "rev-parse", "HEAD:.github")
+	object := filepath.Join(repo.root, ".git", "objects", oid[:2], oid[2:])
+	if err := os.Rename(object, object+".missing"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RuntimeProvenanceAt(repo.root, "HEAD", lock); err == nil || !strings.Contains(err.Error(), "list runtime pack source tree") {
+		t.Fatalf("provenance with missing tree = %v", err)
+	}
+	reason, err := manifest.ReuseIncompatibility(repo.root, "HEAD", lock)
+	if reason != "" || err == nil || !strings.Contains(err.Error(), "list runtime source tree") {
+		t.Fatalf("reuse with missing tree = %q, %v", reason, err)
+	}
+}
+
 func TestRuntimeManifestInvalidStructurePropagates(t *testing.T) {
 	m := RuntimeManifest{}
 	for _, err := range []error{

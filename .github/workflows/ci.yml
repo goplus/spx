@@ -41,8 +41,6 @@ jobs:
 
       - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'false'
 
       - name: Resolve runtime release
         id: runtime

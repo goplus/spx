@@ -9,80 +9,63 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/release"
 )
 
-type assetManifest struct {
+type embeddedAssetManifest struct {
 	CacheKey string   `json:"cache_key"`
 	Names    []string `json:"names"`
 }
 
-type assetSpecs []string
-
 func main() {
 	// Keep the historical positional mode used by cmd/spx/install.sh. CI uses
 	// the flag mode below to emit the reproducible release manifest.
+	var err error
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
-		if err := writeEmbeddedAssetManifest(os.Args[1:], os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
+		err = writeEmbeddedAssetManifest(os.Args[1:], os.Stdout)
+	} else {
+		err = runReleaseManifest(os.Args[1:])
 	}
-	if err := runReleaseManifest(os.Args[1:]); err != nil {
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-func (s *assetSpecs) String() string {
-	return strings.Join(*s, ",")
-}
-
-func (s *assetSpecs) Set(value string) error {
-	if _, _, ok := strings.Cut(value, "="); !ok {
-		return fmt.Errorf("invalid asset spec %q: want name=path", value)
-	}
-	*s = append(*s, value)
-	return nil
 }
 
 func runReleaseManifest(args []string) error {
 	fs := flag.NewFlagSet("runtime-manifest", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
-		engineSourceHash      string
-		lockPath              string
-		outputPath            string
-		checksumsPath         string
-		revision              string
-		spxCommit             string
-		moduleTree            string
-		runtimePackSourceHash string
-		buildRecipeHash       string
-		verifyEngineManifest  string
-		engineManifest        string
-		verifyManifest        string
-		assetDirectory        string
-		specs                 assetSpecs
+		lockPath, outputPath, checksumsPath  string
+		revision, assetDir                   string
+		verifyEngineManifest, verifyManifest string
+		sourceManifest                       string
+		provenance                           release.RuntimeProvenance
+		assets                               []release.RuntimeAssetInput
 	)
 	fs.StringVar(&lockPath, "lock", "", "runtime lock JSON (defaults to the embedded lock)")
 	fs.StringVar(&outputPath, "output", "-", "manifest output path, or - for stdout")
 	fs.StringVar(&checksumsPath, "checksums", "", "optional SHA256SUMS output path")
 	fs.StringVar(&revision, "revision", "", "derive all provenance from this Git revision instead of explicit provenance flags")
-	fs.StringVar(&spxCommit, "spx-commit", "", "full lowercase SPX commit SHA")
-	fs.StringVar(&moduleTree, "module-tree", "", "full lowercase SPX module tree SHA")
-	fs.StringVar(&runtimePackSourceHash, "runtime-pack-source-sha256", "", "SHA-256 of the tracked SPX runtime pack source inputs")
-	fs.StringVar(&engineSourceHash, "engine-source-sha256", "", "SHA-256 of the independent engine inputs")
-	fs.StringVar(&buildRecipeHash, "build-recipe-sha256", "", "SHA-256 of the tracked runtime build recipe")
+	fs.StringVar(&provenance.SPXCommit, "spx-commit", "", "full lowercase SPX commit SHA")
+	fs.StringVar(&provenance.ModuleTree, "module-tree", "", "full lowercase SPX module tree SHA")
+	fs.StringVar(&provenance.RuntimePackSourceSHA256, "runtime-pack-source-sha256", "", "SHA-256 of the tracked SPX runtime pack source inputs")
+	fs.StringVar(&provenance.EngineSourceSHA256, "engine-source-sha256", "", "SHA-256 of the independent engine inputs")
+	fs.StringVar(&provenance.BuildRecipeSHA256, "build-recipe-sha256", "", "SHA-256 of the tracked runtime build recipe")
 	fs.StringVar(&verifyEngineManifest, "verify-engine-manifest", "", "verify an engine reuse source against its saved lock and current inputs")
-	fs.StringVar(&engineManifest, "engine-manifest", "", "verified source manifest for copied engine assets")
+	fs.StringVar(&sourceManifest, "engine-manifest", "", "verified source manifest for copied engine assets")
 	fs.StringVar(&verifyManifest, "verify-manifest", "", "verify an existing release manifest instead of generating one")
-	fs.StringVar(&assetDirectory, "asset-directory", "", "optionally verify manifest assets below this directory")
-	fs.Var(&specs, "asset", "release asset in name=path form; repeat for every required asset")
+	fs.StringVar(&assetDir, "asset-directory", "", "optionally verify manifest assets below this directory")
+	fs.Func("asset", "release asset in name=path form; repeat for every required asset", func(spec string) error {
+		asset, err := parseAsset(spec)
+		if err != nil {
+			return err
+		}
+		assets = append(assets, asset)
+		return nil
+	})
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "usage: runtime-manifest [flags] --asset name=path ...")
 		fs.PrintDefaults()
@@ -94,54 +77,27 @@ func runReleaseManifest(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	set := make(map[string]bool)
-	fs.Visit(func(f *flag.Flag) {
-		set[f.Name] = true
-	})
-	explicitProvenance := set["spx-commit"] || set["module-tree"] || set["runtime-pack-source-sha256"] || set["build-recipe-sha256"] || set["engine-source-sha256"]
-	if set["revision"] {
-		if explicitProvenance || set["verify-manifest"] {
-			return errors.New("--revision cannot be combined with explicit provenance flags or --verify-manifest")
-		}
-		if strings.TrimSpace(revision) == "" {
-			return errors.New("--revision must not be empty")
-		}
-	}
-	for name, value := range map[string]string{"verify-manifest": verifyManifest, "verify-engine-manifest": verifyEngineManifest, "engine-manifest": engineManifest} {
-		if set[name] && strings.TrimSpace(value) == "" {
-			return fmt.Errorf("--%s must not be empty", name)
-		}
-	}
-	if set["verify-manifest"] || set["verify-engine-manifest"] {
-		if explicitProvenance || set["engine-manifest"] || len(specs) != 0 || set["checksums"] || set["output"] {
-			return errors.New("generation flags cannot be combined with manifest verification")
-		}
-	}
-	if set["verify-engine-manifest"] && (!set["revision"] || set["verify-manifest"]) {
-		return errors.New("--verify-engine-manifest requires --revision and cannot be combined with --verify-manifest")
-	}
-	if set["engine-manifest"] && !set["revision"] {
-		return errors.New("--engine-manifest requires --revision")
+	if err := validateManifestFlags(fs); err != nil {
+		return err
 	}
 	lock := release.DefaultRuntimeLock()
 	if lockPath != "" {
-		data, err := os.ReadFile(lockPath)
-		if err != nil {
-			return fmt.Errorf("read runtime lock: %w", err)
-		}
-		parsed, err := release.ParseRuntimeLock(data)
+		var err error
+		lock, err = release.LoadRuntimeLock(lockPath)
 		if err != nil {
 			return err
 		}
-		lock = parsed
 	}
 	if verifyEngineManifest != "" {
-		source, err := loadEngineSource(verifyEngineManifest, lock, revision)
+		source, err := release.LoadRuntimeManifest(verifyEngineManifest)
 		if err != nil {
 			return err
 		}
-		if assetDirectory != "" {
-			return source.VerifyEngineFiles(assetDirectory)
+		if err := release.ValidateEngineReuse(source, lock, ".", revision); err != nil {
+			return err
+		}
+		if assetDir != "" {
+			return source.VerifyEngineFiles(assetDir)
 		}
 		return nil
 	}
@@ -154,50 +110,36 @@ func runReleaseManifest(args []string) error {
 		if err != nil {
 			return err
 		}
-		if assetDirectory != "" {
-			return manifest.VerifyFiles(assetDirectory)
+		if assetDir != "" {
+			return manifest.VerifyFiles(assetDir)
 		}
 		return nil
 	}
-	if assetDirectory != "" {
+	if assetDir != "" {
 		return errors.New("--asset-directory requires --verify-manifest or --verify-engine-manifest")
 	}
-	if len(specs) == 0 {
+	if len(assets) == 0 {
 		fs.Usage()
 		return errors.New("at least one --asset is required")
 	}
 
-	inputs := make([]release.RuntimeAssetInput, 0, len(specs))
-	for _, spec := range specs {
-		name, path, _ := strings.Cut(spec, "=")
-		if name == "" || path == "" {
-			return fmt.Errorf("invalid asset spec %q: want non-empty name=path", spec)
-		}
-		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: path})
-	}
-	provenance := release.RuntimeProvenance{
-		EngineSourceSHA256:      engineSourceHash,
-		SPXCommit:               spxCommit,
-		ModuleTree:              moduleTree,
-		RuntimePackSourceSHA256: runtimePackSourceHash,
-		BuildRecipeSHA256:       buildRecipeHash,
-	}
-	if set["revision"] {
+	if revision != "" {
 		var err error
-		provenance, err = revisionProvenance(revision, lock)
+		provenance, err = release.RuntimeProvenanceAt(".", revision, lock)
 		if err != nil {
 			return err
 		}
+	} else {
+		provenance.GodotCommit = lock.Godot.Commit
+		provenance.Toolchain = lock.Toolchain
 	}
-	provenance.GodotCommit = lock.Godot.Commit
-	provenance.Toolchain = lock.Toolchain
-	manifest, err := release.GenerateRuntimeManifest(lock, provenance, inputs)
+	manifest, err := release.GenerateRuntimeManifest(lock, provenance, assets)
 	if err != nil {
 		return err
 	}
 
-	if engineManifest != "" {
-		source, err := loadEngineSource(engineManifest, lock, provenance.SPXCommit)
+	if sourceManifest != "" {
+		source, err := release.LoadRuntimeManifest(sourceManifest)
 		if err != nil {
 			return err
 		}
@@ -218,55 +160,9 @@ func runReleaseManifest(args []string) error {
 		return err
 	}
 	if checksumsPath != "" {
-		if err := release.WriteSHA256SUMS(checksumsPath, manifest); err != nil {
-			return err
-		}
+		return release.WriteSHA256SUMS(checksumsPath, manifest)
 	}
 	return nil
-}
-
-func loadEngineSource(path string, lock release.RuntimeLock, revision string) (release.RuntimeManifest, error) {
-	source, err := release.LoadRuntimeManifest(path)
-	if err != nil {
-		return source, err
-	}
-	return source, release.ValidateEngineReuse(source, lock, ".", revision)
-}
-
-func revisionProvenance(revision string, lock release.RuntimeLock) (release.RuntimeProvenance, error) {
-	var provenance release.RuntimeProvenance
-	commit, err := gitObject(revision + "^{commit}")
-	if err != nil {
-		return provenance, err
-	}
-	// Resolve a movable ref once, then use the same immutable commit for every
-	// provenance field. Local generated files never participate in these hashes.
-	provenance.SPXCommit = commit
-	provenance.ModuleTree, err = gitObject(commit + ":" + lock.Module.Path)
-	if err != nil {
-		return provenance, err
-	}
-	provenance.RuntimePackSourceSHA256, err = release.RuntimePackSourceSHA256(".", commit)
-	if err != nil {
-		return provenance, err
-	}
-	provenance.BuildRecipeSHA256, err = release.RuntimeBuildRecipeSHA256(".", commit)
-	if err != nil {
-		return provenance, err
-	}
-	provenance.EngineSourceSHA256, err = release.RuntimeEngineSourceSHA256(".", commit, lock)
-	return provenance, err
-}
-
-func gitObject(revision string) (string, error) {
-	output, err := exec.Command("git", "rev-parse", "--verify", "--end-of-options", revision).Output()
-	if err != nil {
-		if exit, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("resolve Git object %q: %w: %s", revision, err, strings.TrimSpace(string(exit.Stderr)))
-		}
-		return "", fmt.Errorf("resolve Git object %q: %w", revision, err)
-	}
-	return strings.TrimSpace(string(output)), nil
 }
 
 func writeEmbeddedAssetManifest(args []string, output io.Writer) error {
@@ -274,22 +170,58 @@ func writeEmbeddedAssetManifest(args []string, output io.Writer) error {
 		return errors.New("usage: runtime-manifest name=path [name=path ...]")
 	}
 	hasher := sha256.New()
-	manifest := assetManifest{Names: make([]string, 0, len(args))}
-	for _, arg := range args {
-		name, path, ok := strings.Cut(arg, "=")
-		if !ok || name == "" || path == "" {
-			return fmt.Errorf("invalid asset spec: %q", arg)
+	manifest := embeddedAssetManifest{Names: make([]string, 0, len(args))}
+	for _, spec := range args {
+		asset, err := parseAsset(spec)
+		if err != nil {
+			return err
 		}
-		if err := hashEmbeddedAsset(hasher, name, path); err != nil {
-			return fmt.Errorf("hash asset %s: %w", name, err)
+		if err := hashEmbeddedAsset(hasher, asset.Name, asset.Path); err != nil {
+			return fmt.Errorf("hash asset %s: %w", asset.Name, err)
 		}
-		manifest.Names = append(manifest.Names, name)
+		manifest.Names = append(manifest.Names, asset.Name)
 	}
 	manifest.CacheKey = hex.EncodeToString(hasher.Sum(nil))[:16]
 	encoder := json.NewEncoder(output)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(manifest); err != nil {
 		return fmt.Errorf("encode manifest: %w", err)
+	}
+	return nil
+}
+
+func parseAsset(spec string) (release.RuntimeAssetInput, error) {
+	name, path, ok := strings.Cut(spec, "=")
+	if !ok || name == "" || path == "" {
+		return release.RuntimeAssetInput{}, fmt.Errorf("invalid asset %q: want non-empty name=path", spec)
+	}
+	return release.RuntimeAssetInput{Name: name, Path: path}, nil
+}
+
+func validateManifestFlags(fs *flag.FlagSet) error {
+	set := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		set[f.Name] = true
+	})
+	explicitProvenance := set["spx-commit"] || set["module-tree"] || set["runtime-pack-source-sha256"] || set["build-recipe-sha256"] || set["engine-source-sha256"]
+	if set["revision"] && (explicitProvenance || set["verify-manifest"]) {
+		return errors.New("--revision cannot be combined with explicit provenance flags or --verify-manifest")
+	}
+	for _, name := range []string{"revision", "verify-manifest", "verify-engine-manifest", "engine-manifest"} {
+		if set[name] && strings.TrimSpace(fs.Lookup(name).Value.String()) == "" {
+			return fmt.Errorf("--%s must not be empty", name)
+		}
+	}
+	if set["verify-manifest"] || set["verify-engine-manifest"] {
+		if explicitProvenance || set["engine-manifest"] || set["asset"] || set["checksums"] || set["output"] {
+			return errors.New("generation flags cannot be combined with manifest verification")
+		}
+	}
+	if set["verify-engine-manifest"] && (!set["revision"] || set["verify-manifest"]) {
+		return errors.New("--verify-engine-manifest requires --revision and cannot be combined with --verify-manifest")
+	}
+	if set["engine-manifest"] && !set["revision"] {
+		return errors.New("--engine-manifest requires --revision")
 	}
 	return nil
 }

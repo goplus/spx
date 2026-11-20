@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path"
 	"regexp"
 	"slices"
@@ -109,6 +110,15 @@ func RuntimeLockForVersion(runtimeVersion string) (RuntimeLock, error) {
 		return RuntimeLock{}, fmt.Errorf("release: no runtime lock snapshot for version %q", runtimeVersion)
 	}
 	return cloneRuntimeLock(lock), nil
+}
+
+// LoadRuntimeLock reads and validates the lock at path.
+func LoadRuntimeLock(path string) (RuntimeLock, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return RuntimeLock{}, fmt.Errorf("read runtime lock: %w", err)
+	}
+	return ParseRuntimeLock(data)
 }
 
 // ParseRuntimeLock decodes and validates a runtime lock. Unknown JSON fields

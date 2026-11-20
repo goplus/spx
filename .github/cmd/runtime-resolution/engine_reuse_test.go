@@ -56,9 +56,9 @@ func TestResolveEngineReuseRejectsUnavailablePublishedSource(t *testing.T) {
 		status                     int
 		err                        error
 	}{
-		{name: "missing release", endpoint: "release", status: http.StatusNotFound, want: "engine source release HTTP status 404"},
-		{name: "draft release", endpoint: "release", body: `{"tag_name":"$TAG","draft":true}`, want: "requested published release"},
-		{name: "wrong release tag", endpoint: "release", body: `{"tag_name":"runtime-v99.1.0"}`, want: "requested published release"},
+		{name: "missing release", endpoint: "release", status: http.StatusNotFound, want: "must be a published release"},
+		{name: "draft release", endpoint: "release", body: `{"tag_name":"$TAG","draft":true}`, want: "must be a published release"},
+		{name: "wrong release tag", endpoint: "release", body: `{"tag_name":"runtime-v99.1.0"}`, want: "GitHub returned tag"},
 		{name: "missing source assets", endpoint: "release", body: `{"tag_name":"$TAG","assets":[]}`, want: "release assets"},
 		{name: "malformed metadata", endpoint: "release", body: "{", want: "unexpected end of JSON input"},
 		{name: "release transfer", endpoint: "release", err: failure, want: failure.Error()},
@@ -176,7 +176,7 @@ func writeResolutionLock(t *testing.T, path string, lock release.RuntimeLock) {
 
 func serveEngineReuse(t *testing.T, fixture *runtimeResolutionFixture) {
 	t.Helper()
-	target, err := loadRuntimeResolutionLock(fixture.config.LockPath)
+	target, err := release.LoadRuntimeLock(fixture.config.LockPath)
 	if err != nil {
 		t.Fatal(err)
 	}

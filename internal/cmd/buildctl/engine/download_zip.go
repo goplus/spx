@@ -31,11 +31,7 @@ type binaryInstall struct {
 	dst       string
 }
 
-func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string) error {
-	return downloadBinariesFromZip(env, zipName, []binaryInstall{{assetName, dst}})
-}
-
-func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs []binaryInstall) error {
+func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs ...binaryInstall) error {
 	zipPath := filepath.Join(env.cacheDir, zipName)
 	if err := fetchEngineAsset(env, zipName, zipPath); err != nil {
 		return err

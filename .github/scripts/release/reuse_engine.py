@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,7 +16,10 @@ def reuse_engine(env):
     tag = env["ENGINE_TAG"]
     repository = env["REPOSITORY"]
     manifest_name = env["RUNTIME_MANIFEST"]
-    with tempfile.TemporaryDirectory(prefix="spx-engine-source-") as temporary:
+    destination = Path("reused-engine")
+    if destination.exists():
+        raise FileExistsError(f"{destination} already exists")
+    with tempfile.TemporaryDirectory(prefix="spx-engine-source-", dir=".") as temporary:
         source = Path(temporary)
         download_release(tag, repository, source, manifest_name)
         manifest = source / manifest_name
@@ -33,16 +35,14 @@ def reuse_engine(env):
             for name in engine_names
         ):
             raise ValueError("Engine source manifest must contain literal engine ZIP names")
-        download_release(tag, repository, source, *engine_names)
+        engines = source / "engines"
+        engines.mkdir()
+        download_release(tag, repository, engines, *engine_names)
         subprocess.run(("go", "run", "./.github/cmd/runtime-manifest",
                         "--verify-engine-manifest", str(manifest),
-                        "--asset-directory", str(source), "--revision", "HEAD"), check=True)
-
-        destination = Path("reused-engine")
-        destination.mkdir()
-        for name in engine_names:
-            shutil.copyfile(source / name, destination / name)
-        shutil.copyfile(manifest, destination / "engine-source-manifest.json")
+                        "--asset-directory", str(engines), "--revision", "HEAD"), check=True)
+        manifest.rename(engines / "engine-source-manifest.json")
+        engines.rename(destination)
 
 
 if __name__ == "__main__":

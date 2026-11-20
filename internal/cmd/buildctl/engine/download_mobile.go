@@ -19,11 +19,11 @@ package engine
 import "path/filepath"
 
 func downloadAndroidAssets(env engineDownloadEnv) error {
-	return downloadBinariesFromZip(env, "android.zip", []binaryInstall{
-		{"android_debug.apk", filepath.Join(env.templateDir, "android_debug.apk")},
-		{"android_release.apk", filepath.Join(env.templateDir, "android_release.apk")},
-		{"android_source.zip", filepath.Join(env.templateDir, "android_source.zip")},
-	})
+	return downloadBinariesFromZip(env, "android.zip",
+		binaryInstall{"android_debug.apk", filepath.Join(env.templateDir, "android_debug.apk")},
+		binaryInstall{"android_release.apk", filepath.Join(env.templateDir, "android_release.apk")},
+		binaryInstall{"android_source.zip", filepath.Join(env.templateDir, "android_source.zip")},
+	)
 }
 
 func downloadIOSAssets(env engineDownloadEnv) error {

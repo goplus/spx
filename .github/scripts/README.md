@@ -40,13 +40,13 @@ Changes to this path must be coordinated with the Godot consumers.
 | `build_go.yml` | Build Go on each OS and test platform-specific behavior |
 | `build_web.yml` / `test_godot_module.yml` | Build with a published Web runtime / test the current module against locked Godot and produce the C++ coverage artifact |
 | `release.yml` | Order publication, hold the publication concurrency lock, and provide npm's top-level OIDC identity |
-| `build_release.yml` | Plan, build, and assemble release artifacts; expose publication inputs only through the completion gate |
+| `build_release.yml` | Plan the selected packages, build runtime artifacts, and require all selected jobs to succeed before assembly |
 | `build_runtime_pack.yml` / `package_*.yml` | Build the runtime pack / package selected products |
 | `publish_npm.yml` | Publish a verified release bundle or build and publish the requested development commit |
 
-`setup-toolchain` installs locked Go/XGo; metadata-only jobs use `xgo: false`
-to skip XGo. `setup-buildctl` builds the current checkout and returns its
-executable path; callers pass that path explicitly.
+`setup-toolchain` installs the Go version in the runtime lock. Builds and
+tests that use XGo request the locked XGo version with `xgo: 'true'`.
+`setup-buildctl` builds the current checkout and returns its executable path.
 `build-web-bundle` and `package-standalone` own their toolchain preparation and
 product commands. Platform workflows own runner selection, OS dependencies,
 and artifact transport. Actions call scripts in the owning domain; setup logic

@@ -16,27 +16,14 @@
 
 package release
 
-import (
-	"fmt"
-	"path/filepath"
-)
+import "fmt"
 
 // ValidateEngineReuse binds a published source to its immutable lock snapshot
 // before comparing the independent engine identity. Old manifests intentionally
 // cannot seed partial reuse: they did not record this build contract.
 func ValidateEngineReuse(manifest RuntimeManifest, target RuntimeLock, repoRoot, revision string) error {
-	source, err := RuntimeLockForVersion(manifest.RuntimeVersion)
-	if err != nil {
+	if err := manifest.validateEngineSource(target.ReleaseRepository); err != nil {
 		return err
-	}
-	if err := manifest.ValidateForLock(source); err != nil {
-		return err
-	}
-	if source.ReleaseRepository != target.ReleaseRepository {
-		return fmt.Errorf("release: engine source repository differs from target")
-	}
-	if manifest.Provenance.EngineSourceSHA256 == "" {
-		return fmt.Errorf("release: source runtime has no engine identity; build a new runtime first")
 	}
 	digest, err := RuntimeEngineSourceSHA256(repoRoot, revision, target)
 	if err != nil {
@@ -48,37 +35,22 @@ func ValidateEngineReuse(manifest RuntimeManifest, target RuntimeLock, repoRoot,
 	return manifest.validateRequiredAssets(target.RequiredAssets)
 }
 
-// VerifyEngineFiles checks each reusable engine ZIP, not the obsolete pack.
-func (m RuntimeManifest) VerifyEngineFiles(directory string) error {
-	if err := m.Validate(); err != nil {
-		return err
-	}
-	for _, asset := range m.Assets {
-		if asset.Name == RuntimeAssetZipName {
-			continue
-		}
-		if err := verifyRuntimeAssetFile(asset, filepath.Join(directory, asset.Name)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // InheritEngine verifies that copied bytes retain their source identity and
 // keeps the original build origin across successive pack-only releases.
 func (m *RuntimeManifest) InheritEngine(source RuntimeManifest) error {
-	if err := source.Validate(); err != nil {
+	if err := source.validateEngineSource(m.ReleaseRepository); err != nil {
 		return err
 	}
-	if source.Provenance.EngineSourceSHA256 == "" || source.Provenance.EngineSourceSHA256 != m.Provenance.EngineSourceSHA256 {
-		return fmt.Errorf("release: copied engine identity differs from source")
+	if source.Provenance.EngineSourceSHA256 != m.Provenance.EngineSourceSHA256 {
+		return fmt.Errorf("release: engine source digest differs from current inputs")
 	}
-	for _, asset := range m.Assets {
-		if asset.Name == RuntimeAssetZipName {
-			continue
-		}
-		original, ok := source.Asset(asset.Name)
-		if !ok || asset != original {
+	if len(m.Assets) != len(source.Assets) {
+		return fmt.Errorf("release: source and target asset counts differ")
+	}
+	// Both manifests are sorted. Only the pack may have different bytes.
+	for i, asset := range m.Assets {
+		original := source.Assets[i]
+		if original.Name != asset.Name || (asset.Name != RuntimeAssetZipName && asset != original) {
 			return fmt.Errorf("release: reused engine asset %q differs from source", asset.Name)
 		}
 	}
@@ -86,6 +58,29 @@ func (m *RuntimeManifest) InheritEngine(source RuntimeManifest) error {
 	if source.Provenance.EngineOrigin != nil {
 		origin = *source.Provenance.EngineOrigin
 	}
-	m.Provenance.EngineOrigin = &origin
-	return m.Validate()
+	candidate := *m
+	candidate.Provenance.EngineOrigin = &origin
+	if err := candidate.Validate(); err != nil {
+		return err
+	}
+	*m = candidate
+	return nil
+}
+
+// Both planning and final assembly bind the source to its published lock.
+func (manifest RuntimeManifest) validateEngineSource(repository string) error {
+	source, err := RuntimeLockForVersion(manifest.RuntimeVersion)
+	if err != nil {
+		return err
+	}
+	if err := manifest.ValidateForLock(source); err != nil {
+		return err
+	}
+	if source.ReleaseRepository != repository {
+		return fmt.Errorf("release: engine source repository differs from target")
+	}
+	if manifest.Provenance.EngineSourceSHA256 == "" {
+		return fmt.Errorf("release: source runtime has no engine identity; build a new runtime first")
+	}
+	return nil
 }

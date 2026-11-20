@@ -177,11 +177,7 @@ func runDoctor(args []string) error {
 func inspectBuildConfiguration(repoRoot string, output io.Writer) error {
 	lock := release.DefaultRuntimeLock()
 	lockPath := filepath.Join(repoRoot, "internal", "release", "runtime.lock.json")
-	lockData, err := os.ReadFile(lockPath)
-	if err != nil {
-		return fmt.Errorf("read runtime lock %s: %w", lockPath, err)
-	}
-	worktreeLock, err := release.ParseRuntimeLock(lockData)
+	worktreeLock, err := release.LoadRuntimeLock(lockPath)
 	if err != nil {
 		return err
 	}

@@ -24,6 +24,8 @@ jobs:
 
       - name: Set up locked Go and XGo
         uses: ./.github/actions/setup-toolchain
+        with:
+          xgo: 'true'
 
       - name: Set up CI test dependencies
         run: python3 -m pip install -r .github/scripts/ci/requirements.txt

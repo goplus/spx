@@ -10,15 +10,10 @@ import subprocess
 import sys
 
 from download import download_release
+from plan import PLATFORM_ASSETS
 
 LOCK = Path("internal/release/runtime.lock.json")
 MANIFEST_COMMAND = ("go", "run", "./.github/cmd/runtime-manifest")
-PRODUCTS = {
-    "WEB": ("spx_web.zip", "spx_web_worker.zip", "spx_web_minigame.zip", "spx_web_miniprogram.zip"),
-    "MACOS": ("spx-standalone-darwin-x64.zip", "spx-standalone-darwin-arm64.zip"),
-    "WINDOWS": ("spx-standalone-windows-x64.zip",),
-    "LINUX": ("spx-standalone-linux-x64.zip",),
-}
 
 
 def run(*arguments, cwd=None):
@@ -108,21 +103,21 @@ def assemble(env):
     if state == "ready" and engine_manifest is not None:
         raise ValueError("Published runtime reuse must not contain copied engine provenance")
 
-    selected = [name for platform, names in PRODUCTS.items() if env[f"RUN_{platform}"] == "true" for name in names]
-    copy_assets(files, selected, product, "selected SPX product asset")
+    product_assets = [name for platform in json.loads(env["PACKAGE_PLATFORMS"]) for name in PLATFORM_ASSETS[platform]]
+    copy_assets(files, product_assets, product, "selected SPX product asset")
     if files:
         raise ValueError(f"Unexpected build artifact: {', '.join(sorted(files))}")
     if state == "missing":
         generate_runtime_manifest(runtime, required_assets, env, engine_manifest)
         verify_runtime(runtime, manifest)
     require_runtime_files(runtime, {*required_assets, manifest, "SHA256SUMS"})
-    if selected:
-        entries = [f"{file_digest(product / name)}  {name}\n" for name in sorted(selected)]
+    if product_assets:
+        entries = [f"{file_digest(product / name)}  {name}\n" for name in sorted(product_assets)]
         (product / "SHA256SUMS").write_text("".join(entries))
 
     # Publish outputs only after the complete artifact set has passed validation.
     with Path(env["GITHUB_OUTPUT"]).open("a") as output:
-        output.write(f"product_count={len(selected)}\n")
+        output.write(f"product_count={len(product_assets)}\n")
     for label, directory in (("Runtime", runtime), ("SPX product", product)):
         print(f"[info] {label} release assets:")
         print("\n".join(sorted(path.name for path in directory.iterdir() if path.is_file())))
