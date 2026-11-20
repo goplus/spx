@@ -25,6 +25,8 @@ import (
 	"testing"
 )
 
+type runtimeEngineFixture struct{ root string }
+
 func TestRuntimeEngineSourceLockIdentity(t *testing.T) {
 	fixture := newRuntimeEngineFixture(t)
 	lock := DefaultRuntimeLock()
@@ -203,23 +205,6 @@ func TestRuntimeEngineSourceRequiresPinnedWorkflow(t *testing.T) {
 	}
 }
 
-type runtimeEngineFixture struct{ root string }
-
-func newRuntimeEngineFixture(t *testing.T) runtimeEngineFixture {
-	t.Helper()
-	fixture := runtimeEngineFixture{root: t.TempDir()}
-	fixture.git(t, "init", "-q")
-	fixture.write(t, DefaultRuntimeLock().Module.Path+"/register_types.cpp", "module")
-	fixture.write(t, ".github/scripts/runtime/build_contract.py", "contract")
-	fixture.write(t, ".github/workflows/build_release.yml", engineWorkflowFixture(strings.Repeat("1", 40)))
-	fixture.commit(t)
-	return fixture
-}
-
-func engineWorkflowFixture(pin string) string {
-	return "jobs:\n  engine:\n    uses: goplus/godot/.github/workflows/release_builds.yml@" + pin + "\n"
-}
-
 func (f runtimeEngineFixture) git(t *testing.T, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", f.root}, args...)...)
@@ -255,4 +240,19 @@ func (f runtimeEngineFixture) digest(t *testing.T, revision string, lock Runtime
 		t.Fatal(err)
 	}
 	return value
+}
+
+func newRuntimeEngineFixture(t *testing.T) runtimeEngineFixture {
+	t.Helper()
+	fixture := runtimeEngineFixture{root: t.TempDir()}
+	fixture.git(t, "init", "-q")
+	fixture.write(t, DefaultRuntimeLock().Module.Path+"/register_types.cpp", "module")
+	fixture.write(t, ".github/scripts/runtime/build_contract.py", "contract")
+	fixture.write(t, ".github/workflows/build_release.yml", engineWorkflowFixture(strings.Repeat("1", 40)))
+	fixture.commit(t)
+	return fixture
+}
+
+func engineWorkflowFixture(pin string) string {
+	return "jobs:\n  engine:\n    uses: goplus/godot/.github/workflows/release_builds.yml@" + pin + "\n"
 }

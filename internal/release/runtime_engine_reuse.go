@@ -35,24 +35,6 @@ func ValidateEngineReuse(manifest RuntimeManifest, target RuntimeLock, repoRoot,
 	return manifest.validateRequiredAssets(target.RequiredAssets)
 }
 
-// Both planning and final assembly bind the source to its published lock.
-func (manifest RuntimeManifest) validateEngineSource(repository string) error {
-	source, err := RuntimeLockForVersion(manifest.RuntimeVersion)
-	if err != nil {
-		return err
-	}
-	if err := manifest.ValidateForLock(source); err != nil {
-		return err
-	}
-	if source.ReleaseRepository != repository {
-		return fmt.Errorf("release: engine source repository differs from target")
-	}
-	if manifest.Provenance.EngineSourceSHA256 == "" {
-		return fmt.Errorf("release: source runtime has no engine identity; build a new runtime first")
-	}
-	return nil
-}
-
 // InheritEngine verifies that copied bytes retain their source identity and
 // keeps the original build origin across successive pack-only releases.
 func (m *RuntimeManifest) InheritEngine(source RuntimeManifest) error {
@@ -82,5 +64,23 @@ func (m *RuntimeManifest) InheritEngine(source RuntimeManifest) error {
 		return err
 	}
 	*m = candidate
+	return nil
+}
+
+// Both planning and final assembly bind the source to its published lock.
+func (manifest RuntimeManifest) validateEngineSource(repository string) error {
+	source, err := RuntimeLockForVersion(manifest.RuntimeVersion)
+	if err != nil {
+		return err
+	}
+	if err := manifest.ValidateForLock(source); err != nil {
+		return err
+	}
+	if source.ReleaseRepository != repository {
+		return fmt.Errorf("release: engine source repository differs from target")
+	}
+	if manifest.Provenance.EngineSourceSHA256 == "" {
+		return fmt.Errorf("release: source runtime has no engine identity; build a new runtime first")
+	}
 	return nil
 }

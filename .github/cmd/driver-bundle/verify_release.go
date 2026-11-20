@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goplus/spx/v4/internal/release"
 	"github.com/goplus/spx/v4/internal/release/driverbundle"
 )
 
@@ -48,7 +49,7 @@ func runVerifyRelease(args []string) error {
 	if err != nil {
 		return fmt.Errorf("read SPX driver manifest: %w", err)
 	}
-	lock, err := loadDriverLock(lockPath)
+	lock, err := release.LoadRuntimeLock(lockPath)
 	if err != nil {
 		return err
 	}

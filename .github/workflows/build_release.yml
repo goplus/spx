@@ -64,10 +64,7 @@ jobs:
       engine_state: ${{ steps.runtime.outputs.engine_state }}
       engine_tag: ${{ steps.runtime.outputs.engine_tag }}
       engine_manifest: ${{ steps.runtime.outputs.engine_manifest }}
-      run_web: ${{ steps.plan.outputs.run_web }}
-      run_macos: ${{ steps.plan.outputs.run_macos }}
-      run_windows: ${{ steps.plan.outputs.run_windows }}
-      run_linux: ${{ steps.plan.outputs.run_linux }}
+      package_platforms: ${{ steps.plan.outputs.package_platforms }}
     steps:
       - name: Check out code
         uses: actions/checkout@v7
@@ -170,8 +167,8 @@ jobs:
     with:
       check_export_types: true
 
-  build-godot-runtime:
-    name: Build locked Godot runtime
+  build-engine:
+    name: Build locked Godot engine
     needs: [plan-release, check-source]
     if: needs.plan-release.outputs.runtime_state == 'missing' && needs.plan-release.outputs.engine_state == 'build'
     # Pin the canonical workflow implementation independently from the Godot
@@ -186,7 +183,7 @@ jobs:
       spx_repository: ${{ github.repository }}
       spx_ref: ${{ github.sha }}
 
-  reuse-godot-runtime:
+  reuse-engine:
     name: Reuse verified Godot engine
     needs: [plan-release, check-source]
     if: needs.plan-release.outputs.runtime_state == 'missing' && needs.plan-release.outputs.engine_state == 'reuse'
@@ -262,27 +259,27 @@ jobs:
 
   build-runtime-pack:
     name: Build runtime pack
-    needs: [plan-release, build-godot-runtime, reuse-godot-runtime]
+    needs: [plan-release, build-engine, reuse-engine]
     if: >-
       ${{
         !cancelled() && needs.plan-release.outputs.runtime_state == 'missing' &&
-        (needs.build-godot-runtime.result == 'success' || needs.reuse-godot-runtime.result == 'success')
+        (needs.build-engine.result == 'success' || needs.reuse-engine.result == 'success')
       }}
     uses: ./.github/workflows/build_runtime_pack.yml
 
   runtime-prerequisites:
     name: Verify runtime prerequisites
-    needs: [plan-release, check-source, build-godot-runtime, reuse-godot-runtime, build-runtime-pack]
+    needs: [plan-release, check-source, build-engine, reuse-engine, build-runtime-pack]
     if: >-
       ${{
         !cancelled() &&
         needs.plan-release.result == 'success' &&
         needs.check-source.result == 'success' &&
         (
-          (needs.plan-release.outputs.runtime_state == 'ready' && needs.build-godot-runtime.result == 'skipped' && needs.reuse-godot-runtime.result == 'skipped' && needs.build-runtime-pack.result == 'skipped') ||
+          (needs.plan-release.outputs.runtime_state == 'ready' && needs.build-engine.result == 'skipped' && needs.reuse-engine.result == 'skipped' && needs.build-runtime-pack.result == 'skipped') ||
           (needs.plan-release.outputs.runtime_state == 'missing' && needs.build-runtime-pack.result == 'success' &&
-            ((needs.build-godot-runtime.result == 'success' && needs.reuse-godot-runtime.result == 'skipped') ||
-             (needs.build-godot-runtime.result == 'skipped' && needs.reuse-godot-runtime.result == 'success')))
+            ((needs.build-engine.result == 'success' && needs.reuse-engine.result == 'skipped') ||
+             (needs.build-engine.result == 'skipped' && needs.reuse-engine.result == 'success')))
         )
       }}
     runs-on: ubuntu-22.04
@@ -301,7 +298,7 @@ jobs:
   package-web:
     name: Package Web
     needs: [plan-release, runtime-prerequisites]
-    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_web == 'true' }}
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && contains(fromJSON(needs.plan-release.outputs.package_platforms), 'web') }}
     uses: ./.github/workflows/package_web.yml
     with:
       engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
@@ -309,7 +306,7 @@ jobs:
   package-macos:
     name: Package macOS
     needs: [plan-release, runtime-prerequisites]
-    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_macos == 'true' }}
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && contains(fromJSON(needs.plan-release.outputs.package_platforms), 'macos') }}
     uses: ./.github/workflows/package_macos.yml
     with:
       engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
@@ -317,7 +314,7 @@ jobs:
   package-windows:
     name: Package Windows
     needs: [plan-release, runtime-prerequisites]
-    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_windows == 'true' }}
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && contains(fromJSON(needs.plan-release.outputs.package_platforms), 'windows') }}
     uses: ./.github/workflows/package_windows.yml
     with:
       engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
@@ -325,7 +322,7 @@ jobs:
   package-linux:
     name: Package Linux
     needs: [plan-release, runtime-prerequisites]
-    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_linux == 'true' }}
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && contains(fromJSON(needs.plan-release.outputs.package_platforms), 'linux') }}
     uses: ./.github/workflows/package_linux.yml
     with:
       engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
@@ -339,18 +336,34 @@ jobs:
       - package-macos
       - package-windows
       - package-linux
-    if: >-
-      ${{
-        !cancelled() &&
-        needs.plan-release.result == 'success' &&
-        needs.runtime-prerequisites.result == 'success' &&
-        (needs.plan-release.outputs.run_web != 'true' || needs.package-web.result == 'success') &&
-        (needs.plan-release.outputs.run_macos != 'true' || needs.package-macos.result == 'success') &&
-        (needs.plan-release.outputs.run_windows != 'true' || needs.package-windows.result == 'success') &&
-        (needs.plan-release.outputs.run_linux != 'true' || needs.package-linux.result == 'success')
-      }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
+    env:
+      PACKAGE_PLATFORMS: ${{ needs.plan-release.outputs.package_platforms }}
     steps:
+      - name: Require completed release inputs
+        shell: python
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          import json
+          import os
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+
+          def require_success(job):
+              result = needs.get(job, {}).get("result", "missing")
+              if result != "success":
+                  raise SystemExit(f"{job}: expected success, got {result}")
+
+          require_success("plan-release")
+          require_success("runtime-prerequisites")
+          platforms = json.loads(os.environ["PACKAGE_PLATFORMS"])
+          if not isinstance(platforms, list):
+              raise SystemExit("Expected a list of package platforms")
+          for platform in platforms:
+              require_success(f"package-{platform}")
+
       - name: Check out code
         uses: actions/checkout@v7
 
@@ -374,10 +387,6 @@ jobs:
           ENGINE_STATE: ${{ needs.plan-release.outputs.engine_state }}
           RUNTIME_TAG: ${{ needs.plan-release.outputs.runtime_tag }}
           RUNTIME_MANIFEST: ${{ needs.plan-release.outputs.runtime_manifest }}
-          RUN_WEB: ${{ needs.plan-release.outputs.run_web }}
-          RUN_MACOS: ${{ needs.plan-release.outputs.run_macos }}
-          RUN_WINDOWS: ${{ needs.plan-release.outputs.run_windows }}
-          RUN_LINUX: ${{ needs.plan-release.outputs.run_linux }}
         run: python3 .github/scripts/release/assemble.py
 
       - name: Upload assembled runtime release
@@ -397,19 +406,3 @@ jobs:
           path: dist/product
           if-no-files-found: error
           retention-days: 14
-
-  build-gate:
-    name: Verify release artifacts completed
-    needs: [plan-release, assemble-release]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Require verified release artifacts
-        env:
-          PLAN_RESULT: ${{ needs.plan-release.result }}
-          ASSEMBLE_RESULT: ${{ needs.assemble-release.result }}
-        run: |
-          if [ "$PLAN_RESULT" != success ] || [ "$ASSEMBLE_RESULT" != success ]; then
-            echo "[error] Release artifacts incomplete: plan=$PLAN_RESULT assemble=$ASSEMBLE_RESULT" >&2
-            exit 1
-          fi

@@ -32,15 +32,3 @@ type BuildConfig struct {
 	TestModule      bool
 	WebLinkOptimize *bool // nil inherits the SPX module profile.
 }
-
-func ShouldRefreshPreparedAssets() bool {
-	return shouldRefreshPreparedAssets()
-}
-
-func PrepareHostEditorAsset(repoRoot, assetDir string) error {
-	env, err := prepareEngineDownloadEnv(repoRoot, "", assetDir, true)
-	if err != nil {
-		return err
-	}
-	return downloadPlatformAssets(env, "editor", true)
-}

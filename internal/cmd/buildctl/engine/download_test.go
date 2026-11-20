@@ -113,7 +113,7 @@ func TestDownloadBinariesFromZipValidatesBeforeInstalling(t *testing.T) {
 			files: map[string]string{"release": "new release", "debug": "new debug"},
 		},
 		{
-			name:   "single binary wrapper",
+			name:   "single binary",
 			files:  map[string]string{"release": "new release"},
 			single: true,
 		},
@@ -159,12 +159,7 @@ func TestDownloadBinariesFromZipValidatesBeforeInstalling(t *testing.T) {
 				mustWriteFile(t, install.dst, []byte("old "+install.assetName))
 			}
 
-			var err error
-			if tt.single {
-				err = downloadBinaryFromZip(env, zipName, installs[0].assetName, installs[0].dst)
-			} else {
-				err = downloadBinariesFromZip(env, zipName, installs)
-			}
+			err := downloadBinariesFromZip(env, zipName, installs...)
 			wantFailure := tt.wantErr != nil || tt.message != ""
 			if (err != nil) != wantFailure {
 				t.Fatalf("downloadBinariesFromZip error = %v, want failure = %v", err, wantFailure)
@@ -194,16 +189,6 @@ func TestDownloadBinariesFromZipValidatesBeforeInstalling(t *testing.T) {
 				t.Errorf("local source archive was removed: %v", err)
 			}
 		})
-	}
-}
-
-func TestDownloadLinuxAssetsRequiresLinuxPlatform(t *testing.T) {
-	for _, env := range []engineDownloadEnv{{platform: "darwin", arch: linuxRuntimePackArch}} {
-		if err := downloadLinuxAssets(env, false); err == nil {
-			t.Fatalf("downloadLinuxAssets accepted %s", env.platform)
-		} else if !strings.Contains(err.Error(), "downloading Linux runtime assets requires platform linux") {
-			t.Fatalf("downloadLinuxAssets error = %v", err)
-		}
 	}
 }
 
@@ -554,7 +539,7 @@ func TestShouldRefreshPreparedAssetsDefaultsToGitHubActions(t *testing.T) {
 		t.Fatalf("Unsetenv returned error: %v", err)
 	}
 
-	if !shouldRefreshPreparedAssets() {
+	if !ShouldRefreshPreparedAssets() {
 		t.Fatal("expected GitHub Actions runs to refresh prepared assets by default")
 	}
 }
@@ -563,7 +548,7 @@ func TestShouldRefreshPreparedAssetsAllowsExplicitDisableInCI(t *testing.T) {
 	t.Setenv("GITHUB_ACTIONS", "true")
 	t.Setenv("SPX_PREPARE_FORCE_REFRESH", "0")
 
-	if shouldRefreshPreparedAssets() {
+	if ShouldRefreshPreparedAssets() {
 		t.Fatal("expected SPX_PREPARE_FORCE_REFRESH=0 to disable forced refresh in CI")
 	}
 }
@@ -572,7 +557,7 @@ func TestShouldRefreshPreparedAssetsAllowsExplicitEnableLocally(t *testing.T) {
 	t.Setenv("GITHUB_ACTIONS", "")
 	t.Setenv("SPX_PREPARE_FORCE_REFRESH", "1")
 
-	if !shouldRefreshPreparedAssets() {
+	if !ShouldRefreshPreparedAssets() {
 		t.Fatal("expected SPX_PREPARE_FORCE_REFRESH=1 to force refresh locally")
 	}
 }
@@ -693,6 +678,17 @@ func TestDownloadHostRuntimeAssetsDesktopLifecycle(t *testing.T) {
 			assertEngineDownloadFiles(t, env, nil)
 
 			writeAssets("initial")
+			checkInstalled("initial")
+			missing := filepath.Join(env.goBinDir, "gdspxrtdbgtest"+tt.suffix)
+			if tt.platform == "macos" {
+				missing = filepath.Join(env.templateDir, "macos.zip")
+				if err := os.Remove(filepath.Join(env.assetDir, templateArchive)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Remove(missing); err != nil {
+				t.Fatal(err)
+			}
 			checkInstalled("initial")
 			if err := os.RemoveAll(env.assetDir); err != nil {
 				t.Fatal(err)
@@ -878,6 +874,7 @@ func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
 			case "editor":
 				err = PrepareHostEditorAsset(root, "assets")
 			case "linux pack":
+				t.Setenv("PLATFORM", "web") // Release packs always use the Linux host editor.
 				err = PrepareLinuxRuntimePackAssets(root, "assets")
 			case "ios command":
 				err = Run([]string{"download", "--platform", "ios", "--asset-dir", "assets", "--same-run-artifacts"})

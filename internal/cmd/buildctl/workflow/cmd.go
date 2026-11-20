@@ -39,29 +39,6 @@ type BuildConfig struct {
 	WebLinkOptimize *bool // nil inherits the SPX module profile.
 }
 
-// NormalizeBuildConfig validates build options and supplies the default Web mode.
-func NormalizeBuildConfig(cfg BuildConfig) (BuildConfig, error) {
-	switch cfg.Target {
-	case "dev", "web":
-		if cfg.Mode == "" {
-			cfg.Mode = "normal"
-		}
-		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
-			return BuildConfig{}, err
-		}
-	case "editor", "desktop", "android", "ios":
-		if cfg.WebLinkOptimize != nil {
-			return BuildConfig{}, errors.New("--web-link-optimize is only supported by build dev and build web")
-		}
-		if cfg.Mode != "" {
-			return BuildConfig{}, errors.New("--mode is only supported by build dev and build web")
-		}
-	default:
-		return BuildConfig{}, fmt.Errorf("unsupported build target: %s", cfg.Target)
-	}
-	return cfg, nil
-}
-
 type workflowRunDemoConfig struct {
 	demoIndex int
 	mode      string
@@ -124,6 +101,29 @@ func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
 	default:
 		return fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}
+}
+
+// NormalizeBuildConfig validates build options and supplies the default Web mode.
+func NormalizeBuildConfig(cfg BuildConfig) (BuildConfig, error) {
+	switch cfg.Target {
+	case "dev", "web":
+		if cfg.Mode == "" {
+			cfg.Mode = "normal"
+		}
+		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
+			return BuildConfig{}, err
+		}
+	case "editor", "desktop", "android", "ios":
+		if cfg.WebLinkOptimize != nil {
+			return BuildConfig{}, errors.New("--web-link-optimize is only supported by build dev and build web")
+		}
+		if cfg.Mode != "" {
+			return BuildConfig{}, errors.New("--mode is only supported by build dev and build web")
+		}
+	default:
+		return BuildConfig{}, fmt.Errorf("unsupported build target: %s", cfg.Target)
+	}
+	return cfg, nil
 }
 
 func printWorkflowUsage() {

@@ -7,7 +7,12 @@ from pathlib import Path
 import string
 import sys
 
-PLATFORMS = ("web", "macos", "windows", "linux")
+PLATFORM_ASSETS = {
+    "web": ("spx_web.zip", "spx_web_worker.zip", "spx_web_minigame.zip", "spx_web_miniprogram.zip"),
+    "macos": ("spx-standalone-darwin-x64.zip", "spx-standalone-darwin-arm64.zip"),
+    "windows": ("spx-standalone-windows-x64.zip",),
+    "linux": ("spx-standalone-linux-x64.zip",),
+}
 NORMALIZE_PLATFORMS = str.maketrans(string.ascii_uppercase, string.ascii_lowercase, string.whitespace)
 LOCK = Path("internal/release/runtime.lock.json")
 
@@ -22,30 +27,33 @@ def validate_inputs(env):
 
 
 def resolve_platforms(env):
+    if env["OPERATION_INPUT"] == "publish-runtime":
+        return []
+    platforms = env["PLATFORMS_INPUT"].translate(NORMALIZE_PLATFORMS)
+    if not platforms:
+        raise ValueError("Platforms must not be empty")
+    if platforms == "all":
+        return list(PLATFORM_ASSETS)
+    if env["OPERATION_INPUT"] == "publish-release":
+        raise ValueError("Publishing requires platforms=all")
+    items = platforms.split(",")
+    if "" in items:
+        raise ValueError("Platforms must not contain empty values")
     selected = set()
-    if env["OPERATION_INPUT"] != "publish-runtime":
-        platforms = env["PLATFORMS_INPUT"].translate(NORMALIZE_PLATFORMS)
-        if not platforms:
-            raise ValueError("Platforms must not be empty")
-        if env["OPERATION_INPUT"] == "publish-release" and platforms != "all":
-            raise ValueError("Publishing requires platforms=all")
-        items = list(PLATFORMS) if platforms == "all" else platforms.split(",")
-        if "" in items:
-            raise ValueError("Platforms must not contain empty values")
-        for platform in items:
-            if platform not in PLATFORMS:
-                raise ValueError(f"Unsupported platform: {platform}")
-            if platform in selected:
-                raise ValueError(f"Duplicate platform: {platform}")
-            selected.add(platform)
-    with Path(env["GITHUB_OUTPUT"]).open("a") as output:
-        for platform in PLATFORMS:
-            output.write(f"run_{platform}={str(platform in selected).lower()}\n")
+    for platform in items:
+        if platform not in PLATFORM_ASSETS:
+            raise ValueError(f"Unsupported platform: {platform}")
+        if platform in selected:
+            raise ValueError(f"Duplicate platform: {platform}")
+        selected.add(platform)
+    return [platform for platform in PLATFORM_ASSETS if platform in selected]
 
 
 def plan_inputs(env):
     validate_inputs(env)
-    resolve_platforms(env)
+    platforms = resolve_platforms(env)
+    with Path(env["GITHUB_OUTPUT"]).open("a") as output:
+        output.write(f"package_platforms={json.dumps(platforms)}\n")
 
 
 def enforce_runtime_policy(env, development=False):

@@ -17,12 +17,11 @@
 package release
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 )
+
+const runtimePackResourcesPrefix = "cmd/spx/template/project/engine/"
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
 	".github/scripts/runtime/build_pack.sh":         {},
@@ -51,8 +50,6 @@ var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/template/project/runtime.gdextension.txt":              {},
 }
 
-const runtimePackResourcesPrefix = "cmd/spx/template/project/engine/"
-
 // RuntimePackSourceSHA256 returns a stable digest of the tracked SPX inputs
 // that can affect spx-runtime-assets.zip at revision. It deliberately excludes
 // godot_modules/spx: the module tree is an independent Godot-engine input and
@@ -64,32 +61,33 @@ const runtimePackResourcesPrefix = "cmd/spx/template/project/engine/"
 // Git tree entries are used instead of worktree contents so untracked build
 // outputs cannot contaminate release provenance.
 func RuntimePackSourceSHA256(repoRoot, revision string) (string, error) {
-	tree, err := trackedTree(repoRoot, revision, "runtime pack source")
+	tree, err := readGitTree(repoRoot, revision, "runtime pack source")
 	if err != nil {
 		return "", err
 	}
 	return tree.packSourceSHA256()
 }
 
-func (tree runtimeSourceTree) packSourceSHA256() (string, error) {
-	return transformedTreeSHA256(tree.entries, "runtime pack source", func(entry []byte, name string) ([]byte, error) {
-		return runtimePackSourceEntry(tree.root, entry, name)
-	})
+// RuntimeBuildRecipeSHA256 returns a stable digest of the implementation that
+// can change runtime-pack bytes. CI transport details such as workflow layout
+// and external Action versions are deliberately excluded.
+func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
+	tree, err := readGitTree(repoRoot, revision, "runtime build recipe")
+	if err != nil {
+		return "", err
+	}
+	return tree.buildRecipeSHA256()
 }
 
-func runtimePackSourceEntry(repoRoot string, entry []byte, name string) ([]byte, error) {
-	if !isRuntimePackSourcePath(name) {
-		return nil, nil
-	}
-	if name != runtimePackExportPresets {
-		return entry, nil
-	}
-	fields := strings.Fields(string(entry[:bytes.IndexByte(entry, '\t')]))
-	if len(fields) != 3 || fields[1] != "blob" {
-		return nil, fmt.Errorf("release: invalid git blob entry %q", entry)
-	}
+func (tree gitTree) packSourceSHA256() (string, error) {
+	return tree.digest("runtime pack source", isRuntimePackSourcePath, tree.packSourceRecord)
+}
 
-	output, err := gitOutput(repoRoot, "cat-file", "blob", fields[2])
+func (tree gitTree) packSourceRecord(entry gitTreeEntry) ([]byte, error) {
+	if entry.path != runtimePackExportPresets {
+		return entry.record, nil
+	}
+	output, err := tree.readBlob(entry.path)
 	if err != nil {
 		return nil, fmt.Errorf("release: read runtime pack preset: %w", err)
 	}
@@ -97,75 +95,11 @@ func runtimePackSourceEntry(repoRoot string, entry []byte, name string) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("release: project runtime pack preset: %w", err)
 	}
-	return append([]byte("projection\t"+name+"\x00"), projection...), nil
+	return append([]byte("projection\t"+entry.path+"\x00"), projection...), nil
 }
 
-// RuntimeBuildRecipeSHA256 returns a stable digest of the implementation that
-// can change runtime-pack bytes. CI transport details such as workflow layout
-// and external Action versions are deliberately excluded.
-func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
-	tree, err := trackedTree(repoRoot, revision, "runtime build recipe")
-	if err != nil {
-		return "", err
-	}
-	return tree.buildRecipeSHA256()
-}
-
-func (tree runtimeSourceTree) buildRecipeSHA256() (string, error) {
-	return selectedTreeSHA256(tree.entries, "runtime build recipe", isRuntimeBuildRecipePath)
-}
-
-func selectedTreeSHA256(tree []byte, label string, include func(string) bool) (string, error) {
-	return transformedTreeSHA256(tree, label, func(entry []byte, name string) ([]byte, error) {
-		if !include(name) {
-			return nil, nil
-		}
-		return entry, nil
-	})
-}
-
-func transformedTreeSHA256(tree []byte, label string, selectEntry func([]byte, string) ([]byte, error)) (string, error) {
-	hasher := sha256.New()
-	count := 0
-	err := walkGitTree(tree, func(entry []byte, name string) error {
-		selected, err := selectEntry(entry, name)
-		if err != nil {
-			return err
-		}
-		if selected == nil {
-			return nil
-		}
-		_, _ = hasher.Write(selected)
-		_, _ = hasher.Write([]byte{0})
-		count++
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	if count == 0 {
-		return "", fmt.Errorf("release: %s tree contains no tracked inputs", label)
-	}
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func walkGitTree(tree []byte, visit func(entry []byte, name string) error) error {
-	for len(tree) != 0 {
-		end := bytes.IndexByte(tree, 0)
-		if end < 0 {
-			return fmt.Errorf("release: malformed NUL-delimited git tree output")
-		}
-		entry := tree[:end]
-		tree = tree[end+1:]
-		separator := bytes.IndexByte(entry, '\t')
-		if separator < 0 || separator == len(entry)-1 {
-			return fmt.Errorf("release: malformed git tree entry %q", entry)
-		}
-		if err := visit(entry, string(entry[separator+1:])); err != nil {
-			return err
-		}
-	}
-	return nil
+func (tree gitTree) buildRecipeSHA256() (string, error) {
+	return tree.digest("runtime build recipe", isRuntimeBuildRecipePath, nil)
 }
 
 func isRuntimeBuildRecipePath(name string) bool {

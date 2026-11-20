@@ -176,7 +176,7 @@ func writeResolutionLock(t *testing.T, path string, lock release.RuntimeLock) {
 
 func serveEngineReuse(t *testing.T, fixture *runtimeResolutionFixture) {
 	t.Helper()
-	target, err := loadRuntimeResolutionLock(fixture.config.LockPath)
+	target, err := release.LoadRuntimeLock(fixture.config.LockPath)
 	if err != nil {
 		t.Fatal(err)
 	}

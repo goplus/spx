@@ -111,10 +111,10 @@ class ToolchainSetupTest(unittest.TestCase):
     def test_workflow_jobs_request_their_toolchain(self):
         for workflow, xgo, names in (
             ("ci.yml", "false", ("resolve-runtime",)),
-            ("build_release.yml", "false", ("plan-release", "reuse-godot-runtime", "assemble-release")),
+            ("build_release.yml", "false", ("plan-release", "reuse-engine", "assemble-release")),
+            ("build_runtime_pack.yml", "false", ("build-runtime-pack",)),
             ("release.yml", "false", ("publish-runtime", "validate-dev-npm")),
             ("build_go.yml", "true", ("build-go",)),
-            ("build_runtime_pack.yml", "true", ("build-runtime-pack",)),
             ("check_source.yml", "true", ("check-source",)),
         ):
             jobs = load_workflow(ROOT / ".github/workflows" / workflow)["jobs"]

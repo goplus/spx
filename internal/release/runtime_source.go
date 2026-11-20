@@ -17,6 +17,9 @@
 package release
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -24,32 +27,15 @@ import (
 	"strings"
 )
 
-// Resolve the commit before reading any of its inputs so a moving branch can
-// never mix two revisions in the same provenance record.
-func runtimeRevision(repoRoot, revision string, lock RuntimeLock) (RuntimeProvenance, error) {
-	var p RuntimeProvenance
-	if strings.TrimSpace(revision) == "" {
-		return p, errors.New("SPX revision must not be empty")
-	}
-	commit, err := gitObject(repoRoot, revision+"^{commit}")
-	if err != nil {
-		return p, fmt.Errorf("resolve current SPX commit: %w", err)
-	}
-	p.SPXCommit = commit
-	p.ModuleTree, err = gitObject(repoRoot, commit+":"+lock.Module.Path)
-	if err != nil {
-		return p, fmt.Errorf("resolve current module tree: %w", err)
-	}
-	p.GodotCommit, p.Toolchain = lock.Godot.Commit, lock.Toolchain
-	return p, nil
+type gitTree struct {
+	repoRoot string
+	entries  []gitTreeEntry
 }
 
-func gitObject(repoRoot, revision string) (string, error) {
-	output, err := gitOutput(repoRoot, "rev-parse", "--verify", "--end-of-options", revision)
-	if err != nil {
-		return "", fmt.Errorf("resolve Git object %q: %w", revision, err)
-	}
-	return strings.TrimSpace(string(output)), nil
+// record preserves the exact ls-tree bytes included in published digests.
+type gitTreeEntry struct {
+	path   string
+	record []byte
 }
 
 // RuntimeProvenanceAt derives all build identities from one immutable revision.
@@ -61,7 +47,7 @@ func RuntimeProvenanceAt(repoRoot, revision string, lock RuntimeLock) (RuntimePr
 	if err != nil {
 		return p, err
 	}
-	tree, err := trackedTree(repoRoot, p.SPXCommit, "runtime pack source")
+	tree, err := readGitTree(repoRoot, p.SPXCommit, "runtime pack source")
 	if err != nil {
 		return p, err
 	}
@@ -92,7 +78,7 @@ func (m RuntimeManifest) ReuseIncompatibility(repoRoot, revision string, lock Ru
 	if p.ModuleTree != current.ModuleTree {
 		return fmt.Sprintf("module tree = %s, current runtime input = %s", p.ModuleTree, current.ModuleTree), nil
 	}
-	tree, err := trackedTree(repoRoot, current.SPXCommit, "runtime source")
+	tree, err := readGitTree(repoRoot, current.SPXCommit, "runtime source")
 	if err != nil {
 		return "", err
 	}
@@ -123,24 +109,105 @@ func (m RuntimeManifest) ReuseIncompatibility(repoRoot, revision string, lock Ru
 	return "", nil
 }
 
-type runtimeSourceTree struct {
-	root, revision string
-	entries        []byte
+// Read by object ID so all blobs come from the tree already listed, even if
+// the original revision names a branch that has since advanced.
+func (tree gitTree) readBlob(path string) ([]byte, error) {
+	for _, entry := range tree.entries {
+		if entry.path != path {
+			continue
+		}
+		header, _, _ := bytes.Cut(entry.record, []byte{'\t'})
+		fields := bytes.Fields(header)
+		if len(fields) != 3 || string(fields[1]) != "blob" {
+			return nil, fmt.Errorf("release: invalid git blob entry %q", entry.record)
+		}
+		return gitOutput(tree.repoRoot, "cat-file", "blob", string(fields[2]))
+	}
+	return nil, fmt.Errorf("release: no Git tree entry for %q", path)
 }
 
-func trackedTree(repoRoot, revision, label string) (runtimeSourceTree, error) {
+func (tree gitTree) digest(label string, include func(string) bool, project func(gitTreeEntry) ([]byte, error)) (string, error) {
+	hash := sha256.New()
+	count := 0
+	for _, entry := range tree.entries {
+		if !include(entry.path) {
+			continue
+		}
+		record := entry.record
+		if project != nil {
+			var err error
+			record, err = project(entry)
+			if err != nil {
+				return "", err
+			}
+		}
+		hash.Write(record)
+		hash.Write([]byte{0})
+		count++
+	}
+	if count == 0 {
+		return "", fmt.Errorf("release: %s tree contains no tracked inputs", label)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// Resolve the commit before reading any of its inputs so a moving branch can
+// never mix two revisions in the same provenance record.
+func runtimeRevision(repoRoot, revision string, lock RuntimeLock) (RuntimeProvenance, error) {
+	var p RuntimeProvenance
+	if strings.TrimSpace(revision) == "" {
+		return p, errors.New("SPX revision must not be empty")
+	}
+	commit, err := gitObject(repoRoot, revision+"^{commit}")
+	if err != nil {
+		return p, fmt.Errorf("resolve current SPX commit: %w", err)
+	}
+	p.SPXCommit = commit
+	p.ModuleTree, err = gitObject(repoRoot, commit+":"+lock.Module.Path)
+	if err != nil {
+		return p, fmt.Errorf("resolve current module tree: %w", err)
+	}
+	p.GodotCommit, p.Toolchain = lock.Godot.Commit, lock.Toolchain
+	return p, nil
+}
+
+func gitObject(repoRoot, revision string) (string, error) {
+	output, err := gitOutput(repoRoot, "rev-parse", "--verify", "--end-of-options", revision)
+	if err != nil {
+		return "", fmt.Errorf("resolve Git object %q: %w", revision, err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func readGitTree(repoRoot, revision, label string) (gitTree, error) {
 	if strings.TrimSpace(repoRoot) == "" {
-		return runtimeSourceTree{}, fmt.Errorf("release: %s repository must not be empty", label)
+		return gitTree{}, fmt.Errorf("release: %s repository must not be empty", label)
 	}
 	if strings.TrimSpace(revision) == "" {
-		return runtimeSourceTree{}, fmt.Errorf("release: %s revision must not be empty", label)
+		return gitTree{}, fmt.Errorf("release: %s revision must not be empty", label)
 	}
-
-	output, err := gitOutput(repoRoot, "ls-tree", "-r", "-z", "--full-tree", revision)
+	output, err := gitOutput(repoRoot, "ls-tree", "-r", "-z", "--full-tree", "--end-of-options", revision)
 	if err != nil {
-		return runtimeSourceTree{}, fmt.Errorf("release: list %s tree at %q: %w", label, revision, err)
+		return gitTree{}, fmt.Errorf("release: list %s tree at %q: %w", label, revision, err)
 	}
-	return runtimeSourceTree{repoRoot, revision, output}, nil
+	return parseGitTree(repoRoot, output)
+}
+
+func parseGitTree(repoRoot string, data []byte) (gitTree, error) {
+	tree := gitTree{repoRoot: repoRoot}
+	for len(data) > 0 {
+		record, rest, ok := bytes.Cut(data, []byte{0})
+		if !ok {
+			return gitTree{}, errors.New("release: malformed NUL-delimited git tree output")
+		}
+		_, path, ok := bytes.Cut(record, []byte{'\t'})
+		if !ok || len(path) == 0 {
+			return gitTree{}, fmt.Errorf("release: malformed git tree entry %q", record)
+		}
+		tree.entries = append(tree.entries, gitTreeEntry{path: string(path), record: record})
+		data = rest
+	}
+	return tree, nil
 }
 
 func gitOutput(root string, args ...string) ([]byte, error) {

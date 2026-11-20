@@ -18,6 +18,8 @@ package engine
 
 import (
 	"fmt"
+	"runtime"
+	"strings"
 )
 
 func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
@@ -42,6 +44,31 @@ func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
 	return downloadPlatformAssets(env, cfg.Mode, false)
 }
 
+func PrepareHostEditorAsset(repoRoot, assetDir string) error {
+	return prepareEditorAsset(repoRoot, "", assetDir)
+}
+
+// PrepareLinuxRuntimePackAssets installs the Linux/amd64 editor used by the
+// release runtime pack workflow. Resource-only export does not need templates.
+func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return fmt.Errorf("preparing Linux runtime packs requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	if strings.TrimSpace(assetDir) == "" {
+		return fmt.Errorf("preparing Linux runtime packs requires an engine asset directory")
+	}
+
+	return prepareEditorAsset(repoRoot, "linux", assetDir)
+}
+
+func prepareEditorAsset(repoRoot, platform, assetDir string) error {
+	env, err := prepareEngineDownloadEnv(repoRoot, platform, assetDir, true)
+	if err != nil {
+		return err
+	}
+	return downloadPlatformAssets(env, "editor", true)
+}
+
 func downloadHostRuntimeAssets(env engineDownloadEnv) error {
 	if err := downloadPlatformAssets(env, "", false); err != nil {
 		return err
@@ -60,9 +87,7 @@ func downloadPlatformAssets(env engineDownloadEnv, mode string, editor bool) err
 			mode = "normal"
 		}
 		return downloadWebAssets(env, mode)
-	case "linux":
-		return downloadLinuxAssets(env, editor)
-	case "windows", "macos":
+	case "linux", "windows", "macos":
 		return downloadDesktopAssets(env, editor)
 	default:
 		return fmt.Errorf("unsupported platform for engine download: %s", env.platform)

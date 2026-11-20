@@ -29,7 +29,7 @@ class AssemblyTest(unittest.TestCase):
             "RUNTIME_STATE": "missing", "RUNTIME_TAG": "runtime-v4.0.0",
             "RUNTIME_MANIFEST": "runtime-manifest.json", "REPOSITORY": "fixture/spx",
             "GITHUB_OUTPUT": str(self.root / "output"),
-            **{f"RUN_{platform}": "false" for platform in assemble.PRODUCTS},
+            "PACKAGE_PLATFORMS": "[]",
         }
         self.required = ("engine.zip", "pack.zip")
         assemble.LOCK.parent.mkdir(parents=True)
@@ -118,8 +118,8 @@ class AssemblyTest(unittest.TestCase):
 
     def test_missing_runtime_generates_canonical_manifest_and_product_checksums(self):
         self.stage_runtime()
-        self.env.update(RUN_WEB="true", RUN_LINUX="true")
-        products = (*assemble.PRODUCTS["WEB"], *assemble.PRODUCTS["LINUX"])
+        self.env["PACKAGE_PLATFORMS"] = json.dumps(["web", "linux"])
+        products = (*assemble.PLATFORM_ASSETS["web"], *assemble.PLATFORM_ASSETS["linux"])
         for name in products:
             self.write(f"artifacts/products/{name}", f"contents of {name}")
         self.run_assembly()
@@ -153,7 +153,7 @@ class AssemblyTest(unittest.TestCase):
             with self.subTest(scenario=scenario):
                 shutil.rmtree("artifacts", ignore_errors=True)
                 shutil.rmtree("dist", ignore_errors=True)
-                self.env["RUN_LINUX"] = "false"
+                self.env["PACKAGE_PLATFORMS"] = "[]"
                 self.stage_runtime()
                 if scenario == "duplicate":
                     self.write("artifacts/another/engine.zip")
@@ -162,7 +162,7 @@ class AssemblyTest(unittest.TestCase):
                 elif scenario == "missing-runtime":
                     Path("artifacts/runtime/engine.zip").unlink()
                 elif scenario == "missing-product":
-                    self.env["RUN_LINUX"] = "true"
+                    self.env["PACKAGE_PLATFORMS"] = json.dumps(["linux"])
                 elif scenario == "unexpected":
                     self.write("artifacts/runtime/unknown.zip")
                 else:

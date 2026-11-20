@@ -353,6 +353,18 @@ func (m RuntimeManifest) VerifyEngineFiles(dir string) error {
 	return m.verifyFiles(dir, true)
 }
 
+// SHA256SUMS returns conventional, deterministically ordered checksum lines.
+func (m RuntimeManifest) SHA256SUMS() ([]byte, error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	var sums strings.Builder
+	for _, asset := range m.Assets {
+		fmt.Fprintf(&sums, "%s  %s\n", asset.SHA256, asset.Name)
+	}
+	return []byte(sums.String()), nil
+}
+
 func (m RuntimeManifest) verifyFiles(dir string, engineOnly bool) error {
 	if err := m.Validate(); err != nil {
 		return err
@@ -366,18 +378,6 @@ func (m RuntimeManifest) verifyFiles(dir string, engineOnly bool) error {
 		}
 	}
 	return nil
-}
-
-// SHA256SUMS returns conventional, deterministically ordered checksum lines.
-func (m RuntimeManifest) SHA256SUMS() ([]byte, error) {
-	if err := m.Validate(); err != nil {
-		return nil, err
-	}
-	var sums strings.Builder
-	for _, asset := range m.Assets {
-		fmt.Fprintf(&sums, "%s  %s\n", asset.SHA256, asset.Name)
-	}
-	return []byte(sums.String()), nil
 }
 
 func (m RuntimeManifest) validateForVersion(runtimeVersion string) error {

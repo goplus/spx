@@ -98,7 +98,7 @@ func runRuntimeResolution(args []string) error {
 }
 
 func resolveRuntime(ctx context.Context, config runtimeResolutionConfig) (runtimeResolution, error) {
-	target, err := loadRuntimeResolutionLock(config.LockPath)
+	target, err := release.LoadRuntimeLock(config.LockPath)
 	if err != nil {
 		return runtimeResolution{}, err
 	}
@@ -218,18 +218,6 @@ func fetchPublishedManifest(ctx context.Context, config runtimeResolutionConfig,
 		return release.RuntimeManifest{}, fmt.Errorf("download manifest: HTTP %d %s", status, http.StatusText(status))
 	}
 	return release.ParseRuntimeManifestForRelease(body, lock.RuntimeVersion, lock.RequiredAssets)
-}
-
-func loadRuntimeResolutionLock(path string) (release.RuntimeLock, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return release.RuntimeLock{}, fmt.Errorf("read runtime lock: %w", err)
-	}
-	lock, err := release.ParseRuntimeLock(data)
-	if err != nil {
-		return release.RuntimeLock{}, err
-	}
-	return lock, nil
 }
 
 func runtimeReleaseAPIURL(baseURL, repository, tag string) (string, error) {

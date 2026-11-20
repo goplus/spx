@@ -545,133 +545,6 @@ func TestWriteRuntimeResolutionOutputsRejectsInvalidValues(t *testing.T) {
 	}
 }
 
-func (f runtimeResolutionFixture) server(t *testing.T, releaseStatus int, draft bool, manifest release.RuntimeManifest, mutateAssets func(*[]gitHubAsset)) (*httptest.Server, *atomic.Int32) {
-	t.Helper()
-	requests := &atomic.Int32{}
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		requests.Add(1)
-		if request.URL.Path == "/manifest" {
-			data, err := manifest.JSON()
-			if err != nil {
-				t.Error(err)
-				response.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			response.Header().Set("Content-Type", "application/json")
-			_, _ = response.Write(data)
-			return
-		}
-		if request.URL.Path == "/repos/"+f.lock.ReleaseRepository {
-			_ = json.NewEncoder(response).Encode(map[string]string{"full_name": f.lock.ReleaseRepository})
-			return
-		}
-		if releaseStatus != http.StatusOK {
-			response.WriteHeader(releaseStatus)
-			return
-		}
-
-		assetNames := append([]string(nil), f.lock.RequiredAssets...)
-		assetNames = append(assetNames, f.lock.Manifest, release.SHA256SumsFileName)
-		assets := make([]gitHubAsset, 0, len(assetNames))
-		for _, name := range assetNames {
-			downloadURL := server.URL + "/unused/" + name
-			if name == f.lock.Manifest {
-				downloadURL = server.URL + "/manifest"
-			}
-			assets = append(assets, gitHubAsset{Name: name, BrowserDownloadURL: downloadURL})
-		}
-		if mutateAssets != nil {
-			mutateAssets(&assets)
-		}
-		_ = json.NewEncoder(response).Encode(map[string]any{
-			"tag_name": f.lock.RuntimeReleaseTag(),
-			"draft":    draft,
-			"assets":   assets,
-		})
-	}))
-	return server, requests
-}
-
-func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
-	return fn(request)
-}
-
-func (r resolutionErrorReader) Read([]byte) (int, error) { return 0, r.err }
-
-func (resolutionErrorReader) Close() error { return nil }
-
-func newRuntimeResolutionFixture(t *testing.T) runtimeResolutionFixture {
-	t.Helper()
-	repoRoot := gitOutput(t, ".", "rev-parse", "--show-toplevel")
-	currentLockPath := filepath.Join(repoRoot, "internal", "release", "runtime.lock.json")
-	lock, err := loadRuntimeResolutionLock(currentLockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lockData, err := lock.JSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	lockPath := filepath.Join(t.TempDir(), "runtime.lock.json")
-	if err := os.WriteFile(lockPath, lockData, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	moduleTree := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD:"+lock.Module.Path)
-	spxCommit := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD^{commit}")
-	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, "HEAD")
-	if err != nil {
-		t.Fatal(err)
-	}
-	buildRecipeDigest, err := release.RuntimeBuildRecipeSHA256(repoRoot, "HEAD")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assetDir := t.TempDir()
-	inputs := make([]release.RuntimeAssetInput, 0, len(lock.RequiredAssets))
-	for _, name := range lock.RequiredAssets {
-		path := filepath.Join(assetDir, name)
-		if err := os.WriteFile(path, []byte("asset:"+name+"\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: path})
-	}
-	manifest, err := release.GenerateRuntimeManifest(lock, release.RuntimeProvenance{
-		SPXCommit:               spxCommit,
-		GodotCommit:             lock.Godot.Commit,
-		ModuleTree:              moduleTree,
-		RuntimePackSourceSHA256: runtimePackDigest,
-		BuildRecipeSHA256:       buildRecipeDigest,
-		Toolchain:               lock.Toolchain,
-	}, inputs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return runtimeResolutionFixture{
-		config: runtimeResolutionConfig{
-			LockPath: lockPath,
-			RepoRoot: repoRoot,
-			Revision: "HEAD",
-		},
-		lock:     lock,
-		manifest: manifest,
-	}
-}
-
-func gitOutput(t *testing.T, repoRoot string, args ...string) string {
-	t.Helper()
-	commandArgs := append([]string{"-C", repoRoot}, args...)
-	output, err := exec.Command("git", commandArgs...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(commandArgs, " "), err, output)
-	}
-	return strings.TrimSpace(string(output))
-}
-
-func roundTripClient(fn roundTripFunc) *http.Client {
-	return &http.Client{Transport: fn}
-}
-
 func TestRuntimeResolutionMainReportsFailure(t *testing.T) {
 	const helper = "SPX_TEST_RESOLUTION_MAIN_ERROR"
 	if os.Getenv(helper) == "1" {
@@ -779,4 +652,131 @@ func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f runtimeResolutionFixture) server(t *testing.T, releaseStatus int, draft bool, manifest release.RuntimeManifest, mutateAssets func(*[]gitHubAsset)) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	requests := &atomic.Int32{}
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		if request.URL.Path == "/manifest" {
+			data, err := manifest.JSON()
+			if err != nil {
+				t.Error(err)
+				response.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = response.Write(data)
+			return
+		}
+		if request.URL.Path == "/repos/"+f.lock.ReleaseRepository {
+			_ = json.NewEncoder(response).Encode(map[string]string{"full_name": f.lock.ReleaseRepository})
+			return
+		}
+		if releaseStatus != http.StatusOK {
+			response.WriteHeader(releaseStatus)
+			return
+		}
+
+		assetNames := append([]string(nil), f.lock.RequiredAssets...)
+		assetNames = append(assetNames, f.lock.Manifest, release.SHA256SumsFileName)
+		assets := make([]gitHubAsset, 0, len(assetNames))
+		for _, name := range assetNames {
+			downloadURL := server.URL + "/unused/" + name
+			if name == f.lock.Manifest {
+				downloadURL = server.URL + "/manifest"
+			}
+			assets = append(assets, gitHubAsset{Name: name, BrowserDownloadURL: downloadURL})
+		}
+		if mutateAssets != nil {
+			mutateAssets(&assets)
+		}
+		_ = json.NewEncoder(response).Encode(map[string]any{
+			"tag_name": f.lock.RuntimeReleaseTag(),
+			"draft":    draft,
+			"assets":   assets,
+		})
+	}))
+	return server, requests
+}
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
+func (r resolutionErrorReader) Read([]byte) (int, error) { return 0, r.err }
+
+func (resolutionErrorReader) Close() error { return nil }
+
+func newRuntimeResolutionFixture(t *testing.T) runtimeResolutionFixture {
+	t.Helper()
+	repoRoot := gitOutput(t, ".", "rev-parse", "--show-toplevel")
+	currentLockPath := filepath.Join(repoRoot, "internal", "release", "runtime.lock.json")
+	lock, err := release.LoadRuntimeLock(currentLockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockData, err := lock.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(t.TempDir(), "runtime.lock.json")
+	if err := os.WriteFile(lockPath, lockData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	moduleTree := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD:"+lock.Module.Path)
+	spxCommit := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD^{commit}")
+	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildRecipeDigest, err := release.RuntimeBuildRecipeSHA256(repoRoot, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assetDir := t.TempDir()
+	inputs := make([]release.RuntimeAssetInput, 0, len(lock.RequiredAssets))
+	for _, name := range lock.RequiredAssets {
+		path := filepath.Join(assetDir, name)
+		if err := os.WriteFile(path, []byte("asset:"+name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: path})
+	}
+	manifest, err := release.GenerateRuntimeManifest(lock, release.RuntimeProvenance{
+		SPXCommit:               spxCommit,
+		GodotCommit:             lock.Godot.Commit,
+		ModuleTree:              moduleTree,
+		RuntimePackSourceSHA256: runtimePackDigest,
+		BuildRecipeSHA256:       buildRecipeDigest,
+		Toolchain:               lock.Toolchain,
+	}, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runtimeResolutionFixture{
+		config: runtimeResolutionConfig{
+			LockPath: lockPath,
+			RepoRoot: repoRoot,
+			Revision: "HEAD",
+		},
+		lock:     lock,
+		manifest: manifest,
+	}
+}
+
+func gitOutput(t *testing.T, repoRoot string, args ...string) string {
+	t.Helper()
+	commandArgs := append([]string{"-C", repoRoot}, args...)
+	output, err := exec.Command("git", commandArgs...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(commandArgs, " "), err, output)
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func roundTripClient(fn roundTripFunc) *http.Client {
+	return &http.Client{Transport: fn}
 }

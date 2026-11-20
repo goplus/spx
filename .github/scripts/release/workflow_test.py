@@ -97,8 +97,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         plan = named_step(planning, "Validate release inputs")
         self.assertEqual(plan["env"]["PLATFORMS_INPUT"], "${{ inputs.platforms }}")
         self.assertLess(planning["steps"].index(plan), planning["steps"].index(named_step(planning, "Resolve locked runtime release")))
-        for platform in ("web", "macos", "windows", "linux"):
-            self.assertEqual(planning["outputs"][f"run_{platform}"], "${{ steps." + plan["id"] + f".outputs.run_{platform}" + " }}")
+        self.assertEqual(planning["outputs"]["package_platforms"],
+                         "${{ steps." + plan["id"] + ".outputs.package_platforms }}")
 
     def test_ready_runtime_reuse_does_not_require_checkout_or_mutations(self):
         job = self.jobs["publish-runtime"]
@@ -145,50 +145,31 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(self.jobs["publish-npm"]["with"]["release_artifact"], "web-release")
 
     def test_internal_build_scheduling_preserves_optional_platforms_and_runtime_reuse(self):
-        conditions = {
-            "runtime-prerequisites": (
-                "!cancelled()&&needs.plan-release.result=='success'&&needs.check-source.result=='success'&&"
-                "((needs.plan-release.outputs.runtime_state=='ready'&&needs.build-godot-runtime.result=='skipped'&&"
-                "needs.reuse-godot-runtime.result=='skipped'&&needs.build-runtime-pack.result=='skipped')||"
-                "(needs.plan-release.outputs.runtime_state=='missing'&&needs.build-runtime-pack.result=='success'&&"
-                "((needs.build-godot-runtime.result=='success'&&needs.reuse-godot-runtime.result=='skipped')||"
-                "(needs.build-godot-runtime.result=='skipped'&&needs.reuse-godot-runtime.result=='success'))))"
-            ),
-            "assemble-release": (
-                "!cancelled()&&needs.plan-release.result=='success'&&needs.runtime-prerequisites.result=='success'&&"
-                "(needs.plan-release.outputs.run_web!='true'||needs.package-web.result=='success')&&"
-                "(needs.plan-release.outputs.run_macos!='true'||needs.package-macos.result=='success')&&"
-                "(needs.plan-release.outputs.run_windows!='true'||needs.package-windows.result=='success')&&"
-                "(needs.plan-release.outputs.run_linux!='true'||needs.package-linux.result=='success')"
-            ),
-        }
         dependencies = {
             "plan-release": (), "check-source": ("plan-release",),
-            "build-godot-runtime": ("plan-release", "check-source"),
-            "reuse-godot-runtime": ("plan-release", "check-source"),
-            "build-runtime-pack": ("plan-release", "build-godot-runtime", "reuse-godot-runtime"),
-            "runtime-prerequisites": ("plan-release", "check-source", "build-godot-runtime", "reuse-godot-runtime", "build-runtime-pack"),
+            "build-engine": ("plan-release", "check-source"),
+            "reuse-engine": ("plan-release", "check-source"),
+            "build-runtime-pack": ("plan-release", "build-engine", "reuse-engine"),
+            "runtime-prerequisites": ("plan-release", "check-source", "build-engine", "reuse-engine", "build-runtime-pack"),
             "assemble-release": ("plan-release", "runtime-prerequisites", "package-web", "package-macos", "package-windows", "package-linux"),
-            "build-gate": ("plan-release", "assemble-release"),
         }
-        godot = self.build_jobs["build-godot-runtime"]
+        godot = self.build_jobs["build-engine"]
         self.assertEqual(job_condition(godot), "needs.plan-release.outputs.runtime_state=='missing'&&needs.plan-release.outputs.engine_state=='build'")
         self.assertRegex(godot["uses"], r"^goplus/godot/\.github/workflows/release_builds\.yml@[0-9a-f]{40}$")
         for platform in ("web", "macos", "windows", "linux"):
             name = f"package-{platform}"
             dependencies[name] = ("plan-release", "runtime-prerequisites")
-            conditions[name] = ("!cancelled()&&needs.runtime-prerequisites.result=='success'&&"
-                                f"needs.plan-release.outputs.run_{platform}=='true'")
+            self.assertEqual(job_condition(self.build_jobs[name]),
+                             "!cancelled()&&needs.runtime-prerequisites.result=='success'&&"
+                             f"contains(fromJSON(needs.plan-release.outputs.package_platforms),'{platform}')")
             self.assertEqual(self.build_jobs[name]["with"]["engine_artifacts"],
                              "${{ needs.plan-release.outputs.runtime_state == 'missing' }}")
         self.assertEqual(set(self.build_jobs), set(dependencies))
         for name, needs in dependencies.items():
             self.assertEqual(job_needs(self.build_jobs[name]), needs, name)
-        for name, condition in conditions.items():
-            self.assertEqual(job_condition(self.build_jobs[name]), condition, name)
 
     def test_engine_reuse_keeps_existing_artifact_names_and_provenance(self):
-        job = self.build_jobs["reuse-godot-runtime"]
+        job = self.build_jobs["reuse-engine"]
         self.assertEqual(job_condition(job),
                          "needs.plan-release.outputs.runtime_state=='missing'&&needs.plan-release.outputs.engine_state=='reuse'")
         verify = named_step(job, "Download and verify source engine")
@@ -218,7 +199,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         pack = self.build_jobs["build-runtime-pack"]
         self.assertEqual(job_condition(pack),
                          "!cancelled()&&needs.plan-release.outputs.runtime_state=='missing'&&"
-                         "(needs.build-godot-runtime.result=='success'||needs.reuse-godot-runtime.result=='success')")
+                         "(needs.build-engine.result=='success'||needs.reuse-engine.result=='success')")
         resolve = named_step(self.build_jobs["plan-release"], "Resolve locked runtime release")
         self.assertEqual(resolve["env"]["REUSE_ENGINE_VERSION"], "${{ inputs.reuse_engine_version }}")
         self.assertIn('--reuse-engine-version "$REUSE_ENGINE_VERSION"', resolve["run"])
@@ -226,11 +207,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_runtime_gate_requires_one_complete_engine_path(self):
         condition = job_condition(self.build_jobs["runtime-prerequisites"])
         statuses = ("success", "failure", "skipped", "cancelled")
-        for state, build, reuse, pack in itertools.product(("ready", "missing"), statuses, statuses, statuses):
-            expression = condition.replace("!cancelled()", "True")
+        for state, plan, check, build, reuse, pack, cancelled in itertools.product(
+                ("ready", "missing", "incompatible"), statuses, statuses,
+                statuses, statuses, statuses, (True, False)):
+            expression = condition.replace("!cancelled()", str(not cancelled))
             values = {"plan-release.outputs.runtime_state": state,
-                      "plan-release.result": "success", "check-source.result": "success",
-                      "build-godot-runtime.result": build, "reuse-godot-runtime.result": reuse,
+                      "plan-release.result": plan, "check-source.result": check,
+                      "build-engine.result": build, "reuse-engine.result": reuse,
                       "build-runtime-pack.result": pack}
             for key, value in values.items():
                 expression = expression.replace("needs." + key, repr(value))
@@ -238,7 +221,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
             expected = ((state == "ready" and build == reuse == pack == "skipped") or
                         (state == "missing" and pack == "success" and
                          (build, reuse) in (("success", "skipped"), ("skipped", "success"))))
-            with self.subTest(state=state, build=build, reuse=reuse, pack=pack):
+            expected = expected and not cancelled and plan == check == "success"
+            with self.subTest(inputs=values, cancelled=cancelled):
                 self.assertEqual(eval(expression, {"__builtins__": {}}), expected)
 
     def test_publication_scheduling_and_development_isolation(self):
@@ -256,16 +240,39 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertEqual(job_needs(self.jobs[name]), needs, name)
             self.assertEqual(job_condition(self.jobs[name]), condition, name)
 
-    def test_build_completion_gate_rejects_missing_failed_and_skipped_assembly(self):
-        gate = self.build_jobs["build-gate"]
-        self.assertEqual(job_condition(gate), "!cancelled()")
-        step = named_step(gate, "Require verified release artifacts")
-        self.assertEqual(step["env"], {"PLAN_RESULT": "${{ needs.plan-release.result }}",
-                                       "ASSEMBLE_RESULT": "${{ needs.assemble-release.result }}"})
-        for plan, assemble in itertools.product(("success", "skipped", "failure", "cancelled", ""), repeat=2):
-            with self.subTest(plan=plan, assemble=assemble):
-                result = run_shell(step["run"], env={"PLAN_RESULT": plan, "ASSEMBLE_RESULT": assemble})
-                self.assertEqual(result.returncode == 0, plan == assemble == "success", result.stderr)
+    def test_assembly_requires_successful_prerequisites_and_selected_packages(self):
+        job = self.build_jobs["assemble-release"]
+        self.assertEqual(job_condition(job), "!cancelled()")
+        self.assertEqual(job["env"]["PACKAGE_PLATFORMS"], "${{ needs.plan-release.outputs.package_platforms }}")
+        guard = job["steps"][0]
+        self.assertNotIn("if", guard)
+        self.assertEqual(guard["shell"], "python")
+        self.assertEqual(guard["env"], {"NEEDS_JSON": "${{ toJSON(needs) }}"})
+
+        def run_guard(needs, platforms):
+            return run_command([sys.executable, "-c", guard["run"]], env={
+                "NEEDS_JSON": json.dumps(needs), "PACKAGE_PLATFORMS": json.dumps(platforms),
+            })
+
+        platforms = ("web", "macos", "windows", "linux")
+        for selected in ((), ("linux",), platforms):
+            required = ("plan-release", "runtime-prerequisites", *(f"package-{p}" for p in selected))
+            needs = {name: {"result": "success" if name in required else "skipped"} for name in job_needs(job)}
+            self.assertEqual(run_guard(needs, selected).returncode, 0)
+            for name, result in itertools.product(required, ("failure", "skipped", "cancelled", None)):
+                with self.subTest(selected=selected, job=name, result=result):
+                    failed = needs.copy()
+                    if result is None:
+                        del failed[name]
+                    else:
+                        failed[name] = {"result": result}
+                    completed = run_guard(failed, selected)
+                    self.assertNotEqual(completed.returncode, 0)
+                    self.assertIn(name, completed.stderr)
+        for invalid in (None, {}, ["unknown"]):
+            with self.subTest(platforms=invalid):
+                result = run_guard({name: {"result": "success"} for name in job_needs(job)}, invalid)
+                self.assertNotEqual(result.returncode, 0)
 
     def test_release_gate_is_operation_aware_and_fail_closed(self):
         gate = self.jobs["release-gate"]

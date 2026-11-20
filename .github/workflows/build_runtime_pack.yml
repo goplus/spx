@@ -23,10 +23,8 @@ jobs:
         with:
           profile: native
 
-      - name: Set up locked Go and XGo
+      - name: Set up locked Go
         uses: ./.github/actions/setup-toolchain
-        with:
-          xgo: 'true'
 
       - name: Build local buildctl
         id: buildctl

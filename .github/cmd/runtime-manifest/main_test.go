@@ -233,62 +233,6 @@ func TestRevisionManifestFailuresPreserveOutputs(t *testing.T) {
 	}
 }
 
-func newManifestRepository(t *testing.T) (release.RuntimeLock, func(...string) string) {
-	t.Helper()
-	t.Chdir(t.TempDir())
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	t.Setenv("GIT_AUTHOR_NAME", "Manifest Test")
-	t.Setenv("GIT_AUTHOR_EMAIL", "manifest@example.invalid")
-	t.Setenv("GIT_COMMITTER_NAME", "Manifest Test")
-	t.Setenv("GIT_COMMITTER_EMAIL", "manifest@example.invalid")
-	git := func(args ...string) string {
-		t.Helper()
-		output, err := exec.Command("git", args...).CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %q: %v\n%s", args, err, output)
-		}
-		return strings.TrimSpace(string(output))
-	}
-	lock := release.DefaultRuntimeLock()
-	data, err := lock.JSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeManifestFixtureFile(t, "runtime.lock.json", string(data))
-	writeManifestFixtureFile(t, "cmd/spx/template/project/main.tscn", "[gd_scene format=3]\n")
-	writeManifestFixtureFile(t, lock.Module.Path+"/register.cpp", "// module\n")
-	writeManifestFixtureFile(t, ".github/scripts/runtime/build_pack.sh", "package main\n")
-	writeManifestFixtureFile(t, ".github/scripts/runtime/build_contract.py", "contract\n")
-	writeManifestFixtureFile(t, ".github/workflows/build_release.yml", "    uses: goplus/godot/.github/workflows/release_builds.yml@"+strings.Repeat("1", 40)+"\n")
-	git("init", "--quiet")
-	git("config", "commit.gpgSign", "false")
-	git("add", ".")
-	git("commit", "--quiet", "-m", "manifest inputs")
-	return lock, git
-}
-
-func manifestFixtureAssetArgs(t *testing.T, lock release.RuntimeLock) []string {
-	t.Helper()
-	args := []string{"--lock", "runtime.lock.json"}
-	for _, name := range lock.RequiredAssets {
-		path := filepath.Join("assets", name)
-		writeManifestFixtureFile(t, path, "asset:"+name)
-		args = append(args, "--asset", name+"="+path)
-	}
-	return args
-}
-
-func writeManifestFixtureFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRunReleaseManifestRejectsInvalidInputs(t *testing.T) {
 	dir := t.TempDir()
 	invalid := filepath.Join(dir, "invalid.json")
@@ -308,7 +252,7 @@ func TestRunReleaseManifestRejectsInvalidInputs(t *testing.T) {
 		{"invalid manifest", []string{"--verify-manifest", invalid}, "decode runtime manifest"},
 		{"asset directory in generation", []string{"--asset-directory", dir}, "requires --verify-manifest"},
 		{"missing assets", nil, "at least one --asset"},
-		{"missing separator", []string{"--asset", "invalid"}, "want name=path"},
+		{"missing separator", []string{"--asset", "invalid"}, "non-empty name=path"},
 		{"empty name", []string{"--asset", "=path"}, "non-empty name=path"},
 		{"empty path", []string{"--asset", "name="}, "non-empty name=path"},
 		{"incomplete asset set", []string{"--asset", "runtime.zip=path"}, "asset"},
@@ -333,7 +277,7 @@ func TestEmbeddedAssetManifest(t *testing.T) {
 	if err := writeEmbeddedAssetManifest([]string{"first=" + first, "second=" + second}, &output); err != nil {
 		t.Fatal(err)
 	}
-	var manifest assetManifest
+	var manifest embeddedAssetManifest
 	if err := json.Unmarshal(output.Bytes(), &manifest); err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +346,7 @@ func TestManifestMainModesAndOutputFailures(t *testing.T) {
 				t.Fatal(err)
 			}
 			if test.name == "embedded" {
-				var got assetManifest
+				var got embeddedAssetManifest
 				if err := json.Unmarshal(data, &got); err != nil || strings.Join(got.Names, ",") != "asset" || len(got.CacheKey) != 16 {
 					t.Fatalf("embedded manifest = %q, error %v", data, err)
 				}
@@ -443,8 +387,6 @@ func TestManifestMainModesAndOutputFailures(t *testing.T) {
 	}
 }
 
-func (w manifestFailWriter) Write([]byte) (int, error) { return 0, w.err }
-
 func TestManifestMainReportsFailures(t *testing.T) {
 	const helper = "SPX_TEST_MANIFEST_MAIN_ERROR"
 	if mode := os.Getenv(helper); mode != "" {
@@ -475,5 +417,63 @@ func TestManifestMainReportsFailures(t *testing.T) {
 				t.Fatalf("stderr = %q; want %q", exit.Stderr, tt.message)
 			}
 		})
+	}
+}
+
+func (w manifestFailWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func newManifestRepository(t *testing.T) (release.RuntimeLock, func(...string) string) {
+	t.Helper()
+	t.Chdir(t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_AUTHOR_NAME", "Manifest Test")
+	t.Setenv("GIT_AUTHOR_EMAIL", "manifest@example.invalid")
+	t.Setenv("GIT_COMMITTER_NAME", "Manifest Test")
+	t.Setenv("GIT_COMMITTER_EMAIL", "manifest@example.invalid")
+	git := func(args ...string) string {
+		t.Helper()
+		output, err := exec.Command("git", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %q: %v\n%s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	lock := release.DefaultRuntimeLock()
+	data, err := lock.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeManifestFixtureFile(t, "runtime.lock.json", string(data))
+	writeManifestFixtureFile(t, "cmd/spx/template/project/main.tscn", "[gd_scene format=3]\n")
+	writeManifestFixtureFile(t, lock.Module.Path+"/register.cpp", "// module\n")
+	writeManifestFixtureFile(t, ".github/scripts/runtime/build_pack.sh", "package main\n")
+	writeManifestFixtureFile(t, ".github/scripts/runtime/build_contract.py", "contract\n")
+	writeManifestFixtureFile(t, ".github/workflows/build_release.yml", "    uses: goplus/godot/.github/workflows/release_builds.yml@"+strings.Repeat("1", 40)+"\n")
+	git("init", "--quiet")
+	git("config", "commit.gpgSign", "false")
+	git("add", ".")
+	git("commit", "--quiet", "-m", "manifest inputs")
+	return lock, git
+}
+
+func manifestFixtureAssetArgs(t *testing.T, lock release.RuntimeLock) []string {
+	t.Helper()
+	args := []string{"--lock", "runtime.lock.json"}
+	for _, name := range lock.RequiredAssets {
+		path := filepath.Join("assets", name)
+		writeManifestFixtureFile(t, path, "asset:"+name)
+		args = append(args, "--asset", name+"="+path)
+	}
+	return args
+}
+
+func writeManifestFixtureFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

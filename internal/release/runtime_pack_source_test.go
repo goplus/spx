@@ -29,14 +29,6 @@ import (
 	"testing"
 )
 
-func runtimePackSourcePathTreeSHA256(tree []byte) (string, error) {
-	return selectedTreeSHA256(tree, "runtime pack source", isRuntimePackSourcePath)
-}
-
-func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
-	return selectedTreeSHA256(tree, "runtime build recipe", isRuntimeBuildRecipePath)
-}
-
 func TestRuntimePackSourceTreeSHA256SelectsPackInputs(t *testing.T) {
 	t.Parallel()
 
@@ -277,7 +269,7 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/engine/common.go", false},
 		{"internal/cmd/buildctl/engine/download.go", false},
 		{"internal/cmd/buildctl/engine/download_desktop.go", false},
-		{"internal/cmd/buildctl/engine/download_linux_pack.go", false},
+		{"internal/cmd/buildctl/engine/download_env.go", false},
 		{"internal/cmd/buildctl/engine/download_local.go", false},
 		{"internal/cmd/buildctl/engine/download_zip.go", false},
 		{"internal/cmd/buildctl/engine/download_http.go", false},
@@ -456,6 +448,7 @@ func TestRuntimeBuildRecipeIgnoresIndependentBuildPaths(t *testing.T) {
 		"internal/cmd/buildctl/root.go",
 		"internal/cmd/buildctl/engine/download.go",
 		"internal/cmd/buildctl/engine/download_desktop.go",
+		"internal/cmd/buildctl/engine/download_env.go",
 		"internal/cmd/buildctl/engine/download_http.go",
 		"internal/cmd/buildctl/engine/download_mobile.go",
 		"internal/cmd/buildctl/engine/download_runtime.go",
@@ -549,7 +542,11 @@ func TestRuntimeSourceSelectionRejectsMalformedBlobs(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			installReleaseGitFixture(t, tt.content)
-			if _, err := runtimePackSourceEntry(t.TempDir(), []byte(tt.header), runtimePackExportPresets); err == nil || !strings.Contains(err.Error(), tt.want) {
+			tree, err := parseGitTree(t.TempDir(), gitTreeFixture(tt.header))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tree.packSourceSHA256(); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("source selection = %v, want %q", err, tt.want)
 			}
 		})
@@ -565,18 +562,20 @@ func TestRuntimeSourceSelectionRejectsMalformedBlobs(t *testing.T) {
 func TestRuntimeSourceSelectionReadsOnlyExportPreset(t *testing.T) {
 	installReleaseGitFixture(t, "")
 	t.Setenv("SPX_GIT_STATUS", "4")
-	for _, name := range []string{"cmd/spx/template/project/main.tscn", "README.md"} {
-		entry := []byte("100644 blob abc\t" + name)
-		got, err := runtimePackSourceEntry(t.TempDir(), entry, name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if name == "README.md" && got != nil || name != "README.md" && !bytes.Equal(got, entry) {
-			t.Fatalf("source entry %s = %q", name, got)
-		}
+	const scene = "100644 blob abc\tcmd/spx/template/project/main.tscn"
+	tree, err := parseGitTree(t.TempDir(), gitTreeFixture(scene, "100644 blob def\tREADME.md"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	entry := []byte("100644 blob abc\t" + runtimePackExportPresets)
-	if _, err := runtimePackSourceEntry(t.TempDir(), entry, runtimePackExportPresets); err == nil || !strings.Contains(err.Error(), "read runtime pack preset") {
+	want := sha256.Sum256([]byte(scene + "\x00"))
+	if got, err := tree.packSourceSHA256(); err != nil || got != hex.EncodeToString(want[:]) {
+		t.Fatalf("pack source digest = %q, %v", got, err)
+	}
+	tree, err = parseGitTree(t.TempDir(), gitTreeFixture("100644 blob abc\t"+runtimePackExportPresets))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tree.packSourceSHA256(); err == nil || !strings.Contains(err.Error(), "read runtime pack preset") {
 		t.Fatalf("preset blob failure = %v", err)
 	}
 }
@@ -805,6 +804,22 @@ func TestProjectGodotPresetRequiresOptions(t *testing.T) {
 	if _, err := projectGodotPreset([]byte("[preset.0]\nname=\"Linux\"\n"), "Linux"); err == nil || !strings.Contains(err.Error(), "has no options") {
 		t.Fatalf("missing preset options = %v", err)
 	}
+}
+
+func runtimePackSourcePathTreeSHA256(data []byte) (string, error) {
+	tree, err := parseGitTree("", data)
+	if err != nil {
+		return "", err
+	}
+	return tree.digest("runtime pack source", isRuntimePackSourcePath, nil)
+}
+
+func runtimeBuildRecipeTreeSHA256(data []byte) (string, error) {
+	tree, err := parseGitTree("", data)
+	if err != nil {
+		return "", err
+	}
+	return tree.buildRecipeSHA256()
 }
 
 func gitTreeFixture(entries ...string) []byte {

@@ -68,7 +68,7 @@ func TestValidateEngineReuse(t *testing.T) {
 			}
 		})
 	}
-	if err := ValidateEngineReuse(source, target, fixture.root, "missing"); err == nil || !strings.Contains(err.Error(), "resolve runtime engine source tree") {
+	if err := ValidateEngineReuse(source, target, fixture.root, "missing"); err == nil || !strings.Contains(err.Error(), "list runtime engine source tree") {
 		t.Fatalf("missing revision error = %v", err)
 	}
 }
