@@ -87,11 +87,13 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 
 | `operation` | 结果 | `platforms` |
 | --- | --- | --- |
-| `dry-run` | 构建并校验精确的锁定 candidate，但不发布；报告 canonical-ref ancestry | 通常为 `all` |
+| `dry-run` | 构建并校验精确的锁定 candidate，不发布正式产物；报告 canonical-ref ancestry；对 web 候选执行 spxbench 回归门禁 | 必须包含 `web` |
 | `publish-runtime` | 只发布不可变的 `runtime-v*` 资产 | 忽略 |
 | `publish-release` | 发布 runtime、SPX 产品与 npm | 必须为 `all` |
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
+
+`dry-run` 还会创建临时的 `v<version>-rc.<run>.<attempt>` prerelease（内含 `spx_web.zip`），注册到 spxbench 并运行名为 `spx` 的门禁测试集。spxbench 向工作流推送任务完成事件，工作流随后读取最终状态并将每个游戏本次运行的结果与录制结果比较；不一致时门禁失败。使用此工作流前须先部署 spxbench 的任务事件流接口。全部用例通过后，工作流先从 spxbench 删除候选版本，再删除 prerelease。测试失败或删除候选版本失败时，两者都会保留，以便排查及后续重跑。清理失败不会改变已通过的回归测试结论：工作流会发出警告，并在 GitHub Step Summary 中分别报告回归与清理结果；prerelease 删除失败会再重试一次。安装请求发出前失败仍会清理 prerelease。spxbench 地址在校验脚本内有默认值（`https://spxbench.qiniu.io`，可用环境变量 `SPXBENCH_URL` 覆盖）；只需仓库配置 secret `SPXBENCH_API_TOKEN`。`dry-run` 不发布任何正式 SPX release、runtime 或 npm 包。
 
 1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=<当前声明的-SPX-tag>`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。
