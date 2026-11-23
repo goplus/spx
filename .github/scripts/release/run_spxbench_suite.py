@@ -263,7 +263,7 @@ class SpxbenchSuiteGate:
         log(f"   suite id={suite_id}")
         return suite_id
 
-    def install_candidate(self):
+    def install_candidate(self, commit):
         repository = github_context("GITHUB_REPOSITORY", "gh", "repo", "view",
                                     "--json", "nameWithOwner", "-q", ".nameWithOwner")
         asset_url = f"https://github.com/{repository}/releases/download/{self.candidate_tag}/spx_web.zip"
@@ -271,7 +271,7 @@ class SpxbenchSuiteGate:
         log(f"installing version {self.candidate_version}")
         set_prerelease_cleanup_pending(False)
         self.install_started = True
-        payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": asset_url}
+        payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": asset_url, "sourceCommit": commit}
         operation_id = f"spx:{self.candidate_version}"
         status, body = self.recoverable_request("/api/runtime-versions/install", "install request", method="POST",
                                                 payload=payload, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
@@ -295,6 +295,8 @@ class SpxbenchSuiteGate:
         artifact = self.candidate_artifact(body)
         if artifact is None:
             raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
+        if artifact.get("sourceCommit") and artifact["sourceCommit"] != commit:
+            raise SpxbenchSuiteError(f"installed candidate commit {artifact['sourceCommit']} does not match {commit}")
         log(f"   installed, digest={artifact.get('digest')}")
 
     def candidate_artifact(self, body):
@@ -344,7 +346,7 @@ class SpxbenchSuiteGate:
 
     def start_suite_run(self, suite_id):
         log(f"starting suite run (suite={suite_id}, spxVersion={self.candidate_version})")
-        query = urllib.parse.urlencode({"suite": suite_id, "spxVersion": self.candidate_version})
+        query = urllib.parse.urlencode({"suite": suite_id, "spxVersion": self.candidate_version, "trigger": "spx-dry-run"})
         while True:
             if time.monotonic() >= self.deadline:
                 raise SpxbenchSuiteError("timed out waiting for a free run slot")
@@ -527,7 +529,7 @@ class SpxbenchSuiteGate:
         try:
             create_candidate_release(self.candidate_tag, self.web_archive_path, commit)
             suite_id = self.resolve_suite()
-            self.install_candidate()
+            self.install_candidate(commit)
             job_id = self.start_suite_run(suite_id)
             state = self.wait_for_suite_job(job_id)
             suite_result = "failed"
