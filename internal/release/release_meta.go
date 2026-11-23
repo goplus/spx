@@ -89,6 +89,7 @@ var historicalSPXRuntimeMappings = []spxRuntimeMapping{
 	{spxVersion: "v3.3.0", runtimeVersion: "3.0.0"},
 	{spxVersion: "v4.0.0", runtimeVersion: "4.0.0"},
 	{spxVersion: "v4.0.1", runtimeVersion: "4.0.1"},
+	{spxVersion: "v4.0.2", runtimeVersion: "4.0.2"},
 }
 
 type releaseCatalog struct {
