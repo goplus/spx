@@ -16,10 +16,11 @@ from run_spxbench_suite import (SpxbenchConnectionError, SpxbenchSuiteError, Spx
 
 
 VERSION = "0.0.1-rc.1.1"
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
 CANDIDATE_ENV = {
     "SPXBENCH_URL": "http://127.0.0.1", "SPXBENCH_API_TOKEN": "t",
     "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": VERSION,
-    "GITHUB_REPOSITORY": "goplus/spx", "GITHUB_SHA": "abc123",
+    "GITHUB_REPOSITORY": "goplus/spx", "GITHUB_SHA": COMMIT,
 }
 OPERATION_ID = f"spx:{VERSION}"
 INSTALL_ACCEPTED = (202, {"operationId": OPERATION_ID, "status": "running"})
@@ -27,7 +28,7 @@ INSTALL_SUCCEEDED = (200, {"operationId": OPERATION_ID, "status": "success"})
 CANDIDATE_REGISTERED = (200, {"versions": [{"kind": "spx", "version": VERSION, "digest": "sha256:abc"}]})
 INSTALL_REQUEST = mock.call(
     "/api/runtime-versions/install", method="POST", timeout=30,
-    payload={"kind": "spx", "version": VERSION,
+    payload={"kind": "spx", "version": VERSION, "sourceCommit": COMMIT,
              "sourceUrl": f"https://github.com/goplus/spx/releases/download/v{VERSION}/spx_web.zip"})
 OPERATION_REQUEST = mock.call(f"/api/runtime-versions/operations/spx%3A{VERSION}", timeout=30)
 VERSIONS_REQUEST = mock.call("/api/runtime-versions", timeout=30)
@@ -157,7 +158,7 @@ class SuiteRunConflictTest(unittest.TestCase):
                 with self.assertRaises(SpxbenchSuiteError) as caught:
                     SpxbenchSuiteGate().start_suite_run(7)
                 self.assertEqual(str(caught.exception), message)
-                requested.assert_called_once_with("/__e2e/api/run?suite=7&spxVersion=0.0.1-rc.1.1", method="POST")
+                requested.assert_called_once_with("/__e2e/api/run?suite=7&spxVersion=0.0.1-rc.1.1&trigger=spx-dry-run", method="POST")
                 sleep.assert_not_called()
 
 
@@ -171,8 +172,13 @@ class CandidateInstallTest(unittest.TestCase):
 
     def test_already_completed_install_is_accepted(self):
         self.request.return_value = CANDIDATE_REGISTERED
-        SpxbenchSuiteGate().install_candidate()
+        SpxbenchSuiteGate().install_candidate(COMMIT)
         self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST])
+
+    def test_registered_candidate_with_different_commit_is_rejected(self):
+        self.request.return_value = (200, {"versions": [{"kind": "spx", "version": VERSION, "sourceCommit": "f" * 40}]})
+        with self.assertRaisesRegex(SpxbenchSuiteError, "does not match"):
+            SpxbenchSuiteGate().install_candidate(COMMIT)
 
     def test_invalid_install_response_is_rejected_without_polling(self):
         for response, message in (
@@ -184,13 +190,13 @@ class CandidateInstallTest(unittest.TestCase):
                 self.request.reset_mock()
                 self.request.return_value = response
                 with self.assertRaisesRegex(SpxbenchSuiteError, message):
-                    SpxbenchSuiteGate().install_candidate()
+                    SpxbenchSuiteGate().install_candidate(COMMIT)
                 self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST])
 
     def test_async_install_polls_until_candidate_is_registered(self):
         running = (200, {"operationId": OPERATION_ID, "status": "running", "stage": "下载 SPX archive"})
         self.request.side_effect = [INSTALL_ACCEPTED, running, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED]
-        SpxbenchSuiteGate().install_candidate()
+        SpxbenchSuiteGate().install_candidate(COMMIT)
         self.assertEqual(self.request.call_args_list,
                          [INSTALL_REQUEST, OPERATION_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST])
         self.sleep.assert_called_once_with(5)
@@ -200,14 +206,14 @@ class CandidateInstallTest(unittest.TestCase):
             with self.subTest(failure=failure):
                 self.request.reset_mock()
                 self.request.side_effect = [failure, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED]
-                SpxbenchSuiteGate().install_candidate()
+                SpxbenchSuiteGate().install_candidate(COMMIT)
                 self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST])
                 self.sleep.assert_not_called()
 
     def test_final_candidate_lookup_retries_transient_failure(self):
         self.request.side_effect = [INSTALL_ACCEPTED, INSTALL_SUCCEEDED,
                                     (503, "temporarily unavailable"), CANDIDATE_REGISTERED]
-        SpxbenchSuiteGate().install_candidate()
+        SpxbenchSuiteGate().install_candidate(COMMIT)
         self.assertEqual(self.request.call_args_list,
                          [INSTALL_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST, VERSIONS_REQUEST])
         self.sleep.assert_called_once_with(5)
@@ -216,7 +222,7 @@ class CandidateInstallTest(unittest.TestCase):
         failed = (200, {"operationId": OPERATION_ID, "status": "failed", "error": "download failed"})
         self.request.side_effect = [INSTALL_ACCEPTED, failed]
         with self.assertRaisesRegex(SpxbenchSuiteError, "download failed"):
-            SpxbenchSuiteGate().install_candidate()
+            SpxbenchSuiteGate().install_candidate(COMMIT)
         self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST])
         self.sleep.assert_not_called()
 
@@ -641,14 +647,14 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         self.assert_cleanup_states(True, False, True, False)
         self.assert_report(regression="passed", runtime="removed", prerelease="deleted")
         self.assertIn("/__e2e?job=11", self.summary.read_text())
-        self.created.assert_called_once_with(f"v{VERSION}", "dist/spx_web.zip", "abc123")
+        self.created.assert_called_once_with(f"v{VERSION}", "dist/spx_web.zip", COMMIT)
         self.deleted.assert_called_once_with(f"v{VERSION}")
         self.removed.assert_called_once_with("http://127.0.0.1/api/runtime-versions", "t", method="POST",
                                             payload={"action": "remove", "kind": "spx", "version": VERSION},
                                             timeout=mock.ANY)
         self.assertEqual(self.request.call_args_list[1], INSTALL_REQUEST)
         self.assertEqual(self.request.call_args_list[4],
-                         mock.call(f"/__e2e/api/run?suite=7&spxVersion={VERSION}", method="POST"))
+                         mock.call(f"/__e2e/api/run?suite=7&spxVersion={VERSION}&trigger=spx-dry-run", method="POST"))
 
     def test_install_failure_retains_candidate_and_prerelease(self):
         def request(path, **kwargs):
