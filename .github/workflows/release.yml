@@ -14,7 +14,7 @@ on:
         default: ''
         type: string
       platforms:
-        description: 'SPX packages: all or comma-separated web,macos,windows,linux; ignored by publish-runtime and publish-dev-npm'
+        description: 'SPX packages (all or comma-separated web,macos,windows,linux). Dry-run requires web. Ignored by publish-runtime and publish-dev-npm.'
         required: true
         default: 'all'
         type: string
@@ -46,6 +46,51 @@ jobs:
       release_tag: ${{ inputs.release_tag }}
       platforms: ${{ inputs.platforms }}
       reuse_engine_version: ${{ inputs.reuse_engine_version }}
+
+  run-spxbench-suite:
+    name: Check release candidate with spxbench suite
+    needs: build-release
+    if: ${{ !cancelled() && inputs.operation == 'dry-run' && needs.build-release.result == 'success' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      CANDIDATE_VERSION: ${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - name: Check out release scripts
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download assembled SPX product release
+        uses: actions/download-artifact@v8
+        with:
+          name: spx-product-release-${{ needs.build-release.outputs.version }}
+          path: dist
+
+      - name: Run spxbench regression suite
+        id: suite
+        shell: bash
+        env:
+          SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          WEB_ARCHIVE_PATH: dist/spx_web.zip
+        run: python3 .github/scripts/release/run_spxbench_suite.py
+
+      - name: Retry candidate prerelease cleanup
+        if: ${{ always() && steps.suite.outputs.prerelease_cleanup_pending == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release delete "v$CANDIDATE_VERSION" --cleanup-tag --yes; then
+            result=deleted
+          else
+            result=failed
+            echo "::warning title=spxbench prerelease cleanup::Could not delete v$CANDIDATE_VERSION after retry"
+          fi
+          echo "- Prerelease cleanup retry: **$result**." >> "$GITHUB_STEP_SUMMARY" || \
+            echo '::warning title=spxbench summary::Could not write prerelease cleanup result'
 
   publish-runtime:
     name: Publish or reuse runtime release
@@ -205,6 +250,7 @@ jobs:
       - prepare-spx-release
       - publish-npm
       - publish-spx-release
+      - run-spxbench-suite
       - validate-dev-npm
       - publish-dev-npm
     if: ${{ !cancelled() }}
@@ -221,7 +267,7 @@ jobs:
 
           operation = os.environ["OPERATION"]
           required = {
-              "dry-run": ("build-release",),
+              "dry-run": ("build-release", "run-spxbench-suite"),
               "publish-runtime": ("build-release", "publish-runtime"),
               "publish-release": ("build-release", "publish-runtime", "prepare-spx-release", "publish-npm", "publish-spx-release"),
               "publish-dev-npm": ("validate-dev-npm", "publish-dev-npm"),

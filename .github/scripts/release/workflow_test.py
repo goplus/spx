@@ -2,13 +2,16 @@
 
 import itertools
 import json
+import os
+from pathlib import Path
 import re
 import sys
 import tempfile
 import unittest
 
 from test_support import (WORKFLOWS, action_steps, job_condition, job_needs,
-                          load_workflow, named_step, run_command, run_shell, step_script)
+                          load_workflow, named_step, run_command, run_shell, step_script,
+                          write_executable)
 
 
 class ReleaseWorkflowTest(unittest.TestCase):
@@ -27,7 +30,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                          ["dry-run", "publish-runtime", "publish-release", "publish-dev-npm"])
         self.assertEqual(self.workflow["concurrency"], {"group": "spx-release", "cancel-in-progress": "false"})
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
-        for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release"):
+        for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release", "run-spxbench-suite"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "write"})
         # npm trusted publishing keeps release.yml as its direct caller.
         for name in ("publish-npm", "publish-dev-npm"):
@@ -82,6 +85,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 "Require reusable development runtime": "release/plan.py dev-runtime-policy",
             },
             "prepare-spx-release": {"Prepare SPX release draft": "release/publish.py spx"},
+            "run-spxbench-suite": {"Run spxbench regression suite": "release/run_spxbench_suite.py"},
         }
         for job_name, steps in commands.items():
             job = {**self.build_jobs, **self.jobs}[job_name]
@@ -138,11 +142,49 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(step_script(job, "Assemble immutable asset sets"),
                          "python3 .github/scripts/release/assemble.py")
         for upload, consumer in (("Upload assembled runtime release", "publish-runtime"),
-                                 ("Upload assembled SPX release", "prepare-spx-release")):
+                                 ("Upload assembled SPX release", "prepare-spx-release"),
+                                 ("Upload assembled SPX release", "run-spxbench-suite")):
             producer_name = named_step(job, upload)["with"]["name"]
             download, = action_steps(self.jobs[consumer], "actions/download-artifact")
             self.assertEqual(download["with"]["name"], producer_name.replace("needs.plan-release.", "needs.build-release."))
         self.assertEqual(self.jobs["publish-npm"]["with"]["release_artifact"], "web-release")
+
+    def test_candidate_validation_uses_the_assembled_web_archive(self):
+        job = self.jobs["run-spxbench-suite"]
+        download, = action_steps(job, "actions/download-artifact")
+        validation = named_step(job, "Run spxbench regression suite")
+        cleanup = named_step(job, "Retry candidate prerelease cleanup")
+        self.assertLess(job["steps"].index(download), job["steps"].index(validation))
+        self.assertLess(job["steps"].index(validation), job["steps"].index(cleanup))
+        self.assertEqual(job["env"]["CANDIDATE_VERSION"],
+                         "${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}")
+        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"], f"{download['with']['path']}/spx_web.zip")
+        self.assertEqual(validation["env"]["SPXBENCH_API_TOKEN"], "${{ secrets.SPXBENCH_API_TOKEN }}")
+        for step in (validation, cleanup):
+            self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertEqual(job_condition(cleanup),
+                         f"always()&&steps.{validation['id']}.outputs.prerelease_cleanup_pending=='true'")
+
+    def test_prerelease_cleanup_retry_reports_result_without_failing_gate(self):
+        script = step_script(self.jobs["run-spxbench-suite"], "Retry candidate prerelease cleanup")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            version = "0.0.1-rc.1.1"
+            env = {"PATH": f"{root}:{os.environ['PATH']}", "CANDIDATE_VERSION": version}
+            for exit_code, summary_name in ((0, "success"), (1, "failure"), (1, "missing/summary")):
+                with self.subTest(exit_code=exit_code, summary=summary_name):
+                    write_executable(root / "gh", f'#!/bin/sh\necho "$@" > gh-args\nexit {exit_code}\n')
+                    summary = root / summary_name
+                    result = run_shell(script, cwd=root, env={**env, "GITHUB_STEP_SUMMARY": str(summary)})
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual((root / "gh-args").read_text().strip(),
+                                     f"release delete v{version} --cleanup-tag --yes")
+                    self.assertEqual("::warning" in result.stdout, exit_code != 0)
+                    if summary.parent == root:
+                        expected = "failed" if exit_code else "deleted"
+                        self.assertIn(f"Prerelease cleanup retry: **{expected}**", summary.read_text())
+                    else:
+                        self.assertIn("Could not write prerelease cleanup result", result.stdout)
 
     def test_internal_build_scheduling_preserves_optional_platforms_and_runtime_reuse(self):
         dependencies = {
@@ -228,6 +270,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_publication_scheduling_and_development_isolation(self):
         contract = {
             "build-release": ((), "inputs.operation!='publish-dev-npm'"),
+            "run-spxbench-suite": (("build-release",), "!cancelled()&&inputs.operation=='dry-run'&&needs.build-release.result=='success'"),
             "publish-runtime": (("build-release",), "!cancelled()&&inputs.operation!='dry-run'&&needs.build-release.result=='success'"),
             "prepare-spx-release": (("build-release", "publish-runtime"), "!cancelled()&&inputs.operation=='publish-release'&&needs.publish-runtime.result=='success'"),
             "publish-npm": (("build-release", "prepare-spx-release"), "!cancelled()&&inputs.operation=='publish-release'&&needs.prepare-spx-release.result=='success'"),
@@ -277,12 +320,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def test_release_gate_is_operation_aware_and_fail_closed(self):
         gate = self.jobs["release-gate"]
         required = {
-            "dry-run": ("build-release",),
+            "dry-run": ("build-release", "run-spxbench-suite"),
             "publish-runtime": ("build-release", "publish-runtime"),
             "publish-release": ("build-release", "publish-runtime", "prepare-spx-release", "publish-npm", "publish-spx-release"),
             "publish-dev-npm": ("validate-dev-npm", "publish-dev-npm"),
         }
-        terminal_jobs = (*required["publish-release"], *required["publish-dev-npm"])
+        terminal_jobs = (*required["publish-release"], "run-spxbench-suite", *required["publish-dev-npm"])
         self.assertEqual(job_needs(gate), terminal_jobs)
         self.assertEqual(job_condition(gate), "!cancelled()")
         step = named_step(gate, "Require the selected operation's terminal jobs")

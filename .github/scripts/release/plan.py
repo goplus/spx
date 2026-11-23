@@ -46,6 +46,8 @@ def resolve_platforms(env):
         if platform in selected:
             raise ValueError(f"Duplicate platform: {platform}")
         selected.add(platform)
+    if "web" not in selected:
+        raise ValueError("dry-run validates the web build against spxbench; include web in platforms")
     return [platform for platform in PLATFORM_ASSETS if platform in selected]
 
 
