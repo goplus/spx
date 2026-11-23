@@ -56,8 +56,9 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 	cfg := Config{
 		RuntimeSourceRoot: sourceRoot, RuntimeManifestPath: explicitManifest,
 		RuntimeCacheRoot: filepath.Join(root, "cache"),
+		IO:               IO{Env: []string{"SPX_RUNTIME_OFFLINE=1"}},
 	}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{"SPX_RUNTIME_OFFLINE=1"}}, lock, runtimeAssetDependencies{
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, lock, runtimeAssetDependencies{
 		fetch:     func(context.Context, string, io.Writer) error { return errors.New("network must not be used") },
 		cacheRoot: func() string { return cfg.RuntimeCacheRoot },
 	})
@@ -75,7 +76,7 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 
 	cfg.RuntimeManifestPath = ""
 	cfg.Source.SourceMode = true
-	assets, err = acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{"SPX_RUNTIME_OFFLINE=1"}}, lock, runtimeAssetDependencies{
+	assets, err = acquireRuntimeAssetsWith(context.Background(), cfg, lock, runtimeAssetDependencies{
 		fetch:     func(context.Context, string, io.Writer) error { return errors.New("network must not be used") },
 		cacheRoot: func() string { return filepath.Join(root, "cache-source") },
 	})
@@ -94,10 +95,20 @@ func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
 
 func TestRuntimeEnvironmentConfigOverridesProcess(t *testing.T) {
 	t.Setenv(runtimeCacheEnv, "/process-cache")
-	env := runtimeEnvironment(Config{RuntimeCacheRoot: "/config-cache"}, nil)
+	env := Config{RuntimeCacheRoot: "/config-cache"}.runtimeEnvironment()
 	value, found, duplicate := environmentValue(env, runtimeCacheEnv)
 	if !found || duplicate || value != "/config-cache" {
 		t.Fatalf("%s = %q, found %v, duplicate %v", runtimeCacheEnv, value, found, duplicate)
+	}
+}
+
+func TestSourceRuntimeGoQueryHonorsEmptyEnvironment(t *testing.T) {
+	t.Setenv("GOPATH", t.TempDir())
+	cfg := Config{WorkDir: t.TempDir(), IO: IO{Env: []string{}}}
+	launcherGoFixture(t, &cfg, `printf '%s' "${GOPATH-}"`)
+	_, err := resolveGoBin(context.Background(), cfg, cfg.runtimeEnvironment())
+	if err == nil || !strings.Contains(err.Error(), "Go environment has no GOPATH") {
+		t.Fatalf("Go query with empty environment: %v", err)
 	}
 }
 
@@ -117,8 +128,8 @@ func TestAcquireRuntimeAssetsRejectsInvalidExplicitManifestWithoutFetch(t *testi
 		calls++
 		return t.TempDir(), nil
 	}
-	cfg := Config{RuntimeCacheRoot: cacheRoot, RuntimeManifestPath: manifestPath, Source: SourceIdentity{SourceMode: true}}
-	_, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{runtimeCacheEnv + "=" + cacheRoot}}, release.DefaultRuntimeLock(), dependencies)
+	cfg := Config{RuntimeCacheRoot: cacheRoot, RuntimeManifestPath: manifestPath, Source: SourceIdentity{SourceMode: true}, IO: IO{Env: []string{runtimeCacheEnv + "=" + cacheRoot}}}
+	_, err := acquireRuntimeAssetsWith(context.Background(), cfg, release.DefaultRuntimeLock(), dependencies)
 	if err == nil {
 		t.Fatal("invalid explicit local manifest was accepted")
 	}
@@ -138,9 +149,9 @@ func TestAcquireRuntimeAssetsRejectsTamperedLocalRuntimeFilesWithoutFetch(t *tes
 		return errors.New("local manifest must not fetch")
 	}
 	cfg := Config{RuntimeManifestPath: manifestPath, RuntimeCacheRoot: cacheRoot}
-	env := IO{Env: []string{}}
+	cfg.IO.Env = []string{}
 	dependencies := localRuntimeTestDependencies(cacheRoot, fetch)
-	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, lock, dependencies)
 	if err != nil {
 		t.Fatalf("valid local runtime acquisition: %v", err)
 	}
@@ -164,7 +175,7 @@ func TestAcquireRuntimeAssetsRejectsTamperedLocalRuntimeFilesWithoutFetch(t *tes
 			if err := os.WriteFile(path, []byte("tampered"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies); err == nil {
+			if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, lock, dependencies); err == nil {
 				t.Fatalf("tampered local runtime asset %q was accepted", name)
 			}
 			if calls != 0 {
@@ -208,9 +219,9 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 		return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 	}
 	cfg := Config{RuntimeSourceRoot: sourceRoot, RuntimeCacheRoot: cacheRoot, Source: SourceIdentity{SourceMode: true}}
-	env := IO{Env: []string{}}
+	cfg.IO.Env = []string{}
 	dependencies := localRuntimeTestDependencies(cacheRoot, fetch)
-	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, lock, dependencies)
 	if err != nil {
 		t.Fatalf("valid auto-discovered local runtime: %v", err)
 	}
@@ -224,7 +235,7 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 	if err := os.WriteFile(manifestPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, env, lock, dependencies); err == nil {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, lock, dependencies); err == nil {
 		t.Fatal("identity-mismatched auto-discovered manifest fell back to published runtime")
 	}
 	if calls != 2 {
@@ -341,7 +352,7 @@ func TestRuntimeAcquisitionRejectsInvalidEnvironmentBeforeFetch(t *testing.T) {
 				t.Fatal("invalid environment triggered a fetch")
 				return nil
 			})
-			if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, IO{Env: tt.env}, release.DefaultRuntimeLock(), deps); err == nil || !strings.Contains(err.Error(), tt.want) {
+			if _, err := acquireRuntimeAssetsWith(context.Background(), Config{IO: IO{Env: tt.env}}, release.DefaultRuntimeLock(), deps); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("acquisition error = %v, want %q", err, tt.want)
 			}
 		})
@@ -356,7 +367,7 @@ func TestRuntimeAcquisitionRejectsInvalidEnvironmentBeforeFetch(t *testing.T) {
 			t.Fatalf("runtimeOffline(%q) = %v, %v", value, offline, err)
 		}
 	}
-	if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, IO{}, release.DefaultRuntimeLock(), runtimeAssetDependencies{}); err == nil || !strings.Contains(err.Error(), "incomplete") {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, release.DefaultRuntimeLock(), runtimeAssetDependencies{}); err == nil || !strings.Contains(err.Error(), "incomplete") {
 		t.Fatalf("missing acquisition dependencies = %v", err)
 	}
 }
@@ -428,7 +439,7 @@ func TestRuntimeAcquisitionRejectsInvalidLockBeforeResolution(t *testing.T) {
 		t.Fatal("invalid lock resolved cache storage")
 		return ""
 	}
-	if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, IO{Env: []string{}}, lock, deps); err == nil {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, lock, deps); err == nil {
 		t.Fatal("invalid runtime lock accepted")
 	}
 }

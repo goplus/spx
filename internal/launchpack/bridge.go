@@ -20,20 +20,28 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 )
 
-func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, streams IO) (string, func(), error) {
+// BuildSourceBridge compiles the configured source bridge and returns a path
+// plus a cleanup function. Provenance checks belong to the caller.
+func BuildSourceBridge(ctx context.Context, cfg Config) (string, func(), error) {
+	if ctx == nil {
+		return "", nil, fmt.Errorf("launchpack: nil context")
+	}
 	if err := cfg.validateGraphInputs(); err != nil {
 		return "", nil, err
 	}
-	if err := cfg.verifyGraph(ctx, "before source bridge build"); err != nil {
+	bridgeName, err := bridgeFileName(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
 		return "", nil, err
 	}
 	if cfg.BridgePackage == "" {
 		return "", nil, fmt.Errorf("launchpack: bridge package is required")
+	}
+	if err := cfg.verifyGraph(ctx, "before source bridge build"); err != nil {
+		return "", nil, err
 	}
 	workDir, err := os.MkdirTemp("", "spx-launchpack-bridge-")
 	if err != nil {
@@ -43,18 +51,12 @@ func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, strea
 	cleanup := func() { _ = os.RemoveAll(workDir) }
 	if keepWork {
 		cleanup = func() {}
-		if streams.Stderr != nil {
-			_, _ = fmt.Fprintf(streams.Stderr, "SPXBRIDGEWORK=%s\n", workDir)
+		if cfg.IO.Stderr != nil {
+			_, _ = fmt.Fprintf(cfg.IO.Stderr, "SPXBRIDGEWORK=%s\n", workDir)
 		}
 	}
 	bridgePath := filepath.Join(workDir, bridgeName)
-	args := sourceBridgeBuildArgs(cfg, bridgePath)
-	command := exec.CommandContext(ctx, cfg.GoCommand, args...)
-	command.Dir = cfg.WorkDir
-	command.Env = sourceBridgeEnv(cfg, streams.Env)
-	command.Stdin = streams.Stdin
-	command.Stdout = streams.Stdout
-	command.Stderr = streams.Stderr
+	command := cfg.goBuildCommand(ctx, "c-shared", bridgePath, cfg.BridgePackage)
 	if err := command.Run(); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("launchpack: build source interpreter bridge: %w", err)
@@ -68,20 +70,6 @@ func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, strea
 		return "", nil, err
 	}
 	return bridgePath, cleanup, nil
-}
-
-func sourceBridgeBuildArgs(cfg Config, bridgePath string) []string {
-	return sourceBridgeBuildArgsForGOOS(cfg, bridgePath, runtime.GOOS)
-}
-
-func sourceBridgeBuildArgsForGOOS(cfg Config, bridgePath, goos string) []string {
-	args := append([]string{"build"}, cfg.GraphFlags...)
-	args = append(args, normalizedGoBuildFlags(cfg.BuildFlags)...)
-	args = append(args, "-buildmode=c-shared")
-	if goos == "windows" {
-		args = append(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
-	}
-	return append(args, "-o", bridgePath, cfg.BridgePackage)
 }
 
 func bridgeFileName(goos, goarch string) (string, error) {

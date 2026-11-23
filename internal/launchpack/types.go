@@ -24,9 +24,11 @@ import (
 
 	"github.com/goplus/spx/v4/internal/portableconfig"
 	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
-// IO describes command streams and environment. A nil Env inherits the process.
+// IO describes command streams and the base environment for Go commands and
+// runtime acquisition. Only a nil Env inherits the process environment.
 type IO struct {
 	Stdin  io.Reader
 	Stdout io.Writer
@@ -34,24 +36,8 @@ type IO struct {
 	Env    []string
 }
 
-// RuntimeIdentity asserts the runtime consumed by a package operation.
-type RuntimeIdentity struct {
-	Version string
-	ABI     int
-	GOOS    string
-	GOARCH  string
-}
-
-// SourceIdentity is a generic source identity recorded in the payload. It is
-// intentionally independent of module graph and driver protocol types.
-type SourceIdentity struct {
-	SelectedPath     string
-	SelectedVersion  string
-	EffectivePath    string
-	EffectiveVersion string
-	Main             bool
-	SourceMode       bool
-}
+// SourceIdentity records the source identity embedded in the launcher payload.
+type SourceIdentity = runtimepayload.SourceIdentity
 
 // Config is the complete input to launcher packaging.
 type Config struct {
@@ -68,7 +54,6 @@ type Config struct {
 	RuntimeAssetDir     string
 	RuntimeCacheRoot    string
 	RuntimeOffline      bool
-	RuntimeIdentity     RuntimeIdentity
 
 	RuntimeLock release.RuntimeLock
 	Source      SourceIdentity

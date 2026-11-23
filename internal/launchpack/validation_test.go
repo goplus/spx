@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -82,6 +83,11 @@ func TestLauncherConfigurationRejectsUnsafeInputs(t *testing.T) {
 		name, want string
 		change     func(*testing.T, *Config)
 	}{
+		{"uninitialized snapshot", "portable config", func(t *testing.T, c *Config) {
+			c.PortableConfig = portableconfig.PortableConfigSnapshot{}
+			// Acquiring the runtime first would fail on the missing manifest.
+			c.RuntimeManifestPath = filepath.Join(c.WorkDir, "missing.json")
+		}},
 		{"missing project", "project-dir is required", func(t *testing.T, c *Config) { c.ProjectDir = "" }},
 		{"missing source", "project-file is required", func(t *testing.T, c *Config) { c.ProjectFile = "" }},
 		{"missing output", "output is required", func(t *testing.T, c *Config) { c.Output = "" }},
@@ -166,45 +172,91 @@ func TestLauncherPublicEntryPointsRejectNilContext(t *testing.T) {
 	}
 }
 
-func TestRuntimeLockRejectsIncompatibleIdentity(t *testing.T) {
+func TestRuntimeLockSelectsDefaultOrExplicitLock(t *testing.T) {
+	explicit := release.DefaultRuntimeLock()
+	explicit.RuntimeVersion = "9.9.9"
+	explicit.RuntimeABI++
+	for _, tt := range []struct {
+		name string
+		cfg  Config
+		want release.RuntimeLock
+	}{
+		{name: "default", want: release.DefaultRuntimeLock()},
+		{name: "explicit", cfg: Config{RuntimeLock: explicit}, want: explicit},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := runtimeLock(tt.cfg)
+			if err != nil || !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("runtimeLock = %#v, %v, want %#v", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestRuntimeAcquisitionRejectsInvalidLockBeforeMaterialization(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
 		change     func(*Config)
 	}{
-		{"invalid lock", "runtime", func(c *Config) { c.RuntimeLock.RuntimeVersion = "invalid version" }},
-		{"version", "runtime version", func(c *Config) { c.RuntimeIdentity.Version = "9.9.9" }},
-		{"abi", "runtime ABI", func(c *Config) { c.RuntimeIdentity.ABI = c.RuntimeLock.RuntimeABI + 1 }},
-		{"os", "runtime target", func(c *Config) { c.RuntimeIdentity.GOOS = "other" }},
-		{"arch", "runtime target", func(c *Config) { c.RuntimeIdentity.GOARCH = "other" }},
+		{"version", "invalid runtime version", func(c *Config) { c.RuntimeLock.RuntimeVersion = "invalid version" }},
 		{"cache", "runtime cache root", func(c *Config) { c.RuntimeCacheRoot = "relative" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{RuntimeLock: release.DefaultRuntimeLock()}
+			root := t.TempDir()
+			cfg := Config{
+				RuntimeLock: release.DefaultRuntimeLock(), RuntimeCacheRoot: filepath.Join(root, "cache"),
+				RuntimeManifestPath: filepath.Join(root, "unavailable-manifest.json"),
+			}
 			tt.change(&cfg)
 			if _, err := AcquireRuntimeAssets(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("AcquireRuntimeAssets error = %v, want %q", err, tt.want)
+			}
+			if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+				t.Fatalf("invalid configuration created files %v: %v", entries, err)
 			}
 		})
 	}
 }
 
 func TestProjectArchiveIncludesSortedSourcesAndPackDir(t *testing.T) {
-	projectDir := t.TempDir()
-	for _, name := range []string{"main.spx", "Hero.spx", "outside.png", "assets/hero.png"} {
-		writeProjectTestFile(t, filepath.Join(projectDir, name), name)
+	cfg := validLaunchpackConfig(t)
+	for _, name := range []string{"Hero.spx", "outside.png", "assets/hero.png"} {
+		writeProjectTestFile(t, filepath.Join(cfg.ProjectDir, name), name)
 	}
-	writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), `{"backdrops":[{"path":"hero.png"},{"path":"./hero.png"}]}`)
-	snapshot, err := portableconfig.SnapshotPortableConfig(projectDir)
+	writeProjectTestFile(t, filepath.Join(cfg.ProjectDir, "assets", "index.json"), `{"backdrops":[{"path":"hero.png"},{"path":"./hero.png"}]}`)
+	archiveConfig, err := prepareProjectArchiveConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "main.spx"), ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json"}
-	archiveConfig, err := prepareProjectArchiveConfig(cfg, snapshot)
-	if err != nil {
-		t.Fatal(err)
+	if archiveConfig.IncludeConfig || archiveConfig.ConfigBytes != nil {
+		t.Fatal("archive includes absent .config")
 	}
 	if archiveConfig.PackDir != "assets" || !slices.Equal(archiveConfig.ProjectFiles, []string{"Hero.spx", "main.spx"}) {
 		t.Fatalf("archive inputs = %q and %q", archiveConfig.PackDir, archiveConfig.ProjectFiles)
+	}
+}
+
+func TestProjectArchiveUsesCapturedPortableConfig(t *testing.T) {
+	cfg := validLaunchpackConfig(t)
+	path := filepath.Join(cfg.ProjectDir, ".config")
+	const original = `{"title":"captured"}`
+	writeProjectTestFile(t, path, original)
+	var err error
+	cfg.PortableConfig, err = portableconfig.SnapshotPortableConfig(cfg.ProjectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := prepareProjectArchiveConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	writeProjectTestFile(t, path, "{}")
+	if !archive.IncludeConfig || string(archive.ConfigBytes) != original {
+		t.Fatalf("archived snapshot = %q, included = %t", archive.ConfigBytes, archive.IncludeConfig)
+	}
+	if _, err := prepareProjectArchiveConfig(cfg); err == nil {
+		t.Fatal("accepted changed config")
 	}
 }
 
@@ -247,7 +299,7 @@ func TestProjectAllowlistRejectsUnsafeOrIncompleteProjects(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := validLaunchpackConfig(t)
 			tt.change(t, &cfg)
-			if _, err := prepareProjectArchiveConfig(cfg, cfg.PortableConfig); err == nil || !strings.Contains(err.Error(), tt.want) {
+			if _, err := prepareProjectArchiveConfig(cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("prepareProjectArchiveConfig error = %v, want %q", err, tt.want)
 			}
 		})

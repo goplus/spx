@@ -161,6 +161,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool", "./internal/cmd/buildctl/runtimecmd",
             ],
             "coverage-command-macos.out": ["./cmd/spx/internal/command"],
+            "coverage-launchpack-macos.out": ["./internal/launchpack"],
         },
         "windows": {
             "coverage-buildctl-windows.out": ["./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool"],
@@ -168,6 +169,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "coverage-fileutil-windows.out": ["./internal/base/fileutil"],
             "coverage-interpsession-windows.out": ["./internal/interpsession"],
             "coverage-runtimebundle-windows.out": ["./internal/runtimebundle"],
+            "coverage-launchpack-windows.out": ["./internal/launchpack"],
         },
         "web": {
             "coverage-web.out": [
@@ -179,7 +181,9 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "coverage-web-engine.out": ["./internal/engine"],
         },
         "web-process": {
-            "coverage-web-process.out": ["./internal/cmd/buildctl/engine", "./internal/base/processsupervisor", "./pkg/launcher"],
+            "coverage-web-process.out": [
+                "./internal/cmd/buildctl/engine", "./internal/base/processsupervisor", "./pkg/launcher", "./internal/launchpack",
+            ],
         },
         "web-interpreter": {"cmd/ispx/coverage-web.out": ["./..."]},
         "tools": {"coverage-tools.out": ["./.github/cmd/..."]},
