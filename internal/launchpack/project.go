@@ -25,7 +25,6 @@ import (
 
 	"github.com/goplus/spx/v4/internal/launchpack/assets"
 	"github.com/goplus/spx/v4/internal/launchpack/projectarchive"
-	"github.com/goplus/spx/v4/internal/portableconfig"
 )
 
 func collectProjectAllowlist(cfg Config) ([]string, error) {
@@ -84,15 +83,15 @@ func topLevelProjectName(projectDir, projectFile string) (string, error) {
 	return rel, nil
 }
 
-func prepareProjectArchiveConfig(cfg Config, snapshot portableconfig.PortableConfigSnapshot) (projectarchive.Config, error) {
+func prepareProjectArchiveConfig(cfg Config) (projectarchive.Config, error) {
 	files, err := collectProjectAllowlist(cfg)
 	if err != nil {
 		return projectarchive.Config{}, err
 	}
-	if err := snapshot.Verify(cfg.ProjectDir); err != nil {
+	if err := cfg.PortableConfig.Verify(cfg.ProjectDir); err != nil {
 		return projectarchive.Config{}, fmt.Errorf("launchpack: %w", err)
 	}
 	return projectarchive.Config{ProjectDir: cfg.ProjectDir, ProjectFiles: files,
-		IncludeConfig: snapshot.Present(), ConfigBytes: snapshot.Bytes(), PackDir: cfg.PackDir,
+		IncludeConfig: cfg.PortableConfig.Present(), ConfigBytes: cfg.PortableConfig.Bytes(), PackDir: cfg.PackDir,
 		Output: cfg.Output}, nil
 }

@@ -42,6 +42,8 @@ case "${1:-}" in
       ./internal/cmd/buildctl/shared ./internal/cmd/buildctl/tool ./internal/cmd/buildctl/runtimecmd
     covered_test coverage-command-macos.out -v \
       -run '^TestResolveAppPathReportsPermissionRepairFailure$' ./cmd/spx/internal/command
+    covered_test coverage-launchpack-macos.out -v \
+      -run '^Test(BuildLauncherEndToEnd|CompileLauncherReportsDarwinSigningFailure)$' ./internal/launchpack
     ;;
   windows)
     require_native_platform windows
@@ -58,6 +60,7 @@ case "${1:-}" in
     covered_test coverage-runtimebundle-windows.out -v \
       -run '^Test(CacheDefaultPermissionsProtectNestedFilesAndRepair|CacheUsesConfiguredWindowsPermissions|WindowsPrivateDACLIsAppliedAtCreation|AcquireCreatesProtectedWindowsCache|VerifyPrivateSecurityDescriptor.*)$' \
       ./internal/runtimebundle
+    covered_test coverage-launchpack-windows.out -v -run '^TestGoBuildCommand$' ./internal/launchpack
     ;;
   web)
     covered_web_test coverage-web.out -timeout=1m \
@@ -71,7 +74,7 @@ case "${1:-}" in
   web-process)
     covered_web_test coverage-web-process.out \
       -run 'UnsupportedPlatform|^Test(RunCommand|MaterializeComponent)|^Test(RunRejectsInvalidInput|PrepareLinuxRuntimePackAssetsRejectsInvalidInputs|ProcessStatusSuccess|RunRejectsInvalidPayload|RunContextRejectsInvalidContext|ContextWriter)$' \
-      ./internal/cmd/buildctl/engine ./internal/base/processsupervisor ./pkg/launcher
+      ./internal/cmd/buildctl/engine ./internal/base/processsupervisor ./pkg/launcher ./internal/launchpack
     ;;
   web-interpreter)
     cd cmd/ispx

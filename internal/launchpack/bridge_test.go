@@ -91,7 +91,7 @@ func TestBuildSourceBridgeChecksGraphAndCleansFailures(t *testing.T) {
 	}
 	cfg := validLaunchpackConfig(t)
 	cfg.BridgePackage = ""
-	if _, _, err := buildSourceBridge(context.Background(), cfg, "bridge.so", IO{}); err == nil || !strings.Contains(err.Error(), "bridge package") {
+	if _, _, err := BuildSourceBridge(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "bridge package") {
 		t.Fatalf("missing bridge package: %v", err)
 	}
 	for _, goos := range []string{"linux", "darwin", "windows"} {
@@ -103,18 +103,51 @@ func TestBuildSourceBridgeChecksGraphAndCleansFailures(t *testing.T) {
 	if _, err := bridgeFileName("plan9", "amd64"); err == nil {
 		t.Fatal("unsupported host accepted")
 	}
-	args := sourceBridgeBuildArgsForGOOS(cfg, "bridge.dll", "windows")
-	if !slices.Contains(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition") {
-		t.Fatalf("Windows linker flags = %q", args)
+}
+
+func TestBuildSourceBridgeUnsupportedPlatform(t *testing.T) {
+	switch runtime.GOOS {
+	case "darwin", "linux", "windows":
+		t.Skip("source bridge builds are supported on this host")
+	}
+	dir := t.TempDir()
+	cfg := Config{WorkDir: dir, GoCommand: filepath.Join(dir, "go"), BridgePackage: "./bridge"}
+	writeProjectTestFile(t, cfg.GoCommand, "")
+	path, cleanup, err := BuildSourceBridge(t.Context(), cfg)
+	want := "host platform " + runtime.GOOS + "/" + runtime.GOARCH + " is not supported"
+	if err == nil || !strings.Contains(err.Error(), want) || path != "" || cleanup != nil {
+		t.Fatalf("BuildSourceBridge returned path %q, cleanup %t, error %v; want %q", path, cleanup != nil, err, want)
 	}
 }
 
-func TestSourceBridgeEnvironmentDropsInheritedCGOFlags(t *testing.T) {
-	base := []string{"PATH=/tools", "CGO_CFLAGS=-I/untrusted", "CGO_LDFLAGS=-L/untrusted", "CGO_ENABLED=0", "CGO_CPPFLAGS=-DOTHER", "GOOS=other", "GOWORK=other", "GOFLAGS=-tags=other", "CGO_WITHOUT_EQUALS"}
-	original := append([]string(nil), base...)
-	got := sourceBridgeEnv(Config{GoWork: "off"}, base)
-	want := []string{"PATH=/tools", "CGO_WITHOUT_EQUALS", "GOFLAGS=", "GOWORK=off", "GOOS=" + runtime.GOOS, "GOARCH=" + runtime.GOARCH, "CGO_ENABLED=1"}
-	if !slices.Equal(got, want) || !slices.Equal(base, original) {
-		t.Fatalf("bridge environment = %q; original = %q", got, base)
+func TestGoBuildCommand(t *testing.T) {
+	base := []string{
+		"PATH=/tools", "CGO_CFLAGS=-I/untrusted", "CGO_LDFLAGS=-L/untrusted", "CGO_ENABLED=0",
+		"CGO_CPPFLAGS=-DOTHER", "GOOS=other", "GOWORK=other", "GOFLAGS=-tags=other", "CGO_WITHOUT_EQUALS",
+	}
+	original := slices.Clone(base)
+	cfg := Config{GoCommand: "go", GoWork: "off", IO: IO{Env: base}}
+	for _, tt := range []struct {
+		mode      string
+		inherited []string
+		cgo       string
+	}{
+		{"exe", []string{"PATH=/tools", "CGO_CFLAGS=-I/untrusted", "CGO_LDFLAGS=-L/untrusted", "CGO_CPPFLAGS=-DOTHER", "CGO_WITHOUT_EQUALS"}, "0"},
+		{"c-shared", []string{"PATH=/tools", "CGO_WITHOUT_EQUALS"}, "1"},
+	} {
+		t.Run(tt.mode, func(t *testing.T) {
+			cmd := cfg.goBuildCommand(context.Background(), tt.mode, "out", "./target")
+			args := []string{"go", "build", "-buildmode=" + tt.mode}
+			if runtime.GOOS == "windows" && tt.mode == "c-shared" {
+				args = append(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
+			}
+			if want := append(args, "-o", "out", "./target"); !slices.Equal(cmd.Args, want) {
+				t.Errorf("build arguments = %q, want %q", cmd.Args, want)
+			}
+			want := append(tt.inherited, "GOFLAGS=", "GOWORK=off", "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH, "CGO_ENABLED="+tt.cgo)
+			if !slices.Equal(cmd.Env, want) || !slices.Equal(base, original) {
+				t.Fatalf("build environment = %q; original = %q", cmd.Env, base)
+			}
+		})
 	}
 }

@@ -74,7 +74,7 @@ func resolveGoBin(ctx context.Context, cfg Config, env []string) (string, error)
 	}
 	command := exec.CommandContext(ctx, cfg.GoCommand, "env", "GOPATH")
 	command.Dir = cfg.WorkDir
-	command.Env = hostGoEnv(cfg, env)
+	command.Env = hostGoEnv(env, cfg.GoWork, false)
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	output, err := command.Output()

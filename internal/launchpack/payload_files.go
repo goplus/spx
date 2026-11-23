@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
-	"strings"
 
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 	"github.com/goplus/spx/v4/internal/runtimepayload"
@@ -147,36 +145,3 @@ func hasBuildFlag(flags []string, name string) bool {
 }
 
 func traceEnabled(flags []string) bool { return hasBuildFlag(flags, "x") || hasBuildFlag(flags, "v") }
-
-func sanitizeEnvironment(env []string) []string {
-	if env == nil {
-		env = os.Environ()
-	}
-	result := make([]string, 0, len(env))
-	for _, entry := range env {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && (key == "GOFLAGS" || key == "GOWORK" || key == "GOOS" || key == "GOARCH" || key == "CGO_ENABLED") {
-			continue
-		}
-		result = append(result, entry)
-	}
-	return result
-}
-
-func hostGoEnv(cfg Config, base []string) []string {
-	env := sanitizeEnvironment(base)
-	return append(env, "GOFLAGS=", "GOWORK="+cfg.GoWork, "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
-}
-
-func sourceBridgeEnv(cfg Config, base []string) []string {
-	env := sanitizeEnvironment(base)
-	filtered := env[:0]
-	for _, entry := range env {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && strings.HasPrefix(key, "CGO_") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return append(filtered, "GOFLAGS=", "GOWORK="+cfg.GoWork, "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH, "CGO_ENABLED=1")
-}

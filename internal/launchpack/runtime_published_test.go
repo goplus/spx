@@ -54,7 +54,7 @@ func TestAcquireRuntimeAssetsFromPublishedRelease(t *testing.T) {
 	fixture := newPublishedRuntimeFixture(t)
 	cacheRoot := t.TempDir()
 	calls := 0
-	assets, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: []string{}}, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls)))
+	assets, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls)))
 	if err != nil {
 		t.Fatalf("acquire published runtime: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestAcquireRuntimeAssetsPreservesOriginIdentity(t *testing.T) {
 			dependencies := fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls))
 			for _, offline := range []bool{false, true} {
 				cfg.RuntimeOffline = offline
-				assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{}}, fixture.lock, dependencies)
+				assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, dependencies)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -196,7 +196,7 @@ func TestAcquireRuntimeAssetsDerivesURLsFromSelectedRuntimeVersion(t *testing.T)
 		urls = append(urls, url)
 		return fetchFixture(ctx, url, dst)
 	}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: []string{}}, fixture.lock, fixture.dependencies(cacheRoot, fetch))
+	assets, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), fixture.lock, fixture.dependencies(cacheRoot, fetch))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,8 +226,8 @@ func TestAcquireRuntimeAssetsFromLocalReleaseDirectory(t *testing.T) {
 
 	cacheRoot := t.TempDir()
 	calls := 0
-	cfg := Config{RuntimeAssetDir: assetDir, RuntimeCacheRoot: cacheRoot, RuntimeOffline: true}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{}}, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls)))
+	cfg := Config{RuntimeAssetDir: assetDir, RuntimeCacheRoot: cacheRoot, RuntimeOffline: true, IO: IO{Env: []string{}}}
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls)))
 	if err != nil {
 		t.Fatalf("acquire local release assets: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestAcquireRuntimeAssetsOfflineRejectsCorruptCachedReleaseData(t *testing.T
 			fixture := newPublishedRuntimeFixture(t)
 			cacheRoot := t.TempDir()
 			firstCalls := 0
-			first, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: []string{}}, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &firstCalls)))
+			first, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &firstCalls)))
 			if err != nil {
 				t.Fatalf("initial acquisition: %v", err)
 			}
@@ -294,8 +294,9 @@ func TestAcquireRuntimeAssetsOfflineRejectsCorruptCachedReleaseData(t *testing.T
 				offlineCalls++
 				return errors.New("offline cache failure must not fetch")
 			}
-			env := []string{runtimeOfflineEnv + "=1"}
-			if _, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: env}, fixture.lock, fixture.dependencies(cacheRoot, offlineFetch)); err == nil {
+			cfg := publishedRuntimeConfig(cacheRoot)
+			cfg.IO.Env = []string{runtimeOfflineEnv + "=1"}
+			if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, fixture.dependencies(cacheRoot, offlineFetch)); err == nil {
 				t.Fatal("offline acquisition accepted corrupt cached release data")
 			}
 			if offlineCalls != 0 {
@@ -309,7 +310,7 @@ func TestAcquireRuntimeAssetsOfflineRepairsCorruptMaterializedBundle(t *testing.
 	fixture := newPublishedRuntimeFixture(t)
 	cacheRoot := t.TempDir()
 	firstCalls := 0
-	first, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: []string{}}, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &firstCalls)))
+	first, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &firstCalls)))
 	if err != nil {
 		t.Fatalf("initial acquisition: %v", err)
 	}
@@ -324,7 +325,9 @@ func TestAcquireRuntimeAssetsOfflineRepairsCorruptMaterializedBundle(t *testing.
 		offlineCalls++
 		return errors.New("offline repair must not fetch")
 	}
-	repaired, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: []string{runtimeOfflineEnv + "=1"}}, fixture.lock, fixture.dependencies(cacheRoot, offlineFetch))
+	cfg := publishedRuntimeConfig(cacheRoot)
+	cfg.IO.Env = []string{runtimeOfflineEnv + "=1"}
+	repaired, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, fixture.dependencies(cacheRoot, offlineFetch))
 	if err != nil {
 		t.Fatalf("offline repair: %v", err)
 	}
@@ -340,12 +343,12 @@ func TestAcquireRuntimeAssetsOfflineRepairsCorruptMaterializedBundle(t *testing.
 func TestAcquireRuntimeAssetsRejectsOuterDigestMismatchAndRetries(t *testing.T) {
 	fixture := newPublishedRuntimeFixture(t)
 	cacheRoot := t.TempDir()
-	env := []string{}
+	cfg := publishedRuntimeConfig(cacheRoot)
 	badArchive := append([]byte(nil), fixture.assets[fixture.spec.ArchiveName]...)
 	badArchive[len(badArchive)/2] ^= 0x01
 	calls := 0
 
-	if _, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: env}, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(map[string][]byte{fixture.spec.ArchiveName: badArchive}, &calls))); err == nil || !strings.Contains(err.Error(), "SHA-256") {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(map[string][]byte{fixture.spec.ArchiveName: badArchive}, &calls))); err == nil || !strings.Contains(err.Error(), "SHA-256") {
 		t.Fatalf("digest-mismatched Engine archive error = %v", err)
 	}
 	engineAsset, ok := fixture.manifest.Asset(fixture.spec.ArchiveName)
@@ -359,7 +362,7 @@ func TestAcquireRuntimeAssetsRejectsOuterDigestMismatchAndRetries(t *testing.T) 
 		t.Fatalf("Engine bundle was materialized after digest mismatch, stat error = %v", err)
 	}
 
-	assets, err := acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(cacheRoot), IO{Env: env}, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls)))
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, fixture.dependencies(cacheRoot, fixture.fetcher(nil, &calls)))
 	if err != nil {
 		t.Fatalf("retry after rejected archive: %v", err)
 	}
@@ -384,7 +387,7 @@ func TestAcquireRuntimeAssetsRejectsAssetOutsideVersionedManifest(t *testing.T) 
 	}
 	calls := 0
 	dependencies := fixture.dependencies(t.TempDir(), fixture.fetcher(map[string][]byte{fixture.lock.Manifest: data}, &calls))
-	_, err = acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(t.TempDir()), IO{}, fixture.lock, dependencies)
+	_, err = acquireRuntimeAssetsWith(context.Background(), publishedRuntimeConfig(t.TempDir()), fixture.lock, dependencies)
 	if !errors.Is(err, runtimebundle.ErrDigestMismatch) {
 		t.Fatalf("versioned manifest asset error = %v, want ErrDigestMismatch", err)
 	}
@@ -602,5 +605,5 @@ func writeRuntimeZip(t *testing.T, filePath string, entries ...runtimeZipEntry) 
 }
 
 func publishedRuntimeConfig(cacheRoot string) Config {
-	return Config{RuntimeCacheRoot: cacheRoot}
+	return Config{RuntimeCacheRoot: cacheRoot, IO: IO{Env: []string{}}}
 }

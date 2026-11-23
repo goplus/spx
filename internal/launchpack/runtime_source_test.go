@@ -42,7 +42,7 @@ func TestSourceRuntimePrefersPublishedAssets(t *testing.T) {
 		binCalls++
 		return bin, nil
 	}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), fixture.lock, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestSourceRuntimeFallsBackAfterPublishedFetchFailure(t *testing.T) {
 		binCalls++
 		return bin, nil
 	}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(sourceRoot, cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(sourceRoot, cacheRoot), fixture.lock, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestSourceRuntimeRejectsPublishedIntegrityFailure(t *testing.T) {
 				binCalls++
 				return bin, nil
 			}
-			_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies)
+			_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), fixture.lock, dependencies)
 			if test.digestError && !errors.Is(err, runtimebundle.ErrDigestMismatch) {
 				t.Fatalf("archive integrity failure = %v, want ErrDigestMismatch", err)
 			}
@@ -130,7 +130,7 @@ func TestSourceRuntimeRejectsMalformedPublishedManifest(t *testing.T) {
 		binCalls++
 		return bin, nil
 	}
-	_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies)
+	_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), fixture.lock, dependencies)
 	if err == nil || errors.Is(err, errReleaseUnavailable) {
 		t.Fatalf("malformed manifest error = %v", err)
 	}
@@ -150,8 +150,8 @@ func TestPublishedFetchFailureDoesNotFallbackOutsideSourceMode(t *testing.T) {
 		binCalls++
 		return t.TempDir(), nil
 	}
-	cfg := Config{RuntimeSourceRoot: t.TempDir(), RuntimeCacheRoot: cacheRoot}
-	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{}}, fixture.lock, dependencies); err == nil {
+	cfg := Config{RuntimeSourceRoot: t.TempDir(), RuntimeCacheRoot: cacheRoot, IO: IO{Env: []string{}}}
+	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, dependencies); err == nil {
 		t.Fatal("published fetch failure was accepted outside source mode")
 	}
 	if binCalls != 0 {
@@ -176,7 +176,7 @@ func TestUnpublishedSourceRuntimeFallsBackAfterManifestMiss(t *testing.T) {
 		binCalls++
 		return bin, nil
 	}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), lock, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestOfflineSourceRuntimeFallsBackWithoutFetch(t *testing.T) {
 	dependencies.goBin = func(context.Context, Config, []string) (string, error) { return bin, nil }
 	cfg := sourceRuntimeConfig(t.TempDir(), cacheRoot)
 	cfg.RuntimeOffline = true
-	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{}}, fixture.lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestExplicitReleaseDirectoryFailureDoesNotUseGoBin(t *testing.T) {
 	}
 	cfg := sourceRuntimeConfig(t.TempDir(), cacheRoot)
 	cfg.RuntimeAssetDir = t.TempDir()
-	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{}}, fixture.lock, dependencies); err == nil {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), cfg, fixture.lock, dependencies); err == nil {
 		t.Fatal("missing explicit release directory assets were accepted")
 	}
 	if binCalls != 0 {
@@ -244,7 +244,7 @@ func TestRuntimeManifestVersionMismatchDoesNotUseGoBin(t *testing.T) {
 		binCalls++
 		return t.TempDir(), nil
 	}
-	if _, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, fixture.lock, dependencies); err == nil || !strings.Contains(err.Error(), "does not match") {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), fixture.lock, dependencies); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("runtime manifest version mismatch = %v", err)
 	}
 	if binCalls != 0 {
@@ -301,7 +301,7 @@ func TestSourceRuntimeRejectsInvalidInstalledPair(t *testing.T) {
 				return fmt.Errorf("%w: unpublished runtime", errReleaseUnavailable)
 			})
 			dependencies.goBin = func(context.Context, Config, []string) (string, error) { return bin, nil }
-			_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, lock, dependencies)
+			_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), lock, dependencies)
 			if err == nil || !strings.Contains(err.Error(), "make dev") {
 				t.Fatalf("invalid installed pair error = %v", err)
 			}
@@ -361,7 +361,7 @@ func TestSourceManifestUsesVersionValidationButExplicitStaysStrict(t *testing.T)
 		binCalls++
 		return t.TempDir(), nil
 	}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(root, cacheRoot), IO{Env: []string{}}, lock, dependencies)
+	assets, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(root, cacheRoot), lock, dependencies)
 	if err != nil {
 		t.Fatalf("source manifest: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestSourceManifestUsesVersionValidationButExplicitStaysStrict(t *testing.T)
 	}
 	explicit := sourceRuntimeConfig(root, t.TempDir())
 	explicit.RuntimeManifestPath = manifestPath
-	if _, err := acquireRuntimeAssetsWith(context.Background(), explicit, IO{Env: []string{}}, lock, dependencies); err == nil {
+	if _, err := acquireRuntimeAssetsWith(context.Background(), explicit, lock, dependencies); err == nil {
 		t.Fatal("explicit manifest accepted stale lock metadata")
 	}
 	if binCalls != 0 {
@@ -394,8 +394,9 @@ func TestSourceRuntimePassesAcquisitionEnvironmentToGoBin(t *testing.T) {
 		return bin, nil
 	}
 	cfg := sourceRuntimeConfig(t.TempDir(), cacheRoot)
-	cfg.IO.Env = []string{"GOPATH=/stale-gopath"}
-	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, IO{Env: []string{"GOPATH=/frozen-gopath"}}, lock, dependencies)
+	t.Setenv("GOPATH", "/stale-gopath")
+	cfg.IO.Env = []string{"GOPATH=/frozen-gopath"}
+	assets, err := acquireRuntimeAssetsWith(context.Background(), cfg, lock, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +415,7 @@ func TestSourceRuntimeHonorsCanceledContextBeforeResolution(t *testing.T) {
 		calls++
 		return t.TempDir(), nil
 	}
-	_, err := acquireRuntimeAssetsWith(ctx, sourceRuntimeConfig(t.TempDir(), t.TempDir()), IO{Env: []string{}}, release.DefaultRuntimeLock(), dependencies)
+	_, err := acquireRuntimeAssetsWith(ctx, sourceRuntimeConfig(t.TempDir(), t.TempDir()), release.DefaultRuntimeLock(), dependencies)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled acquisition error = %v", err)
 	}
@@ -435,7 +436,7 @@ func TestSourceRuntimeDoesNotFallbackAfterFetchCancellation(t *testing.T) {
 		binCalls++
 		return t.TempDir(), nil
 	}
-	_, err := acquireRuntimeAssetsWith(ctx, sourceRuntimeConfig(t.TempDir(), t.TempDir()), IO{Env: []string{}}, fixture.lock, dependencies)
+	_, err := acquireRuntimeAssetsWith(ctx, sourceRuntimeConfig(t.TempDir(), t.TempDir()), fixture.lock, dependencies)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled fetch error = %v", err)
 	}
@@ -451,7 +452,7 @@ func TestSourceRuntimeMissingFilesSuggestsMakeDev(t *testing.T) {
 		return fmt.Errorf("%w: missing release", errReleaseUnavailable)
 	})
 	dependencies.goBin = func(context.Context, Config, []string) (string, error) { return t.TempDir(), nil }
-	_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), IO{Env: []string{}}, lock, dependencies)
+	_, err := acquireRuntimeAssetsWith(context.Background(), sourceRuntimeConfig(t.TempDir(), cacheRoot), lock, dependencies)
 	if err == nil || !strings.Contains(err.Error(), "make dev") || !strings.Contains(err.Error(), "gdspxrt"+lock.RuntimeVersion) {
 		t.Fatalf("missing local runtime error = %v", err)
 	}
@@ -582,6 +583,7 @@ func sourceRuntimeConfig(sourceRoot, cacheRoot string) Config {
 		RuntimeSourceRoot: sourceRoot,
 		RuntimeCacheRoot:  cacheRoot,
 		Source:            SourceIdentity{SourceMode: true},
+		IO:                IO{Env: []string{}},
 	}
 }
 

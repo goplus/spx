@@ -135,12 +135,9 @@ func TestCompileLauncherFailureCleansWork(t *testing.T) {
 			launcherGoFixture(t, &cfg, "printf '\\177ELFfixture' > \"$out\"")
 			temp := t.TempDir()
 			t.Setenv("TMPDIR", temp)
-			var builder payloadBuilder = func(_ string, w io.Writer) (string, string, error) {
-				_, err := io.WriteString(w, "payload")
-				return "payload-hash", "manifest-hash", err
-			}
+			var builder payloadBuilder = writeTestLauncherPayload
 			tt.modify(t, &cfg, &builder)
-			err := compileLauncher(context.Background(), cfg, IO{Env: []string{}}, builder)
+			err := compileLauncher(context.Background(), cfg, builder)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("compileLauncher error = %v, want %q", err, tt.want)
 			}
@@ -158,31 +155,115 @@ func TestCompileLauncherFailureCleansWork(t *testing.T) {
 	}
 }
 
-func TestCompileLauncherRetainsRequestedWorkAndNormalizesFlags(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("fixture has an ELF header")
+func writeTestLauncherPayload(_ string, w io.Writer) (string, string, error) {
+	_, err := io.WriteString(w, "payload")
+	return "p", "m", err
+}
+
+func TestCompileLauncherReportsDarwinSigningFailure(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("requires macOS codesign")
 	}
 	cfg := validLaunchpackConfig(t)
-	launcherGoFixture(t, &cfg, "printf '\\177ELFfixture' > \"$out\"")
-	cfg.BuildFlags = []string{"-work=true", "-v=false", "-trimpath=true", "-buildvcs=false"}
-	temp := t.TempDir()
-	t.Setenv("TMPDIR", temp)
-	var log bytes.Buffer
-	err := compileLauncher(context.Background(), cfg, IO{Stderr: &log, Env: []string{}}, func(_ string, w io.Writer) (string, string, error) {
-		_, err := io.WriteString(w, "payload")
-		return "p", "m", err
-	})
-	if err != nil {
-		t.Fatal(err)
+	// codesign rejects resource forks on otherwise valid Mach-O executables.
+	launcherGoFixture(t, &cfg, `/bin/cp /bin/echo "$out"
+/usr/bin/xattr -w com.apple.ResourceFork data "$out"`)
+	var stderr bytes.Buffer
+	cfg.IO.Stderr = &stderr
+	err := compileLauncher(t.Context(), cfg, writeTestLauncherPayload)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || !strings.Contains(err.Error(), "ad-hoc sign launcher") {
+		t.Fatalf("compileLauncher error = %v, want codesign failure", err)
 	}
-	work := strings.TrimSpace(strings.TrimPrefix(log.String(), "SPXWORK="))
-	if !pathWithin(temp, work) {
-		t.Fatalf("unexpected work directory %q", work)
+	if !strings.Contains(stderr.String(), cfg.Output) {
+		t.Fatalf("missing codesign diagnostic for %q in %q", cfg.Output, stderr.String())
 	}
-	assertRuntimeFile(t, filepath.Join(work, "payload.spxpkg"), "payload")
-	assertRuntimeFile(t, filepath.Join(work, "main.go"), string(renderGeneratedLauncher("p", "m")))
-	if got := normalizedGoBuildFlags(cfg.BuildFlags); !slices.Equal(got, []string{"-work", "-trimpath", "-buildvcs=false"}) {
+}
+
+func TestCompileLauncherRetainsRequestedWorkAndNormalizesFlags(t *testing.T) {
+	flags := []string{"-work=true", "-v=false", "-trimpath=true", "-buildvcs=false"}
+	if got := normalizedGoBuildFlags(flags); !slices.Equal(got, []string{"-work", "-trimpath", "-buildvcs=false"}) {
 		t.Fatalf("normalized flags = %q", got)
+	}
+
+	for _, tt := range []struct {
+		name, command string
+		wantErr       bool
+	}{
+		{"success", `printf '\177ELFfixture' > "$out"`, false},
+		{"command failure", "exit 19", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.wantErr && runtime.GOOS != "linux" {
+				t.Skip("fixture has an ELF header")
+			}
+			cfg := validLaunchpackConfig(t)
+			launcherGoFixture(t, &cfg, tt.command)
+			temp := t.TempDir()
+			t.Setenv("TMPDIR", temp)
+			var log bytes.Buffer
+			cfg.BuildFlags = flags
+			cfg.IO.Stderr = &log
+			if err := compileLauncher(t.Context(), cfg, writeTestLauncherPayload); (err != nil) != tt.wantErr {
+				t.Fatalf("compileLauncher error = %v, wantErr = %t", err, tt.wantErr)
+			}
+			work, ok := strings.CutPrefix(strings.TrimSpace(log.String()), "SPXWORK=")
+			if !ok || !pathWithin(temp, work) {
+				t.Fatalf("unexpected work directory %q", work)
+			}
+			assertRuntimeFile(t, filepath.Join(work, "payload.spxpkg"), "payload")
+			assertRuntimeFile(t, filepath.Join(work, "main.go"), string(renderGeneratedLauncher("p", "m")))
+		})
+	}
+}
+
+func TestPackagingCommandsUseConfigIOAndContext(t *testing.T) {
+	const command = `IFS= read -r line
+printf 'stdout:%s\n' "$line"
+printf 'stderr:%s\n' "$SPX_LAUNCHPACK_IO" >&2
+exit 19`
+	for _, name := range []string{"launcher", "source bridge"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := validLaunchpackConfig(t)
+			launcherGoFixture(t, &cfg, command)
+			temp := t.TempDir()
+			t.Setenv("TMPDIR", temp)
+			t.Setenv("SPX_LAUNCHPACK_IO", "ambient")
+			var stdout, stderr bytes.Buffer
+			cfg.IO = IO{
+				Stdin: strings.NewReader("input\n"), Stdout: &stdout, Stderr: &stderr,
+				Env: []string{"SPX_LAUNCHPACK_IO=captured"},
+			}
+			build := func(ctx context.Context) error {
+				if name == "launcher" {
+					return compileLauncher(ctx, cfg, writeTestLauncherPayload)
+				}
+				path, cleanup, err := BuildSourceBridge(ctx, cfg)
+				if path != "" || cleanup != nil {
+					t.Fatalf("failed bridge returned path %q or cleanup", path)
+				}
+				return err
+			}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			if err := build(ctx); !errors.Is(err, context.Canceled) {
+				t.Fatalf("canceled build error = %v", err)
+			}
+			var exitErr *exec.ExitError
+			if err := build(t.Context()); !errors.As(err, &exitErr) || exitErr.ExitCode() != 19 {
+				t.Fatalf("command error = %v, want exit 19", err)
+			}
+			if !strings.Contains(stdout.String(), "stdout:input\n") || !strings.Contains(stderr.String(), "stderr:captured\n") {
+				t.Fatalf("command streams = %q, %q", stdout.String(), stderr.String())
+			}
+			if entries, err := os.ReadDir(temp); err != nil || len(entries) != 0 {
+				t.Fatalf("failed builds left temporary entries %v: %v", entries, err)
+			}
+			if _, err := os.Stat(cfg.Output); !os.IsNotExist(err) {
+				t.Fatalf("failed build created output: %v", err)
+			}
+		})
 	}
 }
 
@@ -261,6 +342,12 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 		replaceSource string
 	}{
 		{name: "valid traced payload"},
+		{name: "main source payload", mutate: func(t *testing.T, c *Config, a *Assets, p *projectarchive.Config, work string) {
+			c.Source.SelectedVersion = ""
+			c.Source.EffectivePath = c.WorkDir
+			c.Source.EffectiveVersion = ""
+			c.Source.Main = true
+		}},
 		{name: "engine replaced during write", want: "changed while reading", replaceSource: "engine"},
 		{name: "pack replaced during write", want: "changed while reading", replaceSource: "pack"},
 		{name: "bridge replaced during write", want: "changed while reading", replaceSource: "bridge"},
@@ -293,14 +380,14 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 				t.Skip("Windows keeps opened source files locked against rename")
 			}
 			cfg := validLaunchpackConfig(t)
-			cfg.Source = SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", SelectedVersion: "v4.0.0", EffectivePath: cfg.WorkDir, SourceMode: true}
+			cfg.Source = SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", SelectedVersion: "v4.0.0", EffectivePath: "example.com/spx", EffectiveVersion: "v4.1.0", SourceMode: true}
 			cfg.BuildFlags = []string{"-x"}
 			work := t.TempDir()
 			assets := Assets{EnginePath: filepath.Join(work, "engine"), PackPath: filepath.Join(work, "runtime.pck"), BridgePath: filepath.Join(work, "bridge.so"), Lock: cfg.RuntimeLock}
 			for path, data := range map[string]string{assets.EnginePath: "engine", assets.PackPath: "pack", assets.BridgePath: "bridge"} {
 				writeProjectTestFile(t, path, data)
 			}
-			project, err := prepareProjectArchiveConfig(cfg, cfg.PortableConfig)
+			project, err := prepareProjectArchiveConfig(cfg)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -319,7 +406,8 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 				// writer still reads from its pinned, unchanged descriptor.
 				dst = &launcherSourceReplacingWriter{Writer: &payload, source: path}
 			}
-			digest, manifest, err := writeLauncherPayload(work, dst, cfg, assets, project, IO{Stderr: &log})
+			cfg.IO.Stderr = &log
+			digest, manifest, err := writeLauncherPayload(work, dst, cfg, assets, project)
 			if tt.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.want) || digest != "" || manifest != "" {
 					t.Fatalf("payload = %q, %q, %v, want %q", digest, manifest, err, tt.want)
@@ -336,7 +424,7 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if verified.Manifest.Project.PackDirectory != "assets" || !strings.Contains(log.String(), "payload="+digest) {
+			if verified.Manifest.SPX != cfg.Source || verified.Manifest.Project.PackDirectory != "assets" || !strings.Contains(log.String(), "payload="+digest) {
 				t.Fatalf("payload manifest or trace mismatch: %#v, %q", verified.Manifest, log.String())
 			}
 		})
@@ -354,12 +442,12 @@ func TestBuildWorkDirectoriesReportUnavailableTemporaryStorage(t *testing.T) {
 			}
 			var err error
 			if name == "launcher" {
-				err = compileLauncher(context.Background(), cfg, IO{}, func(string, io.Writer) (string, string, error) {
+				err = compileLauncher(context.Background(), cfg, func(string, io.Writer) (string, string, error) {
 					t.Fatal("payload builder ran without a work directory")
 					return "", "", nil
 				})
 			} else {
-				path, cleanup, buildErr := buildSourceBridge(context.Background(), cfg, "bridge.so", IO{})
+				path, cleanup, buildErr := BuildSourceBridge(context.Background(), cfg)
 				err = buildErr
 				if path != "" || cleanup != nil {
 					t.Fatalf("failed bridge build returned path %q or cleanup", path)
@@ -376,7 +464,7 @@ func TestBuildWorkDirectoriesReportUnavailableTemporaryStorage(t *testing.T) {
 	}
 	cfg := validLaunchpackConfig(t)
 	cfg.BuildFlags = []string{"-unsupported"}
-	if _, _, err := buildSourceBridge(context.Background(), cfg, "bridge.so", IO{}); err == nil || !strings.Contains(err.Error(), "unsupported build flag") {
+	if _, _, err := BuildSourceBridge(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "unsupported build flag") {
 		t.Fatalf("invalid source bridge graph = %v", err)
 	}
 }
@@ -426,10 +514,9 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 		ProjectDir: projectDir, ProjectFile: projectFile, ProjectExt: ".spx",
 		PackDir: "assets", PackIndex: "index.json", PortableConfig: snapshot,
 		RuntimeManifestPath: manifest, RuntimeCacheRoot: filepath.Join(moduleRoot, "cache"),
-		RuntimeIdentity: RuntimeIdentity{Version: lock.RuntimeVersion, ABI: lock.RuntimeABI, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
-		RuntimeLock:     lock,
-		Source:          SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", SelectedVersion: "v4.0.0", EffectivePath: repoRoot, SourceMode: true},
-		GoCommand:       goCommand, WorkDir: moduleRoot, GoWork: "off", GraphFlags: []string{"-mod=mod"},
+		RuntimeLock: lock,
+		Source:      SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", SelectedVersion: "v4.0.0", EffectivePath: repoRoot, SourceMode: true},
+		GoCommand:   goCommand, WorkDir: moduleRoot, GoWork: "off", GraphFlags: []string{"-mod=mod"},
 		BuildFlags: []string{"-trimpath=true", "-buildvcs=false"},
 		Output:     output, BridgePackage: "./bridge", VerifyGraph: func(context.Context) error {
 			graphChecks++
@@ -450,7 +537,6 @@ func TestBuildLauncherFailureReleasesBridgeWork(t *testing.T) {
 		name, want string
 		configure  func(*testing.T, *Config)
 	}{
-		{"uninitialized snapshot", "portable config", func(t *testing.T, c *Config) { c.PortableConfig = portableconfig.PortableConfigSnapshot{} }},
 		{"runtime unavailable", "inspect local runtime manifest", func(t *testing.T, c *Config) { c.RuntimeManifestPath += ".missing" }},
 		{"bridge build fails", "build source interpreter bridge", func(t *testing.T, c *Config) { launcherGoFixture(t, c, "exit 8") }},
 		{"bridge verification fails", "verify source bridge", func(t *testing.T, c *Config) {

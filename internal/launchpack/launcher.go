@@ -67,7 +67,7 @@ func renderGeneratedLauncher(payloadDigest, manifestDigest string) []byte {
 	return fmt.Appendf(nil, generatedLauncherTemplate, strconv.Quote(payloadDigest), strconv.Quote(manifestDigest))
 }
 
-func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload payloadBuilder) error {
+func compileLauncher(ctx context.Context, cfg Config, buildPayload payloadBuilder) error {
 	if err := cfg.validateGraphInputs(); err != nil {
 		return err
 	}
@@ -82,8 +82,8 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 	}
 	keepWork := hasBuildFlag(cfg.BuildFlags, "work")
 	if keepWork {
-		if streams.Stderr != nil {
-			_, _ = fmt.Fprintf(streams.Stderr, "SPXWORK=%s\n", workDir)
+		if cfg.IO.Stderr != nil {
+			_, _ = fmt.Fprintf(cfg.IO.Stderr, "SPXWORK=%s\n", workDir)
 		}
 	} else {
 		defer os.RemoveAll(workDir)
@@ -111,15 +111,7 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 		return fmt.Errorf("launchpack: write generated launcher: %w", err)
 	}
 
-	args := append([]string{"build"}, cfg.GraphFlags...)
-	args = append(args, normalizedGoBuildFlags(cfg.BuildFlags)...)
-	args = append(args, "-buildmode=exe", "-o", cfg.Output, mainPath)
-	command := exec.CommandContext(ctx, cfg.GoCommand, args...)
-	command.Dir = cfg.WorkDir
-	command.Env = hostGoEnv(cfg, streams.Env)
-	command.Stdin = streams.Stdin
-	command.Stdout = streams.Stdout
-	command.Stderr = streams.Stderr
+	command := cfg.goBuildCommand(ctx, "exe", cfg.Output, mainPath)
 	if err := cfg.verifyGraph(ctx, "before launcher build"); err != nil {
 		return err
 	}
@@ -133,11 +125,54 @@ func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload p
 		return err
 	}
 	if runtime.GOOS == "darwin" {
-		if err := signDarwinLauncher(ctx, cfg.Output, streams); err != nil {
+		if err := signDarwinLauncher(ctx, cfg.Output, cfg.IO); err != nil {
 			return err
 		}
 	}
 	return validateHostExecutable(cfg.Output)
+}
+
+func (cfg Config) goBuildCommand(ctx context.Context, buildMode, output, target string) *exec.Cmd {
+	args := append([]string{"build"}, cfg.GraphFlags...)
+	args = append(args, normalizedGoBuildFlags(cfg.BuildFlags)...)
+	args = append(args, "-buildmode="+buildMode)
+	shared := buildMode == "c-shared"
+	if shared && runtime.GOOS == "windows" {
+		args = append(args, "-ldflags=-extldflags=-Wl,--allow-multiple-definition")
+	}
+	args = append(args, "-o", output, target)
+	command := exec.CommandContext(ctx, cfg.GoCommand, args...)
+	command.Dir = cfg.WorkDir
+	command.Env = hostGoEnv(cfg.IO.Env, cfg.GoWork, shared)
+	command.Stdin = cfg.IO.Stdin
+	command.Stdout = cfg.IO.Stdout
+	command.Stderr = cfg.IO.Stderr
+	return command
+}
+
+func hostGoEnv(base []string, goWork string, enableCGO bool) []string {
+	if base == nil {
+		base = os.Environ()
+	}
+	env := make([]string, 0, len(base)+5)
+	for _, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			switch key {
+			case "GOFLAGS", "GOWORK", "GOOS", "GOARCH", "CGO_ENABLED":
+				continue
+			}
+			if enableCGO && strings.HasPrefix(key, "CGO_") {
+				continue
+			}
+		}
+		env = append(env, entry)
+	}
+	cgo := "CGO_ENABLED=0"
+	if enableCGO {
+		cgo = "CGO_ENABLED=1"
+	}
+	return append(env, "GOFLAGS=", "GOWORK="+goWork, "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH, cgo)
 }
 
 func normalizedGoBuildFlags(flags []string) []string {

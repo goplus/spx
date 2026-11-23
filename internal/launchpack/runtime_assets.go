@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/release"
@@ -65,12 +66,7 @@ func defaultRuntimeAssetDependencies() runtimeAssetDependencies {
 	}
 }
 
-// acquireRuntimeAssets obtains one verified Engine/PCK pair.
-func acquireRuntimeAssets(ctx context.Context, cfg Config, streams IO, lock release.RuntimeLock) (Assets, error) {
-	return acquireRuntimeAssetsWith(ctx, cfg, streams, lock, defaultRuntimeAssetDependencies())
-}
-
-func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock release.RuntimeLock, dependencies runtimeAssetDependencies) (Assets, error) {
+func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, lock release.RuntimeLock, dependencies runtimeAssetDependencies) (Assets, error) {
 	if ctx == nil {
 		return Assets{}, errors.New("launchpack: nil context")
 	}
@@ -80,16 +76,12 @@ func acquireRuntimeAssetsWith(ctx context.Context, cfg Config, streams IO, lock 
 	if dependencies.fetch == nil || dependencies.cacheRoot == nil {
 		return Assets{}, errors.New("launchpack: incomplete runtime acquisition dependencies")
 	}
-	env := runtimeEnvironment(cfg, streams.Env)
+	env := cfg.runtimeEnvironment()
 	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return Assets{}, err
 	}
-	cacheDefault := dependencies.cacheRoot
-	if cfg.RuntimeCacheRoot != "" {
-		cacheDefault = func() string { return cfg.RuntimeCacheRoot }
-	}
-	cacheRoot, err := resolveRuntimeCacheRoot(env, cacheDefault)
+	cacheRoot, err := resolveRuntimeCacheRoot(env, dependencies.cacheRoot)
 	if err != nil {
 		return Assets{}, err
 	}
@@ -179,11 +171,11 @@ func environmentValue(env []string, key string) (value string, found, duplicate 
 	return value, found, false
 }
 
-func runtimeEnvironment(cfg Config, base []string) []string {
-	if base == nil {
-		base = os.Environ()
+func (cfg Config) runtimeEnvironment() []string {
+	env := slices.Clone(cfg.IO.Env)
+	if env == nil {
+		env = os.Environ()
 	}
-	env := append([]string(nil), base...)
 	for _, item := range []struct{ key, value string }{
 		{runtimeLocalManifestEnv, cfg.RuntimeManifestPath},
 		{runtimeAssetDirEnv, cfg.RuntimeAssetDir},
@@ -192,14 +184,9 @@ func runtimeEnvironment(cfg Config, base []string) []string {
 		if item.value == "" {
 			continue
 		}
-		filtered := env[:0]
-		for _, entry := range env {
-			key, _, ok := strings.Cut(entry, "=")
-			if !ok || key != item.key {
-				filtered = append(filtered, entry)
-			}
-		}
-		env = append(filtered, item.key+"="+item.value)
+		prefix := item.key + "="
+		env = slices.DeleteFunc(env, func(entry string) bool { return strings.HasPrefix(entry, prefix) })
+		env = append(env, prefix+item.value)
 	}
 	return env
 }
