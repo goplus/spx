@@ -32,25 +32,20 @@ import (
 // portableConfigFS replaces the project .config with the validated snapshot.
 // When the snapshot is absent, it hides a project .config instead.
 type portableConfigFS struct {
-	base    fs.FS
-	present bool
-	data    []byte
+	base fs.FS
+	portableConfigOverlay
 }
 
 type portableConfigRoot struct {
 	fs.File
-	directory fs.ReadDirFile
-	overlay   *portableConfigFS
-	once      sync.Once
 	mu        sync.Mutex
-	entries   []fs.DirEntry
+	overlay   *portableConfigFS // cleared after the first read of this handle
+	remaining []fs.DirEntry
 	err       error
-	offset    int
 }
 
 type portableConfigFile struct {
 	*bytes.Reader
-	info portableConfigInfo
 }
 
 type portableConfigInfo struct {
@@ -62,15 +57,14 @@ func (f *portableConfigFS) Open(name string) (fs.File, error) {
 		if !isPortableConfigName(name) || !f.present {
 			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 		}
-		return newPortableConfigFile(f.data), nil
+		return &portableConfigFile{bytes.NewReader(f.data)}, nil
 	}
 	file, err := f.base.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	if name == "." {
-		directory, _ := file.(fs.ReadDirFile)
-		return &portableConfigRoot{File: file, directory: directory, overlay: f}, nil
+		return &portableConfigRoot{File: file, overlay: f}, nil
 	}
 	return file, nil
 }
@@ -96,36 +90,36 @@ func (f *portableConfigFS) Lstat(name string) (fs.FileInfo, error) {
 	return fs.Lstat(f.base, name)
 }
 
+func (f *portableConfigFS) readRoot(file fs.File) ([]fs.DirEntry, error) {
+	directory, ok := file.(fs.ReadDirFile)
+	if !ok {
+		return nil, &fs.PathError{Op: "readdir", Path: ".", Err: fs.ErrInvalid}
+	}
+	entries, err := directory.ReadDir(-1)
+	if err != nil {
+		return nil, err
+	}
+	return f.overlayRootEntries(entries), nil
+}
+
 func (f *portableConfigRoot) ReadDir(n int) ([]fs.DirEntry, error) {
-	f.once.Do(func() {
-		if f.directory == nil {
-			f.err = &fs.PathError{Op: "readdir", Path: ".", Err: fs.ErrInvalid}
-		} else {
-			entries, err := f.directory.ReadDir(-1)
-			if err != nil {
-				f.err = err
-			} else {
-				f.entries = f.overlay.overlayRootEntries(entries)
-			}
-		}
-	})
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.overlay != nil {
+		f.remaining, f.err = f.overlay.readRoot(f.File)
+		f.overlay = nil
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if n <= 0 {
-		entries := f.entries[f.offset:]
-		f.offset = len(f.entries)
-		return entries, nil
+	entries := f.remaining
+	if n > 0 && n < len(entries) {
+		// A caller may append to its page while this handle serves the remainder.
+		f.remaining = entries[n:]
+		return entries[:n:n], nil
 	}
-	if f.offset >= len(f.entries) {
-		return nil, io.EOF
-	}
-	end := min(f.offset+n, len(f.entries))
-	entries := f.entries[f.offset:end]
-	f.offset = end
-	if len(entries) < n {
+	f.remaining = nil
+	if n > len(entries) {
 		return entries, io.EOF
 	}
 	return entries, nil
@@ -133,7 +127,9 @@ func (f *portableConfigRoot) ReadDir(n int) ([]fs.DirEntry, error) {
 
 func (f *portableConfigFile) Close() error { return nil }
 
-func (f *portableConfigFile) Stat() (fs.FileInfo, error) { return f.info, nil }
+func (f *portableConfigFile) Stat() (fs.FileInfo, error) {
+	return portableConfigInfo{size: f.Size()}, nil
+}
 
 func (portableConfigInfo) Name() string { return ".config" }
 
@@ -163,7 +159,7 @@ func (f *portableConfigFS) overlayRootEntries(entries []fs.DirEntry) []fs.DirEnt
 }
 
 func newPortableConfigFS(base fs.FS, overlay *portableConfigOverlay) *portableConfigFS {
-	return &portableConfigFS{base: base, present: overlay.present, data: overlay.data}
+	return &portableConfigFS{base: base, portableConfigOverlay: *overlay}
 }
 
 func isPortableConfigPath(name string) bool {
@@ -173,8 +169,4 @@ func isPortableConfigPath(name string) bool {
 
 func isPortableConfigName(name string) bool {
 	return name == ".config" || (runtime.GOOS == "windows" && strings.EqualFold(name, ".config"))
-}
-
-func newPortableConfigFile(data []byte) *portableConfigFile {
-	return &portableConfigFile{Reader: bytes.NewReader(data), info: portableConfigInfo{size: int64(len(data))}}
 }

@@ -22,11 +22,13 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -249,40 +251,42 @@ func TestPortableConfigRootReadDirPagination(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		pages []page
+		empty bool
 	}{
 		{"one at a time", []page{
 			{1, []string{".config"}, nil}, {1, []string{"a.spx"}, nil},
 			{1, []string{"z.spx"}, nil}, {1, nil, io.EOF}, {0, nil, nil},
-		}},
+		}, false},
 		{"short final page", []page{
 			{2, []string{".config", "a.spx"}, nil}, {2, []string{"z.spx"}, io.EOF}, {2, nil, io.EOF},
-		}},
+		}, false},
 		{"read remainder", []page{
-			{1, []string{".config"}, nil}, {-1, []string{"a.spx", "z.spx"}, nil}, {-1, nil, nil},
-		}},
-		{"zero reads all", []page{{0, []string{".config", "a.spx", "z.spx"}, nil}, {1, nil, io.EOF}}},
+			{1, []string{".config"}, nil}, {math.MinInt, []string{"a.spx", "z.spx"}, nil}, {-1, nil, nil},
+		}, false},
+		{"maximum page after partial read", []page{
+			{1, []string{".config"}, nil}, {math.MaxInt, []string{"a.spx", "z.spx"}, io.EOF}, {math.MaxInt, nil, io.EOF},
+		}, false},
+		{"zero reads all", []page{{0, []string{".config", "a.spx", "z.spx"}, nil}, {1, nil, io.EOF}}, false},
+		{"empty snapshot", []page{{1, nil, io.EOF}, {-1, nil, nil}, {0, nil, nil}, {1, nil, io.EOF}}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			base := fstest.MapFS{"a.spx": {}, "z.spx": {}}
-			file, err := base.Open(".")
-			if err != nil {
-				t.Fatal(err)
+			if test.empty {
+				base = fstest.MapFS{".config": {Data: []byte("hidden config")}}
 			}
-			defer file.Close()
-			directory := &portableConfigTestDirectory{File: file, entries: mustReadDir(t, base)}
-			overlay := newPortableConfigFS(portableConfigTestFS{file: directory}, &portableConfigOverlay{present: true})
-			root, err := overlay.Open(".")
-			if err != nil {
-				t.Fatal(err)
-			}
+			root, directory := openPortableConfigTestDirectory(t, base, !test.empty)
 			for _, page := range test.pages {
-				entries, err := root.(fs.ReadDirFile).ReadDir(page.n)
+				entries, err := root.ReadDir(page.n)
 				var names []string
 				for _, entry := range entries {
 					names = append(names, entry.Name())
 				}
-				if !errors.Is(err, page.err) || !reflect.DeepEqual(names, page.names) {
+				if !errors.Is(err, page.err) || !slices.Equal(names, page.names) {
 					t.Fatalf("ReadDir(%d) = (%v, %v), want (%v, %v)", page.n, names, err, page.names, page.err)
+				}
+				// Appending to a returned page must not overwrite the next page.
+				if len(entries) != 0 {
+					_ = append(entries, entries[0])
 				}
 				// Later pages must use the captured listing, even if the base changes.
 				directory.entries = nil
@@ -296,38 +300,79 @@ func TestPortableConfigRootReadDirPagination(t *testing.T) {
 }
 
 func TestPortableConfigRootReadDirErrorsAreCached(t *testing.T) {
-	for _, readable := range []bool{false, true} {
-		name, wantErr := "not a ReadDirFile", fs.ErrInvalid
-		if readable {
-			name, wantErr = "underlying read fails", fs.ErrPermission
+	check := func(t *testing.T, root fs.ReadDirFile, want error) {
+		t.Helper()
+		entries, first := root.ReadDir(1)
+		if len(entries) != 0 || first == nil || (want != nil && !errors.Is(first, want)) {
+			t.Fatalf("ReadDir(1) = (%v, %v), want initialization error", entries, first)
 		}
-		t.Run(name, func(t *testing.T) {
-			file, err := (fstest.MapFS{"file": {}}).Open("file")
-			if err != nil {
-				t.Fatal(err)
+		entries, err := root.ReadDir(-1)
+		if len(entries) != 0 || err != first {
+			t.Fatalf("ReadDir(-1) = (%v, %v), want cached error %v", entries, err, first)
+		}
+	}
+	t.Run("not a ReadDirFile", func(t *testing.T) {
+		file, err := (fstest.MapFS{"file": {}}).Open("file")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		check(t, openPortableConfigTestRoot(t, file, false), fs.ErrInvalid)
+	})
+	t.Run("underlying read fails", func(t *testing.T) {
+		root, directory := openPortableConfigTestDirectory(t, fstest.MapFS{}, false)
+		directory.err = fs.ErrPermission
+		check(t, root, fs.ErrPermission)
+		if directory.readCalls != 1 {
+			t.Errorf("base directory reads = %d, want 1", directory.readCalls)
+		}
+	})
+	t.Run("closed directory", func(t *testing.T) {
+		file, err := os.Open(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		root := openPortableConfigTestRoot(t, file, false)
+		if err := root.Close(); err != nil {
+			t.Fatal(err)
+		}
+		check(t, root, nil)
+	})
+}
+
+func TestPortableConfigRootReadDirConcurrent(t *testing.T) {
+	base := fstest.MapFS{"a.spx": {}, "z.spx": {}}
+	root, directory := openPortableConfigTestDirectory(t, base, true)
+	var workers sync.WaitGroup
+	start := make(chan struct{})
+	names := make(chan string, 8)
+	for range cap(names) {
+		workers.Go(func() {
+			<-start
+			entries, err := root.ReadDir(1)
+			if len(entries) == 0 && err == io.EOF {
+				return
 			}
-			defer file.Close()
-			directory := &portableConfigTestDirectory{File: file, err: wantErr}
-			var baseFile fs.File = struct{ fs.File }{file}
-			if readable {
-				baseFile = directory
+			if len(entries) != 1 || err != nil {
+				t.Errorf("ReadDir(1) = (%v, %v), want one entry or EOF", entries, err)
+				return
 			}
-			overlay := newPortableConfigFS(portableConfigTestFS{file: baseFile}, &portableConfigOverlay{})
-			root, err := overlay.Open(".")
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, n := range []int{1, -1} {
-				entries, err := root.(fs.ReadDirFile).ReadDir(n)
-				if len(entries) != 0 || !errors.Is(err, wantErr) {
-					t.Errorf("ReadDir(%d) = (%v, %v), want %v", n, entries, err, wantErr)
-				}
-				directory.err = nil
-			}
-			if readable && directory.readCalls != 1 {
-				t.Errorf("base directory reads = %d, want 1", directory.readCalls)
-			}
+			names <- entries[0].Name()
 		})
+	}
+	close(start)
+	workers.Wait()
+	close(names)
+	var got []string
+	for name := range names {
+		got = append(got, name)
+	}
+	slices.Sort(got)
+	if want := []string{".config", "a.spx", "z.spx"}; !slices.Equal(got, want) {
+		t.Errorf("concurrent directory reads = %v, want %v", got, want)
+	}
+	if directory.readCalls != 1 {
+		t.Errorf("base directory reads = %d, want 1", directory.readCalls)
 	}
 }
 
@@ -448,6 +493,27 @@ func TestLoadPortableConfigOverlayAbsentAndInvalidSnapshots(t *testing.T) {
 			}
 		})
 	}
+}
+
+func openPortableConfigTestDirectory(t *testing.T, base fstest.MapFS, present bool) (fs.ReadDirFile, *portableConfigTestDirectory) {
+	t.Helper()
+	file, err := base.Open(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { file.Close() })
+	directory := &portableConfigTestDirectory{File: file, entries: mustReadDir(t, base)}
+	return openPortableConfigTestRoot(t, directory, present), directory
+}
+
+func openPortableConfigTestRoot(t *testing.T, file fs.File, present bool) fs.ReadDirFile {
+	t.Helper()
+	overlay := newPortableConfigFS(portableConfigTestFS{file: file}, &portableConfigOverlay{present: present})
+	root, err := overlay.Open(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root.(fs.ReadDirFile)
 }
 
 func (f portableConfigTestFS) Open(string) (fs.File, error) { return f.file, nil }
