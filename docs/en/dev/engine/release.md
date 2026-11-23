@@ -93,7 +93,11 @@ Use a frozen release branch in `goplus/spx` for the bootstrap operations:
 
 `release_tag` must exactly equal the SPX tag declared by the selected commit. Product `platforms=all` means Web, macOS, Windows, and Linux packages; Android and iOS belong to the complete runtime asset matrix and device smoke tests, not the SPX product targets.
 
-A `dry-run` publishes `spx_web.zip` in a temporary GitHub prerelease tagged `v<version>-rc.<run>.<attempt>`. The workflow installs that archive on spxbench and runs the `spx` suite to compare the candidate with recorded results. Set the repository secret `SPXBENCH_API_TOKEN`. The service at `https://spxbench.qiniu.io` (overridable with `SPXBENCH_URL`) must support asynchronous installation, version removal, job events and durable job results.
+After the build and assembly succeed, `dry-run` downloads the normal-mode `spx_web.zip` from the current workflow’s `web-release` artifact. It creates a temporary prerelease targeting the SPX commit under test, tags it `v<version>-rc.<github.run_id>.<github.run_attempt>`, and uploads the ZIP. The two numbers in the tag identify the Actions run and attempt. For these dry runs, the spxbench results page displays the first seven characters of the SPX commit saved in the job snapshot.
+
+The workflow uses the repository secret `SPXBENCH_API_TOKEN` to request asynchronous installation of the asset at `https://spxbench.qiniu.io`. CI checks the registered SPX commit against `GITHUB_SHA` and the registered SHA-256 against the local ZIP. It then starts the ready cases in the `spx` suite with `PUT /__e2e/api/run` to compare replays against their recorded baselines. CI requests for the same repository, candidate version and suite reuse the job ID. Rerunning the GitHub Actions workflow gives the candidate a new attempt number and version.
+
+CI waits for the completion event and reads the persisted job by ID. The dry-run regression check requires `status=success`. A skipped case, an abnormal test process exit or an empty selection fails the check.
 
 After the suite passes, the workflow removes the spxbench version before deleting the prerelease. If installation, testing or version removal fails, it keeps the prerelease and any installed candidate for investigation. A failure before installation starts still triggers prerelease cleanup. The workflow retries pending prerelease deletion and reports cleanup warnings separately from the regression verdict in the job summary.
 

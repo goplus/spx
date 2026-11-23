@@ -62,10 +62,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download assembled SPX product release
+      - name: Download the verified Web bundle
         uses: actions/download-artifact@v8
         with:
-          name: spx-product-release-${{ needs.build-release.outputs.version }}
+          name: web-release
           path: dist
 
       - name: Run spxbench regression suite

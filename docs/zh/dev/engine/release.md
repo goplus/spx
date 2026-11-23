@@ -93,7 +93,11 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-`dry-run` 会创建标签为 `v<version>-rc.<run>.<attempt>` 的临时 GitHub prerelease，上传 `spx_web.zip`，再由 spxbench 安装该包并运行 `spx` 测试集，将候选版本的运行结果与录制结果比对。仓库需配置 secret `SPXBENCH_API_TOKEN`。spxbench 服务默认位于 `https://spxbench.qiniu.io`，可通过 `SPXBENCH_URL` 覆盖。服务需支持异步安装、版本删除、任务事件流和持久化任务结果查询。
+构建和组装成功后，`dry-run` 从本次 workflow 的 `web-release` artifact 下载普通 Web 模式的 `spx_web.zip`。工作流在本次 SPX 提交上创建临时 prerelease，tag 为 `v<version>-rc.<github.run_id>.<github.run_attempt>`，并上传这个 ZIP。tag 中的两个数字是 GitHub Actions 的运行 ID 和执行次数。spxbench 在这类 dry run 的结果页显示任务快照中 SPX commit 的前 7 位。
+
+工作流使用仓库 secret `SPXBENCH_API_TOKEN` 请求 `https://spxbench.qiniu.io` 异步安装该 asset。安装完成后，CI 核对登记的 SPX commit 与 `GITHUB_SHA`，并比对登记的 SHA-256 与本地 ZIP。随后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的 CI 请求复用原 `jobId`。在 Actions 中重跑该工作流时，新的执行次数会生成新的候选版本。
+
+CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过 dry-run 回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
 
 测试通过后，工作流先移除 spxbench 上的候选版本，再删除 prerelease。如果安装、测试或版本移除失败，工作流会保留 prerelease 和已安装的候选版本，供排查。安装开始前出错仍会清理 prerelease。工作流会重试尚未完成的 prerelease 删除，并在任务摘要中分别记录清理警告与回归结果。
 

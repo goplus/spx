@@ -15,6 +15,7 @@ Optional:
 import http.client
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -22,12 +23,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from assemble import file_digest
+
 DEFAULT_SPXBENCH_URL = "https://spxbench.qiniu.io"
 DEFAULT_SPXBENCH_TIMEOUT_MINUTES = 30
 
 BUSY_RETRY_SECONDS = 120
 EVENT_HEARTBEAT_LOG_SECONDS = 60
-EVENT_RECONNECT_INITIAL_SECONDS = 2
+INITIAL_RETRY_SECONDS = 2
 EVENT_RECONNECT_MAX_SECONDS = 10
 EVENT_RECOVERY_TIMEOUT_SECONDS = 120
 EVENT_STATE_REQUEST_TIMEOUT_SECONDS = 15
@@ -150,43 +153,6 @@ def find_suite_id(suites, name):
     return None
 
 
-def failing_cases(state):
-    return [case for case in state.get("cases") or [] if case.get("status") != "pass"]
-
-
-def job_failure_reasons(state):
-    """Return all reasons a finished job cannot pass the release gate.
-
-    The per-case list alone is not the verdict: spxbench also fails a job on
-    process-level errors (summary/lastError) even when every case passed.
-    """
-    reasons = []
-    summary = (state.get("summary") or "").strip()
-    if summary != "passed":
-        reasons.append(f"job summary is {summary!r}, want 'passed'")
-    last_error = (state.get("lastError") or "").strip()
-    if last_error:
-        reasons.append(f"job error: {last_error}")
-    total, completed = state.get("total") or 0, state.get("completed") or 0
-    if total <= 0:
-        reasons.append("job selected no test cases")
-    if completed != total:
-        reasons.append(f"job incomplete: completed={completed} of total={total}")
-    # spxbench can report "passed" when a case was skipped.
-    passed = state.get("passed")
-    if passed != total:
-        reasons.append(f"job passed {passed} of {total} cases")
-    failures = failing_cases(state)
-    if failures:
-        reasons.append(f"{len(failures)} case(s) did not pass")
-    return reasons
-
-
-def is_run_slot_busy(body):
-    """True only for the recoverable occupied-slot 409; other 409s are permanent."""
-    return "already in progress" in response_detail(body)
-
-
 def create_candidate_release(candidate_tag, web_archive_path, target_sha):
     log(f"creating candidate prerelease {candidate_tag}")
     run_command("gh", "release", "create", candidate_tag, f"{web_archive_path}#spx_web.zip",
@@ -216,6 +182,8 @@ class SpxbenchSuiteGate:
         self.spxbench_url = (os.environ.get("SPXBENCH_URL") or DEFAULT_SPXBENCH_URL).strip().rstrip("/")
         self.token = require_env("SPXBENCH_API_TOKEN")
         self.web_archive_path = require_env("WEB_ARCHIVE_PATH")
+        self.repository = github_context("GITHUB_REPOSITORY", "gh", "repo", "view",
+                                         "--json", "nameWithOwner", "-q", ".nameWithOwner")
         self.candidate_version = require_env("CANDIDATE_VERSION")
         self.suite_name = os.environ.get("SPXBENCH_SUITE_NAME", "").strip() or "spx"
         try:
@@ -241,7 +209,7 @@ class SpxbenchSuiteGate:
         """Return (None, detail) when the caller can recover from a lost response or 5xx."""
         try:
             status, body = self.request(path, **kwargs)
-        except (SpxbenchConnectionError, OSError, http.client.IncompleteRead) as error:
+        except (SpxbenchConnectionError, OSError, http.client.IncompleteRead, json.JSONDecodeError) as error:
             detail = str(error)
         else:
             if not 500 <= status < 600:
@@ -264,9 +232,7 @@ class SpxbenchSuiteGate:
         return suite_id
 
     def install_candidate(self, commit):
-        repository = github_context("GITHUB_REPOSITORY", "gh", "repo", "view",
-                                    "--json", "nameWithOwner", "-q", ".nameWithOwner")
-        asset_url = f"https://github.com/{repository}/releases/download/{self.candidate_tag}/spx_web.zip"
+        asset_url = f"https://github.com/{self.repository}/releases/download/{self.candidate_tag}/spx_web.zip"
         log(f"   candidate package: {asset_url}")
         log(f"installing version {self.candidate_version}")
         set_prerelease_cleanup_pending(False)
@@ -295,9 +261,12 @@ class SpxbenchSuiteGate:
         artifact = self.candidate_artifact(body)
         if artifact is None:
             raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
-        if artifact.get("sourceCommit") and artifact["sourceCommit"] != commit:
-            raise SpxbenchSuiteError(f"installed candidate commit {artifact['sourceCommit']} does not match {commit}")
-        log(f"   installed, digest={artifact.get('digest')}")
+        if artifact.get("sourceCommit") != commit:
+            raise SpxbenchSuiteError(f"installed candidate commit {artifact.get('sourceCommit')!r} does not match {commit}")
+        expected_digest = "sha256:" + file_digest(Path(self.web_archive_path))
+        if artifact.get("digest") != expected_digest:
+            raise SpxbenchSuiteError(f"installed archive digest {artifact.get('digest')!r} does not match {expected_digest}")
+        log(f"   installed, digest={expected_digest}")
 
     def candidate_artifact(self, body):
         if not isinstance(body, dict):
@@ -346,23 +315,25 @@ class SpxbenchSuiteGate:
 
     def start_suite_run(self, suite_id):
         log(f"starting suite run (suite={suite_id}, spxVersion={self.candidate_version})")
-        query = urllib.parse.urlencode({"suite": suite_id, "spxVersion": self.candidate_version, "trigger": "spx-dry-run"})
+        query = urllib.parse.urlencode({"suite": suite_id, "spxVersion": self.candidate_version,
+                                        "trigger": "spx-dry-run", "repository": self.repository})
+        path = f"/__e2e/api/run?{query}"
         while True:
-            if time.monotonic() >= self.deadline:
-                raise SpxbenchSuiteError("timed out waiting for a free run slot")
-            status, body = self.request(f"/__e2e/api/run?{query}", method="POST")
+            status, body = self.recoverable_request(path, "suite start", method="PUT")
             if status == 200:
-                job_id = body.get("jobId")
-                if not job_id:
+                job_id = body.get("jobId") if isinstance(body, dict) else None
+                if type(job_id) is not int or job_id <= 0:
                     raise SpxbenchSuiteError(f"run response is missing jobId: {body}")
                 log(f"   job #{job_id} accepted")
                 return job_id
-            if status != 409:
-                raise SpxbenchSuiteError(f"run failed: HTTP {status}: {body}")
-            if not is_run_slot_busy(body):
-                raise SpxbenchSuiteError(f"run rejected: {response_detail(body).strip()}")
-            delay = bounded_timeout(self.deadline, BUSY_RETRY_SECONDS, "timed out waiting for a free run slot")
-            log(f"   run slot busy (409), retrying in {delay:.0f}s")
+            if status is None:
+                delay = INITIAL_RETRY_SECONDS
+            elif status == 409 and isinstance(body, dict) and body.get("code") == "run_slot_busy":
+                delay = BUSY_RETRY_SECONDS
+            else:
+                raise SpxbenchSuiteError(f"run failed: HTTP {status}: {response_detail(body).strip()}")
+            delay = bounded_timeout(self.deadline, delay, "timed out waiting to start suite")
+            log(f"   retrying suite start in {delay:.0f}s")
             time.sleep(delay)
 
     def wait_for_suite_job(self, job_id):
@@ -372,7 +343,7 @@ class SpxbenchSuiteGate:
         wait_started = time.monotonic()
         last_wait_log = wait_started
         recovery_deadline = None
-        reconnect_delay = EVENT_RECONNECT_INITIAL_SECONDS
+        reconnect_delay = INITIAL_RETRY_SECONDS
 
         def on_comment(comment):
             nonlocal last_wait_log, recovery_deadline, reconnect_delay
@@ -380,7 +351,7 @@ class SpxbenchSuiteGate:
                 return
             now = time.monotonic()
             recovery_deadline = None
-            reconnect_delay = EVENT_RECONNECT_INITIAL_SECONDS
+            reconnect_delay = INITIAL_RETRY_SECONDS
             if now - last_wait_log >= EVENT_HEARTBEAT_LOG_SECONDS:
                 log(f"   job #{job_id} still running; waiting for completion event ({int(now - wait_started)}s)")
                 last_wait_log = now
@@ -411,10 +382,10 @@ class SpxbenchSuiteGate:
             # Read durable state after an event or disconnect to cover lost notifications.
             if not finished_event and recovery_deadline is None:
                 recovery_deadline = time.monotonic() + EVENT_RECOVERY_TIMEOUT_SECONDS
-            state = self.read_suite_job_state(job_id, timeout=stream_timeout(EVENT_STATE_REQUEST_TIMEOUT_SECONDS))
-            if state is not None:
-                if not state.get("running"):
-                    return state
+            job = self.read_suite_job(job_id, timeout=stream_timeout(EVENT_STATE_REQUEST_TIMEOUT_SECONDS))
+            if job is not None:
+                if job["status"] != "running":
+                    return job
                 if finished_event:
                     raise SpxbenchSuiteError(f"job #{job_id} completion event did not match a finished state")
             elif recovery_deadline is None:
@@ -424,50 +395,29 @@ class SpxbenchSuiteGate:
             time.sleep(delay)
             reconnect_delay = min(reconnect_delay * 2, EVENT_RECONNECT_MAX_SECONDS)
 
-    def read_suite_job_state(self, job_id, timeout=EVENT_STATE_REQUEST_TIMEOUT_SECONDS):
+    def read_suite_job(self, job_id, timeout=EVENT_STATE_REQUEST_TIMEOUT_SECONDS):
         status, job = self.recoverable_request(f"/api/jobs?id={job_id}", "job state", timeout=timeout)
         if status is None:
             return None
         if status != 200:
             raise SpxbenchSuiteError(f"state read failed: HTTP {status}: {job}")
-        return self.state_from_job_response(job_id, job)
+        if not isinstance(job, dict) or job.get("id") != job_id:
+            raise SpxbenchSuiteError(f"state read returned a different or invalid job: {job}")
+        if job.get("status") not in ("running", "success", "failed", "cancelled"):
+            raise SpxbenchSuiteError(f"state read returned an unknown job status: {job.get('status')!r}")
+        return job
 
-    @staticmethod
-    def state_from_job_response(job_id, job):
-        """Adapt the durable /api/jobs response to the suite gate state shape."""
-        if not isinstance(job, dict):
-            raise SpxbenchSuiteError(f"state read returned an invalid job: {job}")
-        if job.get("id") != job_id:
-            raise SpxbenchSuiteError(f"state read returned a different job: {job.get('id')}")
-        snapshot = job.get("snapshot")
-        if not isinstance(snapshot, dict):
-            raise SpxbenchSuiteError(f"state read returned no snapshot for job {job_id}")
-
-        state = dict(snapshot)
-        state["jobId"] = job_id
-        state["running"] = job.get("status") == "running"
-        for field in ("total", "completed", "passed", "failed", "skipped", "summary"):
-            if field in job:
-                state[field] = job[field]
-        if "error" in job:
-            state["lastError"] = job["error"]
-        return state
-
-    def check_suite_result(self, job_id, state):
-        # The job's own terminal verdict decides; the case list only adds detail.
-        total, passed, failed = state.get("total"), state.get("passed"), state.get("failed")
-        log(f"result: summary={state.get('summary') or '(none)'} total={total} "
-            f"passed={passed} failed={failed}")
+    def check_suite_result(self, job_id, job):
+        total = job.get("total")
+        log(f"result: status={job['status']} passed={job.get('passed')}/{total}")
         log(f"   details: {self.api_url(f'/__e2e?job={job_id}')}")
-        failures = failing_cases(state)
-        if failures:
-            log("   failing cases:")
-            for case in failures:
-                log(f"     - {case.get('name')} [{case.get('status')}]")
-        reasons = job_failure_reasons(state)
-        if reasons:
+        if job["status"] != "success":
+            for case in (job.get("snapshot") or {}).get("cases") or []:
+                if case.get("status") != "pass":
+                    log(f"     - {case.get('name')} [{case.get('status')}]")
+            detail = job.get("error") or job.get("summary") or job["status"]
             raise SpxbenchSuiteError(f"candidate {self.candidate_version} failed suite {self.suite_name!r}: "
-                                  + "; ".join(reasons))
+                                     f"{detail} [status={job['status']}]")
         log(f"   candidate {self.candidate_version} passed suite {self.suite_name!r} ({total} cases)")
 
     def remove_candidate(self):
@@ -531,9 +481,9 @@ class SpxbenchSuiteGate:
             suite_id = self.resolve_suite()
             self.install_candidate(commit)
             job_id = self.start_suite_run(suite_id)
-            state = self.wait_for_suite_job(job_id)
+            job = self.wait_for_suite_job(job_id)
             suite_result = "failed"
-            self.check_suite_result(job_id, state)
+            self.check_suite_result(job_id, job)
             suite_result = "passed"
             try:
                 self.remove_candidate()
