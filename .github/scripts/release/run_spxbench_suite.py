@@ -69,11 +69,20 @@ def response_detail(body):
     return body if isinstance(body, str) else json.dumps(body)
 
 
-def retry_delay(deadline, limit, timeout_message):
+def bounded_timeout(deadline, limit, timeout_message):
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise SpxbenchSuiteError(timeout_message)
     return min(limit, remaining)
+
+
+def http_error_body(error):
+    # A lost response body must preserve the HTTP status for the caller's retry decision.
+    with error:
+        try:
+            return error.read().decode(errors="replace")
+        except (OSError, http.client.IncompleteRead):
+            return "<unreadable response body>"
 
 
 def request_spxbench(url, token, method="GET", payload=None, timeout=180):
@@ -89,7 +98,7 @@ def request_spxbench(url, token, method="GET", payload=None, timeout=180):
             body = response.read().decode()
             return response.status, (json.loads(body) if body else {})
     except urllib.error.HTTPError as error:
-        body = error.read().decode()
+        body = http_error_body(error)
         try:
             return error.code, json.loads(body)
         except ValueError:
@@ -123,25 +132,15 @@ def require_env(name):
     return value
 
 
-def write_step_output(name):
+def set_prerelease_cleanup_pending(pending):
     path = os.environ.get("GITHUB_OUTPUT")
     if path:
         with open(path, "a") as output:
-            output.write(f"{name}=true\n")
+            output.write(f"prerelease_cleanup_pending={str(pending).lower()}\n")
 
 
-def github_repository():
-    env_value = os.environ.get("GITHUB_REPOSITORY", "").strip()
-    if env_value:
-        return env_value
-    return run_command("gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner").stdout.strip()
-
-
-def source_commit_sha():
-    env_value = os.environ.get("GITHUB_SHA", "").strip()
-    if env_value:
-        return env_value
-    return run_command("git", "rev-parse", "HEAD").stdout.strip()
+def github_context(name, *fallback_command):
+    return os.environ.get(name, "").strip() or run_command(*fallback_command).stdout.strip()
 
 
 def find_suite_id(suites, name):
@@ -235,11 +234,21 @@ class SpxbenchSuiteGate:
         return f"{self.spxbench_url}{path}"
 
     def request(self, path, method="GET", payload=None, timeout=180):
-        remaining = self.deadline - time.monotonic()
-        if remaining <= 0:
-            raise SpxbenchSuiteError(f"spxbench suite exceeded {self.timeout_minutes} minutes")
-        return request_spxbench(self.api_url(path), self.token, method=method,
-                                payload=payload, timeout=min(timeout, remaining))
+        timeout = bounded_timeout(self.deadline, timeout, f"spxbench suite exceeded {self.timeout_minutes} minutes")
+        return request_spxbench(self.api_url(path), self.token, method=method, payload=payload, timeout=timeout)
+
+    def recoverable_request(self, path, description, **kwargs):
+        """Return (None, detail) when the caller can recover from a lost response or 5xx."""
+        try:
+            status, body = self.request(path, **kwargs)
+        except (SpxbenchConnectionError, OSError, http.client.IncompleteRead) as error:
+            detail = str(error)
+        else:
+            if not 500 <= status < 600:
+                return status, body
+            detail = f"HTTP {status}: {body}"
+        log(f"   {description} temporarily unavailable: {detail}")
+        return None, detail
 
     def resolve_suite(self):
         # ids are per-database, names are the cross-repo contract.
@@ -255,47 +264,38 @@ class SpxbenchSuiteGate:
         return suite_id
 
     def install_candidate(self):
-        asset_url = (f"https://github.com/{github_repository()}"
-                     f"/releases/download/{self.candidate_tag}/spx_web.zip")
+        repository = github_context("GITHUB_REPOSITORY", "gh", "repo", "view",
+                                    "--json", "nameWithOwner", "-q", ".nameWithOwner")
+        asset_url = f"https://github.com/{repository}/releases/download/{self.candidate_tag}/spx_web.zip"
         log(f"   candidate package: {asset_url}")
         log(f"installing version {self.candidate_version}")
-        write_step_output("candidate_install_started")
+        set_prerelease_cleanup_pending(False)
         self.install_started = True
         payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": asset_url}
-        operation_id = self.candidate_operation_id()
-        try:
-            status, body = self.request("/api/runtime-versions/install", method="POST", payload=payload,
-                                        timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
-        except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
-            log(f"   install accept response unavailable; recovering operation {operation_id}: {error}")
-            self.wait_for_candidate_install(operation_id, fallback_error=str(error))
-            return
-
-        # The async endpoint returns the current version list when an
-        # idempotent request finds an already completed local installation.
-        if status == 200:
-            artifact = self.candidate_artifact(body)
-            if artifact is None:
-                raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
-            log(f"   installed, digest={artifact.get('digest')}")
-            return
-
-        if status >= 500:
-            error = f"install request failed: HTTP {status}: {body}"
-            log(f"   {error}; recovering operation {operation_id}")
-            self.wait_for_candidate_install(operation_id, fallback_error=error)
-            return
-
-        if status != 202:
+        operation_id = f"spx:{self.candidate_version}"
+        status, body = self.recoverable_request("/api/runtime-versions/install", "install request", method="POST",
+                                                payload=payload, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
+        if status is None:
+            # The POST may have been accepted. Recover by its deterministic operation ID.
+            log(f"   recovering install operation {operation_id}")
+            body = self.wait_for_candidate_install(operation_id, fallback_error=body)
+        elif status == 202:
+            accepted_id = body.get("operationId") if isinstance(body, dict) else None
+            if not accepted_id:
+                raise SpxbenchSuiteError(f"install response is missing operationId: {body}")
+            if accepted_id != operation_id:
+                raise SpxbenchSuiteError(
+                    f"install response returned operationId {accepted_id!r}, want {operation_id!r}")
+            log(f"   install accepted; operation={operation_id}")
+            body = self.wait_for_candidate_install(operation_id)
+        elif status != 200:
             raise SpxbenchSuiteError(f"install request failed: HTTP {status}: {body}")
-        response_operation_id = self.operation_id(body)
-        if not response_operation_id:
-            raise SpxbenchSuiteError(f"install response is missing operationId: {body}")
-        if response_operation_id != operation_id:
-            raise SpxbenchSuiteError(
-                f"install response returned operationId {response_operation_id!r}, want {operation_id!r}")
-        log(f"   install accepted; operation={operation_id}")
-        self.wait_for_candidate_install(operation_id)
+
+        # An idempotent 200 and a completed async install both return the registered versions.
+        artifact = self.candidate_artifact(body)
+        if artifact is None:
+            raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
+        log(f"   installed, digest={artifact.get('digest')}")
 
     def candidate_artifact(self, body):
         if not isinstance(body, dict):
@@ -304,75 +304,43 @@ class SpxbenchSuiteGate:
                      if isinstance(item, dict) and item.get("kind") == "spx"
                      and item.get("version") == self.candidate_version), None)
 
-    @staticmethod
-    def operation_id(body):
-        if not isinstance(body, dict):
-            return None
-        return body.get("operationId")
+    def pause_install_poll(self):
+        time.sleep(bounded_timeout(self.deadline, INSTALL_POLL_SECONDS,
+                                   f"timed out installing candidate {self.candidate_version}"))
 
-    def candidate_operation_id(self):
-        return f"spx:{self.candidate_version}"
-
-    def read_candidate_versions(self):
+    def read_install_status(self, path, description):
         while True:
-            try:
-                status, body = self.request("/api/runtime-versions", timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
-            except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
-                log(f"   installed candidate lookup temporarily unavailable: {error}")
-                status, body = None, None
-            if status == 200:
-                return body
-            if status is None or 500 <= status < 600:
-                if status is not None:
-                    log(f"   installed candidate lookup temporarily unavailable: HTTP {status}: {body}")
-                delay = retry_delay(self.deadline, INSTALL_POLL_SECONDS,
-                                    f"timed out confirming installed candidate {self.candidate_version}")
-                time.sleep(delay)
-                continue
-            raise SpxbenchSuiteError(f"read installed candidate failed: HTTP {status}: {body}")
+            status, body = self.recoverable_request(path, description, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
+            if status is not None:
+                return status, body
+            self.pause_install_poll()
 
     def wait_for_candidate_install(self, operation_id, fallback_error=None):
-        """Wait for the operation created by the async install endpoint."""
-        operation_path = f"/api/runtime-versions/operations/{urllib.parse.quote(str(operation_id), safe='')}"
+        """Wait for the async operation, then read the registered versions."""
+        path = f"/api/runtime-versions/operations/{urllib.parse.quote(operation_id, safe='')}"
         while True:
-            try:
-                status, body = self.request(operation_path, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
-            except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
-                log(f"   install status temporarily unavailable: {error}")
-                status, body = None, None
-            if status == 200:
-                operation = body if isinstance(body, dict) else {}
-                operation_status = str(operation.get("status") or "").lower()
-                if operation_status == "success":
-                    versions = self.read_candidate_versions()
-                    artifact = self.candidate_artifact(versions)
-                    if artifact is None:
-                        raise SpxbenchSuiteError(
-                            f"install operation succeeded but candidate {self.candidate_version} is not registered")
-                    log(f"   installed, digest={artifact.get('digest')}")
-                    return
-                if operation_status == "failed":
-                    detail = operation.get("error") or "unknown error"
-                    raise SpxbenchSuiteError(f"install failed: {detail}")
-                if operation_status != "running":
-                    raise SpxbenchSuiteError(
-                        f"install operation has unexpected status {operation_status!r}: {operation}")
-                log(f"   install still running; stage={operation.get('stage') or '(unknown)'}")
-            elif status is None:
-                pass
-            elif 500 <= status < 600:
-                log(f"   install status temporarily unavailable: HTTP {status}: {body}")
-            elif status == 404:
+            status, body = self.read_install_status(path, "install status")
+            if status == 404:
                 detail = f"install operation {operation_id} was not found"
                 if fallback_error:
                     detail = f"{fallback_error}; {detail}"
                 raise SpxbenchSuiteError(detail)
-            else:
+            if status != 200:
                 raise SpxbenchSuiteError(f"install status failed: HTTP {status}: {body}")
+            operation_status = str(body.get("status") or "").lower() if isinstance(body, dict) else ""
+            if operation_status == "success":
+                break
+            if operation_status == "failed":
+                raise SpxbenchSuiteError(f"install failed: {body.get('error') or 'unknown error'}")
+            if operation_status != "running":
+                raise SpxbenchSuiteError(f"install operation has unexpected status {operation_status!r}: {body}")
+            log(f"   install still running; stage={body.get('stage') or '(unknown)'}")
+            self.pause_install_poll()
 
-            delay = retry_delay(self.deadline, INSTALL_POLL_SECONDS,
-                                f"timed out installing candidate {self.candidate_version}")
-            time.sleep(delay)
+        status, versions = self.read_install_status("/api/runtime-versions", "installed candidate lookup")
+        if status != 200:
+            raise SpxbenchSuiteError(f"read installed candidate failed: HTTP {status}: {versions}")
+        return versions
 
     def start_suite_run(self, suite_id):
         log(f"starting suite run (suite={suite_id}, spxVersion={self.candidate_version})")
@@ -387,19 +355,18 @@ class SpxbenchSuiteGate:
                     raise SpxbenchSuiteError(f"run response is missing jobId: {body}")
                 log(f"   job #{job_id} accepted")
                 return job_id
-            elif status == 409:
-                if not is_run_slot_busy(body):
-                    raise SpxbenchSuiteError(f"run rejected: {response_detail(body).strip()}")
-                delay = retry_delay(self.deadline, BUSY_RETRY_SECONDS,
-                                    "timed out waiting for a free run slot")
-                log(f"   run slot busy (409), retrying in {delay:.0f}s")
-                time.sleep(delay)
-            else:
+            if status != 409:
                 raise SpxbenchSuiteError(f"run failed: HTTP {status}: {body}")
+            if not is_run_slot_busy(body):
+                raise SpxbenchSuiteError(f"run rejected: {response_detail(body).strip()}")
+            delay = bounded_timeout(self.deadline, BUSY_RETRY_SECONDS, "timed out waiting for a free run slot")
+            log(f"   run slot busy (409), retrying in {delay:.0f}s")
+            time.sleep(delay)
 
     def wait_for_suite_job(self, job_id):
         log(f"waiting for job #{job_id} completion event")
         url = self.api_url(f"/__e2e/api/job-events?job={job_id}")
+        request = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
         wait_started = time.monotonic()
         last_wait_log = wait_started
         recovery_deadline = None
@@ -416,78 +383,48 @@ class SpxbenchSuiteGate:
                 log(f"   job #{job_id} still running; waiting for completion event ({int(now - wait_started)}s)")
                 last_wait_log = now
 
+        def stream_timeout(limit):
+            limit = bounded_timeout(self.deadline, limit,
+                                    f"job #{job_id} did not finish within {self.timeout_minutes} minutes")
+            if recovery_deadline is None:
+                return limit
+            return bounded_timeout(recovery_deadline, limit,
+                                   f"job #{job_id} event stream unavailable for {EVENT_RECOVERY_TIMEOUT_SECONDS} seconds")
+
         while True:
-            remaining = self.deadline - time.monotonic()
-            if remaining <= 0:
-                raise SpxbenchSuiteError(f"job #{job_id} did not finish within {self.timeout_minutes} minutes")
-            request = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
             finished_event = False
             try:
-                recovery_remaining = (recovery_deadline - time.monotonic()
-                                      if recovery_deadline is not None else None)
-                if recovery_remaining is not None and recovery_remaining <= 0:
-                    raise SpxbenchSuiteError(f"job #{job_id} event stream unavailable for "
-                                             f"{EVENT_RECOVERY_TIMEOUT_SECONDS} seconds")
-                stream_timeout = min(45, remaining)
-                if recovery_remaining is not None:
-                    stream_timeout = min(stream_timeout, recovery_remaining)
-                with urllib.request.urlopen(request, timeout=stream_timeout) as response:
+                with urllib.request.urlopen(request, timeout=stream_timeout(45)) as response:
                     if response.headers.get_content_type() != "text/event-stream":
                         raise SpxbenchSuiteError("spxbench job event endpoint did not return an event stream")
-                    for event, data in sse_events(response, self.deadline, on_comment):
-                        if event == "finished" and json.loads(data).get("jobId") == job_id:
-                            finished_event = True
-                            break
+                    finished_event = any(event == "finished" and json.loads(data).get("jobId") == job_id
+                                         for event, data in sse_events(response, self.deadline, on_comment))
             except urllib.error.HTTPError as error:
-                try:
-                    try:
-                        detail = error.read().decode()
-                    except (http.client.IncompleteRead, OSError):
-                        detail = "<unreadable response body>"
-                finally:
-                    error.close()
+                detail = http_error_body(error)
                 if not 500 <= error.code < 600:
                     raise SpxbenchSuiteError(f"job event stream failed: HTTP {error.code}: {detail}") from error
                 log(f"   job event stream temporarily unavailable: HTTP {error.code}: {detail}")
-            except (urllib.error.URLError, TimeoutError, OSError, http.client.IncompleteRead) as error:
+            except (OSError, http.client.IncompleteRead) as error:
                 log(f"   job event stream disconnected: {error}")
             # Read durable state after an event or disconnect to cover lost notifications.
             if not finished_event and recovery_deadline is None:
                 recovery_deadline = time.monotonic() + EVENT_RECOVERY_TIMEOUT_SECONDS
-            state = self.read_suite_job_state(job_id, recovery_deadline)
-            if state is None and recovery_deadline is None:
-                recovery_deadline = time.monotonic() + EVENT_RECOVERY_TIMEOUT_SECONDS
+            state = self.read_suite_job_state(job_id, timeout=stream_timeout(EVENT_STATE_REQUEST_TIMEOUT_SECONDS))
             if state is not None:
-                if finished_event and state.get("running"):
-                    raise SpxbenchSuiteError(f"job #{job_id} completion event did not match a finished state")
                 if not state.get("running"):
                     return state
-            remaining = self.deadline - time.monotonic()
-            if remaining <= 0:
-                raise SpxbenchSuiteError(f"job #{job_id} did not finish within {self.timeout_minutes} minutes")
-            recovery_remaining = recovery_deadline - time.monotonic()
-            if recovery_remaining <= 0:
-                raise SpxbenchSuiteError(f"job #{job_id} event stream unavailable for "
-                                         f"{EVENT_RECOVERY_TIMEOUT_SECONDS} seconds")
-            delay = min(reconnect_delay, remaining, recovery_remaining)
+                if finished_event:
+                    raise SpxbenchSuiteError(f"job #{job_id} completion event did not match a finished state")
+            elif recovery_deadline is None:
+                recovery_deadline = time.monotonic() + EVENT_RECOVERY_TIMEOUT_SECONDS
+            delay = stream_timeout(reconnect_delay)
             log(f"   reconnecting job event stream in {delay:.0f}s")
             time.sleep(delay)
             reconnect_delay = min(reconnect_delay * 2, EVENT_RECONNECT_MAX_SECONDS)
 
-    def read_suite_job_state(self, job_id, recovery_deadline=None):
-        timeout = EVENT_STATE_REQUEST_TIMEOUT_SECONDS
-        if recovery_deadline is not None:
-            recovery_remaining = recovery_deadline - time.monotonic()
-            if recovery_remaining <= 0:
-                return None
-            timeout = min(timeout, recovery_remaining)
-        try:
-            status, job = self.request(f"/api/jobs?id={job_id}", timeout=timeout)
-        except (SpxbenchConnectionError, TimeoutError, OSError, http.client.IncompleteRead) as error:
-            log(f"   job state temporarily unavailable: {error}")
-            return None
-        if 500 <= status < 600:
-            log(f"   job state temporarily unavailable: HTTP {status}: {job}")
+    def read_suite_job_state(self, job_id, timeout=EVENT_STATE_REQUEST_TIMEOUT_SECONDS):
+        status, job = self.recoverable_request(f"/api/jobs?id={job_id}", "job state", timeout=timeout)
+        if status is None:
             return None
         if status != 200:
             raise SpxbenchSuiteError(f"state read failed: HTTP {status}: {job}")
@@ -536,32 +473,33 @@ class SpxbenchSuiteGate:
         deadline = time.monotonic() + REMOVE_TIMEOUT_SECONDS
         payload = {"action": "remove", "kind": "spx", "version": self.candidate_version}
         while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise SpxbenchSuiteError(f"timed out removing candidate {self.candidate_version} from spxbench")
+            timeout = bounded_timeout(deadline, 30,
+                                      f"timed out removing candidate {self.candidate_version} from spxbench")
             status, body = request_spxbench(self.api_url("/api/runtime-versions"), self.token,
-                                            method="POST", payload=payload, timeout=min(30, remaining))
+                                            method="POST", payload=payload, timeout=timeout)
             if status == 200:
                 versions = body.get("versions") if isinstance(body, dict) else None
                 if not isinstance(versions, list) or not all(isinstance(item, dict) for item in versions):
                     raise SpxbenchSuiteError(f"invalid candidate removal response: {body}")
-                if any(item.get("kind") == "spx" and item.get("version") == self.candidate_version
-                       for item in versions):
+                if self.candidate_artifact(body) is not None:
                     raise SpxbenchSuiteError(f"spxbench still lists candidate {self.candidate_version} after removal")
                 break
             if status == 404:
                 break
             if status != 409:
                 raise SpxbenchSuiteError(f"remove candidate failed: HTTP {status}: {body}")
-            delay = retry_delay(deadline, REMOVE_RETRY_SECONDS,
-                                f"timed out removing candidate {self.candidate_version}: {body}")
+            delay = bounded_timeout(deadline, REMOVE_RETRY_SECONDS,
+                                    f"timed out removing candidate {self.candidate_version}: {body}")
             log(f"   candidate removal blocked (409), retrying in {delay:.0f}s")
             time.sleep(delay)
         self.candidate_removed = True
-        write_step_output("candidate_removed")
+        set_prerelease_cleanup_pending(True)
         log(f"   removed candidate {self.candidate_version} from spxbench")
 
-    def summary_lines(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
+    def write_summary(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
+        path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not path:
+            return
         lines = ["### spxbench regression suite", "",
                  f"- Suite: `{self.suite_name}`",
                  f"- Candidate: `{self.candidate_version}`",
@@ -572,29 +510,22 @@ class SpxbenchSuiteGate:
             lines.append(f"- [Test run details]({self.api_url(f'/__e2e?job={job_id}')})")
         lines.extend(f"- Cleanup warning: {' '.join(str(note).splitlines())}"
                      for note in cleanup_notes)
-        return lines
-
-    def write_summary(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
-        path = os.environ.get("GITHUB_STEP_SUMMARY")
-        if not path:
-            return
         try:
             with open(path, "a", encoding="utf-8") as summary:
-                summary.write("\n".join(self.summary_lines(
-                    suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes)) + "\n\n")
+                summary.write("\n".join(lines) + "\n\n")
         except OSError as error:
             warn_cleanup(f"writing GitHub Step Summary failed: {error}")
 
     def run(self):
         suite_result = "not completed"
         runtime_cleanup = "not installed"
-        release_cleanup = "not attempted"
         cleanup_notes = []
         job_id = None
+        commit = github_context("GITHUB_SHA", "git", "rev-parse", "HEAD")
+        # gh may fail or be cancelled after creating the prerelease.
+        set_prerelease_cleanup_pending(True)
         try:
-            # Creation is inside the try: gh release create is multi-step and can
-            # fail after the remote release already exists; finally must clean it.
-            create_candidate_release(self.candidate_tag, self.web_archive_path, source_commit_sha())
+            create_candidate_release(self.candidate_tag, self.web_archive_path, commit)
             suite_id = self.resolve_suite()
             self.install_candidate()
             job_id = self.start_suite_run(suite_id)
@@ -619,16 +550,16 @@ class SpxbenchSuiteGate:
                     deletion_error = delete_candidate_release(self.candidate_tag)
                 except Exception as error:
                     deletion_error = str(error)
-                if deletion_error:
+                if deletion_error is not None:
                     release_cleanup = "failed"
                     cleanup_notes.append(f"GitHub prerelease deletion: {deletion_error}")
                     warn_cleanup(f"GitHub prerelease cleanup failed: {deletion_error}")
-                    try:
-                        write_step_output("candidate_release_cleanup_failed")
-                    except OSError as error:
-                        warn_cleanup(f"recording prerelease cleanup failure failed: {error}")
                 else:
                     release_cleanup = "deleted"
+                    try:
+                        set_prerelease_cleanup_pending(False)
+                    except OSError as error:
+                        warn_cleanup(f"recording prerelease deletion failed: {error}")
             self.write_summary(suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes)
 
 

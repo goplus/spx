@@ -14,7 +14,7 @@ on:
         default: ''
         type: string
       platforms:
-        description: 'SPX packages: all or comma-separated web,macos,windows,linux; ignored by publish-runtime and publish-dev-npm'
+        description: 'SPX packages (all or comma-separated web,macos,windows,linux). Dry-run requires web. Ignored by publish-runtime and publish-dev-npm.'
         required: true
         default: 'all'
         type: string
@@ -75,28 +75,22 @@ jobs:
           SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           WEB_ARCHIVE_PATH: dist/spx_web.zip
-          GITHUB_SHA: ${{ github.sha }}
         run: python3 .github/scripts/release/run_spxbench_suite.py
 
       - name: Retry candidate prerelease cleanup
-        if: >-
-          ${{
-            (failure() || cancelled() || steps.suite.outputs.candidate_release_cleanup_failed == 'true') &&
-            (steps.suite.outputs.candidate_install_started != 'true' || steps.suite.outputs.candidate_removed == 'true')
-          }}
+        if: ${{ always() && steps.suite.outputs.prerelease_cleanup_pending == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          CANDIDATE_TAG: v${{ env.CANDIDATE_VERSION }}
         run: |
-          if gh release delete "$CANDIDATE_TAG" --cleanup-tag --yes; then
-            echo '- Prerelease cleanup retry: **deleted**.' >> "$GITHUB_STEP_SUMMARY" || \
-              echo '::warning title=spxbench summary::Could not write prerelease cleanup result'
+          if gh release delete "v$CANDIDATE_VERSION" --cleanup-tag --yes; then
+            result=deleted
           else
-            echo "::warning title=spxbench prerelease cleanup::Could not delete $CANDIDATE_TAG after retry"
-            echo '- Prerelease cleanup retry: **failed**.' >> "$GITHUB_STEP_SUMMARY" || \
-              echo '::warning title=spxbench summary::Could not write prerelease cleanup result'
+            result=failed
+            echo "::warning title=spxbench prerelease cleanup::Could not delete v$CANDIDATE_VERSION after retry"
           fi
+          echo "- Prerelease cleanup retry: **$result**." >> "$GITHUB_STEP_SUMMARY" || \
+            echo '::warning title=spxbench summary::Could not write prerelease cleanup result'
 
   publish-runtime:
     name: Publish or reuse runtime release

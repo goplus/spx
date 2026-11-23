@@ -6,6 +6,8 @@ import os
 import tempfile
 import unittest
 import urllib.error
+from contextlib import ExitStack
+from pathlib import Path
 from unittest import mock
 
 import run_spxbench_suite
@@ -13,8 +15,22 @@ from run_spxbench_suite import (SpxbenchConnectionError, SpxbenchSuiteError, Spx
                                 find_suite_id, is_run_slot_busy, job_failure_reasons, require_env, sse_events)
 
 
-CANDIDATE_ENV = {"SPXBENCH_URL": "http://127.0.0.1", "SPXBENCH_API_TOKEN": "t",
-                 "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": "0.0.1-rc.1.1", "GITHUB_SHA": "abc123"}
+VERSION = "0.0.1-rc.1.1"
+CANDIDATE_ENV = {
+    "SPXBENCH_URL": "http://127.0.0.1", "SPXBENCH_API_TOKEN": "t",
+    "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": VERSION,
+    "GITHUB_REPOSITORY": "goplus/spx", "GITHUB_SHA": "abc123",
+}
+OPERATION_ID = f"spx:{VERSION}"
+INSTALL_ACCEPTED = (202, {"operationId": OPERATION_ID, "status": "running"})
+INSTALL_SUCCEEDED = (200, {"operationId": OPERATION_ID, "status": "success"})
+CANDIDATE_REGISTERED = (200, {"versions": [{"kind": "spx", "version": VERSION, "digest": "sha256:abc"}]})
+INSTALL_REQUEST = mock.call(
+    "/api/runtime-versions/install", method="POST", timeout=30,
+    payload={"kind": "spx", "version": VERSION,
+             "sourceUrl": f"https://github.com/goplus/spx/releases/download/v{VERSION}/spx_web.zip"})
+OPERATION_REQUEST = mock.call(f"/api/runtime-versions/operations/spx%3A{VERSION}", timeout=30)
+VERSIONS_REQUEST = mock.call("/api/runtime-versions", timeout=30)
 
 
 def patch_candidate_env(**updates):
@@ -145,111 +161,64 @@ class SuiteRunConflictTest(unittest.TestCase):
                 sleep.assert_not_called()
 
 
+@patch_candidate_env()
 class CandidateInstallTest(unittest.TestCase):
-    def test_already_completed_install_response_must_include_candidate(self):
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {"versions": []})):
-            with self.assertRaisesRegex(SpxbenchSuiteError, "did not include candidate"):
-                SpxbenchSuiteGate().install_candidate()
+    def setUp(self):
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        self.request = stack.enter_context(mock.patch.object(SpxbenchSuiteGate, "request"))
+        self.sleep = stack.enter_context(mock.patch.object(run_spxbench_suite.time, "sleep"))
 
     def test_already_completed_install_is_accepted(self):
-        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, {"versions": [artifact]})) as requested:
-            SpxbenchSuiteGate().install_candidate()
-        requested.assert_called_once_with(
-            "/api/runtime-versions/install", method="POST", timeout=30,
-            payload={"kind": "spx", "version": "0.0.1-rc.1.1",
-                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"})
+        self.request.return_value = CANDIDATE_REGISTERED
+        SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST])
+
+    def test_invalid_install_response_is_rejected_without_polling(self):
+        for response, message in (
+            ((200, {"versions": []}), "did not include candidate"),
+            ((202, {"status": "running"}), "missing operationId"),
+            ((202, {"operationId": "spx:another-version"}), "returned operationId"),
+        ):
+            with self.subTest(response=response):
+                self.request.reset_mock()
+                self.request.return_value = response
+                with self.assertRaisesRegex(SpxbenchSuiteError, message):
+                    SpxbenchSuiteGate().install_candidate()
+                self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST])
 
     def test_async_install_polls_until_candidate_is_registered(self):
-        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
-        operation_id = "spx:0.0.1-rc.1.1"
-        responses = [
-            (202, {"operationId": operation_id, "status": "running"}),
-            (200, {"operationId": operation_id, "kind": "spx", "version": "0.0.1-rc.1.1",
-                   "status": "running", "stage": "下载 SPX archive"}),
-            (200, {"operationId": operation_id, "kind": "spx", "version": "0.0.1-rc.1.1",
-                   "status": "success", "stage": "安装完成"}),
-            (200, {"versions": [artifact], "operations": []})]
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=responses) as requested, \
-             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-            SpxbenchSuiteGate().install_candidate()
-        self.assertEqual(requested.call_args_list[0], mock.call(
-            "/api/runtime-versions/install", method="POST", timeout=30,
-            payload={"kind": "spx", "version": "0.0.1-rc.1.1",
-                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"}))
-        self.assertEqual(requested.call_args_list[1:], [
-            mock.call("/api/runtime-versions/operations/spx%3A0.0.1-rc.1.1", timeout=30),
-            mock.call("/api/runtime-versions/operations/spx%3A0.0.1-rc.1.1", timeout=30),
-            mock.call("/api/runtime-versions", timeout=30),
-        ])
-        sleep.assert_called_once_with(5)
+        running = (200, {"operationId": OPERATION_ID, "status": "running", "stage": "下载 SPX archive"})
+        self.request.side_effect = [INSTALL_ACCEPTED, running, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED]
+        SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(self.request.call_args_list,
+                         [INSTALL_REQUEST, OPERATION_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST])
+        self.sleep.assert_called_once_with(5)
 
-    def test_lost_accept_response_recovers_deterministic_operation(self):
-        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
-                 SpxbenchConnectionError("connection lost"),
-                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
-                 (200, {"versions": [artifact]})]) as requested, \
-             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-            SpxbenchSuiteGate().install_candidate()
-        self.assertEqual(requested.call_args_list, [
-            mock.call("/api/runtime-versions/install", method="POST", timeout=30,
-                      payload={"kind": "spx", "version": "0.0.1-rc.1.1",
-                               "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"}),
-            mock.call("/api/runtime-versions/operations/spx%3A0.0.1-rc.1.1", timeout=30),
-            mock.call("/api/runtime-versions", timeout=30),
-        ])
-        sleep.assert_not_called()
-
-    def test_gateway_error_recovers_existing_operation(self):
-        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
-                 (504, "gateway timeout"),
-                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
-                 (200, {"versions": [artifact]})]) as requested:
-            SpxbenchSuiteGate().install_candidate()
-        self.assertEqual(requested.call_count, 3)
+    def test_unavailable_accept_response_recovers_existing_operation(self):
+        for failure in (SpxbenchConnectionError("connection lost"), (504, "gateway timeout")):
+            with self.subTest(failure=failure):
+                self.request.reset_mock()
+                self.request.side_effect = [failure, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED]
+                SpxbenchSuiteGate().install_candidate()
+                self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST])
+                self.sleep.assert_not_called()
 
     def test_final_candidate_lookup_retries_transient_failure(self):
-        artifact = {"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "sha256:abc"}
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
-                 (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
-                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
-                 (503, "temporarily unavailable"), (200, {"versions": [artifact]})]) as requested, \
-             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-            SpxbenchSuiteGate().install_candidate()
-        self.assertEqual(requested.call_count, 4)
-        sleep.assert_called_once_with(5)
-
-    def test_async_install_requires_operation_id(self):
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(202, {"status": "running"})):
-            with self.assertRaisesRegex(SpxbenchSuiteError, "missing operationId"):
-                SpxbenchSuiteGate().install_candidate()
-
-    def test_async_install_rejects_mismatched_operation_id(self):
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request",
-                               return_value=(202, {"operationId": "spx:another-version"})):
-            with self.assertRaisesRegex(SpxbenchSuiteError, "returned operationId"):
-                SpxbenchSuiteGate().install_candidate()
+        self.request.side_effect = [INSTALL_ACCEPTED, INSTALL_SUCCEEDED,
+                                    (503, "temporarily unavailable"), CANDIDATE_REGISTERED]
+        SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(self.request.call_args_list,
+                         [INSTALL_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST, VERSIONS_REQUEST])
+        self.sleep.assert_called_once_with(5)
 
     def test_async_install_failure_is_reported_without_retrying_post(self):
-        with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx"), \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=[
-                 (202, {"operationId": "spx:0.0.1-rc.1.1"}),
-                 (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "failed",
-                        "error": "download failed"})]) as requested, \
-             mock.patch.object(run_spxbench_suite.time, "sleep"):
-            with self.assertRaisesRegex(SpxbenchSuiteError, "download failed"):
-                SpxbenchSuiteGate().install_candidate()
-        self.assertEqual(requested.call_count, 2)
+        failed = (200, {"operationId": OPERATION_ID, "status": "failed", "error": "download failed"})
+        self.request.side_effect = [INSTALL_ACCEPTED, failed]
+        with self.assertRaisesRegex(SpxbenchSuiteError, "download failed"):
+            SpxbenchSuiteGate().install_candidate()
+        self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST])
+        self.sleep.assert_not_called()
 
 
 class CandidateRemovalTest(unittest.TestCase):
@@ -285,15 +254,24 @@ class CandidateRemovalTest(unittest.TestCase):
                 self.assertFalse(gate.candidate_removed)
 
 
-class SuiteJobEventsTest(unittest.TestCase):
-    @staticmethod
-    def stream(body):
-        response = mock.MagicMock()
-        response.__enter__.return_value = response
-        response.headers.get_content_type.return_value = "text/event-stream"
-        response.__iter__.return_value = iter(body.splitlines(keepends=True))
-        return response
+EVENTS_URL = "http://127.0.0.1/__e2e/api/job-events?job=11"
+FINISHED_EVENT = b'event: finished\ndata: {"jobId":11}\n\n'
 
+
+def event_stream(body=FINISHED_EVENT):
+    response = mock.MagicMock()
+    response.__enter__.return_value = response
+    response.headers.get_content_type.return_value = "text/event-stream"
+    response.__iter__.return_value = iter(body.splitlines(keepends=True))
+    return response
+
+
+def unavailable_stream():
+    return urllib.error.HTTPError(EVENTS_URL, 503, "unavailable", {}, io.BytesIO(b"deploying"))
+
+
+@patch_candidate_env()
+class SuiteJobEventsTest(unittest.TestCase):
     def test_job_response_uses_persisted_metadata_and_snapshot_cases(self):
         job = {
             "id": 11,
@@ -339,20 +317,17 @@ class SuiteJobEventsTest(unittest.TestCase):
 
     def test_finished_event_reads_final_state_once(self):
         state = job_response({"running": False, "summary": "passed"})
-        response = self.stream(b": connected\n\nevent: finished\ndata: {\"jobId\":11}\n\n")
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response) as opened, \
+        response = event_stream(b": connected\n\n" + FINISHED_EVENT)
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
             self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
-        self.assertEqual(opened.call_args.args[0].full_url,
-                         "http://127.0.0.1/__e2e/api/job-events?job=11")
+        self.assertEqual(opened.call_args.args[0].full_url, EVENTS_URL)
         self.assertEqual(opened.call_args.args[0].get_header("Authorization"), "Bearer t")
         requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_heartbeats_log_waiting_without_querying_state(self):
-        body = (b": connected\n\n" + b": heartbeat\n\n" * 5
-                + b"event: finished\ndata: {\"jobId\":11}\n\n")
-        response = self.stream(body)
+        body = b": connected\n\n" + b": heartbeat\n\n" * 5 + FINISHED_EVENT
+        response = event_stream(body)
         clock = [0]
 
         def timed_lines():
@@ -365,8 +340,7 @@ class SuiteJobEventsTest(unittest.TestCase):
 
         response.__iter__.return_value = timed_lines()
         state = job_response({"running": False, "summary": "passed"})
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
+        with mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", return_value=response), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested, \
              mock.patch.object(run_spxbench_suite, "log") as logged:
@@ -376,10 +350,9 @@ class SuiteJobEventsTest(unittest.TestCase):
         requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
     def test_missing_event_endpoint_fails_with_deployment_error(self):
-        error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 404,
+        error = urllib.error.HTTPError(EVENTS_URL, 404,
                                       "not found", {}, io.BytesIO(b"404 page not found"))
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
              mock.patch.object(SpxbenchSuiteGate, "request") as requested:
             with self.assertRaisesRegex(SpxbenchSuiteError, "job event stream failed: HTTP 404"):
                 SpxbenchSuiteGate().wait_for_suite_job(11)
@@ -387,110 +360,72 @@ class SuiteJobEventsTest(unittest.TestCase):
 
     def test_disconnect_recovers_from_durable_final_state(self):
         state = job_response({"running": False, "summary": "failed"}, status="failed")
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=urllib.error.URLError("connection lost")) as opened, \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
             self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "failed")
         opened.assert_called_once()
         requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
 
-    def test_disconnect_while_running_reconnects(self):
-        response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        states = [job_response({"running": True}, status="running"),
-                  job_response({"running": False, "summary": "passed"})]
-        states = [(200, state) for state in states]
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                               side_effect=[urllib.error.URLError("lost"), response]) as opened, \
-             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep, \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=states) as requested:
-            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
-        self.assertEqual(opened.call_count, 2)
-        self.assertEqual(requested.call_count, 2)
-        sleep.assert_called_once()
-
-    def test_incomplete_event_stream_checks_state_and_reconnects(self):
+    def test_interrupted_stream_reconnects_while_job_is_running(self):
         def truncated_lines():
             yield b": connected\n"
             yield b"\n"
             yield b"event: finished\n"
             raise http.client.IncompleteRead(b'data: {"jobId":', 3)
 
-        truncated = self.stream(b"")
+        truncated = event_stream(b"")
         truncated.__iter__.return_value = truncated_lines()
-        finished = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        states = [job_response({"running": True}, status="running"),
-                  job_response({"running": False, "summary": "passed"})]
-        states = [(200, state) for state in states]
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                               side_effect=[truncated, finished]) as opened, \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=states) as requested, \
-             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
-        self.assertEqual(opened.call_count, 2)
-        self.assertEqual(requested.call_count, 2)
-        sleep.assert_called_once_with(2)
+        failures = {"disconnect": urllib.error.URLError("lost"), "truncated stream": truncated,
+                    "HTTP 503": unavailable_stream()}
+        for cause, failure in failures.items():
+            states = [(200, job_response({"running": True})),
+                      (200, job_response({"running": False, "summary": "passed"}))]
+            with self.subTest(cause=cause), \
+                 mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+                                   side_effect=[failure, event_stream()]) as opened, \
+                 mock.patch.object(SpxbenchSuiteGate, "request", side_effect=states) as requested, \
+                 mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
+                self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
+                self.assertEqual(opened.call_count, 2)
+                self.assertEqual(requested.call_args_list, [mock.call("/api/jobs?id=11", timeout=15)] * 2)
+                sleep.assert_called_once_with(2)
+
+    def test_truncated_forbidden_job_response_fails_without_retry(self):
+        body = io.BytesIO()
+        error = urllib.error.HTTPError("http://127.0.0.1/api/jobs?id=11", 403, "forbidden", {}, body)
+        error.read = mock.Mock(side_effect=http.client.IncompleteRead(b"forb", 5))
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error) as opened:
+            with self.assertRaisesRegex(SpxbenchSuiteError, "state read failed: HTTP 403"):
+                SpxbenchSuiteGate().read_suite_job_state(11)
+        opened.assert_called_once()
+        self.assertTrue(body.closed)
 
     def test_incomplete_state_response_reconnects(self):
         truncated = mock.MagicMock()
         truncated.__enter__.return_value = truncated
         truncated.read.side_effect = http.client.IncompleteRead(b'{"jobId":11', 5)
-        finished_event = b"event: finished\ndata: {\"jobId\":11}\n\n"
         state_response = mock.MagicMock()
         state_response.__enter__.return_value = state_response
         state_response.status = 200
         state_response.read.return_value = (b'{"id":11,"status":"success","summary":"passed",'
                                              b'"snapshot":{"jobId":11,"running":false,"summary":"passed","cases":[]}}')
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                               side_effect=[self.stream(finished_event), truncated,
-                                            self.stream(finished_event), state_response]) as opened, \
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+                               side_effect=[event_stream(), truncated,
+                                            event_stream(), state_response]) as opened, \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
             self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
         self.assertEqual(opened.call_count, 4)
         sleep.assert_called_once_with(2)
 
-    def test_stream_503_recovers_after_state_check(self):
-        error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                      "unavailable", {}, io.BytesIO(b"deploying"))
-        response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        states = [job_response({"running": True}, status="running"),
-                  job_response({"running": False, "summary": "passed"})]
-        states = [(200, state) for state in states]
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                               side_effect=[error, response]) as opened, \
-             mock.patch.object(SpxbenchSuiteGate, "request", side_effect=states) as requested, \
-             mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
-            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
-        self.assertEqual(opened.call_count, 2)
-        self.assertEqual(requested.call_count, 2)
-        sleep.assert_called_once_with(2)
-
-    def test_truncated_503_body_still_checks_durable_state(self):
-        error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                      "unavailable", {}, io.BytesIO())
-        error.read = mock.Mock(side_effect=http.client.IncompleteRead(b"down", 10))
-        state = job_response({"running": False, "summary": "passed"})
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
-             mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
-            self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
-        error.read.assert_called_once_with()
-        requested.assert_called_once_with("/api/jobs?id=11", timeout=15)
-
     def test_interrupted_503_body_still_checks_durable_state(self):
-        for failure in (TimeoutError("response body timed out"),
+        for failure in (http.client.IncompleteRead(b"down", 10), TimeoutError("response body timed out"),
                         ConnectionResetError("connection reset by peer")):
             with self.subTest(failure=type(failure).__name__):
-                error = urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                              "unavailable", {}, io.BytesIO())
+                error = unavailable_stream()
                 error.read = mock.Mock(side_effect=failure)
                 state = job_response({"running": False, "summary": "passed"})
-                with patch_candidate_env(), \
-                     mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
+                with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=error), \
                      mock.patch.object(SpxbenchSuiteGate, "request", return_value=(200, state)) as requested:
                     self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
                 error.read.assert_called_once_with()
@@ -499,10 +434,9 @@ class SuiteJobEventsTest(unittest.TestCase):
     def test_transient_state_failures_reconnect(self):
         for state_failure in ((503, "deploying"), SpxbenchConnectionError("offline")):
             with self.subTest(state_failure=state_failure):
-                response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
+                response = event_stream()
                 state = job_response({"running": False, "summary": "passed"})
-                with patch_candidate_env(), \
-                     mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+                with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                        side_effect=[urllib.error.URLError("lost"), response]), \
                      mock.patch.object(SpxbenchSuiteGate, "request",
                                        side_effect=[state_failure, (200, state)]) as requested, \
@@ -512,8 +446,7 @@ class SuiteJobEventsTest(unittest.TestCase):
                 sleep.assert_called_once_with(2)
 
     def test_permanent_state_error_does_not_retry(self):
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
                                side_effect=urllib.error.URLError("lost")), \
              mock.patch.object(SpxbenchSuiteGate, "request", return_value=(401, "unauthorized")), \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
@@ -522,15 +455,10 @@ class SuiteJobEventsTest(unittest.TestCase):
         sleep.assert_not_called()
 
     def test_reconnect_backoff_caps_at_ten_seconds(self):
-        def unavailable():
-            return urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                          "unavailable", {}, io.BytesIO(b"deploying"))
-
-        response = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
+        response = event_stream()
         state = job_response({"running": False, "summary": "passed"})
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                               side_effect=[unavailable() for _ in range(4)] + [response]), \
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+                               side_effect=[unavailable_stream() for _ in range(4)] + [response]), \
              mock.patch.object(SpxbenchSuiteGate, "request",
                                side_effect=[(503, "deploying")] * 4 + [(200, state)]), \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
@@ -538,19 +466,13 @@ class SuiteJobEventsTest(unittest.TestCase):
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 8, 10])
 
     def test_heartbeat_resets_reconnect_backoff(self):
-        def unavailable():
-            return urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                          "unavailable", {}, io.BytesIO(b"deploying"))
-
-        heartbeat = self.stream(b": heartbeat\n\n")
-        finished = self.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")
-        running = (200, job_response({"running": True}, status="running"))
+        streams = [unavailable_stream(), unavailable_stream(), event_stream(b": heartbeat\n\n"),
+                   unavailable_stream(), event_stream()]
+        running = (200, job_response({"running": True}))
         passed = (200, job_response({"running": False, "summary": "passed"}))
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                               side_effect=[unavailable(), unavailable(), heartbeat, unavailable(), finished]), \
+        with mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=streams), \
              mock.patch.object(SpxbenchSuiteGate, "request",
-                               side_effect=[running, running, running, running, passed]), \
+                               side_effect=[running] * 4 + [passed]), \
              mock.patch.object(run_spxbench_suite.time, "sleep") as sleep:
             self.assertEqual(SpxbenchSuiteGate().wait_for_suite_job(11)["summary"], "passed")
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 2, 4])
@@ -562,15 +484,13 @@ class SuiteJobEventsTest(unittest.TestCase):
 
         def unavailable(*args, **kwargs):
             stream_attempts.append((clock[0], kwargs["timeout"]))
-            raise urllib.error.HTTPError("http://127.0.0.1/__e2e/api/job-events?job=11", 503,
-                                         "unavailable", {}, io.BytesIO(b"deploying"))
+            raise unavailable_stream()
 
         def unavailable_state(path, **kwargs):
             state_attempts.append((clock[0], kwargs["timeout"]))
             return 503, "deploying"
 
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
+        with mock.patch.object(run_spxbench_suite.time, "monotonic", side_effect=lambda: clock[0]), \
              mock.patch.object(run_spxbench_suite.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)), \
              mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=unavailable), \
              mock.patch.object(SpxbenchSuiteGate, "request", side_effect=unavailable_state), \
@@ -652,153 +572,115 @@ class TimeoutTest(unittest.TestCase):
 
 
 class CandidateReleaseCleanupTest(unittest.TestCase):
-    def test_creation_failure_still_cleans_up(self):
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite, "create_candidate_release",
-                               side_effect=SpxbenchSuiteError("boom")), \
-             mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value=None) as deleted:
-            with self.assertRaises(SpxbenchSuiteError):
-                run_spxbench_suite.main()
-            deleted.assert_called_once_with("v0.0.1-rc.1.1")
+    def setUp(self):
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+        self.output = directory / "outputs"
+        self.summary = directory / "summary"
+        stack.enter_context(patch_candidate_env(
+            GITHUB_OUTPUT=str(self.output), GITHUB_STEP_SUMMARY=str(self.summary)))
+        self.created = stack.enter_context(mock.patch.object(run_spxbench_suite, "create_candidate_release"))
+        self.deleted = stack.enter_context(mock.patch.object(
+            run_spxbench_suite, "delete_candidate_release", return_value=None))
+        self.removed = stack.enter_context(mock.patch.object(
+            run_spxbench_suite, "request_spxbench", return_value=(200, {"versions": []})))
+        self.request = stack.enter_context(mock.patch.object(SpxbenchSuiteGate, "request"))
+        stack.enter_context(mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
+                                             return_value=event_stream()))
 
-    def test_cleanup_failure_does_not_hide_creation_failure(self):
-        with patch_candidate_env(), \
-             mock.patch.object(run_spxbench_suite, "create_candidate_release",
-                               side_effect=SpxbenchSuiteError("release creation failed")), \
-             mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value="release not found"):
-            with self.assertRaisesRegex(SpxbenchSuiteError, "release creation failed"):
-                run_spxbench_suite.main()
+    def run_suite(self, *, passed=True):
+        job = job_response({
+            "running": False, "total": 1, "completed": 1, "passed": int(passed),
+            "summary": "passed" if passed else "failed",
+            "cases": [{"name": "smoke", "status": "pass" if passed else "fail"}],
+        }, status="success" if passed else "failed")
+        self.request.side_effect = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
+                                    INSTALL_ACCEPTED, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED,
+                                    (200, {"jobId": 11}), (200, job)]
+        run_spxbench_suite.main()
 
-    def test_successful_validation_reports_prerelease_cleanup_failure_without_failing_gate(self):
-        with tempfile.TemporaryDirectory() as directory:
-            output_path = os.path.join(directory, "outputs")
-            summary_path = os.path.join(directory, "summary")
-            with patch_candidate_env(GITHUB_OUTPUT=output_path, GITHUB_STEP_SUMMARY=summary_path), \
-                 mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
-                 mock.patch.object(run_spxbench_suite, "delete_candidate_release", return_value="permission denied"), \
-                 mock.patch.object(run_spxbench_suite, "request_spxbench", return_value=(200, {"versions": []})), \
-                 mock.patch.object(SpxbenchSuiteGate, "resolve_suite", return_value=7), \
-                 mock.patch.object(SpxbenchSuiteGate, "install_candidate"), \
-                 mock.patch.object(SpxbenchSuiteGate, "start_suite_run", return_value=1), \
-                 mock.patch.object(SpxbenchSuiteGate, "wait_for_suite_job", return_value={"summary": "passed", "total": 1,
-                                                                                     "completed": 1, "passed": 1, "cases": []}):
-                run_spxbench_suite.main()
-            with open(output_path) as output:
-                self.assertEqual(output.read().splitlines(),
-                                 ["candidate_removed=true", "candidate_release_cleanup_failed=true"])
-            with open(summary_path) as summary:
-                report = summary.read()
-            self.assertIn("Regression: **passed**", report)
-            self.assertIn("spxbench candidate: **removed**", report)
-            self.assertIn("GitHub prerelease: **failed**", report)
-            self.assertIn("permission denied", report)
+    def assert_cleanup_states(self, *states):
+        self.assertEqual(self.output.read_text().splitlines(),
+                         [f"prerelease_cleanup_pending={str(state).lower()}" for state in states])
+
+    def assert_report(self, *, regression, runtime, prerelease):
+        report = self.summary.read_text()
+        self.assertIn(f"Regression: **{regression}**", report)
+        self.assertIn(f"spxbench candidate: **{runtime}**", report)
+        self.assertIn(f"GitHub prerelease: **{prerelease}**", report)
+
+    def test_creation_failure_still_cleans_up_and_preserves_original_error(self):
+        self.created.side_effect = SpxbenchSuiteError("release creation failed")
+        for deletion_error, states in ((None, [True, False]), ("release not found", [True])):
+            with self.subTest(deletion_error=deletion_error):
+                self.output.write_text("")
+                self.deleted.reset_mock()
+                self.deleted.return_value = deletion_error
+                with self.assertRaisesRegex(SpxbenchSuiteError, "release creation failed"):
+                    run_spxbench_suite.main()
+                self.deleted.assert_called_once_with(f"v{VERSION}")
+                self.assert_cleanup_states(*states)
+
+    def test_prerelease_cleanup_failure_does_not_fail_passing_suite(self):
+        self.deleted.return_value = "permission denied"
+        self.run_suite()
+        self.assert_cleanup_states(True, False, True)
+        self.assert_report(regression="passed", runtime="removed", prerelease="failed")
+        self.assertIn("permission denied", self.summary.read_text())
 
     def test_candidate_is_pinned_across_release_install_and_run(self):
-        responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
-                     (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
-                     (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
-                     (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1", "digest": "abc"}]}),
-                     (200, {"jobId": 11}),
-                     (200, job_response({"running": False, "summary": "passed", "total": 1,
-                                        "completed": 1, "passed": 1,
-                                        "cases": [{"name": "smoke", "status": "pass"}]}))]
-        with tempfile.TemporaryDirectory() as directory:
-            output_path = os.path.join(directory, "outputs")
-            summary_path = os.path.join(directory, "summary")
-            events = []
-            with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_SHA="abc123",
-                                     GITHUB_OUTPUT=output_path, GITHUB_STEP_SUMMARY=summary_path), \
-                 mock.patch.object(run_spxbench_suite, "create_candidate_release") as created, \
-                 mock.patch.object(run_spxbench_suite, "delete_candidate_release",
-                                   side_effect=lambda tag: events.append("release") or None) as deleted, \
-                 mock.patch.object(run_spxbench_suite, "request_spxbench",
-                                   side_effect=lambda *args, **kwargs: events.append("runtime") or
-                                   (200, {"versions": []})) as removed, \
-                 mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                                   return_value=SuiteJobEventsTest.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")), \
-                 mock.patch.object(SpxbenchSuiteGate, "request", side_effect=responses) as requested:
-                run_spxbench_suite.main()
-            with open(output_path) as output:
-                self.assertEqual(output.read().splitlines(),
-                                 ["candidate_install_started=true", "candidate_removed=true"])
-            with open(summary_path) as summary:
-                report = summary.read()
-            self.assertIn("Regression: **passed**", report)
-            self.assertIn("spxbench candidate: **removed**", report)
-            self.assertIn("GitHub prerelease: **deleted**", report)
-            self.assertIn("/__e2e?job=11", report)
-        created.assert_called_once_with("v0.0.1-rc.1.1", "dist/spx_web.zip", "abc123")
-        deleted.assert_called_once_with("v0.0.1-rc.1.1")
-        self.assertEqual(events, ["runtime", "release"])
-        removed.assert_called_once_with("http://127.0.0.1/api/runtime-versions", "t", method="POST",
-                                        payload={"action": "remove", "kind": "spx", "version": "0.0.1-rc.1.1"},
-                                        timeout=mock.ANY)
-        self.assertEqual(requested.call_args_list[1], mock.call("/api/runtime-versions/install", method="POST",
-            payload={"kind": "spx", "version": "0.0.1-rc.1.1",
-                     "sourceUrl": "https://github.com/goplus/spx/releases/download/v0.0.1-rc.1.1/spx_web.zip"},
-            timeout=30))
-        self.assertEqual(requested.call_args_list[4],
-                         mock.call("/__e2e/api/run?suite=7&spxVersion=0.0.1-rc.1.1", method="POST"))
+        def remove(*args, **kwargs):
+            self.assert_cleanup_states(True, False)
+            return 200, {"versions": []}
+
+        self.created.side_effect = lambda *args: self.assert_cleanup_states(True)
+        self.removed.side_effect = remove
+        self.deleted.side_effect = lambda tag: self.assert_cleanup_states(True, False, True)
+        self.run_suite()
+        self.assert_cleanup_states(True, False, True, False)
+        self.assert_report(regression="passed", runtime="removed", prerelease="deleted")
+        self.assertIn("/__e2e?job=11", self.summary.read_text())
+        self.created.assert_called_once_with(f"v{VERSION}", "dist/spx_web.zip", "abc123")
+        self.deleted.assert_called_once_with(f"v{VERSION}")
+        self.removed.assert_called_once_with("http://127.0.0.1/api/runtime-versions", "t", method="POST",
+                                            payload={"action": "remove", "kind": "spx", "version": VERSION},
+                                            timeout=mock.ANY)
+        self.assertEqual(self.request.call_args_list[1], INSTALL_REQUEST)
+        self.assertEqual(self.request.call_args_list[4],
+                         mock.call(f"/__e2e/api/run?suite=7&spxVersion={VERSION}", method="POST"))
+
+    def test_install_failure_retains_candidate_and_prerelease(self):
+        def request(path, **kwargs):
+            if path == "/api/suites":
+                return 200, {"suites": [{"id": 7, "name": "spx"}]}
+            self.assertEqual(path, "/api/runtime-versions/install")
+            self.assert_cleanup_states(True, False)
+            return 403, "forbidden"
+
+        self.request.side_effect = request
+        with self.assertRaisesRegex(SpxbenchSuiteError, "install request failed: HTTP 403"):
+            run_spxbench_suite.main()
+        self.assert_cleanup_states(True, False)
+        self.assert_report(regression="not completed", runtime="retained", prerelease="retained")
+        self.removed.assert_not_called()
+        self.deleted.assert_not_called()
 
     def test_failed_suite_retains_runtime_and_prerelease(self):
-        responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
-                     (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
-                     (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
-                     (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]}),
-                     (200, {"jobId": 11}),
-                     (200, job_response({"running": False, "summary": "failed", "total": 1,
-                                        "completed": 1, "passed": 0,
-                                        "cases": [{"name": "smoke", "status": "fail"}]},
-                                        status="failed"))]
-        with tempfile.TemporaryDirectory() as directory:
-            output_path = os.path.join(directory, "outputs")
-            summary_path = os.path.join(directory, "summary")
-            with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_OUTPUT=output_path,
-                                     GITHUB_STEP_SUMMARY=summary_path), \
-                 mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
-                 mock.patch.object(run_spxbench_suite, "delete_candidate_release") as deleted, \
-                 mock.patch.object(run_spxbench_suite, "request_spxbench") as removed, \
-                 mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                                   return_value=SuiteJobEventsTest.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")), \
-                 mock.patch.object(SpxbenchSuiteGate, "request", side_effect=responses):
-                with self.assertRaisesRegex(SpxbenchSuiteError, "failed suite"):
-                    run_spxbench_suite.main()
-            with open(output_path) as output:
-                self.assertEqual(output.read().splitlines(), ["candidate_install_started=true"])
-            with open(summary_path) as summary:
-                report = summary.read()
-            self.assertIn("Regression: **failed**", report)
-            self.assertIn("spxbench candidate: **retained**", report)
-            self.assertIn("GitHub prerelease: **retained**", report)
-        removed.assert_not_called()
-        deleted.assert_not_called()
+        with self.assertRaisesRegex(SpxbenchSuiteError, "failed suite"):
+            self.run_suite(passed=False)
+        self.assert_cleanup_states(True, False)
+        self.assert_report(regression="failed", runtime="retained", prerelease="retained")
+        self.removed.assert_not_called()
+        self.deleted.assert_not_called()
 
     def test_remove_failure_retains_prerelease(self):
-        responses = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
-                     (202, {"operationId": "spx:0.0.1-rc.1.1", "status": "running"}),
-                     (200, {"operationId": "spx:0.0.1-rc.1.1", "status": "success"}),
-                     (200, {"versions": [{"kind": "spx", "version": "0.0.1-rc.1.1"}]}),
-                     (200, {"jobId": 11}),
-                     (200, job_response({"running": False, "summary": "passed", "total": 1,
-                                        "completed": 1, "passed": 1,
-                                        "cases": [{"name": "smoke", "status": "pass"}]}))]
-        with tempfile.TemporaryDirectory() as directory:
-            summary_path = os.path.join(directory, "summary")
-            with patch_candidate_env(GITHUB_REPOSITORY="goplus/spx", GITHUB_STEP_SUMMARY=summary_path), \
-                 mock.patch.object(run_spxbench_suite, "create_candidate_release"), \
-                 mock.patch.object(run_spxbench_suite, "delete_candidate_release") as deleted, \
-                 mock.patch.object(run_spxbench_suite, "request_spxbench", return_value=(500, "unavailable")), \
-                 mock.patch.object(run_spxbench_suite.urllib.request, "urlopen",
-                                   return_value=SuiteJobEventsTest.stream(b"event: finished\ndata: {\"jobId\":11}\n\n")), \
-                 mock.patch.object(SpxbenchSuiteGate, "request", side_effect=responses):
-                run_spxbench_suite.main()
-            with open(summary_path) as summary:
-                report = summary.read()
-            self.assertIn("Regression: **passed**", report)
-            self.assertIn("spxbench candidate: **failed**", report)
-            self.assertIn("GitHub prerelease: **retained**", report)
-            self.assertIn("HTTP 500", report)
-        deleted.assert_not_called()
+        self.removed.return_value = (500, "unavailable")
+        self.run_suite()
+        self.assert_cleanup_states(True, False)
+        self.assert_report(regression="passed", runtime="failed", prerelease="retained")
+        self.assertIn("HTTP 500", self.summary.read_text())
+        self.deleted.assert_not_called()
 
 
 if __name__ == "__main__":

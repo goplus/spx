@@ -85,6 +85,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 "Require reusable development runtime": "release/plan.py dev-runtime-policy",
             },
             "prepare-spx-release": {"Prepare SPX release draft": "release/publish.py spx"},
+            "run-spxbench-suite": {"Run spxbench regression suite": "release/run_spxbench_suite.py"},
         }
         for job_name, steps in commands.items():
             job = {**self.build_jobs, **self.jobs}[job_name]
@@ -150,58 +151,40 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_candidate_validation_uses_the_assembled_web_archive(self):
         job = self.jobs["run-spxbench-suite"]
-        checkout, = action_steps(job, "actions/checkout")
         download, = action_steps(job, "actions/download-artifact")
         validation = named_step(job, "Run spxbench regression suite")
         cleanup = named_step(job, "Retry candidate prerelease cleanup")
-        self.assertLess(job["steps"].index(checkout), job["steps"].index(validation))
         self.assertLess(job["steps"].index(download), job["steps"].index(validation))
-        self.assertEqual(job["env"], {
-            "CANDIDATE_VERSION": "${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}",
-        })
-        self.assertEqual(validation["env"], {
-            "SPXBENCH_API_TOKEN": "${{ secrets.SPXBENCH_API_TOKEN }}",
-            "GH_TOKEN": "${{ github.token }}",
-            "WEB_ARCHIVE_PATH": "dist/spx_web.zip",
-            "GITHUB_SHA": "${{ github.sha }}",
-        })
-        self.assertEqual(validation["run"], "python3 .github/scripts/release/run_spxbench_suite.py")
-        self.assertEqual(validation["id"], "suite")
+        self.assertLess(job["steps"].index(validation), job["steps"].index(cleanup))
+        self.assertEqual(job["env"]["CANDIDATE_VERSION"],
+                         "${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}")
+        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"], f"{download['with']['path']}/spx_web.zip")
+        self.assertEqual(validation["env"]["SPXBENCH_API_TOKEN"], "${{ secrets.SPXBENCH_API_TOKEN }}")
+        for step in (validation, cleanup):
+            self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertEqual(job_condition(cleanup),
-                         "(failure()||cancelled()||steps.suite.outputs.candidate_release_cleanup_failed=='true')&&"
-                         "(steps.suite.outputs.candidate_install_started!='true'||"
-                         "steps.suite.outputs.candidate_removed=='true')")
-        self.assertEqual(cleanup["env"]["CANDIDATE_TAG"], "v${{ env.CANDIDATE_VERSION }}")
-        self.assertIn("Prerelease cleanup retry", cleanup["run"])
-        self.assertIn("$GITHUB_STEP_SUMMARY", cleanup["run"])
+                         f"always()&&steps.{validation['id']}.outputs.prerelease_cleanup_pending=='true'")
 
     def test_prerelease_cleanup_retry_reports_result_without_failing_gate(self):
         script = step_script(self.jobs["run-spxbench-suite"], "Retry candidate prerelease cleanup")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            gh = bin_dir / "gh"
-            summary = root / "summary"
-            for exit_code, expected in ((0, "deleted"), (1, "failed")):
-                with self.subTest(exit_code=exit_code):
-                    write_executable(gh, f"#!/bin/sh\nexit {exit_code}\n")
-                    summary.write_text("", encoding="utf-8")
-                    result = run_shell(script, cwd=root, env={
-                        "PATH": f"{bin_dir}:{os.environ['PATH']}",
-                        "CANDIDATE_TAG": "v0.0.1-rc.1.1",
-                        "GITHUB_STEP_SUMMARY": str(summary),
-                    })
+            version = "0.0.1-rc.1.1"
+            env = {"PATH": f"{root}:{os.environ['PATH']}", "CANDIDATE_VERSION": version}
+            for exit_code, summary_name in ((0, "success"), (1, "failure"), (1, "missing/summary")):
+                with self.subTest(exit_code=exit_code, summary=summary_name):
+                    write_executable(root / "gh", f'#!/bin/sh\necho "$@" > gh-args\nexit {exit_code}\n')
+                    summary = root / summary_name
+                    result = run_shell(script, cwd=root, env={**env, "GITHUB_STEP_SUMMARY": str(summary)})
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIn(f"Prerelease cleanup retry: **{expected}**", summary.read_text())
+                    self.assertEqual((root / "gh-args").read_text().strip(),
+                                     f"release delete v{version} --cleanup-tag --yes")
                     self.assertEqual("::warning" in result.stdout, exit_code != 0)
-            result = run_shell(script, cwd=root, env={
-                "PATH": f"{bin_dir}:{os.environ['PATH']}",
-                "CANDIDATE_TAG": "v0.0.1-rc.1.1",
-                "GITHUB_STEP_SUMMARY": str(root / "missing" / "summary"),
-            })
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Could not write prerelease cleanup result", result.stdout)
+                    if summary.parent == root:
+                        expected = "failed" if exit_code else "deleted"
+                        self.assertIn(f"Prerelease cleanup retry: **{expected}**", summary.read_text())
+                    else:
+                        self.assertIn("Could not write prerelease cleanup result", result.stdout)
 
     def test_internal_build_scheduling_preserves_optional_platforms_and_runtime_reuse(self):
         dependencies = {
