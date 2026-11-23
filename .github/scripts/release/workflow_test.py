@@ -142,23 +142,26 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(step_script(job, "Assemble immutable asset sets"),
                          "python3 .github/scripts/release/assemble.py")
         for upload, consumer in (("Upload assembled runtime release", "publish-runtime"),
-                                 ("Upload assembled SPX release", "prepare-spx-release"),
-                                 ("Upload assembled SPX release", "run-spxbench-suite")):
+                                 ("Upload assembled SPX release", "prepare-spx-release")):
             producer_name = named_step(job, upload)["with"]["name"]
             download, = action_steps(self.jobs[consumer], "actions/download-artifact")
             self.assertEqual(download["with"]["name"], producer_name.replace("needs.plan-release.", "needs.build-release."))
         self.assertEqual(self.jobs["publish-npm"]["with"]["release_artifact"], "web-release")
 
-    def test_candidate_validation_uses_the_assembled_web_archive(self):
+    def test_candidate_validation_downloads_only_the_normal_web_archive(self):
         job = self.jobs["run-spxbench-suite"]
         download, = action_steps(job, "actions/download-artifact")
+        package = load_workflow(WORKFLOWS / "package_web.yml")["jobs"]["package-web"]
+        normal, = (entry for entry in package["strategy"]["matrix"]["include"] if entry["mode"] == "normal")
+        self.assertEqual(download["with"]["name"], normal["artifact_name"])
+        self.assertEqual(job_needs(job), ("build-release",))
         validation = named_step(job, "Run spxbench regression suite")
         cleanup = named_step(job, "Retry candidate prerelease cleanup")
         self.assertLess(job["steps"].index(download), job["steps"].index(validation))
         self.assertLess(job["steps"].index(validation), job["steps"].index(cleanup))
         self.assertEqual(job["env"]["CANDIDATE_VERSION"],
                          "${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}")
-        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"], f"{download['with']['path']}/spx_web.zip")
+        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"], f"{download['with']['path']}/{normal['zip_file']}")
         self.assertEqual(validation["env"]["SPXBENCH_API_TOKEN"], "${{ secrets.SPXBENCH_API_TOKEN }}")
         for step in (validation, cleanup):
             self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
