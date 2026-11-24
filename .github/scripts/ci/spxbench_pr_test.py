@@ -16,7 +16,6 @@ HEAD_SHA = "a" * 40
 MERGE_SHA = "b" * 40
 BASE_SHA = "c" * 40
 REPOSITORY = "goplus/spx"
-INTEGRATION_JOB = "Test SPX module with locked Godot / SPX module integration gate"
 
 
 class PRCandidateTest(unittest.TestCase):
@@ -35,7 +34,6 @@ class PRCandidateTest(unittest.TestCase):
             "PR_HEAD_SHA": HEAD_SHA,
             "PREPARE_RESULT": "success",
             "SUITE_RESULT": "success",
-            "SKIP_REASON": "",
         }, clear=True).start()
         self.api = mock.patch.object(spxbench_pr, "github_api", side_effect=self.github_api).start()
         self.reset()
@@ -62,7 +60,6 @@ class PRCandidateTest(unittest.TestCase):
         self.other_pr = {**deepcopy(self.pr), "number": 43}
         self.artifacts = [self.artifact]
         self.merge = {"parents": [{"sha": BASE_SHA}, {"sha": HEAD_SHA}]}
-        self.jobs = []
         self.statuses = []
         self.api.reset_mock()
         self.output_path.write_text("")
@@ -84,7 +81,6 @@ class PRCandidateTest(unittest.TestCase):
             "pulls/42": (False, self.pr),
             "pulls/43": (False, self.other_pr),
             "actions/runs/100/artifacts?per_page=100": (True, [{"artifacts": self.artifacts}]),
-            "actions/runs/100/jobs?filter=all&per_page=100": (True, [{"jobs": self.jobs}]),
             f"git/commits/{MERGE_SHA}": (False, self.merge),
         }
         expected_paginate, result = responses[path]
@@ -213,26 +209,14 @@ class PRCandidateTest(unittest.TestCase):
                     spxbench_pr.prepare()
                 self.assertNotIn("artifact_id", self.outputs())
 
-    def test_missing_candidate_skips_only_after_successful_source_integration(self):
-        for web, integration, expected_skip in (
-            ("skipped", "success", True), ("success", "success", False),
-            ("skipped", "failure", False), (None, "success", False),
-        ):
-            with self.subTest(web=web, integration=integration):
-                self.reset()
-                self.artifacts = []
-                self.jobs = [
-                    {"id": 1, "name": "Build Web bundle", "conclusion": web},
-                    {"id": 2, "name": INTEGRATION_JOB,
-                     "conclusion": integration},
-                ]
-                if expected_skip:
-                    spxbench_pr.prepare()
-                    self.assertIn("source integration", self.outputs()["skip_reason"])
-                    self.assertNotIn("artifact_id", self.outputs())
-                else:
-                    with self.assertRaisesRegex(ValueError, "exactly one"):
-                        spxbench_pr.prepare()
+    def test_successful_ci_without_candidate_reports_failure(self):
+        self.artifacts = []
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            spxbench_pr.prepare()
+        self.assertEqual(self.outputs(), {"head_sha": HEAD_SHA})
+        with mock.patch.dict(os.environ, {"PREPARE_RESULT": "failure", "SUITE_RESULT": "skipped"}):
+            spxbench_pr.finish()
+        self.assertEqual([status["state"] for status in self.statuses], ["pending", "failure"])
 
     def test_rerun_reuses_successful_artifact_from_previous_attempt(self):
         self.run["run_attempt"] = 2
@@ -242,41 +226,6 @@ class PRCandidateTest(unittest.TestCase):
         self.write_event()
         spxbench_pr.prepare()
         self.assertEqual(self.outputs()["artifact_id"], "300")
-
-    def test_source_only_rerun_uses_latest_result_of_each_job(self):
-        self.artifacts = []
-        self.jobs = [
-            {"id": 3, "name": INTEGRATION_JOB,
-             "conclusion": "success"},
-            {"id": 1, "name": "Build Web bundle", "conclusion": "skipped"},
-            {"id": 2, "name": INTEGRATION_JOB,
-             "conclusion": "failure"},
-        ]
-        spxbench_pr.prepare()
-        self.assertIn("skip_reason", self.outputs())
-
-    def test_old_skipped_placeholder_cannot_hide_new_successful_build_without_artifact(self):
-        self.artifacts = []
-        self.jobs = [
-            {"id": 1, "name": "Build Web bundle", "conclusion": "skipped"},
-            {"id": 2, "name": INTEGRATION_JOB,
-             "conclusion": "success"},
-            {"id": 3, "name": "Build Web bundle / Build Web bundle (normal)", "conclusion": "success"},
-        ]
-        with self.assertRaisesRegex(ValueError, "exactly one"):
-            spxbench_pr.prepare()
-        self.assertNotIn("skip_reason", self.outputs())
-
-    def test_new_skipped_placeholder_supersedes_earlier_successful_build(self):
-        self.artifacts = []
-        self.jobs = [
-            {"id": 1, "name": "Build Web bundle / Build Web bundle (normal)", "conclusion": "success"},
-            {"id": 2, "name": INTEGRATION_JOB,
-             "conclusion": "success"},
-            {"id": 3, "name": "Build Web bundle", "conclusion": "skipped"},
-        ]
-        spxbench_pr.prepare()
-        self.assertIn("skip_reason", self.outputs())
 
     def test_superseded_attempt_or_run_is_ignored(self):
         for superseded in ("attempt", "running", "new_run"):
@@ -303,20 +252,17 @@ class PRCandidateTest(unittest.TestCase):
                 spxbench_pr.prepare()
                 self.assertEqual(self.outputs()["artifact_id"], "300")
 
-    def test_finish_reports_suite_failures_and_explicit_source_skip(self):
-        for prepare, suite, skip, state, description in (
-            ("success", "success", "", "success", "regression suite passed"),
-            ("success", "failure", "", "failure", "failed or was interrupted"),
-            ("success", "cancelled", "", "failure", "failed or was interrupted"),
-            ("success", "skipped", "", "failure", "failed or was interrupted"),
-            ("failure", "skipped", "", "failure", "candidate validation failed"),
-            ("success", "skipped", "Skipped: source integration produced no Web bundle", "success", "Skipped:"),
+    def test_finish_requires_successful_candidate_validation_and_suite(self):
+        for prepare, suite, state, description in (
+            ("success", "success", "success", "regression suite passed"),
+            ("success", "failure", "failure", "failed or was interrupted"),
+            ("success", "cancelled", "failure", "failed or was interrupted"),
+            ("success", "skipped", "failure", "failed or was interrupted"),
+            ("failure", "skipped", "failure", "candidate validation failed"),
         ):
-            with self.subTest(prepare=prepare, suite=suite, skip=skip):
+            with self.subTest(prepare=prepare, suite=suite):
                 self.reset()
-                with mock.patch.dict(os.environ, {
-                    "PREPARE_RESULT": prepare, "SUITE_RESULT": suite, "SKIP_REASON": skip,
-                }):
+                with mock.patch.dict(os.environ, {"PREPARE_RESULT": prepare, "SUITE_RESULT": suite}):
                     spxbench_pr.finish()
                 self.assertEqual(len(self.statuses), 1)
                 self.assertEqual(self.statuses[0]["state"], state)

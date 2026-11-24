@@ -75,11 +75,11 @@ git diff --check
 
 普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 不下载全部 runtime 资产，但会校验 release metadata 与 manifest，计算当前 revision 的 module tree、runtime-pack source digest 和 build-recipe digest，并将它们与 manifest 及 lock 约束的 runtime 身份逐项比较。
 
-- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 跳过基于已发布 runtime 的 Web 产品 smoke 和 spxbench，把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
-- runtime 已公开且完整复用身份一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
+- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。集成测试上传本次构建的 editor 和 Web template，共用的 Web bundle action 使用这些产物生成 `spx_web.zip`。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
+- runtime 已公开且完整复用身份一致时，CI 使用已发布的 editor 和 Web template，通过同一个 Web bundle action 生成 `spx_web.zip`。
 - 已公开 release 缺 manifest、版本不一致、资产集合不完整或 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
 
-对于目标为 `goplus/spx` 的 `dev` 分支的 PR（包括 fork PR），Web 产品 smoke 会上传已有的 `spx_web.zip`。CI 完成后，`spxbench_pr.yml` 校验 PR 和候选 artifact，对实际构建的 merge commit 运行测试集，并向 PR head 写回独立的 `spxbench` 状态。CI 失败或预期的 artifact 缺失会使该状态失败。源码集成测试成功且 Web 产品构建被跳过时，状态会明确标记跳过 spxbench。
+对于目标为 `goplus/spx` 的 `dev` 分支的 PR（包括 fork PR），Web 产品 smoke 会上传已有的 `spx_web.zip`。CI 完成后，`spxbench_pr.yml` 校验 PR 和候选 artifact，对实际构建的 merge commit 运行测试集，并向 PR head 写回独立的 `spxbench` 状态。CI 失败、候选 artifact 缺失、回归失败或回归被跳过，都会使该状态失败。
 
 消费工作流通过 `workflow_run` 触发，从默认分支检出受信任脚本，因此可以为 fork PR 的候选包使用 `SPXBENCH_API_TOKEN`，同时让 PR 构建保持无 secret。该工作流合入默认分支 `dev` 后开始接收事件。将 `spxbench` 加入分支的 required status checks，可让回归结果阻止未通过的 PR 合入。
 

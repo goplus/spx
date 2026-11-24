@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       head_sha: ${{ steps.candidate.outputs.head_sha }}
-      skip_reason: ${{ steps.candidate.outputs.skip_reason }}
       artifact_id: ${{ steps.candidate.outputs.artifact_id }}
       target_sha: ${{ steps.candidate.outputs.target_sha }}
       version: ${{ steps.candidate.outputs.version }}
@@ -70,5 +69,4 @@ jobs:
           PR_HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
           SUITE_RESULT: ${{ needs.run-spxbench-suite.result }}
-          SKIP_REASON: ${{ needs.prepare.outputs.skip_reason }}
         run: python3 .github/scripts/ci/spxbench_pr.py finish

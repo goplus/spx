@@ -76,10 +76,17 @@ jobs:
 
   build-web:
     name: Build Web bundle
-    needs: [check-source, resolve-runtime]
-    if: needs.resolve-runtime.outputs.runtime_state == 'ready'
+    needs: [check-source, resolve-runtime, test-godot-module]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.check-source.result == 'success' &&
+        needs.resolve-runtime.result == 'success' &&
+        (needs.resolve-runtime.outputs.runtime_state == 'ready' || needs.test-godot-module.result == 'success')
+      }}
     uses: ./.github/workflows/build_web.yml
     with:
+      engine_artifacts: ${{ needs.test-godot-module.result == 'success' }}
       upload_candidate: ${{ github.repository == 'goplus/spx' && github.event_name == 'pull_request' && github.base_ref == 'dev' }}
 
   ci-gate:

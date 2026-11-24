@@ -86,20 +86,6 @@ def report(head_sha, state, description):
     })
 
 
-def source_only_run(run):
-    # A rerun of failed jobs can retain successful jobs from earlier attempts.
-    jobs = github_items(f"actions/runs/{run['id']}/jobs?filter=all&per_page=100", "jobs")
-    latest = {}
-    for job in sorted(jobs, key=lambda job: job["id"]):
-        name = job["name"]
-        # Skipped reusable jobs have only the caller name.
-        if name.startswith("Build Web bundle / "):
-            name = "Build Web bundle"
-        latest[name] = job["conclusion"]
-    return (latest.get("Build Web bundle") == "skipped"
-            and latest.get("Test SPX module with locked Godot / SPX module integration gate") == "success")
-
-
 def prepare():
     run = workflow_run()
     if not run.get("head_repository") or not is_current_run(run):
@@ -115,9 +101,6 @@ def prepare():
         raise ValueError(f"Required CI run ended with {run['conclusion']}")
     artifacts = github_items(f"actions/runs/{run['id']}/artifacts?per_page=100", "artifacts")
     candidates = [artifact for artifact in artifacts if artifact["name"].startswith("spxbench-pr-")]
-    if not candidates and source_only_run(run):
-        output(skip_reason="Skipped: source integration produced no Web bundle")
-        return
     if len(candidates) != 1 or candidates[0]["expired"]:
         raise ValueError("Expected exactly one unexpired spxbench PR candidate")
     artifact = candidates[0]
@@ -141,8 +124,6 @@ def finish():
         return
     if os.environ["PREPARE_RESULT"] != "success":
         state, description = "failure", "CI or candidate validation failed"
-    elif os.environ.get("SKIP_REASON"):
-        state, description = "success", os.environ["SKIP_REASON"]
     elif os.environ["SUITE_RESULT"] == "success":
         state, description = "success", "spxbench regression suite passed"
     else:

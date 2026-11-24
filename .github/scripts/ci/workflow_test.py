@@ -296,8 +296,7 @@ class CIWorkflowTest(unittest.TestCase):
         self.assertCountEqual(candidate.split("&&"), [
             "github.repository=='goplus/spx'", "github.event_name=='pull_request'", "github.base_ref=='dev'",
         ])
-        self.assertEqual(job_condition(build), "needs.resolve-runtime.outputs.runtime_state=='ready'")
-        self.assertEqual(set(build["with"]), {"upload_candidate"})
+        self.assertEqual(set(build["with"]), {"upload_candidate", "engine_artifacts"})
         self.assertNotIn("run-spxbench-suite", self.jobs)
         self.assertNotIn("secrets", build)
         self.assertNotIn("permissions", build)
@@ -305,9 +304,10 @@ class CIWorkflowTest(unittest.TestCase):
     def test_ci_provides_the_normal_web_candidate_and_its_spx_version(self):
         workflow = load_workflow(WEB_BUILD_WORKFLOW_PATH)
         interface = workflow["on"]["workflow_call"]
-        self.assertEqual(set(interface["inputs"]), {"upload_candidate"})
-        self.assertEqual(interface["inputs"]["upload_candidate"]["type"], "boolean")
-        self.assertEqual(interface["inputs"]["upload_candidate"]["default"], "false")
+        self.assertEqual(set(interface["inputs"]), {"upload_candidate", "engine_artifacts"})
+        for name in interface["inputs"]:
+            self.assertEqual(interface["inputs"][name]["type"], "boolean")
+            self.assertEqual(interface["inputs"][name]["default"], "false")
         job = workflow["jobs"]["build-web"]
         build, = action_steps(job, "./.github/actions/build-web-bundle")
         upload, = action_steps(job, "actions/upload-artifact")
@@ -331,6 +331,23 @@ class CIWorkflowTest(unittest.TestCase):
         self.assertLess(job["steps"].index(version), job["steps"].index(upload))
         self.assertEqual(version["id"], "release")
 
+    def test_web_bundle_reuses_source_integration_assets(self):
+        build = self.jobs["build-web"]
+        self.assertCountEqual(job_needs(build), ("check-source", "resolve-runtime", "test-godot-module"))
+        self.assertEqual(build["with"]["engine_artifacts"], "${{ needs.test-godot-module.result == 'success' }}")
+        module = load_workflow(MODULE_WORKFLOW_PATH)["jobs"]["test-module"]
+        self.assertEqual(module["with"]["export_web_assets"], "true")
+        web = load_workflow(WEB_BUILD_WORKFLOW_PATH)["jobs"]["build-web"]
+        bundle, = action_steps(web, "./.github/actions/build-web-bundle")
+        downloads = action_steps(web, "actions/download-artifact")
+        self.assertEqual([step["with"]["name"] for step in downloads],
+                         ["spx-module-editor-linux-x86_64", "spx-module-web"])
+        for step in downloads:
+            self.assertEqual(job_condition(step), "inputs.engine_artifacts")
+            self.assertEqual(step["with"]["path"], "runtime-assets")
+            self.assertLess(web["steps"].index(step), web["steps"].index(bundle))
+        self.assertEqual(bundle["with"]["engine-asset-dir"], "${{ inputs.engine_artifacts && 'runtime-assets' || '' }}")
+
     def test_ci_selects_current_build_for_an_incompatible_runtime(self):
         resolution = step_script(self.jobs["resolve-runtime"], "Resolve runtime release")
         self.assertIn("go run ./.github/cmd/runtime-resolution", resolution)
@@ -343,7 +360,8 @@ class CIWorkflowTest(unittest.TestCase):
         )
         self.assertEqual(
             job_condition(self.jobs["build-web"]),
-            "needs.resolve-runtime.outputs.runtime_state=='ready'",
+            "!cancelled()&&needs.check-source.result=='success'&&needs.resolve-runtime.result=='success'&&"
+            "(needs.resolve-runtime.outputs.runtime_state=='ready'||needs.test-godot-module.result=='success')",
         )
 
         job = self.jobs["ci-gate"]
@@ -365,14 +383,14 @@ class CIWorkflowTest(unittest.TestCase):
         for state in ("ready", "missing", "incompatible"):
             expected = {job: {"result": "success"} for job in result_jobs}
             expected["test-godot-module"]["result"] = "skipped" if state == "ready" else "success"
-            expected["build-web"]["result"] = "success" if state == "ready" else "skipped"
+            expected["build-web"]["result"] = "success"
             runtime = {"runtime_state": state, "runtime_reason": "test runtime resolution"}
             expected["resolve-runtime"]["outputs"] = runtime
             with self.subTest(state=state):
                 completed = run_gate(expected)
                 self.assertEqual(completed.returncode, 0, completed.stderr)
                 message = ("Published runtime verified; Web normal bundle built" if state == "ready" else
-                           f"Published runtime is {state}; current SPX module integration passed")
+                           f"Published runtime is {state}; current SPX module integration passed; Web normal bundle built")
                 self.assertEqual(completed.stdout, f"[ok] {message}\n[info] Runtime resolution: test runtime resolution\n")
             for job in result_jobs:
                 for result in ("success", "failure", "cancelled", "skipped", "", None):

@@ -3,6 +3,10 @@ name: Build Web Bundle
 on:
   workflow_call:
     inputs:
+      engine_artifacts:
+        description: Use the editor and Web template from the current module integration run
+        type: boolean
+        default: false
       upload_candidate:
         description: Upload the normal Web bundle for spxbench PR validation
         type: boolean
@@ -18,6 +22,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Download current module editor
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: spx-module-editor-linux-x86_64
+          path: runtime-assets
+
+      - name: Download current module Web template
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: spx-module-web
+          path: runtime-assets
+
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-dependencies
         timeout-minutes: 20
@@ -26,6 +44,8 @@ jobs:
 
       - name: Build Web bundle
         uses: ./.github/actions/build-web-bundle
+        with:
+          engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
 
       - name: Verify candidate Web archive
         if: inputs.upload_candidate
