@@ -1,0 +1,74 @@
+name: Check PR with spxbench
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: spxbench-pr-${{ github.event.workflow_run.event }}-${{ github.event.workflow_run.display_title }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'goplus/spx' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-22.04
+    outputs:
+      head_sha: ${{ steps.candidate.outputs.head_sha }}
+      skip_reason: ${{ steps.candidate.outputs.skip_reason }}
+      artifact_id: ${{ steps.candidate.outputs.artifact_id }}
+      target_sha: ${{ steps.candidate.outputs.target_sha }}
+      version: ${{ steps.candidate.outputs.version }}
+    steps:
+      - name: Check out trusted CI scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Resolve PR candidate from completed CI
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/ci/spxbench_pr.py prepare
+
+  run-spxbench-suite:
+    needs: prepare
+    if: needs.prepare.outputs.artifact_id != ''
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/run_spxbench_suite.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      artifact_id: ${{ needs.prepare.outputs.artifact_id }}
+      artifact_run_id: ${{ github.event.workflow_run.id }}
+      target_sha: ${{ needs.prepare.outputs.target_sha }}
+    secrets:
+      SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
+
+  report:
+    if: ${{ always() && needs.prepare.outputs.head_sha != '' }}
+    needs: [prepare, run-spxbench-suite]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out trusted CI scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Report spxbench result on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          SUITE_RESULT: ${{ needs.run-spxbench-suite.result }}
+          SKIP_REASON: ${{ needs.prepare.outputs.skip_reason }}
+        run: python3 .github/scripts/ci/spxbench_pr.py finish

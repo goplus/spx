@@ -290,6 +290,47 @@ class CIWorkflowTest(unittest.TestCase):
     def setUpClass(cls):
         cls.jobs = load_workflow(CI_WORKFLOW_PATH)["jobs"]
 
+    def test_spxbench_candidate_is_uploaded_for_all_prs_to_canonical_dev(self):
+        build = self.jobs["build-web"]
+        candidate = job_condition({"if": build["with"]["upload_candidate"]})
+        self.assertCountEqual(candidate.split("&&"), [
+            "github.repository=='goplus/spx'", "github.event_name=='pull_request'", "github.base_ref=='dev'",
+        ])
+        self.assertEqual(job_condition(build), "needs.resolve-runtime.outputs.runtime_state=='ready'")
+        self.assertEqual(set(build["with"]), {"upload_candidate"})
+        self.assertNotIn("run-spxbench-suite", self.jobs)
+        self.assertNotIn("secrets", build)
+        self.assertNotIn("permissions", build)
+
+    def test_ci_provides_the_normal_web_candidate_and_its_spx_version(self):
+        workflow = load_workflow(WEB_BUILD_WORKFLOW_PATH)
+        interface = workflow["on"]["workflow_call"]
+        self.assertEqual(set(interface["inputs"]), {"upload_candidate"})
+        self.assertEqual(interface["inputs"]["upload_candidate"]["type"], "boolean")
+        self.assertEqual(interface["inputs"]["upload_candidate"]["default"], "false")
+        job = workflow["jobs"]["build-web"]
+        build, = action_steps(job, "./.github/actions/build-web-bundle")
+        upload, = action_steps(job, "actions/upload-artifact")
+        self.assertNotIn("if", build)
+        self.assertNotIn("make build-", str(job))
+        verify = named_step(job, "Verify candidate Web archive")
+        self.assertEqual(verify["run"], "unzip -t spx_web.zip")
+        self.assertEqual(job_condition(verify), "inputs.upload_candidate")
+        self.assertLess(job["steps"].index(build), job["steps"].index(verify))
+        self.assertLess(job["steps"].index(verify), job["steps"].index(upload))
+        self.assertEqual(job_condition(upload), "inputs.upload_candidate")
+        self.assertEqual(upload["with"]["name"],
+                         "spxbench-pr-${{ github.event.pull_request.number }}-${{ github.sha }}-${{ steps.release.outputs.version }}")
+        self.assertEqual(upload["with"]["path"], "spx_web.zip")
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        self.assertEqual(upload["with"]["retention-days"], "7")
+        self.assertEqual(upload["with"]["overwrite"], "true")
+        version = named_step(job, "Read candidate version")
+        self.assertEqual(version["run"], 'go run ./.github/cmd/runtime-version --github-output "$GITHUB_OUTPUT"')
+        self.assertEqual(job_condition(version), "inputs.upload_candidate")
+        self.assertLess(job["steps"].index(version), job["steps"].index(upload))
+        self.assertEqual(version["id"], "release")
+
     def test_ci_selects_current_build_for_an_incompatible_runtime(self):
         resolution = step_script(self.jobs["resolve-runtime"], "Resolve runtime release")
         self.assertIn("go run ./.github/cmd/runtime-resolution", resolution)

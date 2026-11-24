@@ -9,6 +9,7 @@ Optional:
   SPXBENCH_URL        spxbench base URL (default: https://spxbench.qiniu.io)
   SPXBENCH_SUITE_NAME gate suite name (default: spx; cross-repo contract)
   SPXBENCH_TIMEOUT_MINUTES overall budget (default: 30)
+  CANDIDATE_SHA       tested PR merge commit (defaults to GITHUB_SHA)
   GITHUB_REPOSITORY / GITHUB_SHA  provided by Actions; fall back to gh/git
 """
 
@@ -473,7 +474,7 @@ class SpxbenchSuiteGate:
         runtime_cleanup = "not installed"
         cleanup_notes = []
         job_id = None
-        commit = github_context("GITHUB_SHA", "git", "rev-parse", "HEAD")
+        commit = os.environ.get("CANDIDATE_SHA", "").strip() or github_context("GITHUB_SHA", "git", "rev-parse", "HEAD")
         # gh may fail or be cancelled after creating the prerelease.
         set_prerelease_cleanup_pending(True)
         try:

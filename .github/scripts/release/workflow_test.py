@@ -21,6 +21,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         cls.jobs = cls.workflow["jobs"]
         cls.build_workflow = load_workflow(WORKFLOWS / "build_release.yml")
         cls.build_jobs = cls.build_workflow["jobs"]
+        cls.suite_workflow = load_workflow(WORKFLOWS / "run_spxbench_suite.yml")
+        cls.suite_job = cls.suite_workflow["jobs"]["run-spxbench-suite"]
 
     def test_release_identity_permissions_and_input_contract(self):
         inputs = self.workflow["on"]["workflow_dispatch"]["inputs"]
@@ -30,8 +32,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
                          ["dry-run", "publish-runtime", "publish-release", "publish-dev-npm"])
         self.assertEqual(self.workflow["concurrency"], {"group": "spx-release", "cancel-in-progress": "false"})
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
-        for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release", "run-spxbench-suite"):
+        for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "write"})
+        self.assertEqual(self.jobs["run-spxbench-suite"]["permissions"], {"contents": "write", "actions": "read"})
         # npm trusted publishing keeps release.yml as its direct caller.
         for name in ("publish-npm", "publish-dev-npm"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "read", "id-token": "write"})
@@ -85,7 +88,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 "Require reusable development runtime": "release/plan.py dev-runtime-policy",
             },
             "prepare-spx-release": {"Prepare SPX release draft": "release/publish.py spx"},
-            "run-spxbench-suite": {"Run spxbench regression suite": "release/run_spxbench_suite.py"},
         }
         for job_name, steps in commands.items():
             job = {**self.build_jobs, **self.jobs}[job_name]
@@ -148,20 +150,57 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertEqual(download["with"]["name"], producer_name.replace("needs.plan-release.", "needs.build-release."))
         self.assertEqual(self.jobs["publish-npm"]["with"]["release_artifact"], "web-release")
 
+    def test_release_calls_the_shared_candidate_validation(self):
+        call = self.jobs["run-spxbench-suite"]
+        self.assertEqual(call["uses"], "./.github/workflows/run_spxbench_suite.yml")
+        self.assertEqual(call["with"], {"version": "${{ needs.build-release.outputs.version }}"})
+        self.assertEqual(call["secrets"], {"SPXBENCH_API_TOKEN": "${{ secrets.SPXBENCH_API_TOKEN }}"})
+        self.assertEqual(set(self.suite_workflow["on"]), {"workflow_call"})
+        interface = self.suite_workflow["on"]["workflow_call"]
+        self.assertEqual(set(interface["inputs"]), {"version", "artifact_id", "artifact_run_id", "target_sha"})
+        self.assertEqual(interface["inputs"]["version"]["type"], "string")
+        self.assertEqual(interface["inputs"]["version"]["required"], "true")
+        for name, kind, default in (("artifact_id", "string", ""), ("artifact_run_id", "number", "0"),
+                                    ("target_sha", "string", "")):
+            self.assertEqual(interface["inputs"][name]["type"], kind)
+            self.assertEqual(interface["inputs"][name]["default"], default)
+            self.assertNotEqual(interface["inputs"][name].get("required"), "true")
+        self.assertEqual(set(interface["secrets"]), set(call["secrets"]))
+        self.assertEqual(interface["secrets"]["SPXBENCH_API_TOKEN"]["required"], "true")
+        self.assertEqual(self.suite_job["permissions"], {"contents": "write", "actions": "read"})
+
     def test_candidate_validation_downloads_only_the_normal_web_archive(self):
-        job = self.jobs["run-spxbench-suite"]
-        download, = action_steps(job, "actions/download-artifact")
+        job = self.suite_job
+        download, pr_download = action_steps(job, "actions/download-artifact")
         package = load_workflow(WORKFLOWS / "package_web.yml")["jobs"]["package-web"]
         normal, = (entry for entry in package["strategy"]["matrix"]["include"] if entry["mode"] == "normal")
         self.assertEqual(download["with"]["name"], normal["artifact_name"])
-        self.assertEqual(job_needs(job), ("build-release",))
+        self.assertEqual(job_condition(download), "inputs.artifact_id==''")
+        self.assertEqual(job_condition(pr_download), "inputs.artifact_id!=''")
+        self.assertEqual(pr_download["with"], {
+            "artifact-ids": "${{ inputs.artifact_id }}",
+            "run-id": "${{ inputs.artifact_run_id }}",
+            "github-token": "${{ github.token }}",
+            "path": "${{ runner.temp }}/spxbench-candidate",
+            "merge-multiple": "true",
+        })
         validation = named_step(job, "Run spxbench regression suite")
         cleanup = named_step(job, "Retry candidate prerelease cleanup")
+        checkout, = action_steps(job, "actions/checkout")
+        self.assertEqual(checkout["with"], {
+            "ref": "${{ github.sha }}",
+            "persist-credentials": "false",
+        })
+        self.assertLess(job["steps"].index(checkout), job["steps"].index(validation))
         self.assertLess(job["steps"].index(download), job["steps"].index(validation))
+        self.assertLess(job["steps"].index(pr_download), job["steps"].index(validation))
         self.assertLess(job["steps"].index(validation), job["steps"].index(cleanup))
+        self.assertEqual(validation["run"], "python3 .github/scripts/release/run_spxbench_suite.py")
         self.assertEqual(job["env"]["CANDIDATE_VERSION"],
-                         "${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}")
-        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"], f"{download['with']['path']}/{normal['zip_file']}")
+                         "${{ inputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}")
+        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"],
+                         "${{ inputs.artifact_id != '' && format('{0}/spxbench-candidate/spx_web.zip', runner.temp) || 'dist/spx_web.zip' }}")
+        self.assertEqual(validation["env"]["CANDIDATE_SHA"], "${{ inputs.target_sha || github.sha }}")
         self.assertEqual(validation["env"]["SPXBENCH_API_TOKEN"], "${{ secrets.SPXBENCH_API_TOKEN }}")
         for step in (validation, cleanup):
             self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
@@ -169,7 +208,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                          f"always()&&steps.{validation['id']}.outputs.prerelease_cleanup_pending=='true'")
 
     def test_prerelease_cleanup_retry_reports_result_without_failing_gate(self):
-        script = step_script(self.jobs["run-spxbench-suite"], "Retry candidate prerelease cleanup")
+        script = step_script(self.suite_job, "Retry candidate prerelease cleanup")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             version = "0.0.1-rc.1.1"

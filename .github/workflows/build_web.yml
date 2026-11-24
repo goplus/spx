@@ -2,6 +2,11 @@ name: Build Web Bundle
 
 on:
   workflow_call:
+    inputs:
+      upload_candidate:
+        description: Upload the normal Web bundle for spxbench PR validation
+        type: boolean
+        default: false
 
 jobs:
   build-web:
@@ -10,6 +15,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-dependencies
@@ -19,3 +26,22 @@ jobs:
 
       - name: Build Web bundle
         uses: ./.github/actions/build-web-bundle
+
+      - name: Verify candidate Web archive
+        if: inputs.upload_candidate
+        run: unzip -t spx_web.zip
+
+      - name: Read candidate version
+        if: inputs.upload_candidate
+        id: release
+        run: go run ./.github/cmd/runtime-version --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload spxbench PR candidate
+        if: inputs.upload_candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: spxbench-pr-${{ github.event.pull_request.number }}-${{ github.sha }}-${{ steps.release.outputs.version }}
+          path: spx_web.zip
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7

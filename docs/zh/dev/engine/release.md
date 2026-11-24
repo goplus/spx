@@ -75,9 +75,13 @@ git diff --check
 
 普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 不下载全部 runtime 资产，但会校验 release metadata 与 manifest，计算当前 revision 的 module tree、runtime-pack source digest 和 build-recipe digest，并将它们与 manifest 及 lock 约束的 runtime 身份逐项比较。
 
-- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
+- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 跳过基于已发布 runtime 的 Web 产品 smoke 和 spxbench，把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
 - runtime 已公开且完整复用身份一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
 - 已公开 release 缺 manifest、版本不一致、资产集合不完整或 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
+
+对于目标为 `goplus/spx` 的 `dev` 分支的 PR（包括 fork PR），Web 产品 smoke 会上传已有的 `spx_web.zip`。CI 完成后，`spxbench_pr.yml` 校验 PR 和候选 artifact，对实际构建的 merge commit 运行测试集，并向 PR head 写回独立的 `spxbench` 状态。CI 失败或预期的 artifact 缺失会使该状态失败。源码集成测试成功且 Web 产品构建被跳过时，状态会明确标记跳过 spxbench。
+
+消费工作流通过 `workflow_run` 触发，从默认分支检出受信任脚本，因此可以为 fork PR 的候选包使用 `SPXBENCH_API_TOKEN`，同时让 PR 构建保持无 secret。该工作流合入默认分支 `dev` 后开始接收事件。将 `spxbench` 加入分支的 required status checks，可让回归结果阻止未通过的 PR 合入。
 
 这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
 
@@ -93,11 +97,11 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-构建和组装成功后，`dry-run` 从本次 workflow 的 `web-release` artifact 下载普通 Web 模式的 `spx_web.zip`。工作流在本次 SPX 提交上创建临时 prerelease，tag 为 `v<version>-rc.<github.run_id>.<github.run_attempt>`，并上传这个 ZIP。tag 中的两个数字是 GitHub Actions 的运行 ID 和执行次数。spxbench 在这类 dry run 的结果页显示任务快照中 SPX commit 的前 7 位。
+PR 验证和发布 `dry-run` 共用同一个 spxbench 工作流。发布 dry run 从本次运行的 `web-release` artifact 下载普通 Web 模式的 `spx_web.zip`，PR 验证则按 artifact ID 下载已完成 CI 中经过校验的候选包。工作流在被测 SPX 提交上创建临时 prerelease，使用 tag `v<version>-rc.<github.run_id>.<github.run_attempt>` 并上传这个 ZIP。tag 中的两个数字标识测试集工作流的 Actions 运行 ID 和执行次数。spxbench 结果页显示任务快照中被测 SPX commit 的前 7 位。
 
-工作流使用仓库 secret `SPXBENCH_API_TOKEN` 请求 `https://spxbench.qiniu.io` 异步安装该 asset。安装完成后，CI 核对登记的 SPX commit 与 `GITHUB_SHA`，并比对登记的 SHA-256 与本地 ZIP。随后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的 CI 请求复用原 `jobId`。在 Actions 中重跑该工作流时，新的执行次数会生成新的候选版本。
+工作流使用仓库 secret `SPXBENCH_API_TOKEN` 请求 `https://spxbench.qiniu.io` 异步安装该 asset。安装完成后，CI 核对登记的 SPX commit 与 `CANDIDATE_SHA`，并比对登记的 SHA-256 与本地 ZIP。随后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的 CI 请求复用原 `jobId`。在 Actions 中重跑该工作流时，新的执行次数会生成新的候选版本。
 
-CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过 dry-run 回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
+CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
 
 测试通过后，工作流先移除 spxbench 上的候选版本，再删除 prerelease。如果安装、测试或版本移除失败，工作流会保留 prerelease 和已安装的候选版本，供排查。安装开始前出错仍会清理 prerelease。工作流会重试尚未完成的 prerelease 删除，并在任务摘要中分别记录清理警告与回归结果。
 

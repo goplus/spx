@@ -598,6 +598,12 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         self.assertEqual(self.request.call_args_list[4],
                          mock.call(RUN_PATH, method="PUT"))
 
+    def test_pr_candidate_uses_tested_merge_instead_of_workflow_commit(self):
+        with mock.patch.dict(os.environ, {"CANDIDATE_SHA": COMMIT, "GITHUB_SHA": "f" * 40}):
+            self.run_suite()
+        self.created.assert_called_once_with(f"v{VERSION}", str(self.archive), COMMIT)
+        self.assertEqual(self.request.call_args_list[1], INSTALL_REQUEST)
+
     def test_install_failure_retains_candidate_and_prerelease(self):
         def request(path, **kwargs):
             if path == "/api/suites":
