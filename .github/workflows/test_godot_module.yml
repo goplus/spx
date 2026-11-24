@@ -67,9 +67,9 @@ jobs:
   test-module:
     name: Build and test current SPX module
     needs: resolve-inputs
-    # Pin the canonical workflow implementation independently from the Godot
-    # source identity supplied by runtime.lock below.
-    uses: goplus/godot/.github/workflows/spx_module_checks.yml@2331c3343d4578a615ee515199b0317cb50fe797
+    # Pin the workflow independently from the locked canonical engine source.
+    # Use goplus/godot once the artifact support in goplus/godot#342 is merged.
+    uses: joeykchen/godot/.github/workflows/spx_module_checks.yml@2331c3343d4578a615ee515199b0317cb50fe797
     with:
       runtime_version: ${{ needs.resolve-inputs.outputs.runtime_version }}
       runtime_abi: ${{ needs.resolve-inputs.outputs.runtime_abi }}
