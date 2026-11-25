@@ -42,6 +42,8 @@ type UserSprite struct { spx.SpriteImpl }
 func (*UserSprite) Main() {}
 type CustomSprite struct { UserSprite }
 func (*CustomSprite) ResolveCostumeIndex(name string) int { return len(name) }
+type customBackdrop struct{}
+func (*customBackdrop) ResolveBackdropIndex(name string) int { return len(name) }
 func stringify(v interface { String() string }) string { return v.String() }
 
 func main() {
@@ -62,6 +64,10 @@ func main() {
 	var backdrop compat.BackdropResolver = &game
 	if compat.ResolveBackdropIndex(backdrop, "3") != 2 {
 		panic("native and interpreted backdrop resolvers")
+	}
+	var customStage compat.BackdropResolver = &customBackdrop{}
+	if compat.ResolveBackdropIndex(customStage, "stage") != 5 {
+		panic("custom backdrop resolver")
 	}
 	var custom spx.Sprite = &CustomSprite{}
 	if compat.ResolveCostumeIndex(custom, "costume") != 7 {
@@ -154,6 +160,26 @@ func (t *volumeTarget) ChangeSoundEffect(kind spx.SoundEffectKind, delta float64
 `
 
 func (p scratchDispatchProbe) String() string { return p() }
+
+func TestBuildScratchCompatSelectors(t *testing.T) {
+	isolateInterpreter(t)
+	if err := Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := Build(map[string][]byte{
+		"main.spx": []byte(`import "github.com/goplus/spx/v4/pkg/scratchcompat"
+selector := "next backdrop"
+setBackdrop scratchcompat.ResolveBackdropIndex(this, selector)
+`),
+		"Actor.spx": []byte(`import "github.com/goplus/spx/v4/pkg/scratchcompat"
+selector := "2"
+setCostume scratchcompat.ResolveCostumeIndex(this, selector)
+setBackdrop scratchcompat.ResolveBackdropIndex(this.Game, selector)
+`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestInterpreterScratchCompat(t *testing.T) {
 	for _, execution := range []string{"direct", "fallback"} {

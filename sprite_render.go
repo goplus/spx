@@ -21,7 +21,6 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
-	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
@@ -51,20 +50,6 @@ func (p *SpriteImpl) CostumeName() SpriteCostumeName {
 
 func (p *SpriteImpl) CostumeIndex() int {
 	return p.getCostumeIndex()
-}
-
-// ResolveCostumeIndex resolves a costume name or 1-based integer string to an index.
-//
-// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex] instead.
-func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("ResolveCostumeIndex: sprite=%s, costume=%v", p.name, costume)
-	}
-	if idx := p.findCostume(SpriteCostumeName(costume)); idx >= 0 {
-		return idx
-	}
-
-	return scratch.ParseCostumeIndex(costume, len(p.costumes))
 }
 
 func (p *SpriteImpl) SetCostume__0(name SpriteCostumeName) {

@@ -18,11 +18,28 @@ package scratch
 
 import "math"
 
+// These selectors defer an action until the stage applies a backdrop change.
+const (
+	ResolvedBackdropNext   = math.MinInt
+	ResolvedBackdropPrev   = math.MinInt + 1
+	ResolvedBackdropRandom = math.MinInt + 2
+)
+
 // ParseBackdropIndex parses a Scratch backdrop selector after name lookup has
-// failed. Numeric selectors are rounded like JavaScript Math.round, converted
+// failed. Named actions return their deferred selectors.
+// Numeric selectors are rounded like JavaScript Math.round, converted
 // from 1-based to zero-based, and wrapped over the available backdrops.
 // Invalid and non-finite values return -1.
 func ParseBackdropIndex(backdrop string, count int) int {
+	switch backdrop {
+	case "next backdrop":
+		return ResolvedBackdropNext
+	case "previous backdrop":
+		return ResolvedBackdropPrev
+	case "random backdrop":
+		return ResolvedBackdropRandom
+	}
+
 	value, ok := toFloat64(backdrop)
 	if !ok || math.IsNaN(value) || math.IsInf(value, 0) {
 		return -1

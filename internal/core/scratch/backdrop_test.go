@@ -25,6 +25,9 @@ func TestParseBackdropIndex(t *testing.T) {
 		count    int
 		want     int
 	}{
+		{name: "next backdrop", backdrop: "next backdrop", want: ResolvedBackdropNext},
+		{name: "previous backdrop", backdrop: "previous backdrop", want: ResolvedBackdropPrev},
+		{name: "random backdrop", backdrop: "random backdrop", want: ResolvedBackdropRandom},
 		{name: "zero wraps", backdrop: "0", count: 2, want: 1},
 		{name: "negative wraps", backdrop: "-2", count: 2, want: 1},
 		{name: "fraction rounds", backdrop: "1.5", count: 2, want: 1},

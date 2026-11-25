@@ -24,6 +24,10 @@ on Scratch coercion or indexing.
   `Last` and `Random`.
 - Preserve operand types for `scratchcompat.Rand`. A bound of `"1"` with
   integer upper bound `6` selects an integer. `"1.0"` selects a continuous value.
+- In a sprite script, use `setCostume scratchcompat.ResolveCostumeIndex(this, selector)`
+  for a computed costume selector. Exact names take priority over one-based
+  integer strings.
 - In `main.spx`, use `setBackdrop scratchcompat.ResolveBackdropIndex(this, selector)`
-  for a computed Scratch selector. Exact names take priority over actions
-  and one-based numeric selectors.
+  for a computed backdrop selector. In a sprite script, pass `this.Game` as
+  the first argument so names and indices refer to the stage's backdrops.
+  Exact names take priority over actions and one-based numeric selectors.
