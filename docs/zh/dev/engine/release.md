@@ -81,7 +81,7 @@ git diff --check
 
 对于目标为 `goplus/spx` 的 `dev` 分支的 PR（包括 fork PR），Web 产品 smoke 会上传已有的 `spx_web.zip`。CI 完成后，`spxbench_pr.yml` 校验 PR 和候选 artifact，对实际构建的 merge commit 运行测试集，并向 PR head 写回独立的 `spxbench` 状态。CI 失败、候选 artifact 缺失、回归失败或回归被跳过，都会使该状态失败。
 
-消费工作流通过 `workflow_run` 触发，从默认分支检出受信任脚本，因此可以为 fork PR 的候选包使用 `SPXBENCH_API_TOKEN`，同时让 PR 构建保持无 secret。该工作流合入默认分支 `dev` 后开始接收事件。将 `spxbench` 加入分支的 required status checks，可让回归结果阻止未通过的 PR 合入。
+消费工作流通过 `workflow_run` 触发，从默认分支检出受信任脚本，因此可以为 fork PR 的候选包使用 `SPXBENCH_API_TOKEN`，同时让 PR 构建保持无 secret。该工作流合入默认分支 `dev` 后开始接收事件。当前 PR 的 CI 启动或重跑时，工作流先将 PR head 标为 pending，测试结束后再写回结果。现阶段 `spxbench` 仅作参考，不要配置为必需检查：它不会向 merge group 提交写入状态，PR head 上的状态也不绑定本次合并候选提交。等普通 PR 和 merge group 都能在准确的候选提交上收到结果后，再设为必需检查。
 
 这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
 

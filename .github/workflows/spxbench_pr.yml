@@ -3,7 +3,7 @@ name: Check PR with spxbench
 on:
   workflow_run:
     workflows: [CI]
-    types: [completed]
+    types: [in_progress, completed]
 
 permissions:
   contents: read
@@ -12,7 +12,8 @@ permissions:
   statuses: write
 
 concurrency:
-  group: spxbench-pr-${{ github.event.workflow_run.event }}-${{ github.event.workflow_run.display_title }}
+  # Do not queue start notifications behind an earlier suite run.
+  group: spxbench-pr-${{ github.event.action }}-${{ github.event.workflow_run.event }}-${{ github.event.workflow_run.display_title }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +32,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Resolve PR candidate from completed CI
+      - name: Report CI start or resolve the completed candidate
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}

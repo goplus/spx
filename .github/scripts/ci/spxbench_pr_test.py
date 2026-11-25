@@ -102,17 +102,47 @@ class PRCandidateTest(unittest.TestCase):
             "target_url": "https://github.com/goplus/spx/actions/runs/200",
         }])
 
+    def test_ci_start_and_rerun_mark_pending_without_consuming_artifacts(self):
+        for attempt in (1, 2):
+            with self.subTest(attempt=attempt):
+                self.reset()
+                self.run.update(status="in_progress", run_attempt=attempt, conclusion=None)
+                self.current_run = deepcopy(self.run)
+                self.write_event()
+                spxbench_pr.prepare()
+                self.assertEqual(self.outputs(), {})
+                self.assertEqual([status["state"] for status in self.statuses], ["pending"])
+                self.assertIn("Waiting for CI", self.statuses[0]["description"])
+                self.assertNotIn(mock.call("actions/runs/100/artifacts?per_page=100", paginate=True),
+                                 self.api.call_args_list)
+
+    def test_late_or_superseded_start_does_not_reset_the_status(self):
+        for obsolete in ("completed", "new_attempt", "new_run"):
+            with self.subTest(obsolete=obsolete):
+                self.reset()
+                self.run["status"] = "in_progress"
+                if obsolete != "completed":
+                    self.current_run["status"] = "in_progress"
+                    if obsolete == "new_attempt":
+                        self.current_run["run_attempt"] = 2
+                    else:
+                        self.runs.append({**deepcopy(self.run), "id": 101})
+                self.write_event()
+                spxbench_pr.prepare()
+                self.assertEqual(self.outputs(), {})
+                self.assertEqual(self.statuses, [])
+
     def test_untrusted_or_incomplete_run_cannot_reach_github_api(self):
         for field, value in (
             ("repository", {"full_name": "author/spx"}), ("event", "push"),
-            ("path", ".github/workflows/other.yml"), ("status", "in_progress"),
+            ("path", ".github/workflows/other.yml"), ("status", "queued"),
             ("head_sha", "not-a-sha"),
         ):
             with self.subTest(field=field):
                 self.reset()
                 self.run[field] = value
                 self.write_event()
-                with self.assertRaisesRegex(ValueError, "completed canonical PR CI run"):
+                with self.assertRaisesRegex(ValueError, "Expected a canonical PR CI run"):
                     spxbench_pr.prepare()
                 self.api.assert_not_called()
         for location in ("environment", "event"):
@@ -294,7 +324,10 @@ class PRWorkflowTest(unittest.TestCase):
         self.assertIn("format('CI for PR #{0} into {1}', github.event.pull_request.number, github.base_ref)",
                       ci["run-name"])
         workflow = load_workflow(WORKFLOWS / "spxbench_pr.yml")
-        self.assertEqual(workflow["on"], {"workflow_run": {"workflows": ["CI"], "types": ["completed"]}})
+        self.assertEqual(workflow["on"], {
+            "workflow_run": {"workflows": ["CI"], "types": ["in_progress", "completed"]},
+        })
+        self.assertIn("${{ github.event.action }}", workflow["concurrency"]["group"])
         jobs = workflow["jobs"]
         self.assertIn("github.event.workflow_run.event=='pull_request'", job_condition(jobs["prepare"]))
         self.assertCountEqual(job_needs(jobs["report"]), ("prepare", "run-spxbench-suite"))

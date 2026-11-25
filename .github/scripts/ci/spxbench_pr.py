@@ -31,22 +31,22 @@ def github_items(path, key):
     return [item for page in pages for item in page[key]]
 
 
-def workflow_run():
+def workflow_run(*statuses):
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     run = event["workflow_run"]
     if (os.environ["GITHUB_REPOSITORY"] != REPOSITORY
             or event["repository"]["full_name"] != REPOSITORY
             or run["repository"]["full_name"] != REPOSITORY
             or run["event"] != "pull_request" or run["path"] != CI_PATH
-            or run["status"] != "completed"
+            or run["status"] not in statuses
             or not re.fullmatch(r"[0-9a-f]{40}", run["head_sha"])):
-        raise ValueError("Expected a completed canonical PR CI run")
+        raise ValueError("Expected a canonical PR CI run with status " + " or ".join(statuses))
     return run
 
 
 def is_current_run(run):
     current = github_api(f"actions/runs/{run['id']}")
-    if current["run_attempt"] != run["run_attempt"] or current["status"] != "completed":
+    if current["run_attempt"] != run["run_attempt"] or current["status"] != run["status"]:
         return False
     runs = github_items(f"actions/workflows/ci.yml/runs?event=pull_request&head_sha={run['head_sha']}&per_page=100",
                         "workflow_runs")
@@ -87,7 +87,7 @@ def report(head_sha, state, description):
 
 
 def prepare():
-    run = workflow_run()
+    run = workflow_run("in_progress", "completed")
     if not run.get("head_repository") or not is_current_run(run):
         print("Ignoring superseded CI run")
         return
@@ -95,6 +95,10 @@ def prepare():
     if pr is None:
         print("No current open dev PR matches this CI run")
         return
+    if run["status"] == "in_progress":
+        report(run["head_sha"], "pending", "Waiting for CI to build the Web candidate")
+        return
+
     output(head_sha=run["head_sha"])
     report(run["head_sha"], "pending", "Validating the CI Web candidate")
     if run["conclusion"] != "success":
@@ -115,7 +119,7 @@ def prepare():
 
 
 def finish():
-    run = workflow_run()
+    run = workflow_run("completed")
     head_sha = os.environ["PR_HEAD_SHA"]
     if head_sha != run["head_sha"]:
         raise ValueError("Status target does not match the CI head")
