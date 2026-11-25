@@ -56,7 +56,7 @@ func main() {
 	}
 	var sprite spx.Sprite = &UserSprite{}
 	for _, resolver := range []compat.CostumeResolver{&spx.SpriteImpl{}, sprite} {
-		if compat.ResolveCostumeIndex(resolver, "3") != 2 {
+		if compat.ResolveCostumeIndex(resolver, "3") != 2 || compat.ResolveCostumeIndex(resolver, 3) != 2 {
 			panic("native and interpreted costume resolvers")
 		}
 	}
@@ -70,8 +70,12 @@ func main() {
 		panic("custom backdrop resolver")
 	}
 	var custom spx.Sprite = &CustomSprite{}
-	if compat.ResolveCostumeIndex(custom, "costume") != 7 {
-		panic("overridden costume resolver")
+	var resolver compat.CostumeResolver = custom
+	if compat.ResolveCostumeIndex(resolver, "-1") != 2 {
+		panic("string selector must call the interpreted override")
+	}
+	if compat.ResolveCostumeIndex(resolver, -1) != -2 {
+		panic("integer selector must call the embedded sprite's numeric resolver")
 	}
 	defer spx.ResetRandomSeed()
 	spx.SetRandomSeed(17)
@@ -174,6 +178,7 @@ setBackdrop scratchcompat.ResolveBackdropIndex(this, selector)
 		"Actor.spx": []byte(`import "github.com/goplus/spx/v4/pkg/scratchcompat"
 selector := "2"
 setCostume scratchcompat.ResolveCostumeIndex(this, selector)
+setCostume scratchcompat.ResolveCostumeIndex(this, costumeIndex)
 setBackdrop scratchcompat.ResolveBackdropIndex(this.Game, selector)
 `),
 	}); err != nil {

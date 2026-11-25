@@ -16,18 +16,15 @@
 
 package scratch
 
-import "strconv"
-
-// ParseCostumeIndex parses a 1-based integer string after costume-name lookup
-// has failed. Count must be nonnegative. It preserves SPX's zero and negative
-// indices, signed remainder, and empty-costume behavior; invalid input returns -1.
-func ParseCostumeIndex(costume string, count int) int {
-	idx, err := strconv.Atoi(costume)
-	if err != nil {
-		return -1
+// WrapCostumeNumber converts a 1-based costume number to a zero-based index.
+// With no costumes, it returns the unwrapped index.
+func WrapCostumeNumber(number, count int) int {
+	if count > 0 {
+		// Reduce before subtracting one to avoid overflow for math.MinInt.
+		number %= count
+		if number <= 0 {
+			number += count
+		}
 	}
-	if count == 0 || idx >= 0 && idx <= count {
-		return idx - 1
-	}
-	return (idx - 1) % count
+	return number - 1
 }

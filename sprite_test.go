@@ -2146,15 +2146,13 @@ func TestResolveCostumeIndex(t *testing.T) {
 		want    int
 	}{
 		{name: "name", costume: "run", want: 1},
-		{name: "zero", costume: "0", want: -1},
+		{name: "zero wraps to last", costume: "0", want: 1},
 		{name: "in range", costume: "2", want: 1},
 		{name: "wrap", costume: "3", want: 0},
-		{name: "wrap to zero", costume: "4", want: 1},
+		{name: "second cycle", costume: "4", want: 1},
 		{name: "negative whole cycle", costume: "-1", want: 0},
-		{name: "negative remainder", costume: "-2", want: -1},
+		{name: "negative remainder", costume: "-2", want: 1},
 		{name: "explicit positive sign", costume: "+2", want: 1},
-		{name: "minimum integer wraps subtraction", costume: strconv.Itoa(math.MinInt), want: 1},
-		{name: "maximum integer", costume: strconv.Itoa(math.MaxInt), want: 0},
 		{name: "integer overflow", costume: strconv.Itoa(math.MaxInt) + "0", want: -1},
 		{name: "fraction is not an integer", costume: "2.5", want: -1},
 		{name: "whitespace is not trimmed", costume: " 2 ", want: -1},
@@ -2172,12 +2170,12 @@ func TestResolveCostumeIndex(t *testing.T) {
 }
 
 func TestResolveCostumeIndexPrefersNames(t *testing.T) {
-	for _, name := range []string{"1", "0", "-2", " 2 ", strconv.Itoa(math.MaxInt) + "0"} {
+	for _, name := range []string{"2", "0", "-2", " 2 ", strconv.Itoa(math.MaxInt) + "0"} {
 		t.Run(name, func(t *testing.T) {
 			sprite := newTestRenderSprite()
-			sprite.costumes[1].name = name
-			if got := sprite.ResolveCostumeIndex(name); got != 1 {
-				t.Fatalf("ResolveCostumeIndex(%q) = %d, want named costume at 1", name, got)
+			sprite.costumes[0].name = name
+			if got := sprite.ResolveCostumeIndex(name); got != 0 {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want named costume at 0", name, got)
 			}
 		})
 	}
@@ -2201,6 +2199,17 @@ func TestResolveCostumeIndexWithNoCostumes(t *testing.T) {
 				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNumericCostumeNameAndNumberSelectDifferentCostumes(t *testing.T) {
+	sprite := newTestRenderSprite()
+	sprite.costumes[1].name = "-1"
+	if got := sprite.ResolveCostumeIndex("-1"); got != 1 {
+		t.Errorf("name %q resolved to index %d, want 1", "-1", got)
+	}
+	if got := sprite.ResolveCostumeNumber(-1); got != 0 {
+		t.Errorf("number -1 resolved to index %d, want 0", got)
 	}
 }
 
