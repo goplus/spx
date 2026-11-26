@@ -42,7 +42,7 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.artifact_id != ''
     permissions:
-      contents: write
+      contents: read
       actions: read
     uses: ./.github/workflows/run_spxbench_suite.yml
     with:

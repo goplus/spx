@@ -97,13 +97,13 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-PR 验证和发布 `dry-run` 共用同一个 spxbench 工作流。发布 dry run 从本次运行的 `web-release` artifact 下载普通 Web 模式的 `spx_web.zip`，PR 验证则按 artifact ID 下载已完成 CI 中经过校验的候选包。工作流在被测 SPX 提交上创建临时 prerelease，使用 tag `v<version>-rc.<github.run_id>.<github.run_attempt>` 并上传这个 ZIP。tag 中的两个数字标识测试集工作流的 Actions 运行 ID 和执行次数。spxbench 结果页显示任务快照中被测 SPX commit 的前 7 位。
+PR 验证和发布 `dry-run` 共用同一个 spxbench 工作流。PR 验证按 ID 选取已完成 CI 的普通 Web 产物，发布 dry run 使用本次运行的 `web-release` 产物。工作流下载选中的 artifact，将它的 GitHub API 地址、被测 SPX commit 和包内 `spx_web.zip` 的 SHA-256 发给 spxbench。每次测试在 spxbench 中登记的版本号为 `<version>-rc.<github.run_id>.<github.run_attempt>`。
 
-工作流使用仓库 secret `SPXBENCH_API_TOKEN` 请求 `https://spxbench.qiniu.io` 异步安装该 asset。安装完成后，CI 核对登记的 SPX commit 与 `CANDIDATE_SHA`，并比对登记的 SHA-256 与本地 ZIP。随后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的 CI 请求复用原 `jobId`。在 Actions 中重跑该工作流时，新的执行次数会生成新的候选版本。
+工作流使用仓库 secret `SPXBENCH_API_TOKEN` 向 spxbench 发起安装请求。spxbench 使用自己的 GitHub 凭据下载产物，校验 Web ZIP 后再安装。CI 核对登记的 commit 和摘要，然后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的重复请求会复用任务 ID。结果页显示被测 SPX commit 的前 7 位。
 
 CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
 
-测试通过后，工作流先移除 spxbench 上的候选版本，再删除 prerelease。如果安装、测试或版本移除失败，工作流会保留 prerelease 和已安装的候选版本，供排查。安装开始前出错仍会清理 prerelease。工作流会重试尚未完成的 prerelease 删除，并在任务摘要中分别记录清理警告与回归结果。
+GitHub 保留 PR 产物 7 天，保留发布 dry-run 产物 14 天。保留期内 spxbench 可按同一 artifact ID 重新下载，过期后可重新构建。测试通过后，工作流移除 spxbench 上的候选版本。测试失败时保留已安装的候选版本供排查。任务摘要包含 artifact 地址和清理警告。
 
 1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=<当前声明的-SPX-tag>`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。

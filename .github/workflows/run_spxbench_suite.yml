@@ -28,7 +28,7 @@ jobs:
   run-spxbench-suite:
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
       actions: read
     env:
       CANDIDATE_VERSION: ${{ inputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}
@@ -39,44 +39,31 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Download the candidate Web bundle
+      - name: Resolve release Web artifact
+        id: release
+        shell: bash
         if: inputs.artifact_id == ''
-        uses: actions/download-artifact@v8
-        with:
-          name: web-release
-          path: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=web-release" |
+            jq -er '.artifacts | map(select(.name == "web-release" and (.expired == false))) |
+              if length == 1 then "id=\(.[0].id)" else error("Expected one unexpired web-release artifact") end' >> "$GITHUB_OUTPUT"
 
-      - name: Download the validated PR Web bundle
-        if: inputs.artifact_id != ''
+      - name: Download the candidate Web bundle
         uses: actions/download-artifact@v8
         with:
-          artifact-ids: ${{ inputs.artifact_id }}
-          run-id: ${{ inputs.artifact_run_id }}
+          artifact-ids: ${{ inputs.artifact_id || steps.release.outputs.id }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/spxbench-candidate
           merge-multiple: true
 
       - name: Run spxbench regression suite
-        id: suite
-        shell: bash
         env:
           SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
+          SPXBENCH_ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
+          SPXBENCH_ARTIFACT_ID: ${{ inputs.artifact_id || steps.release.outputs.id }}
           CANDIDATE_SHA: ${{ inputs.target_sha || github.sha }}
-          WEB_ARCHIVE_PATH: ${{ inputs.artifact_id != '' && format('{0}/spxbench-candidate/spx_web.zip', runner.temp) || 'dist/spx_web.zip' }}
+          WEB_ARCHIVE_PATH: ${{ runner.temp }}/spxbench-candidate/spx_web.zip
         run: python3 .github/scripts/release/run_spxbench_suite.py
-
-      - name: Retry candidate prerelease cleanup
-        if: ${{ always() && steps.suite.outputs.prerelease_cleanup_pending == 'true' }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release delete "v$CANDIDATE_VERSION" --cleanup-tag --yes; then
-            result=deleted
-          else
-            result=failed
-            echo "::warning title=spxbench prerelease cleanup::Could not delete v$CANDIDATE_VERSION after retry"
-          fi
-          echo "- Prerelease cleanup retry: **$result**." >> "$GITHUB_STEP_SUMMARY" || \
-            echo '::warning title=spxbench summary::Could not write prerelease cleanup result'

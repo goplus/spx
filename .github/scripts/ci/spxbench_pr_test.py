@@ -342,7 +342,7 @@ class PRWorkflowTest(unittest.TestCase):
         suite = jobs["run-spxbench-suite"]
         self.assertEqual(job_condition(suite), "needs.prepare.outputs.artifact_id!=''")
         self.assertEqual(suite["uses"], "./.github/workflows/run_spxbench_suite.yml")
-        self.assertEqual(suite["permissions"], {"contents": "write", "actions": "read"})
+        self.assertEqual(suite["permissions"], {"contents": "read", "actions": "read"})
         self.assertEqual(suite["with"]["artifact_id"], "${{ needs.prepare.outputs.artifact_id }}")
         self.assertEqual(suite["with"]["artifact_run_id"], "${{ github.event.workflow_run.id }}")
         self.assertEqual(suite["with"]["target_sha"], "${{ needs.prepare.outputs.target_sha }}")

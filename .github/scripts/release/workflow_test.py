@@ -34,7 +34,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
         for name in ("publish-runtime", "prepare-spx-release", "publish-spx-release"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "write"})
-        self.assertEqual(self.jobs["run-spxbench-suite"]["permissions"], {"contents": "write", "actions": "read"})
+        self.assertEqual(self.jobs["run-spxbench-suite"]["permissions"], {"contents": "read", "actions": "read"})
         # npm trusted publishing keeps release.yml as its direct caller.
         for name in ("publish-npm", "publish-dev-npm"):
             self.assertEqual(self.jobs[name]["permissions"], {"contents": "read", "id-token": "write"})
@@ -167,66 +167,62 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertNotEqual(interface["inputs"][name].get("required"), "true")
         self.assertEqual(set(interface["secrets"]), set(call["secrets"]))
         self.assertEqual(interface["secrets"]["SPXBENCH_API_TOKEN"]["required"], "true")
-        self.assertEqual(self.suite_job["permissions"], {"contents": "write", "actions": "read"})
+        self.assertEqual(self.suite_job["permissions"], {"contents": "read", "actions": "read"})
 
     def test_candidate_validation_downloads_only_the_normal_web_archive(self):
         job = self.suite_job
-        download, pr_download = action_steps(job, "actions/download-artifact")
+        download, = action_steps(job, "actions/download-artifact")
+        resolve = named_step(job, "Resolve release Web artifact")
         package = load_workflow(WORKFLOWS / "package_web.yml")["jobs"]["package-web"]
         normal, = (entry for entry in package["strategy"]["matrix"]["include"] if entry["mode"] == "normal")
-        self.assertEqual(download["with"]["name"], normal["artifact_name"])
-        self.assertEqual(job_condition(download), "inputs.artifact_id==''")
-        self.assertEqual(job_condition(pr_download), "inputs.artifact_id!=''")
-        self.assertEqual(pr_download["with"], {
-            "artifact-ids": "${{ inputs.artifact_id }}",
-            "run-id": "${{ inputs.artifact_run_id }}",
+        self.assertIn(f"artifacts?name={normal['artifact_name']}", resolve["run"])
+        self.assertEqual(job_condition(resolve), "inputs.artifact_id==''")
+        self.assertEqual(download["with"], {
+            "artifact-ids": "${{ inputs.artifact_id || steps.release.outputs.id }}",
+            "run-id": "${{ inputs.artifact_run_id || github.run_id }}",
             "github-token": "${{ github.token }}",
             "path": "${{ runner.temp }}/spxbench-candidate",
             "merge-multiple": "true",
         })
         validation = named_step(job, "Run spxbench regression suite")
-        cleanup = named_step(job, "Retry candidate prerelease cleanup")
         checkout, = action_steps(job, "actions/checkout")
         self.assertEqual(checkout["with"], {
             "ref": "${{ github.sha }}",
             "persist-credentials": "false",
         })
         self.assertLess(job["steps"].index(checkout), job["steps"].index(validation))
+        self.assertLess(job["steps"].index(resolve), job["steps"].index(download))
         self.assertLess(job["steps"].index(download), job["steps"].index(validation))
-        self.assertLess(job["steps"].index(pr_download), job["steps"].index(validation))
-        self.assertLess(job["steps"].index(validation), job["steps"].index(cleanup))
         self.assertEqual(validation["run"], "python3 .github/scripts/release/run_spxbench_suite.py")
         self.assertEqual(job["env"]["CANDIDATE_VERSION"],
                          "${{ inputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}")
-        self.assertEqual(validation["env"]["WEB_ARCHIVE_PATH"],
-                         "${{ inputs.artifact_id != '' && format('{0}/spxbench-candidate/spx_web.zip', runner.temp) || 'dist/spx_web.zip' }}")
-        self.assertEqual(validation["env"]["CANDIDATE_SHA"], "${{ inputs.target_sha || github.sha }}")
-        self.assertEqual(validation["env"]["SPXBENCH_API_TOKEN"], "${{ secrets.SPXBENCH_API_TOKEN }}")
-        for step in (validation, cleanup):
-            self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
-        self.assertEqual(job_condition(cleanup),
-                         f"always()&&steps.{validation['id']}.outputs.prerelease_cleanup_pending=='true'")
+        self.assertEqual(validation["env"], {
+            "WEB_ARCHIVE_PATH": "${{ runner.temp }}/spxbench-candidate/spx_web.zip",
+            "SPXBENCH_ARTIFACT_ID": download["with"]["artifact-ids"],
+            "SPXBENCH_ARTIFACT_RUN_ID": download["with"]["run-id"],
+            "CANDIDATE_SHA": "${{ inputs.target_sha || github.sha }}",
+            "SPXBENCH_API_TOKEN": "${{ secrets.SPXBENCH_API_TOKEN }}",
+        })
 
-    def test_prerelease_cleanup_retry_reports_result_without_failing_gate(self):
-        script = step_script(self.suite_job, "Retry candidate prerelease cleanup")
+    def test_resolves_exactly_one_live_release_artifact_from_current_run(self):
+        script = step_script(self.suite_job, "Resolve release Web artifact")
+        live = {"name": "web-release", "expired": False, "id": 23}
+        other = {**live, "name": "web-worker-release"}
+        expired = {**live, "expired": True}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            version = "0.0.1-rc.1.1"
-            env = {"PATH": f"{root}:{os.environ['PATH']}", "CANDIDATE_VERSION": version}
-            for exit_code, summary_name in ((0, "success"), (1, "failure"), (1, "missing/summary")):
-                with self.subTest(exit_code=exit_code, summary=summary_name):
-                    write_executable(root / "gh", f'#!/bin/sh\necho "$@" > gh-args\nexit {exit_code}\n')
-                    summary = root / summary_name
-                    result = run_shell(script, cwd=root, env={**env, "GITHUB_STEP_SUMMARY": str(summary)})
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual((root / "gh-args").read_text().strip(),
-                                     f"release delete v{version} --cleanup-tag --yes")
-                    self.assertEqual("::warning" in result.stdout, exit_code != 0)
-                    if summary.parent == root:
-                        expected = "failed" if exit_code else "deleted"
-                        self.assertIn(f"Prerelease cleanup retry: **{expected}**", summary.read_text())
-                    else:
-                        self.assertIn("Could not write prerelease cleanup result", result.stdout)
+            output = root / "outputs"
+            write_executable(root / "gh", '#!/bin/sh\n[ "$*" = "api repos/goplus/spx/actions/runs/7/artifacts?name=web-release" ] && cat artifacts.json\n')
+            for artifacts, expected in (([other, expired, live], "id=23"), ([live, live], None), ([other, expired], None)):
+                with self.subTest(artifacts=artifacts):
+                    (root / "artifacts.json").write_text(json.dumps({"artifacts": artifacts}))
+                    output.write_text("")
+                    result = run_shell(script, cwd=root, env={
+                        "PATH": f"{root}:{os.environ['PATH']}", "GITHUB_REPOSITORY": "goplus/spx",
+                        "GITHUB_RUN_ID": "7", "GITHUB_OUTPUT": str(output),
+                    })
+                    self.assertEqual(result.returncode == 0, expected is not None, result.stderr)
+                    self.assertEqual(output.read_text().strip(), expected or "")
 
     def test_internal_build_scheduling_preserves_optional_platforms_and_runtime_reuse(self):
         dependencies = {

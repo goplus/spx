@@ -52,7 +52,7 @@ jobs:
     needs: build-release
     if: ${{ !cancelled() && inputs.operation == 'dry-run' && needs.build-release.result == 'success' }}
     permissions:
-      contents: write
+      contents: read
       actions: read
     uses: ./.github/workflows/run_spxbench_suite.yml
     with:

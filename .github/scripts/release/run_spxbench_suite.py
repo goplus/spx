@@ -3,9 +3,11 @@
 
 Required environment:
   SPXBENCH_API_TOKEN  spxbench admin bearer token
+  SPXBENCH_ARTIFACT_ID  GitHub Actions artifact containing spx_web.zip
   WEB_ARCHIVE_PATH    path to the built spx_web.zip
   CANDIDATE_VERSION   candidate version, e.g. 4.0.2-rc.43192600496.1
 Optional:
+  SPXBENCH_ARTIFACT_RUN_ID  source workflow run for the Actions summary link
   SPXBENCH_URL        spxbench base URL (default: https://spxbench.qiniu.io)
   SPXBENCH_SUITE_NAME gate suite name (default: spx; cross-repo contract)
   SPXBENCH_TIMEOUT_MINUTES overall budget (default: 30)
@@ -17,6 +19,7 @@ import http.client
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -60,9 +63,9 @@ def warn_cleanup(message):
     print(f"::warning title=spxbench cleanup::{escaped}", flush=True)
 
 
-def run_command(*args, check=True):
+def run_command(*args):
     result = subprocess.run(args, text=True, capture_output=True)
-    if check and result.returncode != 0:
+    if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
         raise SpxbenchSuiteError(f"command failed ({result.returncode}): {' '.join(args)}"
                               + (f": {detail}" if detail else ""))
@@ -136,13 +139,6 @@ def require_env(name):
     return value
 
 
-def set_prerelease_cleanup_pending(pending):
-    path = os.environ.get("GITHUB_OUTPUT")
-    if path:
-        with open(path, "a") as output:
-            output.write(f"prerelease_cleanup_pending={str(pending).lower()}\n")
-
-
 def github_context(name, *fallback_command):
     return os.environ.get(name, "").strip() or run_command(*fallback_command).stdout.strip()
 
@@ -152,28 +148,6 @@ def find_suite_id(suites, name):
         if suite.get("name") == name:
             return suite.get("id")
     return None
-
-
-def create_candidate_release(candidate_tag, web_archive_path, target_sha):
-    log(f"creating candidate prerelease {candidate_tag}")
-    run_command("gh", "release", "create", candidate_tag, f"{web_archive_path}#spx_web.zip",
-        "--title", f"SPX {candidate_tag[1:]} (spxbench suite candidate)",
-        "--notes", "Temporary candidate for the spxbench suite; cleanup runs after the gate.",
-        "--prerelease", "--target", target_sha)
-
-
-def delete_candidate_release(candidate_tag):
-    log(f"deleting candidate prerelease {candidate_tag}")
-    try:
-        result = run_command("gh", "release", "delete", candidate_tag, "--cleanup-tag", "--yes", check=False)
-    except OSError as error:
-        failure = str(error)
-    else:
-        if result.returncode == 0:
-            return None
-        failure = (result.stderr or result.stdout or "").strip() or f"gh exited {result.returncode}"
-    log(f"candidate prerelease deletion failed: {failure}")
-    return failure
 
 
 class SpxbenchSuiteGate:
@@ -194,7 +168,11 @@ class SpxbenchSuiteGate:
             raise SpxbenchSuiteError("SPXBENCH_TIMEOUT_MINUTES must be a positive integer") from error
         if self.timeout_minutes <= 0:
             raise SpxbenchSuiteError("SPXBENCH_TIMEOUT_MINUTES must be a positive integer")
-        self.candidate_tag = f"v{self.candidate_version}"
+        artifact_id = require_env("SPXBENCH_ARTIFACT_ID")
+        if not re.fullmatch(r"[1-9][0-9]*", artifact_id):
+            raise SpxbenchSuiteError("SPXBENCH_ARTIFACT_ID must be a positive artifact ID")
+        self.artifact_id = artifact_id
+        self.artifact_url = f"https://api.github.com/repos/{self.repository}/actions/artifacts/{artifact_id}/zip"
         self.deadline = time.monotonic() + self.timeout_minutes * 60
         self.install_started = False
         self.candidate_removed = False
@@ -233,12 +211,11 @@ class SpxbenchSuiteGate:
         return suite_id
 
     def install_candidate(self, commit):
-        asset_url = f"https://github.com/{self.repository}/releases/download/{self.candidate_tag}/spx_web.zip"
-        log(f"   candidate package: {asset_url}")
-        log(f"installing version {self.candidate_version}")
-        set_prerelease_cleanup_pending(False)
+        digest = "sha256:" + file_digest(Path(self.web_archive_path))
+        log(f"installing version {self.candidate_version} from {self.artifact_url}")
+        payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": self.artifact_url,
+                   "sourceCommit": commit, "sourceDigest": digest}
         self.install_started = True
-        payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": asset_url, "sourceCommit": commit}
         operation_id = f"spx:{self.candidate_version}"
         status, body = self.recoverable_request("/api/runtime-versions/install", "install request", method="POST",
                                                 payload=payload, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
@@ -264,10 +241,9 @@ class SpxbenchSuiteGate:
             raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
         if artifact.get("sourceCommit") != commit:
             raise SpxbenchSuiteError(f"installed candidate commit {artifact.get('sourceCommit')!r} does not match {commit}")
-        expected_digest = "sha256:" + file_digest(Path(self.web_archive_path))
-        if artifact.get("digest") != expected_digest:
-            raise SpxbenchSuiteError(f"installed archive digest {artifact.get('digest')!r} does not match {expected_digest}")
-        log(f"   installed, digest={expected_digest}")
+        if artifact.get("digest") != digest:
+            raise SpxbenchSuiteError(f"installed archive digest {artifact.get('digest')!r} does not match {digest}")
+        log(f"   installed, digest={digest}")
 
     def candidate_artifact(self, body):
         if not isinstance(body, dict):
@@ -446,19 +422,23 @@ class SpxbenchSuiteGate:
             log(f"   candidate removal blocked (409), retrying in {delay:.0f}s")
             time.sleep(delay)
         self.candidate_removed = True
-        set_prerelease_cleanup_pending(True)
         log(f"   removed candidate {self.candidate_version} from spxbench")
 
-    def write_summary(self, suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes):
+    def write_summary(self, suite_result, runtime_cleanup, job_id, cleanup_notes):
         path = os.environ.get("GITHUB_STEP_SUMMARY")
         if not path:
             return
+        run_id = os.environ.get("SPXBENCH_ARTIFACT_RUN_ID") or os.environ.get("GITHUB_RUN_ID")
+        artifact_link = self.artifact_url
+        if run_id:
+            page = f"https://github.com/{self.repository}/actions/runs/{run_id}/artifacts/{self.artifact_id}"
+            artifact_link = f"[{self.artifact_id}]({page})"
         lines = ["### spxbench regression suite", "",
                  f"- Suite: `{self.suite_name}`",
                  f"- Candidate: `{self.candidate_version}`",
                  f"- Regression: **{suite_result}**",
                  f"- spxbench candidate: **{runtime_cleanup}**",
-                 f"- GitHub prerelease: **{release_cleanup}**"]
+                 f"- Actions artifact: {artifact_link}"]
         if job_id is not None:
             lines.append(f"- [Test run details]({self.api_url(f'/__e2e?job={job_id}')})")
         lines.extend(f"- Cleanup warning: {' '.join(str(note).splitlines())}"
@@ -475,10 +455,7 @@ class SpxbenchSuiteGate:
         cleanup_notes = []
         job_id = None
         commit = os.environ.get("CANDIDATE_SHA", "").strip() or github_context("GITHUB_SHA", "git", "rev-parse", "HEAD")
-        # gh may fail or be cancelled after creating the prerelease.
-        set_prerelease_cleanup_pending(True)
         try:
-            create_candidate_release(self.candidate_tag, self.web_archive_path, commit)
             suite_id = self.resolve_suite()
             self.install_candidate(commit)
             job_id = self.start_suite_run(suite_id)
@@ -493,27 +470,9 @@ class SpxbenchSuiteGate:
                 warn_cleanup(f"spxbench candidate removal failed: {error}")
             runtime_cleanup = "removed" if self.candidate_removed else "failed"
         finally:
-            if self.install_started and not self.candidate_removed:
-                if suite_result != "passed":
-                    runtime_cleanup = "retained"
-                release_cleanup = "retained"
-                log(f"retaining candidate {self.candidate_version} and its prerelease for investigation")
-            else:
-                try:
-                    deletion_error = delete_candidate_release(self.candidate_tag)
-                except Exception as error:
-                    deletion_error = str(error)
-                if deletion_error is not None:
-                    release_cleanup = "failed"
-                    cleanup_notes.append(f"GitHub prerelease deletion: {deletion_error}")
-                    warn_cleanup(f"GitHub prerelease cleanup failed: {deletion_error}")
-                else:
-                    release_cleanup = "deleted"
-                    try:
-                        set_prerelease_cleanup_pending(False)
-                    except OSError as error:
-                        warn_cleanup(f"recording prerelease deletion failed: {error}")
-            self.write_summary(suite_result, runtime_cleanup, release_cleanup, job_id, cleanup_notes)
+            if self.install_started and suite_result != "passed":
+                runtime_cleanup = "retained"
+            self.write_summary(suite_result, runtime_cleanup, job_id, cleanup_notes)
 
 
 def main():
