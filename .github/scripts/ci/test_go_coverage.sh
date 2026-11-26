@@ -51,7 +51,7 @@ case "${1:-}" in
       -run '^Test(Windows.*|FetchURLToFileReplacesExistingDestination|SConsEnvironmentCommands|SetupJDKWindowsRequiresManualInstallation)$' \
       ./internal/cmd/buildctl/shared ./internal/cmd/buildctl/tool
     covered_test coverage-engine-windows.out -v \
-      -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$' \
+      -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner|FetchEngineAssetWithAliasedDestination)$' \
       ./internal/cmd/buildctl/engine
     covered_test coverage-fileutil-windows.out -v \
       -run '^Test(ReplaceRegularFile|ReplaceFile|WindowsPath|WriteFileAtomic)' ./internal/base/fileutil

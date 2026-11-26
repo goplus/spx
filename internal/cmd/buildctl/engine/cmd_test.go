@@ -407,6 +407,46 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 	}
 }
 
+func TestFetchEngineAssetWithAliasedDestination(t *testing.T) {
+	const content = "verified"
+	for _, alias := range []string{"same path", "hard link"} {
+		t.Run(alias, func(t *testing.T) {
+			env := newEngineDownloadFixture(t, "")
+			env.assetDir = env.templateDir
+			manifest := newEngineAssetManifestFixture(t, "tampered")
+			env.manifest = &manifest
+			name := manifest.Assets[0].Name
+			src := filepath.Join(env.assetDir, name)
+			mustWriteFile(t, src, []byte(content))
+			dst := src
+			if alias == "hard link" {
+				dst = filepath.Join(env.goBinDir, name)
+				if err := os.Link(src, dst); err != nil {
+					t.Skipf("hard links unavailable: %v", err)
+				}
+			}
+			before, err := os.Stat(dst)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := fetchEngineAsset(env, name, dst); err == nil || !strings.Contains(err.Error(), "SHA-256 =") {
+				t.Fatalf("mismatched manifest error = %v, want digest mismatch", err)
+			}
+			if after, err := os.Stat(dst); err != nil || !os.SameFile(before, after) {
+				t.Fatalf("failed verification replaced %s: %v", dst, err)
+			}
+			want := map[string]string{src: content, dst: content}
+			assertEngineDownloadFiles(t, env, want)
+
+			manifest = newEngineAssetManifestFixture(t, content)
+			if err := fetchEngineAsset(env, name, dst); err != nil {
+				t.Fatal(err)
+			}
+			assertEngineDownloadFiles(t, env, want)
+		})
+	}
+}
+
 func TestCopyEngineAssetAtomically(t *testing.T) {
 	for _, scenario := range []string{"replace", "missing source", "directory source", "directory destination", "file parent"} {
 		t.Run(scenario, func(t *testing.T) {

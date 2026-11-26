@@ -191,20 +191,21 @@ func findLocalEngineAsset(assetDir, name string) (string, error) {
 }
 
 func copyEngineAssetAtomically(src, dst string, verify func(string) error) error {
-	input, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-	info, err := input.Stat()
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("engine asset is not a regular file: %s", src)
-	}
-
 	return fileutil.WriteFileAtomic(dst, func(output *os.File) error {
+		input, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		// Windows requires this handle to close before replacing a destination
+		// that refers to the same file, including through a hard link.
+		defer input.Close()
+		info, err := input.Stat()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("engine asset is not a regular file: %s", src)
+		}
 		if _, err := io.Copy(output, input); err != nil {
 			return err
 		}
