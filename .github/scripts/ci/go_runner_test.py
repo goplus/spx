@@ -167,6 +167,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "coverage-buildctl-windows.out": ["./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool"],
             "coverage-engine-windows.out": ["./internal/cmd/buildctl/engine"],
             "coverage-fileutil-windows.out": ["./internal/base/fileutil"],
+            "coverage-command-windows.out": ["./cmd/spx/internal/command"],
             "coverage-interpsession-windows.out": ["./internal/interpsession"],
             "coverage-runtimebundle-windows.out": ["./internal/runtimebundle"],
             "coverage-launchpack-windows.out": ["./internal/launchpack"],
@@ -268,7 +269,10 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         args = file_test["args"]
         for name in ("TestReplaceRegularFile",
                      "TestReplaceRegularFileRejectsDestinationBeforeRenaming",
-                     "TestReplaceRegularFilePreservesFilesystemErrors"):
+                     "TestReplaceRegularFilePreservesFilesystemErrors",
+                     "TestReplaceFile", "TestReplaceFilePreservesFilesOnFailure",
+                     "TestWindowsPath", "TestReplaceFileWindowsLongPaths", "TestReplaceFileWindowsLockedDestination",
+                     "TestWriteFileAtomicDiscardsPanickedWrite"):
             with self.subTest(name=name):
                 self.assertRegex(name, args[args.index("-run") + 1])
 

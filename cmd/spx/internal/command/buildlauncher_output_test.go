@@ -20,6 +20,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -86,6 +87,20 @@ func TestResolveLauncherOutputProtectsBuildInputs(t *testing.T) {
 	}
 }
 
+func TestResolveLauncherOutputLongPath(t *testing.T) {
+	root := t.TempDir()
+	parent := root
+	for len(parent) <= 300 {
+		parent = filepath.Join(parent, "launcher-output")
+	}
+	target := filepath.Join(parent, "game.exe")
+	writeCommandTestFile(t, target, "previous launcher")
+	inputs := launcherOutputInputs{ProjectDir: root, PackDir: "assets"}
+	if _, err := resolveLauncherOutput(inputs, target); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 	root := t.TempDir()
 	realParent := filepath.Join(root, "real")
@@ -95,6 +110,15 @@ func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 	linkParent := filepath.Join(root, "alias")
 	if err := os.Symlink(realParent, linkParent); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		info, err := os.Lstat(linkParent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !launcherOutputIsReparse(info) {
+			t.Fatal("directory symlink is missing its reparse attribute")
+		}
 	}
 	inputs := launcherOutputInputs{ProjectDir: root, PackDir: "assets"}
 	if _, err := resolveLauncherOutput(inputs, filepath.Join(linkParent, "launcher")); err == nil || !strings.Contains(err.Error(), "symlink") {
@@ -368,10 +392,14 @@ func TestCommitLauncherOutputRevalidatesDestinationAndCleanup(t *testing.T) {
 				}
 				want = "clean staging directory"
 			}
-			if err := commitLauncherOutput(stage, final, launcherOutputProtection{}); err == nil || !strings.Contains(err.Error(), want) {
+			err := commitLauncherOutput(stage, final, launcherOutputProtection{})
+			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("commit error = %v, want %q", err, want)
 			}
 			if kind == "protected destination" {
+				if !errors.Is(err, os.ErrPermission) {
+					t.Fatalf("failed commit lost the permission error: %v", err)
+				}
 				if got := readTestFile(t, final); got != "previous launcher" {
 					t.Fatalf("failed commit replaced destination: %q", got)
 				}

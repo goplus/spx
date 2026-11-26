@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package shared
+package fileutil
 
 import (
 	"os"
@@ -33,17 +33,34 @@ const (
 	windowsLongPathLimit    = 248
 )
 
+// ReplaceFile atomically replaces dst with a same-filesystem src.
 func ReplaceFile(src, dst string) error {
-	if _, err := os.Lstat(dst); err == nil {
-		if err := replaceExistingFile(src, dst); err == nil {
-			return nil
-		} else if err != windows.ERROR_FILE_NOT_FOUND && err != windows.ERROR_PATH_NOT_FOUND {
-			return err
-		}
-	} else if !os.IsNotExist(err) {
+	_, statErr := os.Lstat(dst)
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return statErr
+	}
+	dstName, err := windowsPathPtr(dst)
+	if err != nil {
 		return err
 	}
-	return moveFile(src, dst)
+	srcName, err := windowsPathPtr(src)
+	if err != nil {
+		return err
+	}
+
+	if statErr == nil {
+		result, _, err := replaceFileW.Call(
+			uintptr(unsafe.Pointer(dstName)), uintptr(unsafe.Pointer(srcName)), 0, replaceFileWriteThrough, 0, 0,
+		)
+		if result != 0 {
+			return nil
+		}
+		if err != windows.ERROR_FILE_NOT_FOUND && err != windows.ERROR_PATH_NOT_FOUND {
+			return err
+		}
+	}
+	// The destination may appear or disappear between inspection and replacement.
+	return windows.MoveFileEx(srcName, dstName, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 }
 
 func windowsPath(path string) (string, error) {
@@ -78,34 +95,4 @@ func windowsPathPtr(path string) (*uint16, error) {
 		return nil, err
 	}
 	return windows.UTF16PtrFromString(path)
-}
-
-func replaceExistingFile(src, dst string) error {
-	dstName, err := windowsPathPtr(dst)
-	if err != nil {
-		return err
-	}
-	srcName, err := windowsPathPtr(src)
-	if err != nil {
-		return err
-	}
-	result, _, callErr := replaceFileW.Call(
-		uintptr(unsafe.Pointer(dstName)), uintptr(unsafe.Pointer(srcName)), 0, replaceFileWriteThrough, 0, 0,
-	)
-	if result != 0 {
-		return nil
-	}
-	return callErr
-}
-
-func moveFile(src, dst string) error {
-	srcName, err := windowsPathPtr(src)
-	if err != nil {
-		return err
-	}
-	dstName, err := windowsPathPtr(dst)
-	if err != nil {
-		return err
-	}
-	return windows.MoveFileEx(srcName, dstName, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 }

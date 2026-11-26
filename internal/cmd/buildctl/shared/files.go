@@ -22,9 +22,9 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 	"github.com/goplus/spx/v4/internal/base/httpclient"
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
@@ -95,51 +95,31 @@ func DownloadURL(url, dst string, maxBytes int64, progress func(int64, int64)) (
 		return fmt.Errorf("%w: download %s declares %d bytes, limit %d", runtimebundle.ErrArchiveLimit, url, resp.ContentLength, maxBytes)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := file.Name()
-	defer func() {
-		if file != nil {
-			_ = file.Close()
+	return fileutil.WriteFileAtomic(dst, func(file *os.File) error {
+		var output io.Writer = file
+		if progress != nil && resp.ContentLength > 0 {
+			var downloaded int64
+			output = writerFunc(func(p []byte) (int, error) {
+				n, writeErr := file.Write(p)
+				downloaded += int64(n)
+				if n > 0 && downloaded <= maxBytes {
+					progress(downloaded, resp.ContentLength)
+				}
+				return n, writeErr
+			})
+		}
+		downloaded, err := io.Copy(output, io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes)))
+		if downloaded > maxBytes {
+			return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
 		}
 		if err != nil {
-			_ = os.Remove(tmpPath)
+			return err
 		}
-	}()
-
-	var output io.Writer = file
-	if progress != nil && resp.ContentLength > 0 {
-		var downloaded int64
-		output = writerFunc(func(p []byte) (int, error) {
-			n, writeErr := file.Write(p)
-			downloaded += int64(n)
-			if n > 0 && downloaded <= maxBytes {
-				progress(downloaded, resp.ContentLength)
-			}
-			return n, writeErr
-		})
-	}
-	downloaded, err := io.Copy(output, io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes)))
-	if downloaded > maxBytes {
-		return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
-	}
-	if err != nil {
-		return err
-	}
-	if resp.ContentLength > 0 && downloaded != resp.ContentLength {
-		return fmt.Errorf("download %s ended after %d bytes, want %d: %w", url, downloaded, resp.ContentLength, io.ErrUnexpectedEOF)
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	file = nil
-
-	return ReplaceFile(tmpPath, dst)
+		if resp.ContentLength > 0 && downloaded != resp.ContentLength {
+			return fmt.Errorf("download %s ended after %d bytes, want %d: %w", url, downloaded, resp.ContentLength, io.ErrUnexpectedEOF)
+		}
+		return nil
+	}, nil)
 }
 
 func (e *HTTPStatusError) Error() string {

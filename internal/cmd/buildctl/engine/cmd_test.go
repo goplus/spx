@@ -432,7 +432,7 @@ func TestCopyEngineAssetAtomically(t *testing.T) {
 			default:
 				mustWriteFile(t, preserved, []byte("installed"))
 			}
-			err := copyEngineAssetAtomically(src, dst)
+			err := copyEngineAssetAtomically(src, dst, nil)
 			wantFailure := scenario != "replace"
 			if (err != nil) != wantFailure {
 				t.Fatalf("copyEngineAssetAtomically error = %v, want failure = %v", err, wantFailure)

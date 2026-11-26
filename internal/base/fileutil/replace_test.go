@@ -9,6 +9,66 @@ import (
 	"testing"
 )
 
+func TestReplaceFile(t *testing.T) {
+	testReplaceFile(t, t.TempDir())
+}
+
+func testReplaceFile(t *testing.T, parent string) {
+	t.Helper()
+	for _, existing := range []bool{false, true} {
+		name := fmt.Sprint("existing=", existing)
+		t.Run(name, func(t *testing.T) {
+			dir := filepath.Join(parent, name)
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			src, dst := filepath.Join(dir, "source"), filepath.Join(dir, "destination")
+			writeReplacementFile(t, src, "replacement", 0o600)
+			if existing {
+				writeReplacementFile(t, dst, "existing", 0o600)
+			}
+			if err := ReplaceFile(src, dst); err != nil {
+				t.Fatal(err)
+			}
+			assertReplacementContent(t, dst, "replacement")
+			if _, err := os.Lstat(src); !os.IsNotExist(err) {
+				t.Fatalf("source still exists: %v", err)
+			}
+		})
+	}
+}
+
+func TestReplaceFilePreservesFilesOnFailure(t *testing.T) {
+	for _, name := range []string{"missing source", "invalid source", "invalid destination"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			src, dst := filepath.Join(dir, "source"), filepath.Join(dir, "destination")
+			if name != "missing source" {
+				writeReplacementFile(t, src, "replacement", 0o600)
+			}
+			writeReplacementFile(t, dst, "existing", 0o600)
+			source, destination := src, dst
+			switch name {
+			case "invalid source":
+				source += "\x00invalid"
+			case "invalid destination":
+				destination += "\x00invalid"
+			}
+			err := ReplaceFile(source, destination)
+			if err == nil {
+				t.Fatal("invalid replacement succeeded")
+			}
+			if name == "missing source" && !os.IsNotExist(err) {
+				t.Fatalf("missing source error = %v, want file not found", err)
+			}
+			assertReplacementContent(t, dst, "existing")
+			if name != "missing source" {
+				assertReplacementContent(t, src, "replacement")
+			}
+		})
+	}
+}
+
 func TestReplaceRegularFile(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		t.Run(fmt.Sprint("existing=", existing), func(t *testing.T) {
@@ -166,5 +226,29 @@ func assertReplacementContent(t *testing.T, path, want string) {
 	got, err := os.ReadFile(path)
 	if err != nil || string(got) != want {
 		t.Fatalf("%s = %q, %v; want %q", path, got, err, want)
+	}
+}
+
+func TestWriteFileAtomicDiscardsPanickedWrite(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "asset")
+	writeReplacementFile(t, dst, "old", 0o600)
+	wantPanic := errors.New("write stopped")
+	func() {
+		defer func() {
+			if got := recover(); got != wantPanic {
+				t.Fatalf("panic = %v, want %v", got, wantPanic)
+			}
+		}()
+		WriteFileAtomic(dst, func(f *os.File) error {
+			if _, err := f.WriteString("partial"); err != nil {
+				t.Fatal(err)
+			}
+			panic(wantPanic)
+		}, nil)
+	}()
+	assertReplacementContent(t, dst, "old")
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 1 {
+		t.Fatalf("files after failed write = %v, %v", entries, err)
 	}
 }

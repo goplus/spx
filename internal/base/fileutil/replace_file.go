@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package shared
+package fileutil
 
 import "os"
 

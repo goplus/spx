@@ -165,9 +165,7 @@ func validateLauncherOutputTarget(path string) error {
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return fmt.Errorf("buildlauncher: output is not a regular file: %q", path)
 		}
-		if reparse, reparseErr := launcherOutputPathIsReparse(path); reparseErr != nil {
-			return fmt.Errorf("buildlauncher: inspect output %q: %w", path, reparseErr)
-		} else if reparse {
+		if launcherOutputIsReparse(info) {
 			return fmt.Errorf("buildlauncher: output is a reparse point: %q", path)
 		}
 	} else if !os.IsNotExist(err) {
@@ -217,10 +215,7 @@ func validateLauncherOutputParent(path string, allowMissing bool) error {
 		return fmt.Errorf("buildlauncher: resolve output parent: %w", err)
 	}
 	absolute = filepath.Clean(absolute)
-	if err := validateLauncherExistingPath(absolute, allowMissing); err != nil {
-		return err
-	}
-	return nil
+	return validateLauncherExistingPath(absolute, allowMissing)
 }
 
 func validateLauncherExistingPath(path string, allowMissing bool) error {
@@ -232,9 +227,7 @@ func validateLauncherExistingPath(path string, allowMissing bool) error {
 		if !info.IsDir() {
 			return fmt.Errorf("buildlauncher: output parent is not a directory: %q", path)
 		}
-		if reparse, reparseErr := launcherOutputPathIsReparse(path); reparseErr != nil {
-			return fmt.Errorf("buildlauncher: inspect output parent %q: %w", path, reparseErr)
-		} else if reparse {
+		if launcherOutputIsReparse(info) {
 			return fmt.Errorf("buildlauncher: output parent contains a reparse point: %q", path)
 		}
 		parent := filepath.Dir(path)
