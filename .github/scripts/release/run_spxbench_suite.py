@@ -39,7 +39,7 @@ EVENT_RECONNECT_MAX_SECONDS = 10
 EVENT_RECOVERY_TIMEOUT_SECONDS = 120
 EVENT_STATE_REQUEST_TIMEOUT_SECONDS = 15
 INSTALL_POLL_SECONDS = 5
-INSTALL_REQUEST_TIMEOUT_SECONDS = 30
+INSTALL_STATUS_TIMEOUT_SECONDS = 30
 REMOVE_TIMEOUT_SECONDS = 120
 REMOVE_RETRY_SECONDS = 10
 
@@ -83,16 +83,19 @@ def http_error_body(error):
             return "<unreadable response body>"
 
 
-def request_spxbench(url, token, method="GET", payload=None, timeout=180):
+def request_spxbench(url, token, method="GET", payload=None, timeout=180, archive=None):
     """Return (http_status, parsed_body) for one spxbench API call."""
     request = urllib.request.Request(url, method=method)
     request.add_header("Authorization", f"Bearer {token}")
-    data = None
-    if payload is not None:
+    if archive is not None:
+        request.data = archive
+        request.add_header("Content-Type", "application/zip")
+        request.add_header("Content-Length", str(os.fstat(archive.fileno()).st_size))
+    elif payload is not None:
+        request.data = json.dumps(payload).encode()
         request.add_header("Content-Type", "application/json")
-        data = json.dumps(payload).encode()
     try:
-        with urllib.request.urlopen(request, data=data, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read().decode()
             return response.status, (json.loads(body) if body else {})
     except urllib.error.HTTPError as error:
@@ -155,7 +158,7 @@ class SpxbenchSuiteGate:
     def __init__(self):
         self.spxbench_url = (os.environ.get("SPXBENCH_URL") or DEFAULT_SPXBENCH_URL).strip().rstrip("/")
         self.token = require_env("SPXBENCH_API_TOKEN")
-        self.web_archive_path = require_env("WEB_ARCHIVE_PATH")
+        self.web_archive_path = Path(require_env("WEB_ARCHIVE_PATH"))
         self.repository = github_context("GITHUB_REPOSITORY", "gh", "repo", "view",
                                          "--json", "nameWithOwner", "-q", ".nameWithOwner")
         self.candidate_version = require_env("CANDIDATE_VERSION")
@@ -178,9 +181,9 @@ class SpxbenchSuiteGate:
     def api_url(self, path):
         return f"{self.spxbench_url}{path}"
 
-    def request(self, path, method="GET", payload=None, timeout=180):
+    def request(self, path, timeout=180, **kwargs):
         timeout = bounded_timeout(self.deadline, timeout, f"spxbench suite exceeded {self.timeout_minutes} minutes")
-        return request_spxbench(self.api_url(path), self.token, method=method, payload=payload, timeout=timeout)
+        return request_spxbench(self.api_url(path), self.token, timeout=timeout, **kwargs)
 
     def recoverable_request(self, path, description, **kwargs):
         """Return (None, detail) when the caller can recover from a lost response or 5xx."""
@@ -209,39 +212,45 @@ class SpxbenchSuiteGate:
         return suite_id
 
     def install_candidate(self, commit):
-        digest = "sha256:" + file_digest(Path(self.web_archive_path))
-        log(f"installing version {self.candidate_version} from {self.artifact_url}")
-        payload = {"kind": "spx", "version": self.candidate_version, "sourceUrl": self.artifact_url,
-                   "sourceCommit": commit, "sourceDigest": digest}
+        digest = "sha256:" + file_digest(self.web_archive_path)
+        query = urllib.parse.urlencode({"kind": "spx", "version": self.candidate_version, "sourceUrl": self.artifact_url,
+                                        "sourceCommit": commit, "sourceDigest": digest})
+        log(f"uploading {self.web_archive_path.name} for version {self.candidate_version} ({self.artifact_url})")
         self.install_started = True
-        operation_id = f"spx:{self.candidate_version}"
-        status, body = self.recoverable_request("/api/runtime-versions/install", "install request", method="POST",
-                                                payload=payload, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
-        if status is None:
-            # The POST may have been accepted. Recover by its deterministic operation ID.
-            log(f"   recovering install operation {operation_id}")
-            body = self.wait_for_candidate_install(operation_id, fallback_error=body)
-        elif status == 202:
-            accepted_id = body.get("operationId") if isinstance(body, dict) else None
-            if not accepted_id:
-                raise SpxbenchSuiteError(f"install response is missing operationId: {body}")
-            if accepted_id != operation_id:
-                raise SpxbenchSuiteError(
-                    f"install response returned operationId {accepted_id!r}, want {operation_id!r}")
-            log(f"   install accepted; operation={operation_id}")
-            body = self.wait_for_candidate_install(operation_id)
-        elif status != 200:
-            raise SpxbenchSuiteError(f"install request failed: HTTP {status}: {body}")
-
-        # An idempotent 200 and a completed async install both return the registered versions.
+        body = self.upload_candidate(f"/api/runtime-versions/install?{query}")
         artifact = self.candidate_artifact(body)
         if artifact is None:
             raise SpxbenchSuiteError(f"install response did not include candidate {self.candidate_version}")
-        if artifact.get("sourceCommit") != commit:
-            raise SpxbenchSuiteError(f"installed candidate commit {artifact.get('sourceCommit')!r} does not match {commit}")
-        if artifact.get("digest") != digest:
-            raise SpxbenchSuiteError(f"installed archive digest {artifact.get('digest')!r} does not match {digest}")
+        for field, expected in (("sourceCommit", commit), ("digest", digest), ("sourceUrl", self.artifact_url)):
+            actual = artifact.get(field)
+            if actual != expected:
+                raise SpxbenchSuiteError(f"installed candidate {field} {actual!r} does not match {expected!r}")
         log(f"   installed, digest={digest}")
+
+    def upload_candidate(self, path):
+        operation_id = f"spx:{self.candidate_version}"
+        for attempt in range(2):
+            if attempt:
+                log("   no install operation found, retrying upload")
+            with self.web_archive_path.open("rb") as archive:
+                status, body = self.recoverable_request(path, "candidate upload", method="POST", archive=archive)
+            if status == 200:
+                return body
+            if status == 202:
+                accepted_id = body.get("operationId") if isinstance(body, dict) else None
+                if accepted_id != operation_id:
+                    raise SpxbenchSuiteError(
+                        f"install response returned operationId {accepted_id!r}, want {operation_id!r}")
+                log(f"   install accepted; operation={operation_id}")
+                return self.wait_for_candidate_install(operation_id)
+            if status is not None:
+                raise SpxbenchSuiteError(f"install request failed: HTTP {status}: {body}")
+            # A disconnected upload may have reached the server. Retry only if it has no operation.
+            log(f"   recovering install operation {operation_id}")
+            versions = self.wait_for_candidate_install(operation_id, allow_missing=True)
+            if versions is not None:
+                return versions
+        raise SpxbenchSuiteError(f"candidate upload failed: {body} (install operation {operation_id} was not found)")
 
     def candidate_artifact(self, body):
         if not isinstance(body, dict):
@@ -256,21 +265,20 @@ class SpxbenchSuiteGate:
 
     def read_install_status(self, path, description):
         while True:
-            status, body = self.recoverable_request(path, description, timeout=INSTALL_REQUEST_TIMEOUT_SECONDS)
+            status, body = self.recoverable_request(path, description, timeout=INSTALL_STATUS_TIMEOUT_SECONDS)
             if status is not None:
                 return status, body
             self.pause_install_poll()
 
-    def wait_for_candidate_install(self, operation_id, fallback_error=None):
+    def wait_for_candidate_install(self, operation_id, allow_missing=False):
         """Wait for the async operation, then read the registered versions."""
         path = f"/api/runtime-versions/operations/{urllib.parse.quote(operation_id, safe='')}"
         while True:
             status, body = self.read_install_status(path, "install status")
             if status == 404:
-                detail = f"install operation {operation_id} was not found"
-                if fallback_error:
-                    detail = f"{fallback_error}; {detail}"
-                raise SpxbenchSuiteError(detail)
+                if allow_missing:
+                    return None
+                raise SpxbenchSuiteError(f"install operation {operation_id} was not found")
             if status != 200:
                 raise SpxbenchSuiteError(f"install status failed: HTTP {status}: {body}")
             operation_status = str(body.get("status") or "").lower() if isinstance(body, dict) else ""

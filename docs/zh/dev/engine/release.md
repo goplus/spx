@@ -97,9 +97,9 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-PR 验证和发布 `dry-run` 共用同一个 spxbench 工作流。PR 验证按 ID 选取已完成 CI 的普通 Web 产物，发布 dry run 使用本次运行的 `web-release` 产物。工作流下载选中的 artifact，将它的 GitHub API 地址、被测 SPX commit 和包内 `spx_web.zip` 的 SHA-256 发给 spxbench。每次测试在 spxbench 中登记的版本号为 `<version>-rc.<github.run_id>.<github.run_attempt>`。
+PR 验证和发布 `dry-run` 共用同一个 spxbench 工作流。PR 验证按 ID 选取已完成 CI 的普通 Web 产物，发布 dry run 使用本次运行的 `web-release` 产物。runner 下载选中的 artifact，把包内的 `spx_web.zip` 直接上传到 spxbench，并附上 ZIP 的 SHA-256、被测 SPX commit 和 artifact 的 GitHub API 地址。每次测试在 spxbench 中登记的版本号为 `<version>-rc.<github.run_id>.<github.run_attempt>`。
 
-工作流使用仓库 secret `SPXBENCH_API_TOKEN` 向 spxbench 发起安装请求。spxbench 使用自己的 GitHub 凭据下载产物，校验 Web ZIP 后再安装。CI 核对登记的 commit 和摘要，然后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的重复请求会复用任务 ID。结果页显示被测 SPX commit 的前 7 位。
+工作流使用仓库 secret `SPXBENCH_API_TOKEN` 向 spxbench 发起安装请求。spxbench 校验上传包的 SHA-256，通过后安装，并保留一份供 worker 下载。CI 核对登记的 artifact 地址、commit 和摘要，然后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的重复请求会复用任务 ID。结果页显示被测 SPX commit 的前 7 位。
 
 CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
 
