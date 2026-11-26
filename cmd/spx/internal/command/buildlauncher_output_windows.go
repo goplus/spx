@@ -33,8 +33,10 @@ func launcherOutputIsReparse(info os.FileInfo) bool {
 	return attrs.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
-func launcherOutputAliasAllowed(existing, resolved string) bool {
-	return false
+func launcherOutputAliasAllowed(existing, _ string) bool {
+	// EvalSymlinks also expands 8.3 names. Check the original path for
+	// reparse points before accepting its expanded spelling.
+	return validateLauncherExistingPath(existing, false) == nil
 }
 
 // launchpack validates the PE header before this size check.

@@ -104,7 +104,7 @@ func TestResolveLauncherOutputLongPath(t *testing.T) {
 func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 	root := t.TempDir()
 	realParent := filepath.Join(root, "real")
-	if err := os.Mkdir(realParent, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(realParent, "child"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	linkParent := filepath.Join(root, "alias")
@@ -121,8 +121,10 @@ func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 		}
 	}
 	inputs := launcherOutputInputs{ProjectDir: root, PackDir: "assets"}
-	if _, err := resolveLauncherOutput(inputs, filepath.Join(linkParent, "launcher")); err == nil || !strings.Contains(err.Error(), "symlink") {
-		t.Fatalf("symlink parent error = %v", err)
+	for _, parent := range []string{linkParent, filepath.Join(linkParent, "child")} {
+		if _, err := resolveLauncherOutput(inputs, filepath.Join(parent, "launcher")); err == nil || !strings.Contains(err.Error(), "symlink") {
+			t.Fatalf("symlink parent %q error = %v", parent, err)
+		}
 	}
 
 	target := filepath.Join(root, "target")

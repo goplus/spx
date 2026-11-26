@@ -174,7 +174,7 @@ func validateLauncherOutputTarget(path string) error {
 	return nil
 }
 
-// canonicalizeLauncherOutputAlias permits only macOS system aliases.
+// canonicalizeLauncherOutputAlias handles macOS system aliases and Windows short names.
 func canonicalizeLauncherOutputAlias(path string) (string, error) {
 	parent := filepath.Dir(path)
 	existing := parent
