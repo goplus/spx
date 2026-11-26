@@ -3,10 +3,12 @@
 import hashlib
 import http.client
 import io
+import json
 import os
 import tempfile
 import unittest
 import urllib.error
+import urllib.parse
 from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
@@ -31,13 +33,14 @@ INSTALL_ACCEPTED = (202, {"operationId": OPERATION_ID, "status": "running"})
 INSTALL_SUCCEEDED = (200, {"operationId": OPERATION_ID, "status": "success"})
 ARCHIVE = b"candidate Web archive"
 DIGEST = "sha256:" + hashlib.sha256(ARCHIVE).hexdigest()
-CANDIDATE_REGISTERED = (200, {"versions": [{"kind": "spx", "version": VERSION, "sourceCommit": COMMIT, "digest": DIGEST}]})
+CANDIDATE = {"kind": "spx", "version": VERSION, "sourceUrl": ARTIFACT_URL, "sourceCommit": COMMIT, "digest": DIGEST}
+CANDIDATE_REGISTERED = (200, {"versions": [CANDIDATE]})
 RUN_PATH = f"/__e2e/api/run?suite=7&spxVersion={VERSION}&trigger=spx-dry-run&repository=goplus%2Fspx"
-INSTALL_REQUEST = mock.call(
-    "/api/runtime-versions/install", method="POST", timeout=30,
-    payload={"kind": "spx", "version": VERSION, "sourceCommit": COMMIT,
-             "sourceUrl": ARTIFACT_URL, "sourceDigest": DIGEST})
-OPERATION_REQUEST = mock.call(f"/api/runtime-versions/operations/spx%3A{VERSION}", timeout=30)
+INSTALL_PATH = "/api/runtime-versions/install?" + urllib.parse.urlencode({
+    "kind": "spx", "version": VERSION, "sourceUrl": ARTIFACT_URL, "sourceCommit": COMMIT, "sourceDigest": DIGEST})
+INSTALL_REQUEST = mock.call(INSTALL_PATH, method="POST", archive=mock.ANY)
+OPERATION_PATH = f"/api/runtime-versions/operations/spx%3A{VERSION}"
+OPERATION_REQUEST = mock.call(OPERATION_PATH, timeout=30)
 VERSIONS_REQUEST = mock.call("/api/runtime-versions", timeout=30)
 
 
@@ -145,22 +148,17 @@ class CandidateInstallTest(unittest.TestCase):
         SpxbenchSuiteGate().install_candidate(COMMIT)
         self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST])
 
-    def test_registered_candidate_with_different_commit_is_rejected(self):
-        self.request.return_value = (200, {"versions": [{"kind": "spx", "version": VERSION, "sourceCommit": "f" * 40}]})
-        with self.assertRaisesRegex(SpxbenchSuiteError, "does not match"):
-            SpxbenchSuiteGate().install_candidate(COMMIT)
-
-    def test_missing_or_mismatched_archive_digest_is_rejected(self):
-        for digest in (None, "sha256:other"):
-            self.request.return_value = (200, {"versions": [{"kind": "spx", "version": VERSION,
-                                                           "sourceCommit": COMMIT, "digest": digest}]})
-            with self.subTest(digest=digest), self.assertRaisesRegex(SpxbenchSuiteError, "archive digest"):
+    def test_registered_candidate_must_match_artifact_commit_and_digest(self):
+        for field, value in (("sourceCommit", "f" * 40), ("sourceUrl", ARTIFACT_URL.replace("123", "124")),
+                             ("digest", None), ("digest", "sha256:other")):
+            self.request.return_value = (200, {"versions": [{**CANDIDATE, field: value}]})
+            with self.subTest(field=field, value=value), self.assertRaisesRegex(SpxbenchSuiteError, field):
                 SpxbenchSuiteGate().install_candidate(COMMIT)
 
     def test_invalid_install_response_is_rejected_without_polling(self):
         for response, message in (
             ((200, {"versions": []}), "did not include candidate"),
-            ((202, {"status": "running"}), "missing operationId"),
+            ((202, {"status": "running"}), "returned operationId None"),
             ((202, {"operationId": "spx:another-version"}), "returned operationId"),
         ):
             with self.subTest(response=response):
@@ -187,6 +185,12 @@ class CandidateInstallTest(unittest.TestCase):
                 self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST, VERSIONS_REQUEST])
                 self.sleep.assert_not_called()
 
+    def test_unclaimed_upload_is_retried_only_once(self):
+        self.request.side_effect = [(502, "lost"), (404, "not found")] * 2
+        with self.assertRaisesRegex(SpxbenchSuiteError, "upload failed: HTTP 502.*was not found"):
+            SpxbenchSuiteGate().install_candidate(COMMIT)
+        self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST] * 2)
+
     def test_final_candidate_lookup_retries_transient_failure(self):
         self.request.side_effect = [INSTALL_ACCEPTED, INSTALL_SUCCEEDED,
                                     (503, "temporarily unavailable"), CANDIDATE_REGISTERED]
@@ -202,6 +206,33 @@ class CandidateInstallTest(unittest.TestCase):
             SpxbenchSuiteGate().install_candidate(COMMIT)
         self.assertEqual(self.request.call_args_list, [INSTALL_REQUEST, OPERATION_REQUEST])
         self.sleep.assert_not_called()
+
+
+class CandidateUploadTest(unittest.TestCase):
+    def test_disconnected_upload_resends_complete_archive_after_lookup(self):
+        uploads = []
+
+        def open_request(request, *, timeout):
+            if request.get_method() == "GET":
+                self.assertEqual(request.full_url, "http://127.0.0.1" + OPERATION_PATH)
+                raise urllib.error.HTTPError(request.full_url, 404, "not found", {}, io.BytesIO())
+            self.assertEqual(request.full_url, "http://127.0.0.1" + INSTALL_PATH)
+            self.assertEqual(request.get_header("Authorization"), "Bearer t")
+            self.assertEqual(request.get_header("Content-type"), "application/zip")
+            self.assertEqual(request.get_header("Content-length"), str(len(ARCHIVE)))
+            uploads.append(request.data.read())
+            if len(uploads) == 1:
+                raise urllib.error.URLError("connection lost")
+            response = io.BytesIO(json.dumps(CANDIDATE_REGISTERED[1]).encode())
+            response.status = 200
+            return response
+
+        with tempfile.NamedTemporaryFile() as archive, patch_candidate_env(WEB_ARCHIVE_PATH=archive.name), \
+             mock.patch.object(run_spxbench_suite.urllib.request, "urlopen", side_effect=open_request):
+            archive.write(ARCHIVE)
+            archive.flush()
+            SpxbenchSuiteGate().install_candidate(COMMIT)
+        self.assertEqual(uploads, [ARCHIVE, ARCHIVE])
 
 
 class CandidateRemovalTest(unittest.TestCase):
