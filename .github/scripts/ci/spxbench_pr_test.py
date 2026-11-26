@@ -22,9 +22,8 @@ class PRCandidateTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.directory = Path(temporary.name)
-        self.event_path = self.directory / "event.json"
-        self.output_path = self.directory / "output"
+        self.event_path = Path(temporary.name) / "event.json"
+        self.output_path = Path(temporary.name) / "output"
         self.addCleanup(mock.patch.stopall)
         mock.patch.dict(os.environ, {
             "GITHUB_EVENT_PATH": str(self.event_path),
@@ -57,16 +56,29 @@ class PRCandidateTest(unittest.TestCase):
         }
         self.current_run = deepcopy(self.run)
         self.runs = [self.current_run]
-        self.other_pr = {**deepcopy(self.pr), "number": 43}
         self.artifacts = [self.artifact]
         self.merge = {"parents": [{"sha": BASE_SHA}, {"sha": HEAD_SHA}]}
         self.statuses = []
         self.api.reset_mock()
         self.output_path.write_text("")
-        self.write_event()
 
-    def write_event(self):
+    def fresh_subtest(self, **params):
+        self.reset()
+        return self.subTest(**params)
+
+    def prepare(self, **run_updates):
+        self.run.update(run_updates)
         self.event_path.write_text(json.dumps(self.event))
+        spxbench_pr.prepare()
+
+    def finish(self):
+        self.event_path.write_text(json.dumps(self.event))
+        spxbench_pr.finish()
+
+    def assert_prepare_ignored(self, **run_updates):
+        self.prepare(**run_updates)
+        self.assertEqual(self.outputs(), {})
+        self.assertEqual(self.statuses, [])
 
     def github_api(self, path, payload=None, paginate=False):
         if path == f"statuses/{HEAD_SHA}":
@@ -79,7 +91,7 @@ class PRCandidateTest(unittest.TestCase):
             f"actions/workflows/ci.yml/runs?event=pull_request&head_sha={HEAD_SHA}&per_page=100":
                 (True, [{"workflow_runs": self.runs}]),
             "pulls/42": (False, self.pr),
-            "pulls/43": (False, self.other_pr),
+            "pulls/43": (False, {**self.pr, "number": 43}),
             "actions/runs/100/artifacts?per_page=100": (True, [{"artifacts": self.artifacts}]),
             f"git/commits/{MERGE_SHA}": (False, self.merge),
         }
@@ -91,7 +103,7 @@ class PRCandidateTest(unittest.TestCase):
         return dict(line.split("=", 1) for line in self.output_path.read_text().splitlines())
 
     def test_fork_pr_without_event_pull_requests_uses_run_title(self):
-        spxbench_pr.prepare()
+        self.prepare()
         self.assertEqual(self.outputs(), {
             "head_sha": HEAD_SHA, "artifact_id": "300",
             "target_sha": MERGE_SHA, "version": "4.0.3",
@@ -104,33 +116,29 @@ class PRCandidateTest(unittest.TestCase):
 
     def test_ci_start_and_rerun_mark_pending_without_consuming_artifacts(self):
         for attempt in (1, 2):
-            with self.subTest(attempt=attempt):
-                self.reset()
-                self.run.update(status="in_progress", run_attempt=attempt, conclusion=None)
-                self.current_run = deepcopy(self.run)
-                self.write_event()
-                spxbench_pr.prepare()
+            with self.fresh_subtest(attempt=attempt):
+                self.current_run.update(status="in_progress", run_attempt=attempt)
+                self.prepare(status="in_progress", run_attempt=attempt, conclusion=None)
                 self.assertEqual(self.outputs(), {})
                 self.assertEqual([status["state"] for status in self.statuses], ["pending"])
                 self.assertIn("Waiting for CI", self.statuses[0]["description"])
                 self.assertNotIn(mock.call("actions/runs/100/artifacts?per_page=100", paginate=True),
                                  self.api.call_args_list)
 
-    def test_late_or_superseded_start_does_not_reset_the_status(self):
-        for obsolete in ("completed", "new_attempt", "new_run"):
-            with self.subTest(obsolete=obsolete):
-                self.reset()
-                self.run["status"] = "in_progress"
-                if obsolete != "completed":
-                    self.current_run["status"] = "in_progress"
-                    if obsolete == "new_attempt":
-                        self.current_run["run_attempt"] = 2
-                    else:
-                        self.runs.append({**deepcopy(self.run), "id": 101})
-                self.write_event()
-                spxbench_pr.prepare()
-                self.assertEqual(self.outputs(), {})
-                self.assertEqual(self.statuses, [])
+    def test_superseded_ci_start_or_completion_keeps_existing_status(self):
+        for event_status, current_status, current_attempt, newer_run in (
+            ("in_progress", "completed", 1, False),
+            ("in_progress", "in_progress", 2, False),
+            ("in_progress", "in_progress", 1, True),
+            ("completed", "in_progress", 1, False),
+            ("completed", "completed", 2, False),
+            ("completed", "completed", 1, True),
+        ):
+            with self.fresh_subtest(event=event_status, current=current_status, attempt=current_attempt, newer=newer_run):
+                self.current_run.update(status=current_status, run_attempt=current_attempt)
+                if newer_run:
+                    self.runs.append({**self.current_run, "id": 101})
+                self.assert_prepare_ignored(status=event_status)
 
     def test_untrusted_or_incomplete_run_cannot_reach_github_api(self):
         for field, value in (
@@ -138,26 +146,17 @@ class PRCandidateTest(unittest.TestCase):
             ("path", ".github/workflows/other.yml"), ("status", "queued"),
             ("head_sha", "not-a-sha"),
         ):
-            with self.subTest(field=field):
-                self.reset()
-                self.run[field] = value
-                self.write_event()
+            with self.fresh_subtest(field=field):
                 with self.assertRaisesRegex(ValueError, "Expected a canonical PR CI run"):
-                    spxbench_pr.prepare()
+                    self.prepare(**{field: value})
                 self.api.assert_not_called()
-        for location in ("environment", "event"):
-            with self.subTest(repository_location=location):
-                self.reset()
-                if location == "environment":
-                    with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "author/spx"}):
-                        with self.assertRaises(ValueError):
-                            spxbench_pr.prepare()
-                else:
-                    self.event["repository"]["full_name"] = "author/spx"
-                    self.write_event()
-                    with self.assertRaises(ValueError):
-                        spxbench_pr.prepare()
-                self.api.assert_not_called()
+        self.reset()
+        with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "author/spx"}), self.assertRaises(ValueError):
+            self.prepare()
+        self.event["repository"]["full_name"] = "author/spx"
+        with self.assertRaises(ValueError):
+            self.prepare()
+        self.api.assert_not_called()
 
     def test_pr_must_match_open_dev_branch_head_and_fork_repository(self):
         variants = [
@@ -170,40 +169,27 @@ class PRCandidateTest(unittest.TestCase):
             {"head": {"sha": HEAD_SHA, "ref": "feature", "repo": None}},
         ]
         for update in variants:
-            with self.subTest(update=update):
-                self.reset()
+            with self.fresh_subtest(update=update):
                 self.pr.update(update)
-                spxbench_pr.prepare()
-                self.assertEqual(self.outputs(), {})
-                self.assertEqual(self.statuses, [])
+                self.assert_prepare_ignored()
 
     def test_candidate_must_match_pr_identified_by_run_title(self):
-        self.run["display_title"] = "CI for PR #43 into dev"
-        self.write_event()
         with self.assertRaisesRegex(ValueError, "identify this PR"):
-            spxbench_pr.prepare()
+            self.prepare(display_title="CI for PR #43 into dev")
         self.api.assert_any_call("pulls/43")
         self.assertNotIn("artifact_id", self.outputs())
 
     def test_non_dev_or_malformed_title_is_ignored(self):
         for title in ("CI for PR #42 into main", "CI for PR #42 into dev\nextra", "CI", ""):
-            with self.subTest(title=title):
-                self.reset()
-                self.run["display_title"] = title
-                self.write_event()
-                spxbench_pr.prepare()
-                self.assertEqual(self.outputs(), {})
-                self.assertEqual(self.statuses, [])
+            with self.fresh_subtest(title=title):
+                self.assert_prepare_ignored(display_title=title)
                 self.assertNotIn(mock.call("pulls/42"), self.api.call_args_list)
 
     def test_failed_ci_never_runs_the_candidate(self):
         for conclusion in ("failure", "cancelled", "timed_out", "skipped", None):
-            with self.subTest(conclusion=conclusion):
-                self.reset()
-                self.run["conclusion"] = conclusion
-                self.write_event()
+            with self.fresh_subtest(conclusion=conclusion):
                 with self.assertRaisesRegex(ValueError, "Required CI run ended"):
-                    spxbench_pr.prepare()
+                    self.prepare(conclusion=conclusion)
                 self.assertEqual(self.outputs(), {"head_sha": HEAD_SHA})
                 self.assertEqual(self.statuses[-1]["state"], "pending")
 
@@ -217,69 +203,50 @@ class PRCandidateTest(unittest.TestCase):
             ([{"name": f"spxbench-pr-42-{MERGE_SHA}-invalid"}], "identify this PR"),
         )
         for updates, message in cases:
-            with self.subTest(updates=updates):
-                self.reset()
+            with self.fresh_subtest(updates=updates):
                 self.artifacts = [{**self.artifact, **update} for update in updates]
                 with self.assertRaisesRegex(ValueError, message):
-                    spxbench_pr.prepare()
+                    self.prepare()
                 self.assertEqual(self.outputs(), {"head_sha": HEAD_SHA})
 
     def test_unrelated_coverage_artifact_does_not_conflict_with_candidate(self):
         self.artifacts.append({"id": 301, "name": "coverage-source", "expired": False})
-        spxbench_pr.prepare()
+        self.prepare()
         self.assertEqual(self.outputs()["artifact_id"], "300")
 
     def test_candidate_merge_must_have_pr_head_as_second_parent(self):
         for parents in ([], [{"sha": HEAD_SHA}], [{"sha": HEAD_SHA}, {"sha": BASE_SHA}],
                         [{"sha": BASE_SHA}, {"sha": HEAD_SHA}, {"sha": MERGE_SHA}]):
-            with self.subTest(parents=parents):
-                self.reset()
+            with self.fresh_subtest(parents=parents):
                 self.merge["parents"] = parents
                 with self.assertRaisesRegex(ValueError, "not a merge of this PR head"):
-                    spxbench_pr.prepare()
+                    self.prepare()
                 self.assertNotIn("artifact_id", self.outputs())
 
     def test_successful_ci_without_candidate_reports_failure(self):
         self.artifacts = []
         with self.assertRaisesRegex(ValueError, "exactly one"):
-            spxbench_pr.prepare()
+            self.prepare()
         self.assertEqual(self.outputs(), {"head_sha": HEAD_SHA})
         with mock.patch.dict(os.environ, {"PREPARE_RESULT": "failure", "SUITE_RESULT": "skipped"}):
-            spxbench_pr.finish()
+            self.finish()
         self.assertEqual([status["state"] for status in self.statuses], ["pending", "failure"])
 
     def test_rerun_reuses_successful_artifact_from_previous_attempt(self):
-        self.run["run_attempt"] = 2
         self.current_run["run_attempt"] = 2
         self.artifact["workflow_run"] = {"id": 100, "head_sha": HEAD_SHA}
         self.artifact["created_at"] = "2026-11-23T01:00:00Z"
-        self.write_event()
-        spxbench_pr.prepare()
+        self.prepare(run_attempt=2)
         self.assertEqual(self.outputs()["artifact_id"], "300")
-
-    def test_superseded_attempt_or_run_is_ignored(self):
-        for superseded in ("attempt", "running", "new_run"):
-            with self.subTest(superseded=superseded):
-                self.reset()
-                if superseded == "attempt":
-                    self.current_run["run_attempt"] = 2
-                elif superseded == "running":
-                    self.current_run["status"] = "in_progress"
-                else:
-                    self.runs.append({**deepcopy(self.run), "id": 101})
-                spxbench_pr.prepare()
-                self.assertEqual(self.outputs(), {})
-                self.assertEqual(self.statuses, [])
 
     def test_other_fork_branch_or_pr_run_does_not_supersede_candidate(self):
         for update in (
             {"head_repository": {"id": 8}}, {"head_branch": "other"},
             {"display_title": "CI for PR #42 into main"}, {"display_title": "CI for PR #43 into dev"},
         ):
-            with self.subTest(update=update):
-                self.reset()
+            with self.fresh_subtest(update=update):
                 self.runs.append({**deepcopy(self.run), "id": 101, **update})
-                spxbench_pr.prepare()
+                self.prepare()
                 self.assertEqual(self.outputs()["artifact_id"], "300")
 
     def test_finish_requires_successful_candidate_validation_and_suite(self):
@@ -290,31 +257,29 @@ class PRCandidateTest(unittest.TestCase):
             ("success", "skipped", "failure", "failed or was interrupted"),
             ("failure", "skipped", "failure", "candidate validation failed"),
         ):
-            with self.subTest(prepare=prepare, suite=suite):
-                self.reset()
+            with self.fresh_subtest(prepare=prepare, suite=suite):
                 with mock.patch.dict(os.environ, {"PREPARE_RESULT": prepare, "SUITE_RESULT": suite}):
-                    spxbench_pr.finish()
+                    self.finish()
                 self.assertEqual(len(self.statuses), 1)
                 self.assertEqual(self.statuses[0]["state"], state)
                 self.assertIn(description, self.statuses[0]["description"])
 
     def test_finish_does_not_overwrite_obsolete_or_closed_pr_result(self):
         for obsolete in ("new_run", "closed", "new_head"):
-            with self.subTest(obsolete=obsolete):
-                self.reset()
+            with self.fresh_subtest(obsolete=obsolete):
                 if obsolete == "new_run":
                     self.runs.append({**deepcopy(self.run), "id": 101})
                 elif obsolete == "closed":
                     self.pr["state"] = "closed"
                 else:
                     self.pr["head"]["sha"] = BASE_SHA
-                spxbench_pr.finish()
+                self.finish()
                 self.assertEqual(self.statuses, [])
 
     def test_finish_rejects_a_different_status_target(self):
         with mock.patch.dict(os.environ, {"PR_HEAD_SHA": BASE_SHA}):
             with self.assertRaisesRegex(ValueError, "Status target does not match"):
-                spxbench_pr.finish()
+                self.finish()
         self.assertEqual(self.statuses, [])
 
 

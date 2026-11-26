@@ -26,7 +26,8 @@ jobs:
       target_sha: ${{ steps.candidate.outputs.target_sha }}
       version: ${{ steps.candidate.outputs.version }}
     steps:
-      - name: Check out trusted CI scripts
+      - &checkout-trusted-ci
+        name: Check out trusted CI scripts
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
@@ -58,11 +59,7 @@ jobs:
     needs: [prepare, run-spxbench-suite]
     runs-on: ubuntu-22.04
     steps:
-      - name: Check out trusted CI scripts
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
+      - *checkout-trusted-ci
 
       - name: Report spxbench result on the PR head
         env:
