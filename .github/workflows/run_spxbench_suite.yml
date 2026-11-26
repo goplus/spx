@@ -53,8 +53,8 @@ jobs:
       - name: Download the candidate Web bundle
         uses: actions/download-artifact@v8
         with:
-          artifact-ids: ${{ inputs.artifact_id || steps.release.outputs.id }}
-          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          artifact-ids: &artifact-id ${{ inputs.artifact_id || steps.release.outputs.id }}
+          run-id: &artifact-run-id ${{ inputs.artifact_run_id || github.run_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/spxbench-candidate
           merge-multiple: true
@@ -62,8 +62,8 @@ jobs:
       - name: Run spxbench regression suite
         env:
           SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
-          SPXBENCH_ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
-          SPXBENCH_ARTIFACT_ID: ${{ inputs.artifact_id || steps.release.outputs.id }}
+          SPXBENCH_ARTIFACT_RUN_ID: *artifact-run-id
+          SPXBENCH_ARTIFACT_ID: *artifact-id
           CANDIDATE_SHA: ${{ inputs.target_sha || github.sha }}
           WEB_ARCHIVE_PATH: ${{ runner.temp }}/spxbench-candidate/spx_web.zip
         run: python3 .github/scripts/release/run_spxbench_suite.py

@@ -63,15 +63,6 @@ def warn_cleanup(message):
     print(f"::warning title=spxbench cleanup::{escaped}", flush=True)
 
 
-def run_command(*args):
-    result = subprocess.run(args, text=True, capture_output=True)
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip()
-        raise SpxbenchSuiteError(f"command failed ({result.returncode}): {' '.join(args)}"
-                              + (f": {detail}" if detail else ""))
-    return result
-
-
 def response_detail(body):
     return body if isinstance(body, str) else json.dumps(body)
 
@@ -140,7 +131,15 @@ def require_env(name):
 
 
 def github_context(name, *fallback_command):
-    return os.environ.get(name, "").strip() or run_command(*fallback_command).stdout.strip()
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    result = subprocess.run(fallback_command, text=True, capture_output=True)
+    if result.returncode:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise SpxbenchSuiteError(f"command failed ({result.returncode}): {' '.join(fallback_command)}"
+                                + (f": {detail}" if detail else ""))
+    return result.stdout.strip()
 
 
 def find_suite_id(suites, name):
@@ -168,11 +167,10 @@ class SpxbenchSuiteGate:
             raise SpxbenchSuiteError("SPXBENCH_TIMEOUT_MINUTES must be a positive integer") from error
         if self.timeout_minutes <= 0:
             raise SpxbenchSuiteError("SPXBENCH_TIMEOUT_MINUTES must be a positive integer")
-        artifact_id = require_env("SPXBENCH_ARTIFACT_ID")
-        if not re.fullmatch(r"[1-9][0-9]*", artifact_id):
+        self.artifact_id = require_env("SPXBENCH_ARTIFACT_ID")
+        if not re.fullmatch(r"[1-9][0-9]*", self.artifact_id):
             raise SpxbenchSuiteError("SPXBENCH_ARTIFACT_ID must be a positive artifact ID")
-        self.artifact_id = artifact_id
-        self.artifact_url = f"https://api.github.com/repos/{self.repository}/actions/artifacts/{artifact_id}/zip"
+        self.artifact_url = f"https://api.github.com/repos/{self.repository}/actions/artifacts/{self.artifact_id}/zip"
         self.deadline = time.monotonic() + self.timeout_minutes * 60
         self.install_started = False
         self.candidate_removed = False
@@ -424,7 +422,7 @@ class SpxbenchSuiteGate:
         self.candidate_removed = True
         log(f"   removed candidate {self.candidate_version} from spxbench")
 
-    def write_summary(self, suite_result, runtime_cleanup, job_id, cleanup_notes):
+    def write_summary(self, suite_result, runtime_cleanup, job_id, cleanup_warning):
         path = os.environ.get("GITHUB_STEP_SUMMARY")
         if not path:
             return
@@ -441,8 +439,8 @@ class SpxbenchSuiteGate:
                  f"- Actions artifact: {artifact_link}"]
         if job_id is not None:
             lines.append(f"- [Test run details]({self.api_url(f'/__e2e?job={job_id}')})")
-        lines.extend(f"- Cleanup warning: {' '.join(str(note).splitlines())}"
-                     for note in cleanup_notes)
+        if cleanup_warning:
+            lines.append(f"- Cleanup warning: {' '.join(cleanup_warning.splitlines())}")
         try:
             with open(path, "a", encoding="utf-8") as summary:
                 summary.write("\n".join(lines) + "\n\n")
@@ -452,7 +450,7 @@ class SpxbenchSuiteGate:
     def run(self):
         suite_result = "not completed"
         runtime_cleanup = "not installed"
-        cleanup_notes = []
+        cleanup_warning = None
         job_id = None
         commit = os.environ.get("CANDIDATE_SHA", "").strip() or github_context("GITHUB_SHA", "git", "rev-parse", "HEAD")
         try:
@@ -466,13 +464,13 @@ class SpxbenchSuiteGate:
             try:
                 self.remove_candidate()
             except Exception as error:
-                cleanup_notes.append(f"spxbench candidate removal: {error}")
+                cleanup_warning = f"spxbench candidate removal: {error}"
                 warn_cleanup(f"spxbench candidate removal failed: {error}")
             runtime_cleanup = "removed" if self.candidate_removed else "failed"
         finally:
             if self.install_started and suite_result != "passed":
                 runtime_cleanup = "retained"
-            self.write_summary(suite_result, runtime_cleanup, job_id, cleanup_notes)
+            self.write_summary(suite_result, runtime_cleanup, job_id, cleanup_warning)
 
 
 def main():

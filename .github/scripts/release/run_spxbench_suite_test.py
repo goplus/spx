@@ -25,6 +25,7 @@ CANDIDATE_ENV = {
     "GITHUB_REPOSITORY": "goplus/spx", "GITHUB_SHA": COMMIT,
 }
 ARTIFACT_URL = "https://api.github.com/repos/goplus/spx/actions/artifacts/123/zip"
+SUITE_LIST = (200, {"suites": [{"id": 7, "name": "spx"}]})
 OPERATION_ID = f"spx:{VERSION}"
 INSTALL_ACCEPTED = (202, {"operationId": OPERATION_ID, "status": "running"})
 INSTALL_SUCCEEDED = (200, {"operationId": OPERATION_ID, "status": "success"})
@@ -514,8 +515,7 @@ class CandidateLifecycleTest(unittest.TestCase):
             "summary": "passed" if passed else "failed",
             "cases": [{"name": "smoke", "status": "pass" if passed else "fail"}],
         }, status="success" if passed else "failed")
-        self.request.side_effect = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
-                                    INSTALL_ACCEPTED, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED,
+        self.request.side_effect = [SUITE_LIST, INSTALL_ACCEPTED, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED,
                                     (200, {"jobId": 11}), (200, job)]
         run_spxbench_suite.main()
 
@@ -542,15 +542,10 @@ class CandidateLifecycleTest(unittest.TestCase):
         self.assertEqual(self.request.call_args_list[1], INSTALL_REQUEST)
 
     def test_install_failure_skips_candidate_removal(self):
-        def request(path, **kwargs):
-            if path == "/api/suites":
-                return 200, {"suites": [{"id": 7, "name": "spx"}]}
-            self.assertEqual(path, "/api/runtime-versions/install")
-            return 403, "forbidden"
-
-        self.request.side_effect = request
+        self.request.side_effect = [SUITE_LIST, (403, "forbidden")]
         with self.assertRaisesRegex(SpxbenchSuiteError, "install request failed: HTTP 403"):
             run_spxbench_suite.main()
+        self.assertEqual(self.request.call_args_list, [mock.call("/api/suites"), INSTALL_REQUEST])
         self.assert_report(regression="not completed", runtime="retained")
         self.removed.assert_not_called()
 
@@ -561,10 +556,11 @@ class CandidateLifecycleTest(unittest.TestCase):
         self.removed.assert_not_called()
 
     def test_remove_failure_warns_without_failing_suite(self):
-        self.removed.return_value = (500, "unavailable")
+        self.removed.return_value = (500, "temporarily\nunavailable")
         self.run_suite()
         self.assert_report(regression="passed", runtime="failed")
-        self.assertIn("HTTP 500", self.summary.read_text())
+        self.assertIn("Cleanup warning: spxbench candidate removal: remove candidate failed: HTTP 500: "
+                      "temporarily unavailable", self.summary.read_text())
 
 
 if __name__ == "__main__":
