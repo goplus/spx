@@ -19,18 +19,16 @@ def check_results(needs):
     runtime = needs["resolve-runtime"]["outputs"]
     state = runtime["runtime_state"]
     if state == "ready":
-        require_job_result(needs, "test-godot-module", "skipped")
-        require_job_result(needs, "build-web", "success")
-        message = "Published runtime verified; Web normal bundle built"
+        module_result, message = "skipped", "Published runtime verified"
     elif state in ("missing", "incompatible"):
-        require_job_result(needs, "test-godot-module", "success")
-        require_job_result(needs, "build-web", "skipped")
-        message = f"Published runtime is {state}; current SPX module integration passed"
+        module_result, message = "success", f"Published runtime is {state}; current SPX module integration passed"
     else:
         raise ValueError(f"Unknown runtime state: {state or '<empty>'}")
 
+    require_job_result(needs, "test-godot-module", module_result)
+    require_job_result(needs, "build-web", "success")
     reason = runtime["runtime_reason"]
-    print(f"[ok] {message}")
+    print(f"[ok] {message}; Web normal bundle built")
     print(f"[info] Runtime resolution: {reason}")
 
 

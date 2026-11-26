@@ -75,9 +75,13 @@ git diff --check
 
 普通 CI 会在启动 runtime consumer 前解析 lock 对应的 runtime release。resolver 不下载全部 runtime 资产，但会校验 release metadata 与 manifest，计算当前 revision 的 module tree、runtime-pack source digest 和 build-recipe digest，并将它们与 manifest 及 lock 约束的 runtime 身份逐项比较。
 
-- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 跳过基于已发布 runtime 的 Web 产品 smoke，改为把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
-- runtime 已公开且完整复用身份一致时，下一次 CI 会跳过 source integration 重编译，强制执行使用已发布资产的 Web normal 产品 smoke。
+- runtime 不存在、仍为 draft，或本身合法但与当前源码身份不兼容时，CI 把当前 SPX module 放入 lock 的 Godot source，执行 Linux SPX tests 与 Web normal compile smoke。集成测试上传本次构建的 editor 和 Web template，共用的 Web bundle action 使用这些产物生成 `spx_web.zip`。源码不兼容会写入 summary，但其本身不会让普通 CI 失败。
+- runtime 已公开且完整复用身份一致时，CI 使用已发布的 editor 和 Web template，通过同一个 Web bundle action 生成 `spx_web.zip`。
 - 已公开 release 缺 manifest、版本不一致、资产集合不完整或 GitHub API 异常，都不属于前两种状态；resolver 与 CI gate 会 fail closed。
+
+对于目标为 `goplus/spx` 的 `dev` 分支的 PR（包括 fork PR），Web 产品 smoke 会上传已有的 `spx_web.zip`。CI 完成后，`spxbench_pr.yml` 校验 PR 和候选 artifact，对实际构建的 merge commit 运行测试集，并向 PR head 写回独立的 `spxbench` 状态。CI 失败、候选 artifact 缺失、回归失败或回归被跳过，都会使该状态失败。
+
+消费工作流通过 `workflow_run` 触发，从默认分支检出受信任脚本，因此可以为 fork PR 的候选包使用 `SPXBENCH_API_TOKEN`，同时让 PR 构建保持无 secret。该工作流合入默认分支 `dev` 后开始接收事件。当前 PR 的 CI 启动或重跑时，工作流先将 PR head 标为 pending，测试结束后再写回结果。现阶段 `spxbench` 仅作参考，不要配置为必需检查：它不会向 merge group 提交写入状态，PR head 上的状态也不绑定本次合并候选提交。等普通 PR 和 merge group 都能在准确的候选提交上收到结果后，再设为必需检查。
 
 这个切换同时避免发布循环与 runtime 重复构建。普通 CI 不构建完整 release runtime；只有 release workflow 执行该构建。release assemble 在复用或发布前仍会下载全部资产，并校验 `SHA256SUMS` 与 manifest 中每个文件的 checksum。
 
@@ -93,13 +97,13 @@ canonical-ref ancestry 规则刻意只用于构建和发布新的 runtime。普�
 
 `release_tag` 必须精确等于所选 commit 声明的 SPX tag。这里的产品 `platforms=all` 仅指 Web、macOS、Windows、Linux 包；Android/iOS 属于完整 runtime 资产矩阵和真机 smoke，不是 SPX 产品 target。
 
-构建和组装成功后，`dry-run` 从本次 workflow 的 `web-release` artifact 下载普通 Web 模式的 `spx_web.zip`。工作流在本次 SPX 提交上创建临时 prerelease，tag 为 `v<version>-rc.<github.run_id>.<github.run_attempt>`，并上传这个 ZIP。tag 中的两个数字是 GitHub Actions 的运行 ID 和执行次数。spxbench 在这类 dry run 的结果页显示任务快照中 SPX commit 的前 7 位。
+PR 验证和发布 `dry-run` 共用同一个 spxbench 工作流。PR 验证按 ID 选取已完成 CI 的普通 Web 产物，发布 dry run 使用本次运行的 `web-release` 产物。工作流下载选中的 artifact，将它的 GitHub API 地址、被测 SPX commit 和包内 `spx_web.zip` 的 SHA-256 发给 spxbench。每次测试在 spxbench 中登记的版本号为 `<version>-rc.<github.run_id>.<github.run_attempt>`。
 
-工作流使用仓库 secret `SPXBENCH_API_TOKEN` 请求 `https://spxbench.qiniu.io` 异步安装该 asset。安装完成后，CI 核对登记的 SPX commit 与 `GITHUB_SHA`，并比对登记的 SHA-256 与本地 ZIP。随后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的 CI 请求复用原 `jobId`。在 Actions 中重跑该工作流时，新的执行次数会生成新的候选版本。
+工作流使用仓库 secret `SPXBENCH_API_TOKEN` 向 spxbench 发起安装请求。spxbench 使用自己的 GitHub 凭据下载产物，校验 Web ZIP 后再安装。CI 核对登记的 commit 和摘要，然后通过 `PUT /__e2e/api/run` 启动 `spx` 测试集中已就绪的用例，按录制基准回放比对。同一仓库、候选版本和测试集的重复请求会复用任务 ID。结果页显示被测 SPX commit 的前 7 位。
 
-CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过 dry-run 回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
+CI 订阅任务结束事件，再按 `jobId` 查询持久化结果。只有 `status=success` 才通过回归检查。跳过用例、测试进程异常退出或没有就绪用例都会使检查失败。
 
-测试通过后，工作流先移除 spxbench 上的候选版本，再删除 prerelease。如果安装、测试或版本移除失败，工作流会保留 prerelease 和已安装的候选版本，供排查。安装开始前出错仍会清理 prerelease。工作流会重试尚未完成的 prerelease 删除，并在任务摘要中分别记录清理警告与回归结果。
+GitHub 保留 PR 产物 7 天，保留发布 dry-run 产物 14 天。保留期内 spxbench 可按同一 artifact ID 重新下载，过期后可重新构建。测试通过后，工作流移除 spxbench 上的候选版本。测试失败时保留已安装的候选版本供排查。任务摘要包含 artifact 地址和清理警告。
 
 1. 先对 lock 中精确的 Godot candidate 使用 `release_tag=<当前声明的-SPX-tag>`、`platforms=all`、`operation=dry-run`。检查 workflow summary：pre-merge candidate 在此阶段可以继续，但会明确标记为尚不可发布。下载并检查所有 runtime/product artifacts，完成安装与 demo smoke。
 2. 将该 Godot commit 原样提升到 canonical `godot.ref` 并通过严格 ancestry verifier，再对同一个 SPX commit 设置 `operation=publish-runtime`。没有可复用版本时，该模式会构建、校验并公开全部 runtime 资产，但跳过 SPX 产品包、SPX release 和 npm。

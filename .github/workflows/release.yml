@@ -51,46 +51,14 @@ jobs:
     name: Check release candidate with spxbench suite
     needs: build-release
     if: ${{ !cancelled() && inputs.operation == 'dry-run' && needs.build-release.result == 'success' }}
-    runs-on: ubuntu-22.04
     permissions:
-      contents: write
-    env:
-      CANDIDATE_VERSION: ${{ needs.build-release.outputs.version }}-rc.${{ github.run_id }}.${{ github.run_attempt }}
-    steps:
-      - name: Check out release scripts
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Download the verified Web bundle
-        uses: actions/download-artifact@v8
-        with:
-          name: web-release
-          path: dist
-
-      - name: Run spxbench regression suite
-        id: suite
-        shell: bash
-        env:
-          SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-          WEB_ARCHIVE_PATH: dist/spx_web.zip
-        run: python3 .github/scripts/release/run_spxbench_suite.py
-
-      - name: Retry candidate prerelease cleanup
-        if: ${{ always() && steps.suite.outputs.prerelease_cleanup_pending == 'true' }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release delete "v$CANDIDATE_VERSION" --cleanup-tag --yes; then
-            result=deleted
-          else
-            result=failed
-            echo "::warning title=spxbench prerelease cleanup::Could not delete v$CANDIDATE_VERSION after retry"
-          fi
-          echo "- Prerelease cleanup retry: **$result**." >> "$GITHUB_STEP_SUMMARY" || \
-            echo '::warning title=spxbench summary::Could not write prerelease cleanup result'
+      contents: read
+      actions: read
+    uses: ./.github/workflows/run_spxbench_suite.yml
+    with:
+      version: ${{ needs.build-release.outputs.version }}
+    secrets:
+      SPXBENCH_API_TOKEN: ${{ secrets.SPXBENCH_API_TOKEN }}
 
   publish-runtime:
     name: Publish or reuse runtime release

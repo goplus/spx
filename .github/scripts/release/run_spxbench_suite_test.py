@@ -21,8 +21,11 @@ COMMIT = "0123456789abcdef0123456789abcdef01234567"
 CANDIDATE_ENV = {
     "SPXBENCH_URL": "http://127.0.0.1", "SPXBENCH_API_TOKEN": "t",
     "WEB_ARCHIVE_PATH": "dist/spx_web.zip", "CANDIDATE_VERSION": VERSION,
+    "SPXBENCH_ARTIFACT_ID": "123", "SPXBENCH_ARTIFACT_RUN_ID": "42",
     "GITHUB_REPOSITORY": "goplus/spx", "GITHUB_SHA": COMMIT,
 }
+ARTIFACT_URL = "https://api.github.com/repos/goplus/spx/actions/artifacts/123/zip"
+SUITE_LIST = (200, {"suites": [{"id": 7, "name": "spx"}]})
 OPERATION_ID = f"spx:{VERSION}"
 INSTALL_ACCEPTED = (202, {"operationId": OPERATION_ID, "status": "running"})
 INSTALL_SUCCEEDED = (200, {"operationId": OPERATION_ID, "status": "success"})
@@ -33,7 +36,7 @@ RUN_PATH = f"/__e2e/api/run?suite=7&spxVersion={VERSION}&trigger=spx-dry-run&rep
 INSTALL_REQUEST = mock.call(
     "/api/runtime-versions/install", method="POST", timeout=30,
     payload={"kind": "spx", "version": VERSION, "sourceCommit": COMMIT,
-             "sourceUrl": f"https://github.com/goplus/spx/releases/download/v{VERSION}/spx_web.zip"})
+             "sourceUrl": ARTIFACT_URL, "sourceDigest": DIGEST})
 OPERATION_REQUEST = mock.call(f"/api/runtime-versions/operations/spx%3A{VERSION}", timeout=30)
 VERSIONS_REQUEST = mock.call("/api/runtime-versions", timeout=30)
 
@@ -129,6 +132,13 @@ class CandidateInstallTest(unittest.TestCase):
         stack.enter_context(patch_candidate_env(WEB_ARCHIVE_PATH=str(archive)))
         self.request = stack.enter_context(mock.patch.object(SpxbenchSuiteGate, "request"))
         self.sleep = stack.enter_context(mock.patch.object(run_spxbench_suite.time, "sleep"))
+
+    def test_invalid_artifact_id_fails_before_install(self):
+        for artifact_id in ("", "0", "01", "-1", "123/zip"):
+            with self.subTest(artifact_id=artifact_id), patch_candidate_env(SPXBENCH_ARTIFACT_ID=artifact_id):
+                with self.assertRaisesRegex(SpxbenchSuiteError, "SPXBENCH_ARTIFACT_ID"):
+                    SpxbenchSuiteGate()
+        self.request.assert_not_called()
 
     def test_already_completed_install_is_accepted(self):
         self.request.return_value = CANDIDATE_REGISTERED
@@ -451,40 +461,6 @@ class SuiteJobEventsTest(unittest.TestCase):
         self.assertLessEqual(state_attempts[-1][1], 10)
 
 
-class DeleteCandidateReleaseTest(unittest.TestCase):
-    def test_command_results_preserve_failure_detail_and_logs(self):
-        cases = (
-            (0, "ignored", "ignored", None),
-            (1, " denied ", "fallback", "denied"),
-            (2, "", " missing ", "missing"),
-            (3, "", "", "gh exited 3"),
-            (4, "   ", "ignored", "gh exited 4"),
-        )
-        for code, stderr, stdout, failure in cases:
-            with self.subTest(code=code), \
-                 mock.patch.object(run_spxbench_suite, "run_command",
-                                   return_value=mock.Mock(returncode=code, stderr=stderr, stdout=stdout)) as command, \
-                 mock.patch.object(run_spxbench_suite, "log") as log:
-                self.assertEqual(run_spxbench_suite.delete_candidate_release("vtest"), failure)
-                command.assert_called_once_with("gh", "release", "delete", "vtest",
-                                                "--cleanup-tag", "--yes", check=False)
-                expected = [mock.call("deleting candidate prerelease vtest")]
-                if failure is not None:
-                    expected.append(mock.call(f"candidate prerelease deletion failed: {failure}"))
-                self.assertEqual(log.call_args_list, expected)
-
-    def test_os_error_is_reported_without_raising(self):
-        for message in ("gh unavailable", ""):
-            with self.subTest(message=message), \
-                 mock.patch.object(run_spxbench_suite, "run_command", side_effect=OSError(message)), \
-                 mock.patch.object(run_spxbench_suite, "log") as log:
-                self.assertEqual(run_spxbench_suite.delete_candidate_release("vtest"), message)
-                self.assertEqual(log.call_args_list, [
-                    mock.call("deleting candidate prerelease vtest"),
-                    mock.call(f"candidate prerelease deletion failed: {message}"),
-                ])
-
-
 class TimeoutTest(unittest.TestCase):
     def test_invalid_timeout_is_reported_as_configuration_error(self):
         with patch_candidate_env(SPXBENCH_TIMEOUT_MINUTES="zero"):
@@ -517,20 +493,16 @@ class TimeoutTest(unittest.TestCase):
                 requested.assert_called_once()
 
 
-class CandidateReleaseCleanupTest(unittest.TestCase):
+class CandidateLifecycleTest(unittest.TestCase):
     def setUp(self):
         stack = ExitStack()
         self.addCleanup(stack.close)
         directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
         self.archive = directory / "spx_web.zip"
         self.archive.write_bytes(ARCHIVE)
-        self.output = directory / "outputs"
         self.summary = directory / "summary"
         stack.enter_context(patch_candidate_env(
-            WEB_ARCHIVE_PATH=str(self.archive), GITHUB_OUTPUT=str(self.output), GITHUB_STEP_SUMMARY=str(self.summary)))
-        self.created = stack.enter_context(mock.patch.object(run_spxbench_suite, "create_candidate_release"))
-        self.deleted = stack.enter_context(mock.patch.object(
-            run_spxbench_suite, "delete_candidate_release", return_value=None))
+            WEB_ARCHIVE_PATH=str(self.archive), GITHUB_STEP_SUMMARY=str(self.summary)))
         self.removed = stack.enter_context(mock.patch.object(
             run_spxbench_suite, "request_spxbench", return_value=(200, {"versions": []})))
         self.request = stack.enter_context(mock.patch.object(SpxbenchSuiteGate, "request"))
@@ -543,54 +515,20 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
             "summary": "passed" if passed else "failed",
             "cases": [{"name": "smoke", "status": "pass" if passed else "fail"}],
         }, status="success" if passed else "failed")
-        self.request.side_effect = [(200, {"suites": [{"id": 7, "name": "spx"}]}),
-                                    INSTALL_ACCEPTED, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED,
+        self.request.side_effect = [SUITE_LIST, INSTALL_ACCEPTED, INSTALL_SUCCEEDED, CANDIDATE_REGISTERED,
                                     (200, {"jobId": 11}), (200, job)]
         run_spxbench_suite.main()
 
-    def assert_cleanup_states(self, *states):
-        self.assertEqual(self.output.read_text().splitlines(),
-                         [f"prerelease_cleanup_pending={str(state).lower()}" for state in states])
-
-    def assert_report(self, *, regression, runtime, prerelease):
+    def assert_report(self, *, regression, runtime):
         report = self.summary.read_text()
         self.assertIn(f"Regression: **{regression}**", report)
         self.assertIn(f"spxbench candidate: **{runtime}**", report)
-        self.assertIn(f"GitHub prerelease: **{prerelease}**", report)
+        self.assertIn("[123](https://github.com/goplus/spx/actions/runs/42/artifacts/123)", report)
 
-    def test_creation_failure_still_cleans_up_and_preserves_original_error(self):
-        self.created.side_effect = SpxbenchSuiteError("release creation failed")
-        for deletion_error, states in ((None, [True, False]), ("release not found", [True])):
-            with self.subTest(deletion_error=deletion_error):
-                self.output.write_text("")
-                self.deleted.reset_mock()
-                self.deleted.return_value = deletion_error
-                with self.assertRaisesRegex(SpxbenchSuiteError, "release creation failed"):
-                    run_spxbench_suite.main()
-                self.deleted.assert_called_once_with(f"v{VERSION}")
-                self.assert_cleanup_states(*states)
-
-    def test_prerelease_cleanup_failure_does_not_fail_passing_suite(self):
-        self.deleted.return_value = "permission denied"
+    def test_candidate_is_pinned_across_install_and_run(self):
         self.run_suite()
-        self.assert_cleanup_states(True, False, True)
-        self.assert_report(regression="passed", runtime="removed", prerelease="failed")
-        self.assertIn("permission denied", self.summary.read_text())
-
-    def test_candidate_is_pinned_across_release_install_and_run(self):
-        def remove(*args, **kwargs):
-            self.assert_cleanup_states(True, False)
-            return 200, {"versions": []}
-
-        self.created.side_effect = lambda *args: self.assert_cleanup_states(True)
-        self.removed.side_effect = remove
-        self.deleted.side_effect = lambda tag: self.assert_cleanup_states(True, False, True)
-        self.run_suite()
-        self.assert_cleanup_states(True, False, True, False)
-        self.assert_report(regression="passed", runtime="removed", prerelease="deleted")
+        self.assert_report(regression="passed", runtime="removed")
         self.assertIn("/__e2e?job=11", self.summary.read_text())
-        self.created.assert_called_once_with(f"v{VERSION}", str(self.archive), COMMIT)
-        self.deleted.assert_called_once_with(f"v{VERSION}")
         self.removed.assert_called_once_with("http://127.0.0.1/api/runtime-versions", "t", method="POST",
                                             payload={"action": "remove", "kind": "spx", "version": VERSION},
                                             timeout=mock.ANY)
@@ -598,37 +536,31 @@ class CandidateReleaseCleanupTest(unittest.TestCase):
         self.assertEqual(self.request.call_args_list[4],
                          mock.call(RUN_PATH, method="PUT"))
 
-    def test_install_failure_retains_candidate_and_prerelease(self):
-        def request(path, **kwargs):
-            if path == "/api/suites":
-                return 200, {"suites": [{"id": 7, "name": "spx"}]}
-            self.assertEqual(path, "/api/runtime-versions/install")
-            self.assert_cleanup_states(True, False)
-            return 403, "forbidden"
+    def test_pr_candidate_uses_tested_merge_instead_of_workflow_commit(self):
+        with mock.patch.dict(os.environ, {"CANDIDATE_SHA": COMMIT, "GITHUB_SHA": "f" * 40}):
+            self.run_suite()
+        self.assertEqual(self.request.call_args_list[1], INSTALL_REQUEST)
 
-        self.request.side_effect = request
+    def test_install_failure_skips_candidate_removal(self):
+        self.request.side_effect = [SUITE_LIST, (403, "forbidden")]
         with self.assertRaisesRegex(SpxbenchSuiteError, "install request failed: HTTP 403"):
             run_spxbench_suite.main()
-        self.assert_cleanup_states(True, False)
-        self.assert_report(regression="not completed", runtime="retained", prerelease="retained")
+        self.assertEqual(self.request.call_args_list, [mock.call("/api/suites"), INSTALL_REQUEST])
+        self.assert_report(regression="not completed", runtime="retained")
         self.removed.assert_not_called()
-        self.deleted.assert_not_called()
 
-    def test_failed_suite_retains_runtime_and_prerelease(self):
+    def test_failed_suite_retains_runtime(self):
         with self.assertRaisesRegex(SpxbenchSuiteError, "failed suite"):
             self.run_suite(passed=False)
-        self.assert_cleanup_states(True, False)
-        self.assert_report(regression="failed", runtime="retained", prerelease="retained")
+        self.assert_report(regression="failed", runtime="retained")
         self.removed.assert_not_called()
-        self.deleted.assert_not_called()
 
-    def test_remove_failure_retains_prerelease(self):
-        self.removed.return_value = (500, "unavailable")
+    def test_remove_failure_warns_without_failing_suite(self):
+        self.removed.return_value = (500, "temporarily\nunavailable")
         self.run_suite()
-        self.assert_cleanup_states(True, False)
-        self.assert_report(regression="passed", runtime="failed", prerelease="retained")
-        self.assertIn("HTTP 500", self.summary.read_text())
-        self.deleted.assert_not_called()
+        self.assert_report(regression="passed", runtime="failed")
+        self.assertIn("Cleanup warning: spxbench candidate removal: remove candidate failed: HTTP 500: "
+                      "temporarily unavailable", self.summary.read_text())
 
 
 if __name__ == "__main__":

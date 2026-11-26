@@ -1,4 +1,6 @@
 name: CI
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('CI for PR #{0} into {1}', github.event.pull_request.number, github.base_ref) || '' }}
 on:
   push:
     branches-ignore: ['gh-readonly-queue/**']
@@ -73,10 +75,19 @@ jobs:
     uses: ./.github/workflows/test_godot_module.yml
 
   build-web:
-    name: Build Web bundle with published runtime
-    needs: [check-source, resolve-runtime]
-    if: needs.resolve-runtime.outputs.runtime_state == 'ready'
+    name: Build Web bundle
+    needs: [check-source, resolve-runtime, test-godot-module]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.check-source.result == 'success' &&
+        needs.resolve-runtime.result == 'success' &&
+        (needs.resolve-runtime.outputs.runtime_state == 'ready' || needs.test-godot-module.result == 'success')
+      }}
     uses: ./.github/workflows/build_web.yml
+    with:
+      engine_artifacts: ${{ needs.test-godot-module.result == 'success' }}
+      upload_candidate: ${{ github.repository == 'goplus/spx' && github.event_name == 'pull_request' && github.base_ref == 'dev' }}
 
   ci-gate:
     if: ${{ !cancelled() }}

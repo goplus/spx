@@ -39,6 +39,8 @@ Changes to this path must be coordinated with the Godot consumers.
 | `check_source.yml` | Check generated source, syntax, contracts, and native/Web tests |
 | `build_go.yml` | Build Go on each OS and test platform-specific behavior |
 | `build_web.yml` / `test_godot_module.yml` | Build with a published Web runtime / test the current module against locked Godot and produce the C++ coverage artifact |
+| `run_spxbench_suite.yml` | Check the current Web bundle against recorded spxbench baselines for CI and release dry runs |
+| `spxbench_pr.yml` | Consume completed PR CI artifacts with trusted scripts and report the `spxbench` status on PRs targeting `dev`, including forks |
 | `release.yml` | Order publication, hold the publication concurrency lock, and provide npm's top-level OIDC identity |
 | `build_release.yml` | Plan the selected packages, build runtime artifacts, and require all selected jobs to succeed before assembly |
 | `build_runtime_pack.yml` / `package_*.yml` | Build the runtime pack / package selected products |
