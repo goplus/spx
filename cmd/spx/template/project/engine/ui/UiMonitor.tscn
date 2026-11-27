@@ -1,9 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://bsaqlmdsvus4d"]
+[gd_scene load_steps=14 format=3 uid="uid://bsaqlmdsvus4d"]
 
 [ext_resource type="Texture2D" uid="uid://dtaph1d474hyg" path="res://engine/textures/monitor/frame_name.png" id="1_y7j7f"]
 [ext_resource type="Texture2D" uid="uid://d1544egog82vl" path="res://engine/textures/monitor/frame_value.png" id="2_rbnwe"]
 
 [ext_resource type="Texture2D" path="res://engine/textures/monitor/slider_thumb.svg" id="3_slider_thumb"]
+[ext_resource type="FontFile" path="res://engine/fonts/default.ttf" id="4_default_font"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slider_track"]
 bg_color = Color(0.8, 0.8, 0.8, 1)
@@ -31,6 +32,7 @@ expand_margin_right = 26.0
 modulate_color = Color(0.996078, 1, 1, 1)
 
 [sub_resource type="Theme" id="Theme_gvmbf"]
+default_font = ExtResource("4_default_font")
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_sbh8w"]
 
@@ -91,6 +93,7 @@ visible = false
 layout_mode = 3
 mouse_filter = 2
 anchors_preset = 0
+theme = SubResource("Theme_gvmbf")
 
 [node name="ScratchList" type="SpxListMonitor" parent="."]
 visible = false

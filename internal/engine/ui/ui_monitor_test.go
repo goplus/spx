@@ -318,6 +318,11 @@ func TestUiMonitorSceneContract(t *testing.T) {
 	if got := monitorSceneProperty(parsed.nodes["."], "visible"); got != "false" {
 		t.Errorf("monitor root visibility = %q, want false", got)
 	}
+	monitorTheme := monitorSceneResource(t, parsed, parsed.nodes["."], "theme")
+	fontID := monitorSceneReference(t, monitorSceneProperty(monitorTheme, "default_font"), "ExtResource")
+	if external := parsed.externals[fontID]; !strings.Contains(external, `path="res://engine/fonts/default.ttf"`) {
+		t.Errorf("monitor default font = %q, want engine default.ttf", external)
+	}
 	for _, path := range []string{"ValueOnly", "ScratchBG", "ScratchValueOnly", "ScratchList", "ScratchSlider"} {
 		if got := monitorSceneProperty(parsed.nodes[path], "visible"); got != "false" {
 			t.Errorf("%s initial visibility = %q, want false", path, got)
