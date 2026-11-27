@@ -34,6 +34,7 @@
 #include "scene/gui/control.h"
 #include "scene/gui/scroll_bar.h"
 #include "scene/resources/style_box_flat.h"
+#include "scene/resources/text_paragraph.h"
 
 // Scratch's player list monitor. Drawing only the visible rows keeps the node
 // count and text shaping cost independent of the list length.
@@ -44,11 +45,14 @@ class SpxListMonitor : public Control {
 	static constexpr int BAR_HEIGHT = 22;
 	static constexpr int FONT_SIZE = 12;
 	String label;
+	Ref<TextParagraph> title;
+	float title_height = BAR_HEIGHT;
 	PackedStringArray items;
 	VScrollBar *scroll = nullptr;
 	Ref<StyleBoxFlat> panel_style;
 	Ref<StyleBoxFlat> row_style;
 
+	void update_title();
 	void update_scroll();
 	void scroll_changed(double p_value);
 	void draw_text(const String &p_text, const Rect2 &p_rect, const Color &p_color, HorizontalAlignment p_alignment = HORIZONTAL_ALIGNMENT_LEFT);

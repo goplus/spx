@@ -40,6 +40,9 @@ SpxListMonitor::SpxListMonitor() {
 	set_custom_minimum_size(Size2(100, 60));
 	set_clip_contents(true);
 	set_mouse_filter(MOUSE_FILTER_STOP);
+	title.instantiate();
+	title->set_alignment(HORIZONTAL_ALIGNMENT_CENTER);
+	title->set_break_flags(TextServer::BREAK_MANDATORY | TextServer::BREAK_WORD_BOUND | TextServer::BREAK_ADAPTIVE);
 	panel_style.instantiate();
 	panel_style->set_bg_color(Color(0.898039, 0.941176, 1));
 	panel_style->set_border_width_all(1);
@@ -58,21 +61,37 @@ SpxListMonitor::SpxListMonitor() {
 }
 
 void SpxListMonitor::set_items(const String &p_label, const PackedStringArray &p_items, const Color &p_color) {
-	label = p_label;
+	if (label != p_label) {
+		label = p_label;
+		update_title();
+	}
 	items = p_items;
 	row_style->set_bg_color(p_color);
 	update_scroll();
 	queue_redraw();
 }
 
+void SpxListMonitor::update_title() {
+	title->clear();
+	title->set_width(MAX(0.0, get_size().x - 8));
+	if (!label.is_empty()) {
+		title->add_string(label, get_theme_font("font", "Label"), FONT_SIZE);
+	}
+	title_height = BAR_HEIGHT;
+	if (title->get_line_count() > 1) {
+		title_height += Math::ceil(title->get_size().y - title->get_line_size(0).y);
+	}
+}
+
 void SpxListMonitor::update_scroll() {
-	const double page = MAX(0.0, get_size().y - BAR_HEIGHT * 2);
+	const double page = MAX(0.0, get_size().y - title_height - BAR_HEIGHT);
 	const double total = double(items.size()) * ROW_HEIGHT;
-	scroll->set_position(Vector2(get_size().x - scroll->get_combined_minimum_size().x - 1, BAR_HEIGHT));
-	scroll->set_size(Size2(scroll->get_combined_minimum_size().x, page));
+	const Size2 scroll_min_size = scroll->get_combined_minimum_size();
+	scroll->set_position(Vector2(get_size().x - scroll_min_size.x - 1, title_height));
+	scroll->set_size(Size2(scroll_min_size.x, page));
 	scroll->set_max(MAX(total, page));
 	scroll->set_page(page);
-	scroll->set_visible(total > page);
+	scroll->set_visible(page > 0 && page >= scroll_min_size.y && total > page);
 }
 
 void SpxListMonitor::scroll_changed(double p_value) {
@@ -94,6 +113,7 @@ void SpxListMonitor::_notification(int p_what) {
 		case NOTIFICATION_RESIZED:
 		case NOTIFICATION_THEME_CHANGED:
 		case NOTIFICATION_TRANSLATION_CHANGED:
+			update_title();
 			update_scroll();
 			queue_redraw();
 			break;
@@ -105,22 +125,23 @@ void SpxListMonitor::_notification(int p_what) {
 			const float index_width = get_theme_font("font", "Label")->get_string_size(itos(items.size()), HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x + 10;
 			const double offset = scroll->get_value();
 			const int first = int(offset / ROW_HEIGHT);
-			const int end = MIN(items.size(), int(Math::ceil((offset + size.y - BAR_HEIGHT * 2) / ROW_HEIGHT)));
+			const float viewport_height = MAX(0.0f, size.y - title_height - BAR_HEIGHT);
+			const int end = MIN(items.size(), int(Math::ceil((offset + viewport_height) / ROW_HEIGHT)));
 			for (int i = first; i < end; i++) {
-				const float y = BAR_HEIGHT + i * double(ROW_HEIGHT) - offset;
+				const float y = title_height + i * double(ROW_HEIGHT) - offset;
 				draw_text(itos(i + 1), Rect2(2, y, index_width - 4, ROW_HEIGHT), text_color, HORIZONTAL_ALIGNMENT_RIGHT);
 				const Rect2 row(index_width + 2, y + 1, MAX(0.0f, right - index_width - 5), ROW_HEIGHT - 2);
 				draw_style_box(row_style, row);
 				draw_text(items[i].get_slice("\n", 0).get_slice("\r", 0), row.grow_individual(-5, 0, -5, 0), Color(1, 1, 1));
 			}
 			if (items.is_empty()) {
-				draw_text(atr("(empty)"), Rect2(2, BAR_HEIGHT + 3, right - 4, ROW_HEIGHT), text_color, HORIZONTAL_ALIGNMENT_CENTER);
+				draw_text(atr("(empty)"), Rect2(2, title_height + 3, right - 4, ROW_HEIGHT), text_color, HORIZONTAL_ALIGNMENT_CENTER);
 			}
 			// Opaque bars also clip partially visible rows at the viewport edges.
-			draw_rect(Rect2(1, 1, size.x - 2, BAR_HEIGHT - 1), Color(1, 1, 1));
+			draw_rect(Rect2(1, 1, size.x - 2, title_height - 1), Color(1, 1, 1));
+			draw_line(Vector2(1, title_height), Vector2(size.x - 1, title_height), Color(0, 0, 0, 0.15));
+			title->draw(get_canvas_item(), Vector2(4, (title_height - title->get_size().y) / 2), text_color);
 			draw_rect(Rect2(1, size.y - BAR_HEIGHT, size.x - 2, BAR_HEIGHT - 1), Color(1, 1, 1));
-			draw_line(Vector2(1, BAR_HEIGHT), Vector2(size.x - 1, BAR_HEIGHT), Color(0, 0, 0, 0.15));
-			draw_text(label, Rect2(4, 0, size.x - 8, BAR_HEIGHT), text_color, HORIZONTAL_ALIGNMENT_CENTER);
 			draw_text(atr("length %d").replace("%d", itos(items.size())), Rect2(4, size.y - BAR_HEIGHT, size.x - 8, BAR_HEIGHT), text_color, HORIZONTAL_ALIGNMENT_CENTER);
 			break;
 		}
