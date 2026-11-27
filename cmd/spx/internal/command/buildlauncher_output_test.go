@@ -19,7 +19,9 @@ package command
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -86,10 +88,24 @@ func TestResolveLauncherOutputProtectsBuildInputs(t *testing.T) {
 	}
 }
 
+func TestResolveLauncherOutputLongPath(t *testing.T) {
+	root := t.TempDir()
+	parent := root
+	for len(parent) <= 300 {
+		parent = filepath.Join(parent, "launcher-output")
+	}
+	target := filepath.Join(parent, "game.exe")
+	writeCommandTestFile(t, target, "previous launcher")
+	inputs := launcherOutputInputs{ProjectDir: root, PackDir: "assets"}
+	if _, err := resolveLauncherOutput(inputs, target); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 	root := t.TempDir()
 	realParent := filepath.Join(root, "real")
-	if err := os.Mkdir(realParent, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(realParent, "child"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	linkParent := filepath.Join(root, "alias")
@@ -97,8 +113,10 @@ func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 		t.Skipf("symlink unavailable: %v", err)
 	}
 	inputs := launcherOutputInputs{ProjectDir: root, PackDir: "assets"}
-	if _, err := resolveLauncherOutput(inputs, filepath.Join(linkParent, "launcher")); err == nil || !strings.Contains(err.Error(), "symlink") {
-		t.Fatalf("symlink parent error = %v", err)
+	for _, parent := range []string{linkParent, filepath.Join(linkParent, "child")} {
+		if _, err := resolveLauncherOutput(inputs, filepath.Join(parent, "launcher")); err == nil || !strings.Contains(err.Error(), "symlink") {
+			t.Fatalf("symlink parent %q error = %v", parent, err)
+		}
 	}
 
 	target := filepath.Join(root, "target")
@@ -109,8 +127,35 @@ func TestResolveLauncherOutputRejectsSymlinkParentAndTarget(t *testing.T) {
 	if err := os.Symlink(target, outputLink); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	if _, err := resolveLauncherOutput(inputs, outputLink); err == nil || !strings.Contains(err.Error(), "regular file") {
-		t.Fatalf("symlink output error = %v", err)
+	want := "regular file"
+	if runtime.GOOS == "windows" {
+		want = "reparse point"
+	}
+	if _, err := resolveLauncherOutput(inputs, outputLink); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("symlink output error = %v, want %q", err, want)
+	}
+}
+
+func TestResolveLauncherOutputRejectsJunction(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("directory junctions require Windows")
+	}
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "target"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("cmd.exe", "/d", "/c", "mklink", "/J", "junction", "target")
+	cmd.Dir = root
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("create junction: %v: %s", err, output)
+	}
+	junction := filepath.Join(root, "junction")
+	inputs := launcherOutputInputs{ProjectDir: root, PackDir: "assets"}
+	if _, err := resolveLauncherOutput(inputs, junction); err == nil || !strings.Contains(err.Error(), "reparse point") {
+		t.Fatalf("junction output error = %v", err)
+	}
+	if _, err := resolveLauncherOutput(inputs, filepath.Join(junction, "game.exe")); err == nil || !strings.Contains(err.Error(), "output parent") {
+		t.Fatalf("junction parent error = %v", err)
 	}
 }
 
@@ -368,10 +413,14 @@ func TestCommitLauncherOutputRevalidatesDestinationAndCleanup(t *testing.T) {
 				}
 				want = "clean staging directory"
 			}
-			if err := commitLauncherOutput(stage, final, launcherOutputProtection{}); err == nil || !strings.Contains(err.Error(), want) {
+			err := commitLauncherOutput(stage, final, launcherOutputProtection{})
+			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("commit error = %v, want %q", err, want)
 			}
 			if kind == "protected destination" {
+				if !errors.Is(err, os.ErrPermission) {
+					t.Fatalf("failed commit lost the permission error: %v", err)
+				}
 				if got := readTestFile(t, final); got != "previous launcher" {
 					t.Fatalf("failed commit replaced destination: %q", got)
 				}

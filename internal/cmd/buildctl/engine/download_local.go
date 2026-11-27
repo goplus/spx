@@ -34,43 +34,40 @@ import (
 const maxRuntimeManifestBytes int64 = 1 << 20
 
 func fetchEngineAsset(env engineDownloadEnv, name, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
+	var verify func(string) error
+	if env.manifest != nil {
+		verify = func(path string) error { return env.manifest.VerifyAsset(name, path) }
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".verified-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Remove(tmpPath); err != nil {
-		return err
-	}
-	defer os.Remove(tmpPath)
-
-	if env.assetDir == "" {
-		if err := fetchURLToFile(env.urlPrefix+name, tmpPath); err != nil {
-			return err
-		}
-	} else {
+	if env.assetDir != "" {
 		src, err := findLocalEngineAsset(env.assetDir, name)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(os.Stdout, "Installing local engine asset %s -> %s\n", src, dst)
-		if err := copyEngineAssetAtomically(src, tmpPath); err != nil {
-			return err
-		}
+		return copyEngineAssetAtomically(src, dst, verify)
 	}
 
-	if env.manifest != nil {
-		if err := env.manifest.VerifyAsset(name, tmpPath); err != nil {
+	// The HTTP downloader can report a response close error after writing its
+	// output. Wait for it to finish before publishing even without a manifest.
+	parent := filepath.Dir(dst)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	dir, err := os.MkdirTemp(parent, ".verified-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "download")
+	if err := fetchURLToFile(env.urlPrefix+name, path); err != nil {
+		return err
+	}
+	if verify != nil {
+		if err := verify(path); err != nil {
 			return err
 		}
 	}
-	return shared.ReplaceFile(tmpPath, dst)
+	return fileutil.ReplaceFile(path, dst)
 }
 
 func setLocalAssetDir(env *engineDownloadEnv, repoRoot, assetDir string, allowMissingManifest bool) error {
@@ -193,48 +190,31 @@ func findLocalEngineAsset(assetDir, name string) (string, error) {
 	}
 }
 
-func copyEngineAssetAtomically(src, dst string) (err error) {
-	input, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
+func copyEngineAssetAtomically(src, dst string, verify func(string) error) error {
+	return fileutil.WriteFileAtomic(dst, func(output *os.File) error {
+		input, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		// Windows requires this handle to close before replacing a destination
+		// that refers to the same file, including through a hard link.
+		defer input.Close()
+		return writeEngineAsset(output, input)
+	}, verify)
+}
+
+func writeEngineAsset(output, input *os.File) error {
 	info, err := input.Stat()
 	if err != nil {
 		return err
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("engine asset is not a regular file: %s", src)
+		return fmt.Errorf("engine asset is not a regular file: %s", input.Name())
 	}
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	output, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := output.Name()
-	defer func() {
-		if output != nil {
-			_ = output.Close()
-		}
-		if err != nil {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
 	if _, err := io.Copy(output, input); err != nil {
 		return err
 	}
-	if err := output.Chmod(info.Mode().Perm()); err != nil {
-		return err
-	}
-	if err := output.Close(); err != nil {
-		return err
-	}
-	output = nil
-	return shared.ReplaceFile(tmpPath, dst)
+	return output.Chmod(info.Mode().Perm())
 }
 
 func linkOrCopyFile(src, dst string) error {

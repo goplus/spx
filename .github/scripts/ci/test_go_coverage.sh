@@ -48,13 +48,15 @@ case "${1:-}" in
   windows)
     require_native_platform windows
     covered_test coverage-buildctl-windows.out -v \
-      -run '^Test(ReplaceFileWindows|Windows.*|FetchURLToFileReplacesExistingDestination|SConsEnvironmentCommands|SetupJDKWindowsRequiresManualInstallation)$' \
+      -run '^Test(Windows.*|FetchURLToFileReplacesExistingDestination|SConsEnvironmentCommands|SetupJDKWindowsRequiresManualInstallation)$' \
       ./internal/cmd/buildctl/shared ./internal/cmd/buildctl/tool
     covered_test coverage-engine-windows.out -v \
-      -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$' \
+      -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner|FetchEngineAssetWithAliasedDestination)$' \
       ./internal/cmd/buildctl/engine
     covered_test coverage-fileutil-windows.out -v \
-      -run '^TestReplaceRegularFile' ./internal/base/fileutil
+      -run '^Test(ReplaceRegularFile|ReplaceFile|WindowsPath|WriteFileAtomic)' ./internal/base/fileutil
+    covered_test coverage-command-windows.out -v \
+      -run '^TestResolveLauncherOutput(LongPath|RejectsSymlinkParentAndTarget|RejectsJunction)$' ./cmd/spx/internal/command
     covered_test coverage-interpsession-windows.out -v \
       -run '^Test(PrepareSession|ReplaceRootFile.*)$' ./internal/interpsession
     covered_test coverage-runtimebundle-windows.out -v \

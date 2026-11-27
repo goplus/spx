@@ -865,7 +865,7 @@ func TestDownloadRuntimePackKeepsLocalArchiveInCache(t *testing.T) {
 }
 
 func TestDownloadRuntimePackPreservesInstalledFilesOnIOFailure(t *testing.T) {
-	for _, failure := range []string{"unreadable archive", "read-only cache", "occupied extension destination", "occupied pack destination"} {
+	for _, failure := range []string{"unreadable archive", "read-only cache", "read-only install directory", "occupied extension destination", "occupied pack destination"} {
 		t.Run(failure, func(t *testing.T) {
 			env := newEngineDownloadFixture(t, "")
 			archive := filepath.Join(env.assetDir, release.RuntimeAssetZipName)
@@ -891,8 +891,11 @@ func TestDownloadRuntimePackPreservesInstalledFilesOnIOFailure(t *testing.T) {
 					t.Skip("requires POSIX permissions enforced for an unprivileged user")
 				}
 				path, mode := archive, os.FileMode(0)
-				if failure == "read-only cache" {
+				switch failure {
+				case "read-only cache":
 					path, mode = env.cacheDir, 0o500
+				case "read-only install directory":
+					path, mode = env.goBinDir, 0o500
 				}
 				info, err := os.Stat(path)
 				if err != nil {

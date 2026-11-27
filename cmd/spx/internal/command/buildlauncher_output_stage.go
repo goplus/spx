@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 func stageLauncherOutput(final string) (string, func(), error) {
@@ -75,7 +77,7 @@ func commitLauncherOutput(stage, final string, protection launcherOutputProtecti
 	if err := validateLauncherOutputTarget(final); err != nil {
 		return err
 	}
-	if err := commitLauncherOutputPlatform(stage, final); err != nil {
+	if err := fileutil.ReplaceFile(stage, final); err != nil {
 		return fmt.Errorf("buildlauncher: install output: %w", err)
 	}
 	if err := removeLauncherStageDir(stage, final); err != nil {

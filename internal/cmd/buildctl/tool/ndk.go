@@ -311,7 +311,7 @@ func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir st
 	return "", lastErr
 }
 
-func persistNDKArchive(src, dst string, archive androidNDKArchive) (_ string, err error) {
+func persistNDKArchive(src, dst string, archive androidNDKArchive) (string, error) {
 	if err := archive.validate(); err != nil {
 		return "", err
 	}
@@ -323,43 +323,25 @@ func persistNDKArchive(src, dst string, archive androidNDKArchive) (_ string, er
 	if info.Size() != archive.size {
 		return "", invalidNDKArchivef("size %d does not match locked size %d", info.Size(), archive.size)
 	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return "", err
-	}
-	output, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
-	if err != nil {
-		return "", err
-	}
-	tmpPath := output.Name()
-	defer func() {
-		if output != nil {
-			_ = output.Close()
-		}
-		if err != nil {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-	copied, err := io.Copy(output, io.LimitReader(input, archive.size+1))
-	if err != nil {
-		return "", err
-	}
-	if copied != archive.size {
-		return "", invalidNDKArchivef("size %d does not match locked size %d", copied, archive.size)
-	}
-	if err := output.Sync(); err != nil {
-		return "", err
-	}
-	if err := output.Close(); err != nil {
-		return "", err
-	}
-	output = nil
-	if err := verifyNDKArchive(tmpPath, archive); err != nil {
-		return "", err
-	}
-	if err := shared.ReplaceFile(tmpPath, dst); err != nil {
+	if err := writeNDKArchive(dst, input, archive); err != nil {
 		return "", err
 	}
 	return dst, nil
+}
+
+func writeNDKArchive(dst string, input io.Reader, archive androidNDKArchive) error {
+	return fileutil.WriteFileAtomic(dst, func(output *os.File) error {
+		copied, err := io.Copy(output, io.LimitReader(input, archive.size+1))
+		if err != nil {
+			return err
+		}
+		if copied != archive.size {
+			return invalidNDKArchivef("size %d does not match locked size %d", copied, archive.size)
+		}
+		return output.Sync()
+	}, func(path string) error {
+		return verifyNDKArchive(path, archive)
+	})
 }
 
 func verifyNDKArchive(path string, archive androidNDKArchive) error {

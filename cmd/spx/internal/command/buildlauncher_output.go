@@ -162,13 +162,11 @@ func launcherPathWithinFilesystem(root, target string) (bool, error) {
 func validateLauncherOutputTarget(path string) error {
 	info, err := os.Lstat(path)
 	if err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return fmt.Errorf("buildlauncher: output is not a regular file: %q", path)
-		}
-		if reparse, reparseErr := launcherOutputPathIsReparse(path); reparseErr != nil {
-			return fmt.Errorf("buildlauncher: inspect output %q: %w", path, reparseErr)
-		} else if reparse {
+		if launcherOutputIsReparse(info) {
 			return fmt.Errorf("buildlauncher: output is a reparse point: %q", path)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("buildlauncher: output is not a regular file: %q", path)
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("buildlauncher: inspect output %q: %w", path, err)
@@ -176,7 +174,7 @@ func validateLauncherOutputTarget(path string) error {
 	return nil
 }
 
-// canonicalizeLauncherOutputAlias permits only macOS system aliases.
+// canonicalizeLauncherOutputAlias handles macOS system aliases and Windows short names.
 func canonicalizeLauncherOutputAlias(path string) (string, error) {
 	parent := filepath.Dir(path)
 	existing := parent
@@ -217,25 +215,20 @@ func validateLauncherOutputParent(path string, allowMissing bool) error {
 		return fmt.Errorf("buildlauncher: resolve output parent: %w", err)
 	}
 	absolute = filepath.Clean(absolute)
-	if err := validateLauncherExistingPath(absolute, allowMissing); err != nil {
-		return err
-	}
-	return nil
+	return validateLauncherExistingPath(absolute, allowMissing)
 }
 
 func validateLauncherExistingPath(path string, allowMissing bool) error {
 	info, err := os.Lstat(path)
 	if err == nil {
+		if launcherOutputIsReparse(info) {
+			return fmt.Errorf("buildlauncher: output parent contains a reparse point: %q", path)
+		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("buildlauncher: output parent contains a symlink: %q", path)
 		}
 		if !info.IsDir() {
 			return fmt.Errorf("buildlauncher: output parent is not a directory: %q", path)
-		}
-		if reparse, reparseErr := launcherOutputPathIsReparse(path); reparseErr != nil {
-			return fmt.Errorf("buildlauncher: inspect output parent %q: %w", path, reparseErr)
-		} else if reparse {
-			return fmt.Errorf("buildlauncher: output parent contains a reparse point: %q", path)
 		}
 		parent := filepath.Dir(path)
 		if parent == path {

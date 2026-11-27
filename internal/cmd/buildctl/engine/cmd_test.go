@@ -334,10 +334,11 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 	for _, source := range []string{"local", "http"} {
 		t.Run(source, func(t *testing.T) {
 			for _, tt := range []struct {
-				name, content, message string
-				unpublished, missing   bool
+				name, content, message           string
+				unpublished, missing, noManifest bool
 			}{
 				{name: "verified", content: verified},
+				{name: "without manifest", content: "unverified", noManifest: true},
 				{name: "wrong size", content: "short", message: "size ="},
 				{name: "wrong digest", content: "tampered", message: "SHA-256 ="},
 				{name: "unpublished asset", content: verified, unpublished: true, message: "not present in the manifest"},
@@ -346,7 +347,9 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 				t.Run(tt.name, func(t *testing.T) {
 					env := newEngineDownloadFixture(t, "")
 					manifest := newEngineAssetManifestFixture(t, verified)
-					env.manifest = &manifest
+					if !tt.noManifest {
+						env.manifest = &manifest
+					}
 					name := manifest.Assets[0].Name
 					if tt.unpublished {
 						name = "unpublished.zip"
@@ -388,7 +391,7 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 					if source == "local" && tt.missing && !errors.Is(err, os.ErrNotExist) {
 						t.Errorf("missing local asset error = %v, want ErrNotExist", err)
 					}
-					want := verified
+					want := tt.content
 					if wantFailure {
 						want = "installed"
 					}
@@ -403,6 +406,73 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 					}
 				})
 			}
+		})
+	}
+}
+
+func TestFetchEngineAssetWithAliasedDestination(t *testing.T) {
+	const content = "verified"
+	for _, alias := range []string{"same path", "hard link"} {
+		t.Run(alias, func(t *testing.T) {
+			env := newEngineDownloadFixture(t, "")
+			env.assetDir = env.templateDir
+			manifest := newEngineAssetManifestFixture(t, "tampered")
+			env.manifest = &manifest
+			name := manifest.Assets[0].Name
+			src := filepath.Join(env.assetDir, name)
+			mustWriteFile(t, src, []byte(content))
+			dst := src
+			if alias == "hard link" {
+				dst = filepath.Join(env.goBinDir, name)
+				if err := os.Link(src, dst); err != nil {
+					t.Skipf("hard links unavailable: %v", err)
+				}
+			}
+			before, err := os.Stat(dst)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := fetchEngineAsset(env, name, dst); err == nil || !strings.Contains(err.Error(), "SHA-256 =") {
+				t.Fatalf("mismatched manifest error = %v, want digest mismatch", err)
+			}
+			if after, err := os.Stat(dst); err != nil || !os.SameFile(before, after) {
+				t.Fatalf("failed verification replaced %s: %v", dst, err)
+			}
+			want := map[string]string{src: content, dst: content}
+			assertEngineDownloadFiles(t, env, want)
+
+			manifest = newEngineAssetManifestFixture(t, content)
+			if err := fetchEngineAsset(env, name, dst); err != nil {
+				t.Fatal(err)
+			}
+			assertEngineDownloadFiles(t, env, want)
+		})
+	}
+}
+
+func TestFetchEngineAssetCannotStageHTTPDownload(t *testing.T) {
+	for _, failure := range []string{"file parent", "read-only parent"} {
+		t.Run(failure, func(t *testing.T) {
+			env := newEngineDownloadFixture(t, "")
+			env.assetDir = ""
+			installed := filepath.Join(env.goBinDir, "asset.zip")
+			mustWriteFile(t, installed, []byte("installed"))
+			dst := filepath.Join(installed, "asset.zip")
+			if failure == "read-only parent" {
+				if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+					t.Skip("requires POSIX permissions enforced for an unprivileged user")
+				}
+				if err := os.Chmod(env.goBinDir, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(env.goBinDir, 0o755) })
+				dst = installed
+			}
+			var pathErr *os.PathError
+			if err := fetchEngineAsset(env, "asset.zip", dst); !errors.As(err, &pathErr) || pathErr.Op != "mkdir" {
+				t.Fatalf("fetchEngineAsset error = %v, want directory creation error", err)
+			}
+			assertEngineDownloadFiles(t, env, map[string]string{installed: "installed"})
 		})
 	}
 }
@@ -432,7 +502,7 @@ func TestCopyEngineAssetAtomically(t *testing.T) {
 			default:
 				mustWriteFile(t, preserved, []byte("installed"))
 			}
-			err := copyEngineAssetAtomically(src, dst)
+			err := copyEngineAssetAtomically(src, dst, nil)
 			wantFailure := scenario != "replace"
 			if (err != nil) != wantFailure {
 				t.Fatalf("copyEngineAssetAtomically error = %v, want failure = %v", err, wantFailure)
@@ -468,6 +538,30 @@ func TestCopyEngineAssetAtomically(t *testing.T) {
 				t.Errorf("output directory = %v, err = %v; want no temporary files", entries, err)
 			}
 		})
+	}
+}
+
+func TestWriteEngineAssetReportsSourceErrors(t *testing.T) {
+	dir := t.TempDir()
+	output, err := os.Create(filepath.Join(dir, "output"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer output.Close()
+	src := filepath.Join(dir, "source")
+	mustWriteFile(t, src, []byte("engine"))
+	input, err := os.OpenFile(src, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeEngineAsset(output, input); err == nil {
+		t.Error("writeEngineAsset accepted a write-only source")
+	}
+	if err := input.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeEngineAsset(output, input); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("writeEngineAsset with closed source = %v, want ErrClosed", err)
 	}
 }
 
