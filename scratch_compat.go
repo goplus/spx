@@ -16,7 +16,47 @@
 
 package spx
 
-import "github.com/goplus/spx/v4/internal/core/scratch"
+import (
+	"strconv"
+
+	spxlog "github.com/goplus/spx/v4/internal/base/log"
+	"github.com/goplus/spx/v4/internal/core/scratch"
+)
+
+// ResolveCostumeIndex resolves a costume name or 1-based integer string to an index.
+//
+// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex] instead.
+func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("ResolveCostumeIndex: sprite=%s, costume=%v", p.name, costume)
+	}
+	if idx := p.findCostume(costume); idx >= 0 {
+		return idx
+	}
+	number, err := strconv.Atoi(costume)
+	if err != nil {
+		return -1
+	}
+	return p.ResolveCostumeNumber(number)
+}
+
+// ResolveCostumeNumber wraps a 1-based Scratch costume number over this sprite's costumes.
+func (p *SpriteImpl) ResolveCostumeNumber(number int) int {
+	return scratch.WrapCostumeNumber(number, len(p.costumes))
+}
+
+// ResolveBackdropIndex resolves a backdrop name, action, or numeric selector.
+//
+// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveBackdropIndex] instead.
+func (p *Game) ResolveBackdropIndex(backdrop string) int {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("ResolveBackdropIndex: backdrop=%v", backdrop)
+	}
+	if idx := p.findCostume(backdrop); idx >= 0 {
+		return idx
+	}
+	return scratch.ParseBackdropIndex(backdrop, len(p.costumes))
+}
 
 // List stores values using 0-based indexes.
 //

@@ -84,6 +84,7 @@ func init() {
 			"reflect":       "reflect",
 			"runtime/debug": "debug",
 			"slices":        "slices",
+			"strconv":       "strconv",
 			"strings":       "strings",
 			"sync":          "sync",
 			"sync/atomic":   "atomic",

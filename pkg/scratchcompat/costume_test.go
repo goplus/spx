@@ -17,6 +17,7 @@
 package scratchcompat_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/goplus/spx/v4"
@@ -71,10 +72,30 @@ func TestResolveCostumeIndexPreservesMethodDispatch(t *testing.T) {
 	if got := scratchcompat.ResolveCostumeIndex(custom, "custom"); got != 23 || custom.costume != "custom" {
 		t.Fatalf("custom resolver = (%d, %q), want (23, custom)", got, custom.costume)
 	}
+	if got := scratchcompat.ResolveCostumeIndex(custom, -2); got != -1 || custom.costume != "custom" {
+		t.Fatalf("integer selector on string-only resolver = (%d, %q), want (-1, custom)", got, custom.costume)
+	}
 	override := &overridingCostumeSprite{}
 	var sprite spx.Sprite = override
 	if got := scratchcompat.ResolveCostumeIndex(sprite, "override"); got != 42 || override.costume != "override" {
 		t.Fatalf("sprite override = (%d, %q), want (42, override)", got, override.costume)
+	}
+}
+
+func TestResolveCostumeIndexTypedSelectors(t *testing.T) {
+	var sprite spx.Sprite = &overridingCostumeSprite{}
+	for _, tt := range []struct {
+		selector any
+		want     int
+	}{
+		{"-1", 42}, {-1, -2},
+		{spx.NewValue("-1"), 42}, {spx.NewValue(-1.0), -2},
+		{float32(-1), -2}, {float32(1.5), -1}, {1.5, -1},
+		{math.MaxInt, math.MaxInt - 1}, {uint64(math.MaxUint64), -1}, {math.MaxFloat64, -1},
+	} {
+		if got := scratchcompat.ResolveCostumeIndex(sprite, tt.selector); got != tt.want {
+			t.Errorf("ResolveCostumeIndex(%#v) = %d, want %d", tt.selector, got, tt.want)
+		}
 	}
 }
 

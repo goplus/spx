@@ -39,6 +39,7 @@ func init() {
 		Path: "github.com/goplus/spx/v4/pkg/scratchcompat",
 		Deps: map[string]string{
 			"github.com/goplus/spx/v4":                       "spx",
+			"github.com/goplus/spx/v4/internal/base/numeric": "numeric",
 			"github.com/goplus/spx/v4/internal/core/scratch": "scratch",
 			"github.com/goplus/spx/v4/internal/engine":       "engine",
 		},
@@ -162,7 +163,7 @@ func func_ResolveBackdropIndex(ctx ixgo.DirectCallContext) {
 }
 
 func func_ResolveCostumeIndex(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.ResolveCostumeIndex(ixgo.DirectCallArg[q.CostumeResolver](ctx, 0), ixgo.DirectCallArg[string](ctx, 1)))
+	ctx.SetResult(q.ResolveCostumeIndex(ixgo.DirectCallArg[q.CostumeResolver](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
 }
 
 func func_SetSoundEffect(ctx ixgo.DirectCallContext) {

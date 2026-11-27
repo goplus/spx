@@ -17,19 +17,11 @@
 package spx
 
 import (
-	"math"
-
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/base/log"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/core/scratch"
 	"github.com/goplus/spx/v4/internal/engine"
-)
-
-const (
-	resolvedBackdropNext   = math.MinInt
-	resolvedBackdropPrev   = math.MinInt + 1
-	resolvedBackdropRandom = math.MinInt + 2
 )
 
 // Stage Display.
@@ -39,28 +31,6 @@ func (p *Game) BackdropName() string {
 
 func (p *Game) BackdropIndex() int {
 	return p.getCostumeIndex()
-}
-
-// ResolveBackdropIndex resolves a backdrop name, action, or numeric selector.
-//
-// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveBackdropIndex] instead.
-func (p *Game) ResolveBackdropIndex(backdrop string) int {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("ResolveBackdropIndex: backdrop=%v", backdrop)
-	}
-	if idx := p.findCostume(SpriteCostumeName(backdrop)); idx >= 0 {
-		return idx
-	}
-	switch backdrop {
-	case "next backdrop":
-		return resolvedBackdropNext
-	case "previous backdrop":
-		return resolvedBackdropPrev
-	case "random backdrop":
-		return resolvedBackdropRandom
-	}
-
-	return scratch.ParseBackdropIndex(backdrop, len(p.costumes))
 }
 
 func (p *Game) SetBackdrop__0(name BackdropName) {
@@ -163,23 +133,13 @@ func (p *Game) setBackdrop(backdrop any, wait bool) {
 }
 
 func (p *Game) selectBackdrop(val any) bool {
-	switch v := val.(type) {
-	case int:
-		switch v {
-		case resolvedBackdropNext:
-			return p.goSetCostume(Next)
-		case resolvedBackdropPrev:
-			return p.goSetCostume(Prev)
-		case resolvedBackdropRandom:
-			return p.setRandomBackdrop()
-		}
-		if Pos(v) == Random {
-			return p.setRandomBackdrop()
-		}
-	case float64:
-		if v == float64(Random) {
-			return p.setRandomBackdrop()
-		}
+	switch val {
+	case scratch.ResolvedBackdropNext:
+		val = Next
+	case scratch.ResolvedBackdropPrev:
+		val = Prev
+	case scratch.ResolvedBackdropRandom, Random, float64(Random):
+		return p.setRandomBackdrop()
 	}
 	return p.goSetCostume(val)
 }
