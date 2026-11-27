@@ -31,6 +31,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"testing/synctest"
 
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
@@ -739,6 +740,39 @@ func TestNDKSetupRejectsBlockedLocalStateBeforeDownload(t *testing.T) {
 			// A missing explicit archive also guards against any accidental network fallback.
 			if err := setupAndroidNDK(toolSetupNDKConfig{manualInstall: true, ndkPath: filepath.Join(t.TempDir(), "missing.zip")}); err == nil {
 				t.Fatal("blocked local state ignored")
+			}
+		})
+	}
+}
+
+func TestWriteNDKArchivePreservesCacheOnCopyFailure(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "ndk.zip")
+	archive := writeNDKZipFixture(t, dst)
+	cached, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name  string
+		input io.Reader
+		want  error
+	}{
+		{"source shrank", bytes.NewReader(cached[:len(cached)-1]), errInvalidNDKArchive},
+		// One extra byte establishes oversize without reading the rest of the source.
+		{"source grew", io.MultiReader(bytes.NewReader(cached), strings.NewReader("!"), iotest.ErrReader(io.ErrUnexpectedEOF)), errInvalidNDKArchive},
+		{"read failed", io.MultiReader(strings.NewReader("partial"), iotest.ErrReader(io.ErrUnexpectedEOF)), io.ErrUnexpectedEOF},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := writeNDKArchive(dst, test.input, archive); !errors.Is(err, test.want) {
+				t.Fatalf("writeNDKArchive error = %v, want %v", err, test.want)
+			}
+			if err := verifyNDKArchive(dst, archive); err != nil {
+				t.Fatalf("original cached archive was not preserved: %v", err)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("cache directory after failed copy = %v, %v", entries, err)
 			}
 		})
 	}

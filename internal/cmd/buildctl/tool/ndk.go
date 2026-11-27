@@ -323,7 +323,14 @@ func persistNDKArchive(src, dst string, archive androidNDKArchive) (string, erro
 	if info.Size() != archive.size {
 		return "", invalidNDKArchivef("size %d does not match locked size %d", info.Size(), archive.size)
 	}
-	err = fileutil.WriteFileAtomic(dst, func(output *os.File) error {
+	if err := writeNDKArchive(dst, input, archive); err != nil {
+		return "", err
+	}
+	return dst, nil
+}
+
+func writeNDKArchive(dst string, input io.Reader, archive androidNDKArchive) error {
+	return fileutil.WriteFileAtomic(dst, func(output *os.File) error {
 		copied, err := io.Copy(output, io.LimitReader(input, archive.size+1))
 		if err != nil {
 			return err
@@ -335,10 +342,6 @@ func persistNDKArchive(src, dst string, archive androidNDKArchive) (string, erro
 	}, func(path string) error {
 		return verifyNDKArchive(path, archive)
 	})
-	if err != nil {
-		return "", err
-	}
-	return dst, nil
 }
 
 func verifyNDKArchive(path string, archive androidNDKArchive) error {

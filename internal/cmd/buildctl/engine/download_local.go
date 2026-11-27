@@ -199,18 +199,22 @@ func copyEngineAssetAtomically(src, dst string, verify func(string) error) error
 		// Windows requires this handle to close before replacing a destination
 		// that refers to the same file, including through a hard link.
 		defer input.Close()
-		info, err := input.Stat()
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("engine asset is not a regular file: %s", src)
-		}
-		if _, err := io.Copy(output, input); err != nil {
-			return err
-		}
-		return output.Chmod(info.Mode().Perm())
+		return writeEngineAsset(output, input)
 	}, verify)
+}
+
+func writeEngineAsset(output, input *os.File) error {
+	info, err := input.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("engine asset is not a regular file: %s", input.Name())
+	}
+	if _, err := io.Copy(output, input); err != nil {
+		return err
+	}
+	return output.Chmod(info.Mode().Perm())
 }
 
 func linkOrCopyFile(src, dst string) error {

@@ -56,7 +56,7 @@ case "${1:-}" in
     covered_test coverage-fileutil-windows.out -v \
       -run '^Test(ReplaceRegularFile|ReplaceFile|WindowsPath|WriteFileAtomic)' ./internal/base/fileutil
     covered_test coverage-command-windows.out -v \
-      -run '^TestResolveLauncherOutput(LongPath|RejectsSymlinkParentAndTarget)$' ./cmd/spx/internal/command
+      -run '^TestResolveLauncherOutput(LongPath|RejectsSymlinkParentAndTarget|RejectsJunction)$' ./cmd/spx/internal/command
     covered_test coverage-interpsession-windows.out -v \
       -run '^Test(PrepareSession|ReplaceRootFile.*)$' ./internal/interpsession
     covered_test coverage-runtimebundle-windows.out -v \

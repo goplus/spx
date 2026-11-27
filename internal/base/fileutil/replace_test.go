@@ -252,3 +252,24 @@ func TestWriteFileAtomicDiscardsPanickedWrite(t *testing.T) {
 		t.Fatalf("files after failed write = %v, %v", entries, err)
 	}
 }
+
+func TestWriteFileAtomicDiscardsFileOnCloseError(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "asset")
+	writeReplacementFile(t, dst, "old", 0o600)
+	var temp string
+	err := WriteFileAtomic(dst, func(f *os.File) error {
+		temp = f.Name()
+		return f.Close()
+	}, func(string) error {
+		t.Fatal("verification ran after the temporary file failed to close")
+		return nil
+	})
+	if !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("write error = %v, want closed file", err)
+	}
+	assertReplacementContent(t, dst, "old")
+	if _, err := os.Lstat(temp); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("temporary file after close failure: %v", err)
+	}
+}
