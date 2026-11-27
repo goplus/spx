@@ -217,6 +217,8 @@ TEST_CASE("[SceneTree][SPX] List monitor scrolls long lists and clears stale con
 	monitor->set_size(Size2(200, 144));
 	auto *scroll = Object::cast_to<VScrollBar>(monitor->get_node(NodePath("ScrollBar")));
 	REQUIRE(scroll != nullptr);
+	ui->set_list_items(wrapper->get_gid(), "", nullptr, Color());
+	CHECK(scroll->get_position().y == 22);
 	GdString values[10] = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" };
 	GdArrayInfo array = {};
 	array.type = GD_ARRAY_TYPE_STRING;
@@ -226,6 +228,21 @@ TEST_CASE("[SceneTree][SPX] List monitor scrolls long lists and clears stale con
 	CHECK(scroll->is_visible());
 	CHECK(scroll->get_max() == 240);
 	CHECK(scroll->get_page() == 100);
+	monitor->set_size(Size2(100, 144));
+	ui->set_list_items(wrapper->get_gid(), "items discovered", &array, Color(1, 0, 0));
+	CHECK(scroll->get_position().y > 22);
+	CHECK(scroll->get_page() < 100);
+	monitor->set_size(Size2(100, 80));
+	ui->set_list_items(wrapper->get_gid(), "items discovered in a long list", &array, Color(1, 0, 0));
+	CHECK(scroll->get_page() > 0);
+	CHECK(scroll->get_page() < scroll->get_combined_minimum_size().y);
+	CHECK_FALSE(scroll->is_visible());
+	monitor->set_size(Size2(100, 44));
+	CHECK(scroll->get_page() == 0);
+	CHECK_FALSE(scroll->is_visible());
+	monitor->set_size(Size2(200, 144));
+	ui->set_list_items(wrapper->get_gid(), "items", &array, Color(1, 0, 0));
+	ui->set_list_items(wrapper->get_gid(), "items", &array, Color(1, 0, 0));
 	// Malformed bridge arrays must leave the current list intact.
 	for (GdArrayInfo invalid : { GdArrayInfo{ 10, GD_ARRAY_TYPE_INT64, values },
 				 GdArrayInfo{ -1, GD_ARRAY_TYPE_STRING, values },
@@ -243,6 +260,11 @@ TEST_CASE("[SceneTree][SPX] List monitor scrolls long lists and clears stale con
 	wheel->set_pressed(true);
 	monitor->gui_input(wheel);
 	CHECK(scroll->get_value() == 72);
+	wheel->set_pressed(false);
+	monitor->gui_input(wheel);
+	wheel->set_button_index(MouseButton::LEFT);
+	wheel->set_pressed(true);
+	monitor->gui_input(wheel);
 	MessageQueue::get_singleton()->flush();
 	wheel->set_button_index(MouseButton::WHEEL_UP);
 	monitor->gui_input(wheel);
