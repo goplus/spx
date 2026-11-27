@@ -133,23 +133,13 @@ func (p *Game) setBackdrop(backdrop any, wait bool) {
 }
 
 func (p *Game) selectBackdrop(val any) bool {
-	switch v := val.(type) {
-	case int:
-		switch v {
-		case scratch.ResolvedBackdropNext:
-			return p.goSetCostume(Next)
-		case scratch.ResolvedBackdropPrev:
-			return p.goSetCostume(Prev)
-		case scratch.ResolvedBackdropRandom:
-			return p.setRandomBackdrop()
-		}
-		if Pos(v) == Random {
-			return p.setRandomBackdrop()
-		}
-	case float64:
-		if v == float64(Random) {
-			return p.setRandomBackdrop()
-		}
+	switch val {
+	case scratch.ResolvedBackdropNext:
+		val = Next
+	case scratch.ResolvedBackdropPrev:
+		val = Prev
+	case scratch.ResolvedBackdropRandom, Random, float64(Random):
+		return p.setRandomBackdrop()
 	}
 	return p.goSetCostume(val)
 }

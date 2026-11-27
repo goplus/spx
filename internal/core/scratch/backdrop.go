@@ -41,17 +41,17 @@ func ParseBackdropIndex(backdrop string, count int) int {
 	}
 
 	value, ok := toFloat64(backdrop)
-	if !ok || math.IsNaN(value) || math.IsInf(value, 0) {
+	if !ok {
 		return -1
 	}
 
 	// JavaScript Math.round rounds half values toward positive infinity.
 	index := math.Floor(value+0.5) - 1
-	if count == 0 {
-		if index < float64(math.MinInt) || index >= -float64(math.MinInt) {
-			return -1
-		}
-		return int(index)
+	if count != 0 {
+		index = FloorMod(index, float64(count))
 	}
-	return int(FloorMod(index, float64(count)))
+	if idx, ok := toInt(index); ok {
+		return idx
+	}
+	return -1
 }
